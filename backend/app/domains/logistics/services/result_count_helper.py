@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 
 
@@ -69,7 +70,10 @@ class LogisticsResultCountHelper:
 
         summary = query_result.get("summary")
         if isinstance(summary, dict) and summary:
-            return 1
+            # aggregate 空结果场景下，repository 可能返回“字段齐全但全是 0”的 summary。
+            # 这类 summary 不能再被当成“有 1 条结果”，否则会把空结果误判成 OK。
+            if LogisticsResultCountHelper._summary_has_effective_value(summary):
+                return 1
 
         return 0
 
@@ -77,3 +81,49 @@ class LogisticsResultCountHelper:
     def is_empty(cls, query_result: dict[str, Any] | None) -> bool:
         """判断查询结果是否为空。"""
         return cls.extract_count(query_result) == 0
+
+    @staticmethod
+    def _summary_has_effective_value(summary: dict[str, Any]) -> bool:
+        """判断汇总字典是否包含有效结果。
+
+        规则说明：
+            1. 数值型字段只要存在非 0 值，就视为有效结果；
+            2. 数值字符串会先尝试转数字，避免把 "0.0000" 误判为有效值；
+            3. 非数值但非空的文本、对象或数组，也视为有效结果；
+            4. 若所有字段都为空、为 0 或空容器，则视为空结果。
+        """
+        for value in summary.values():
+            if value is None:
+                continue
+
+            if isinstance(value, bool):
+                if value:
+                    return True
+                continue
+
+            # 数据库 SUM/COALESCE 结果在真实运行态下通常是 Decimal，
+            # 这里必须和 int/float 一样按“是否为 0”判断，避免空结果被误判成有效汇总。
+            if isinstance(value, (int, float, Decimal)):
+                if float(value) != 0:
+                    return True
+                continue
+
+            if isinstance(value, str):
+                normalized = value.strip()
+                if not normalized:
+                    continue
+                try:
+                    if float(normalized) != 0:
+                        return True
+                    continue
+                except ValueError:
+                    return True
+
+            if isinstance(value, (list, tuple, set, dict)):
+                if len(value) > 0:
+                    return True
+                continue
+
+            return True
+
+        return False

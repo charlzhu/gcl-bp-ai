@@ -53,5 +53,7 @@ class QueryLogListResponse(BaseModel):
     """查询历史列表响应。"""
 
     total: int = Field(default=0)
+    page: int = Field(default=1)
+    page_size: int = Field(default=20)
     items: list[QueryLogItem] = Field(default_factory=list)
     load_warning: str | None = None

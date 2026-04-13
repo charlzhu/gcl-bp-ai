@@ -29,13 +29,39 @@ export interface LogisticsAggregatePayload {
 }
 
 /**
+ * 结构化统计结果。
+ * 说明：
+ * 1. 在原有 summary / items 基础上，逐步补齐与 NL_QUERY 对齐的最小契约；
+ * 2. 当前优先给条件查询页使用，不扩大到 detail / compare；
+ * 3. 保留索引签名，避免阻断现有额外字段透传。
+ */
+export interface LogisticsAggregateResult {
+  query_type: string
+  metric_type: string
+  source_scope: string
+  execution_mode?: string | null
+  summary?: Record<string, any>
+  items?: Record<string, any>[]
+  filters?: Record<string, any>
+  status?: Record<string, any> | null
+  result_explanation?: Record<string, any> | null
+  no_result_analysis?: Record<string, any> | null
+  response_meta?: Record<string, any> | null
+  compatibility_notice?: string[] | null
+  [key: string]: any
+}
+
+/**
  * 查询历史过滤条件。
  */
 export interface QueryHistoryParams {
   limit?: number
+  page?: number
+  page_size?: number
   query_type?: string
   status?: string
   trace_id?: string
+  keyword?: string
 }
 
 /**
@@ -51,6 +77,10 @@ export interface QueryHistoryItem {
   metric_type?: string | null
   result_count: number
   status: string
+  status_code?: string | null
+  status_message?: string | null
+  template_hit?: boolean
+  template_id?: string | null
   message?: string | null
   created_at?: string | null
   parsed?: Record<string, any> | null
@@ -60,10 +90,24 @@ export interface QueryHistoryItem {
 }
 
 /**
+ * 查询历史详情。
+ * 说明：
+ * 1. 详情接口会补齐前端直接依赖的 response_meta 与 query_result 快照；
+ * 2. query_result 属于历史快照，不代表再次实时执行的最新结果；
+ * 3. 这里沿用列表项字段，避免前端维护两套完全独立的结构。
+ */
+export interface QueryHistoryDetailResponse extends QueryHistoryItem {
+  response_meta?: Record<string, any> | null
+  query_result?: Record<string, any> | null
+}
+
+/**
  * 查询历史列表。
  */
 export interface QueryHistoryResponse {
   total: number
+  page?: number
+  page_size?: number
   items: QueryHistoryItem[]
   load_warning?: string | null
 }
@@ -81,7 +125,7 @@ export async function fetchNLQuery(payload: LogisticsNLQueryPayload) {
  */
 export async function fetchAggregateQuery(payload: LogisticsAggregatePayload) {
   const resp = await http.post('/logistics/query-service/aggregate', payload)
-  return resp.data
+  return resp.data as { data?: LogisticsAggregateResult } | LogisticsAggregateResult
 }
 
 /**
@@ -107,5 +151,13 @@ export async function fetchSystemSyncTasks() {
  */
 export async function fetchQueryHistory(params: QueryHistoryParams = {}) {
   const resp = await http.get('/sys/query/log', { params })
+  return resp.data
+}
+
+/**
+ * 查询单条历史详情。
+ */
+export async function fetchQueryHistoryDetail(logId: number) {
+  const resp = await http.get(`/sys/query/log/${logId}`)
   return resp.data
 }

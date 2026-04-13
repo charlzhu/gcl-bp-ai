@@ -13,10 +13,30 @@ class _FakeQueryLogRepository:
     def __init__(self, row: dict | None = None) -> None:
         self.row = row
         self.written_payloads: list[dict] = []
+        self.last_list_params: dict | None = None
 
-    def list_query_logs(self, db, *, limit=100, query_type=None, status=None, trace_id=None):
+    def list_query_logs(
+        self,
+        db,
+        *,
+        limit=100,
+        offset=0,
+        query_type=None,
+        status=None,
+        trace_id=None,
+        keyword=None,
+    ):
         """返回固定列表，模拟 sys_query_log 查询结果。"""
-        return [self.row] if self.row else []
+        self.last_list_params = {
+            "limit": limit,
+            "offset": offset,
+            "query_type": query_type,
+            "status": status,
+            "trace_id": trace_id,
+            "keyword": keyword,
+        }
+        rows = [self.row] if self.row else []
+        return rows, len(rows)
 
     def get_query_log_detail(self, db, *, log_id: int):
         """返回固定详情，模拟按主键读取日志。"""
@@ -129,6 +149,40 @@ def test_query_log_service_should_expose_detail_fields_for_frontend():
     assert detail.response_meta["status"]["code"] == "OK"
     assert detail.query_result["status"]["code"] == "OK"
     assert detail.query_result["summary"]["shipment_watt"] == 12345
+
+
+def test_query_log_service_should_support_pagination_and_keyword():
+    """查询历史列表应透传分页与关键词参数，并返回统一分页信息。"""
+    row = {
+        "id": 77,
+        "trace_id": "trace-keyword-001",
+        "query_type": "AGGREGATE",
+        "question_text": "2099年1月运量是多少",
+        "request_payload": json.dumps({}, ensure_ascii=False),
+        "route_type": "hist",
+        "metric_type": "shipment_watt",
+        "result_count": 0,
+        "status": "SUCCESS",
+        "message": "空结果查询",
+        "created_at": datetime(2026, 4, 13, 15, 0, 0),
+    }
+    repository = _FakeQueryLogRepository(row=row)
+    service = QueryLogService(db=object(), repository=repository)
+
+    listing = service.list_query_logs(page=2, page_size=15, keyword="2099", query_type="AGGREGATE")
+
+    assert listing.total == 1
+    assert listing.page == 2
+    assert listing.page_size == 15
+    assert listing.items[0].question == "2099年1月运量是多少"
+    assert repository.last_list_params == {
+        "limit": 15,
+        "offset": 15,
+        "query_type": "AGGREGATE",
+        "status": None,
+        "trace_id": None,
+        "keyword": "2099",
+    }
 
 
 def test_query_plan_store_should_persist_response_meta_and_trimmed_query_result():

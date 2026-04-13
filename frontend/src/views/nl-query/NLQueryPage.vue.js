@@ -1,10 +1,10 @@
-import { ref } from 'vue';
+import { onMounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { fetchNLQuery } from '@/api/logistics';
 import ParsedResultCard from '@/components/ParsedResultCard.vue';
 import QueryResultCard from '@/components/QueryResultCard.vue';
-import { saveLastQueryContext } from '@/utils/queryStorage';
+import { getLastQueryContext, getQueryPageDraft, saveLastQueryContext, saveQueryPageDraft, } from '@/utils/queryStorage';
 const router = useRouter();
 const question = ref('2025年3月运量是多少');
 const loading = ref(false);
@@ -28,6 +28,36 @@ function persistContext(selectedRow = null) {
         queryResult: resultData.value.query_result ?? null,
         selectedRow,
     });
+}
+/**
+ * 恢复自然语言查询页草稿和最近一次结果。
+ * 说明：
+ * 1. 先恢复未提交的输入草稿；
+ * 2. 再恢复最近一次已执行查询的结果，保证从明细页返回时不丢上下文；
+ * 3. 只恢复当前页面自己的缓存，避免误把条件查询页的结果带进来。
+ */
+function restorePageState() {
+    const draft = getQueryPageDraft('nl-query');
+    if (draft?.formData?.question) {
+        question.value = String(draft.formData.question);
+    }
+    const context = getLastQueryContext();
+    if (context?.sourcePage !== 'nl-query')
+        return;
+    if (context.question) {
+        question.value = context.question;
+    }
+    if (context.rawResponse && typeof context.rawResponse === 'object') {
+        resultData.value = context.rawResponse;
+        return;
+    }
+    if (context.parsed || context.queryResult) {
+        resultData.value = {
+            question: context.question,
+            parsed: context.parsed ?? null,
+            query_result: context.queryResult ?? null,
+        };
+    }
 }
 /**
  * 打开完整明细页。
@@ -64,6 +94,22 @@ async function handleQuery() {
         loading.value = false;
     }
 }
+/**
+ * 持续缓存输入草稿。
+ * 说明：
+ * 即使用户还没有点击查询，也尽量保住当前问题文本。
+ */
+watch(question, (value) => {
+    saveQueryPageDraft({
+        sourcePage: 'nl-query',
+        formData: {
+            question: value,
+        },
+    });
+}, { immediate: true });
+onMounted(() => {
+    restorePageState();
+});
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -253,11 +299,19 @@ const __VLS_67 = __VLS_asFunctionalComponent(QueryResultCard, new QueryResultCar
     ...{ 'onOpenDetail': {} },
     ...{ 'onRowDetail': {} },
     queryResult: (__VLS_ctx.resultData?.query_result ?? null),
+    parsed: (__VLS_ctx.resultData?.parsed ?? null),
+    question: (__VLS_ctx.resultData?.question ?? __VLS_ctx.question),
+    requestPayload: ({ question: __VLS_ctx.question.trim() }),
+    responseMeta: (__VLS_ctx.resultData?.response_meta ?? null),
 }));
 const __VLS_68 = __VLS_67({
     ...{ 'onOpenDetail': {} },
     ...{ 'onRowDetail': {} },
     queryResult: (__VLS_ctx.resultData?.query_result ?? null),
+    parsed: (__VLS_ctx.resultData?.parsed ?? null),
+    question: (__VLS_ctx.resultData?.question ?? __VLS_ctx.question),
+    requestPayload: ({ question: __VLS_ctx.question.trim() }),
+    responseMeta: (__VLS_ctx.resultData?.response_meta ?? null),
 }, ...__VLS_functionalComponentArgsRest(__VLS_67));
 let __VLS_70;
 let __VLS_71;
@@ -276,13 +330,30 @@ if (__VLS_ctx.resultData) {
         ...{ class: "page-card" },
         ...{ style: {} },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({
-        ...{ style: {} },
-    });
+    const __VLS_75 = {}.ElCollapse;
+    /** @type {[typeof __VLS_components.ElCollapse, typeof __VLS_components.elCollapse, typeof __VLS_components.ElCollapse, typeof __VLS_components.elCollapse, ]} */ ;
+    // @ts-ignore
+    const __VLS_76 = __VLS_asFunctionalComponent(__VLS_75, new __VLS_75({}));
+    const __VLS_77 = __VLS_76({}, ...__VLS_functionalComponentArgsRest(__VLS_76));
+    __VLS_78.slots.default;
+    const __VLS_79 = {}.ElCollapseItem;
+    /** @type {[typeof __VLS_components.ElCollapseItem, typeof __VLS_components.elCollapseItem, typeof __VLS_components.ElCollapseItem, typeof __VLS_components.elCollapseItem, ]} */ ;
+    // @ts-ignore
+    const __VLS_80 = __VLS_asFunctionalComponent(__VLS_79, new __VLS_79({
+        title: "查看完整响应（调试）",
+        name: "raw-response",
+    }));
+    const __VLS_81 = __VLS_80({
+        title: "查看完整响应（调试）",
+        name: "raw-response",
+    }, ...__VLS_functionalComponentArgsRest(__VLS_80));
+    __VLS_82.slots.default;
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "mono-block" },
     });
     (JSON.stringify(__VLS_ctx.resultData, null, 2));
+    var __VLS_82;
+    var __VLS_78;
 }
 /** @type {__VLS_StyleScopedClasses['page-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['page-title']} */ ;

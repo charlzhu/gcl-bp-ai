@@ -277,18 +277,21 @@ class LogisticsQueryRepository:
         db: Session,
         *,
         limit: int = 100,
+        offset: int = 0,
         query_type: str | None = None,
         status: str | None = None,
         trace_id: str | None = None,
-    ) -> list[dict[str, Any]]:
+        keyword: str | None = None,
+    ) -> tuple[list[dict[str, Any]], int]:
         """读取查询日志列表。
 
         说明：
         1. 当前前端查询历史页主要依赖这份数据；
         2. 这里仍然走白名单字段和绑定参数，避免拼接任意 where 条件；
-        3. 优先按最新时间倒序返回，便于联调时快速看到最近一次查询。
+        3. 优先按最新时间倒序返回，便于联调时快速看到最近一次查询；
+        4. 分页和关键词检索都在这里完成，避免前端自行裁剪列表。
         """
-        params: dict[str, Any] = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit, "offset": offset}
         where_parts: list[str] = []
 
         if query_type:
@@ -300,8 +303,22 @@ class LogisticsQueryRepository:
         if trace_id:
             where_parts.append("trace_id = :trace_id")
             params["trace_id"] = trace_id
+        if keyword:
+            # 关键词检索当前只覆盖历史问题、trace_id 和日志消息，
+            # 这是前端历史页最常用的排查入口，先不扩到更重的 JSON 模糊搜索。
+            where_parts.append(
+                "(question_text LIKE :keyword OR trace_id LIKE :keyword OR message LIKE :keyword)"
+            )
+            params["keyword"] = f"%{keyword}%"
 
         where_sql = f"WHERE {' AND '.join(where_parts)}" if where_parts else ""
+        count_sql = text(
+            f"""
+            SELECT COUNT(1) AS total
+            FROM sys_query_log
+            {where_sql}
+            """
+        )
         sql = text(
             f"""
             SELECT
@@ -319,11 +336,12 @@ class LogisticsQueryRepository:
             FROM sys_query_log
             {where_sql}
             ORDER BY created_at DESC, id DESC
-            LIMIT :limit
+            LIMIT :limit OFFSET :offset
             """
         )
+        total = int(db.execute(count_sql, params).scalar() or 0)
         rows = db.execute(sql, params).mappings().all()
-        return [dict(row) for row in rows]
+        return [dict(row) for row in rows], total
 
     def get_query_log_detail(
         self,

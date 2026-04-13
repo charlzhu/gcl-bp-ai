@@ -34,26 +34,38 @@
       <el-col :span="12">
         <QueryResultCard
           :query-result="resultData?.query_result ?? null"
+          :parsed="resultData?.parsed ?? null"
+          :question="resultData?.question ?? question"
+          :request-payload="{ question: question.trim() }"
+          :response-meta="resultData?.response_meta ?? null"
           @open-detail="openDetail"
           @row-detail="openRowDetail"
         />
       </el-col>
     </el-row>
     <div class="page-card" style="margin-top: 20px" v-if="resultData">
-      <h3 style="margin-top: 0">完整响应</h3>
-      <div class="mono-block">{{ JSON.stringify(resultData, null, 2) }}</div>
+      <el-collapse>
+        <el-collapse-item title="查看完整响应（调试）" name="raw-response">
+          <div class="mono-block">{{ JSON.stringify(resultData, null, 2) }}</div>
+        </el-collapse-item>
+      </el-collapse>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { fetchNLQuery } from '@/api/logistics'
 import ParsedResultCard from '@/components/ParsedResultCard.vue'
 import QueryResultCard from '@/components/QueryResultCard.vue'
-import { saveLastQueryContext } from '@/utils/queryStorage'
+import {
+  getLastQueryContext,
+  getQueryPageDraft,
+  saveLastQueryContext,
+  saveQueryPageDraft,
+} from '@/utils/queryStorage'
 
 const router = useRouter()
 const question = ref('2025年3月运量是多少')
@@ -79,6 +91,40 @@ function persistContext(selectedRow: Record<string, any> | null = null) {
     queryResult: resultData.value.query_result ?? null,
     selectedRow,
   })
+}
+
+/**
+ * 恢复自然语言查询页草稿和最近一次结果。
+ * 说明：
+ * 1. 先恢复未提交的输入草稿；
+ * 2. 再恢复最近一次已执行查询的结果，保证从明细页返回时不丢上下文；
+ * 3. 只恢复当前页面自己的缓存，避免误把条件查询页的结果带进来。
+ */
+function restorePageState() {
+  const draft = getQueryPageDraft('nl-query')
+  if (draft?.formData?.question) {
+    question.value = String(draft.formData.question)
+  }
+
+  const context = getLastQueryContext()
+  if (context?.sourcePage !== 'nl-query') return
+
+  if (context.question) {
+    question.value = context.question
+  }
+
+  if (context.rawResponse && typeof context.rawResponse === 'object') {
+    resultData.value = context.rawResponse
+    return
+  }
+
+  if (context.parsed || context.queryResult) {
+    resultData.value = {
+      question: context.question,
+      parsed: context.parsed ?? null,
+      query_result: context.queryResult ?? null,
+    }
+  }
 }
 
 /**
@@ -117,4 +163,26 @@ async function handleQuery() {
     loading.value = false
   }
 }
+
+/**
+ * 持续缓存输入草稿。
+ * 说明：
+ * 即使用户还没有点击查询，也尽量保住当前问题文本。
+ */
+watch(
+  question,
+  (value) => {
+    saveQueryPageDraft({
+      sourcePage: 'nl-query',
+      formData: {
+        question: value,
+      },
+    })
+  },
+  { immediate: true },
+)
+
+onMounted(() => {
+  restorePageState()
+})
 </script>

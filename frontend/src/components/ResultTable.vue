@@ -30,7 +30,7 @@
           <template #default="scope">
             {{ formatCell(column, scope.row[column]) }}
           </template>
-        </el-table-column>git init
+        </el-table-column>
 
         <el-table-column v-if="items.length" label="操作" width="100" fixed="right" align="center">
           <template #default="scope">

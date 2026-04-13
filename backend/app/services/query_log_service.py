@@ -33,39 +33,59 @@ class QueryLogService:
     def list_query_logs(
         self,
         *,
-        limit: int = 100,
+        limit: int | None = None,
+        page: int = 1,
+        page_size: int = 20,
         query_type: str | None = None,
         status: str | None = None,
         trace_id: str | None = None,
+        keyword: str | None = None,
     ) -> QueryLogListResponse:
         """查询历史列表。
 
         参数：
-            limit: 最大返回条数。
+            limit: 兼容旧接口的最大返回条数；若传入则覆盖 page_size。
+            page: 当前页码。
+            page_size: 每页条数。
             query_type: 可选的查询类型过滤。
             status: 可选的状态过滤。
             trace_id: 可选的 trace_id 过滤。
+            keyword: 可选的关键词检索，当前匹配历史问题、trace_id 和日志消息。
 
         返回：
             统一的查询历史列表结构。
         """
+        effective_page_size = limit or page_size
+        normalized_page = max(page, 1)
+        offset = (normalized_page - 1) * effective_page_size
+        normalized_keyword = keyword.strip() if isinstance(keyword, str) and keyword.strip() else None
+
         try:
-            rows = self.repository.list_query_logs(
+            rows, total = self.repository.list_query_logs(
                 self.db,
-                limit=limit,
+                limit=effective_page_size,
+                offset=offset,
                 query_type=query_type,
                 status=status,
                 trace_id=trace_id,
+                keyword=normalized_keyword,
             )
         except SQLAlchemyError:
             return QueryLogListResponse(
                 total=0,
+                page=normalized_page,
+                page_size=effective_page_size,
                 items=[],
                 load_warning="当前 sys_query_log 尚未就绪，查询历史暂时不可用。",
             )
 
         items = [self._normalize_row(row) for row in rows]
-        return QueryLogListResponse(total=len(items), items=items)
+        return QueryLogListResponse(
+            total=total,
+            page=normalized_page,
+            page_size=effective_page_size,
+            items=items,
+        )
 
     def get_query_log_detail(
         self,

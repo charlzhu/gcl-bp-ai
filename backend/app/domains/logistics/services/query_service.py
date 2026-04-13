@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import logging
 import re
@@ -15,6 +16,10 @@ from backend.app.domains.logistics.schemas.query import (
     LogisticsCompareQuery,
     LogisticsDetailQuery,
 )
+from backend.app.domains.logistics.services.no_result_analyzer import LogisticsNoResultAnalyzer
+from backend.app.domains.logistics.services.query_response_standardizer import LogisticsQueryResponseStandardizer
+from backend.app.domains.logistics.services.result_count_helper import LogisticsResultCountHelper
+from backend.app.domains.logistics.services.result_explainer import LogisticsResultExplainer
 from backend.app.repositories.logistics_query_repo import LogisticsRecord
 from backend.app.schemas.common import MonthRange
 from backend.app.schemas.logistics_query import LogisticsFilters
@@ -76,11 +81,19 @@ class LogisticsQueryService:
         fallback_query_service: CoreQueryService | None = None,
         fallback_compare_service: CompareService | None = None,
         repository: LogisticsQueryRepository | None = None,
+        result_explainer: LogisticsResultExplainer | None = None,
+        no_result_analyzer: LogisticsNoResultAnalyzer | None = None,
+        query_response_standardizer: LogisticsQueryResponseStandardizer | None = None,
     ) -> None:
         self.db = db
         self.fallback_query_service = fallback_query_service
         self.fallback_compare_service = fallback_compare_service
         self.repository = repository or LogisticsQueryRepository()
+        self.result_explainer = result_explainer or LogisticsResultExplainer()
+        self.no_result_analyzer = no_result_analyzer or LogisticsNoResultAnalyzer()
+        self.query_response_standardizer = (
+            query_response_standardizer or LogisticsQueryResponseStandardizer()
+        )
 
     def aggregate(
         self,
@@ -112,12 +125,13 @@ class LogisticsQueryService:
                         "execution_mode": "database",
                     }
                 )
+                self._attach_aggregate_contract(payload=payload, query_result=result)
                 self._safe_write_log(
                     trace_id=trace_id,
                     query_type="AGGREGATE",
                     payload=payload.model_dump(),
                     metric_type=payload.metric_type,
-                    result_count=len(result.get("items", [])),
+                    result_count=LogisticsResultCountHelper.extract_count(result),
                     route_type=payload.source_scope,
                 )
                 return result
@@ -271,6 +285,7 @@ class LogisticsQueryService:
                     "fallback 数据源缺少真实承运商维度，已阻止使用基地字段冒充物流公司结果。"
                 ),
             }
+            self._attach_aggregate_contract(payload=payload, query_result=response)
             self._safe_write_log(
                 trace_id=trace_id,
                 query_type="AGGREGATE",
@@ -304,12 +319,13 @@ class LogisticsQueryService:
             "execution_mode": "fallback",
             "compatibility_notice": self._compatibility_notice(payload),
         }
+        self._attach_aggregate_contract(payload=payload, query_result=response)
         self._safe_write_log(
             trace_id=trace_id,
             query_type="AGGREGATE",
             payload=payload.model_dump(),
             metric_type=payload.metric_type,
-            result_count=len(response["items"]),
+            result_count=LogisticsResultCountHelper.extract_count(response),
             route_type=f"{payload.source_scope}:fallback",
         )
         return response
@@ -584,6 +600,106 @@ class LogisticsQueryService:
         if metric_field is None:
             raise AppException(f"不支持的 metric_type: {metric_type}", code=4006, status_code=400)
         return metric_field
+
+    def _attach_aggregate_contract(
+        self,
+        *,
+        payload: LogisticsAggregateQuery,
+        query_result: dict[str, Any],
+    ) -> None:
+        """给 aggregate 结果补最小统一契约。
+
+        说明：
+        1. 当前条件查询页直接消费 aggregate 返回，因此这里补齐前端直依赖字段；
+        2. 保持 summary / items 等既有结构不变，只增量补 status / explanation / response_meta；
+        3. 该逻辑同时覆盖数据库模式和 fallback 模式，避免前端再次分支兼容。
+        """
+        parsed_snapshot = self._build_aggregate_parsed_snapshot(payload)
+        question = self._build_aggregate_question(payload)
+
+        result_explanation = self.result_explainer.build(
+            question=question,
+            parsed=parsed_snapshot,
+            query_result=query_result,
+        )
+        no_result_analysis = self.no_result_analyzer.analyze(
+            question=question,
+            parsed=parsed_snapshot,
+            query_result=query_result,
+        )
+        status = self.query_response_standardizer.build_status(
+            parsed=parsed_snapshot,
+            query_result=query_result,
+        )
+
+        query_result["status"] = deepcopy(status)
+        query_result["result_explanation"] = deepcopy(result_explanation)
+        if no_result_analysis is not None:
+            query_result["no_result_analysis"] = deepcopy(no_result_analysis)
+        else:
+            query_result.pop("no_result_analysis", None)
+
+        query_result["response_meta"] = self.query_response_standardizer.build_response_meta(
+            question=question,
+            parsed=parsed_snapshot,
+            query_result=query_result,
+            status=status,
+        )
+
+    @staticmethod
+    def _build_aggregate_parsed_snapshot(payload: LogisticsAggregateQuery) -> dict[str, Any]:
+        """为 aggregate 结果解释补一份最小 parsed 快照。
+
+        说明：
+        1. 直接结构化查询没有自然语言解析过程，因此这里不伪造模板信息；
+        2. 只补结果解释、空结果分析和状态计算真正依赖的核心字段；
+        3. 统一标记为 logistics 域，便于复用现有标准化器。
+        """
+        return {
+            "selected_domain": "logistics",
+            "mode": "aggregate",
+            "metric_type": payload.metric_type,
+            "source_scope": payload.source_scope,
+            "year_month_list": list(payload.year_month_list),
+            "customer_name": payload.customer_name,
+            "logistics_company_name": payload.logistics_company_name,
+            "region_name": payload.region_name,
+            "warehouse_name": payload.warehouse_name,
+            "transport_mode": payload.transport_mode,
+            "origin_place": payload.origin_place,
+        }
+
+    @staticmethod
+    def _build_aggregate_question(payload: LogisticsAggregateQuery) -> str:
+        """把结构化筛选条件整理成结果解释可读的问题摘要。"""
+        conditions: list[str] = []
+        if payload.year_month_list:
+            conditions.append("月份 " + "、".join(payload.year_month_list))
+        if payload.customer_name:
+            conditions.append(f"客户 {payload.customer_name}")
+        if payload.logistics_company_name:
+            conditions.append(f"物流公司 {payload.logistics_company_name}")
+        if payload.region_name:
+            conditions.append(f"区域 {payload.region_name}")
+        if payload.origin_place:
+            conditions.append(f"始发地 {payload.origin_place}")
+        if payload.transport_mode:
+            conditions.append(f"运输方式 {payload.transport_mode}")
+
+        summary = "，".join(conditions) if conditions else "当前筛选条件"
+        return f"{summary} 的 {LogisticsQueryService._metric_type_label(payload.metric_type)} 统计"
+
+    @staticmethod
+    def _metric_type_label(metric_type: str) -> str:
+        """返回指标中文名，供结果解释和空结果分析复用。"""
+        mapping = {
+            "shipment_watt": "运量（瓦数）",
+            "shipment_count": "发货件数",
+            "shipment_trip_count": "车次",
+            "total_fee": "总费用",
+            "extra_fee": "附加费",
+        }
+        return mapping.get(metric_type, metric_type)
 
     @staticmethod
     def _date_to_month(value: str) -> str:

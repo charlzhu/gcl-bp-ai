@@ -57,21 +57,25 @@ class LogisticsQueryResponseStandardizer:
                 extras={"execution_mode": execution_mode},
             )
 
+        if total == 0:
+            # 空结果优先级高于 fallback。
+            # 说明：
+            # 1. fallback 只是执行路径说明，不应覆盖“没有匹配数据”这类更具体的业务状态；
+            # 2. 这样前端在 fallback + 空结果场景下仍能稳定展示空结果分析，而不是只看到兼容模式提示。
+            return LogisticsErrorCodeRegistry.build_status(
+                code=LogisticsErrorCodeRegistry.EMPTY_RESULT,
+                message="查询已执行完成，但未返回匹配数据。",
+                success=True,
+                severity="warning",
+                extras={"execution_mode": execution_mode},
+            )
+
         if execution_mode == "fallback":
             # 只有在“已有有效结果”时，才把 fallback 作为主状态码。
             # 若本次本身就是空结果/编号不存在，应优先给更具体的业务状态。
             return LogisticsErrorCodeRegistry.build_status(
                 code=LogisticsErrorCodeRegistry.FALLBACK_MODE,
                 message="当前请求已执行，但使用的是 fallback 兼容模式。",
-                success=True,
-                severity="warning",
-                extras={"execution_mode": execution_mode},
-            )
-
-        if total == 0:
-            return LogisticsErrorCodeRegistry.build_status(
-                code=LogisticsErrorCodeRegistry.EMPTY_RESULT,
-                message="查询已执行完成，但未返回匹配数据。",
                 success=True,
                 severity="warning",
                 extras={"execution_mode": execution_mode},

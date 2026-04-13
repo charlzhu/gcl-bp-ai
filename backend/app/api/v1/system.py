@@ -22,10 +22,13 @@ def get_system_config(
 @router.get("/sys/query/log", response_model=ResponseEnvelope[QueryLogListResponse])
 def list_query_logs(
     request: Request,
-    limit: int = Query(default=100, ge=1, le=500),
+    limit: int | None = Query(default=None, ge=1, le=500),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
     query_type: str | None = Query(default=None),
     status: str | None = Query(default=None),
     trace_id: str | None = Query(default=None),
+    keyword: str | None = Query(default=None),
     query_log_service: QueryLogService = Depends(get_query_log_service),
 ) -> ResponseEnvelope[QueryLogListResponse]:
     """查询历史列表接口。
@@ -37,9 +40,12 @@ def list_query_logs(
     """
     data = query_log_service.list_query_logs(
         limit=limit,
+        page=page,
+        page_size=page_size,
         query_type=query_type,
         status=status,
         trace_id=trace_id,
+        keyword=keyword,
     )
     return success_response(request, data)
 

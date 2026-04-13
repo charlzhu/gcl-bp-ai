@@ -36,3 +36,10 @@ export async function fetchQueryHistory(params = {}) {
     const resp = await http.get('/sys/query/log', { params });
     return resp.data;
 }
+/**
+ * 查询单条历史详情。
+ */
+export async function fetchQueryHistoryDetail(logId) {
+    const resp = await http.get(`/sys/query/log/${logId}`);
+    return resp.data;
+}

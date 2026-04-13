@@ -1,9 +1,10 @@
-import { reactive, ref } from 'vue';
+import { onMounted, reactive, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { fetchAggregateQuery } from '@/api/logistics';
 import QueryResultCard from '@/components/QueryResultCard.vue';
-import { saveLastQueryContext } from '@/utils/queryStorage';
+import { formatMetricTypeLabel } from '@/utils/queryResultPresentation';
+import { getLastQueryContext, getQueryPageDraft, saveLastQueryContext, saveQueryPageDraft, } from '@/utils/queryStorage';
 const router = useRouter();
 const loading = ref(false);
 const monthInput = ref('2025-03');
@@ -45,6 +46,34 @@ function buildPayload() {
     };
 }
 /**
+ * 构建当前结构化查询的摘要问题。
+ * 说明：
+ * 条件查询页没有自然语言原问题，这里用筛选条件拼出一个摘要，
+ * 便于结果解释和空结果分析展示当前查询上下文。
+ */
+function buildResultQuestion() {
+    const yearMonthList = monthInput.value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean);
+    const conditions = [];
+    if (yearMonthList.length > 0) {
+        conditions.push(`月份 ${yearMonthList.join('、')}`);
+    }
+    if (form.customer_name)
+        conditions.push(`客户 ${form.customer_name}`);
+    if (form.logistics_company_name)
+        conditions.push(`物流公司 ${form.logistics_company_name}`);
+    if (form.region_name)
+        conditions.push(`区域 ${form.region_name}`);
+    if (form.origin_place)
+        conditions.push(`始发地 ${form.origin_place}`);
+    if (form.transport_mode)
+        conditions.push(`运输方式 ${form.transport_mode}`);
+    const summary = conditions.length > 0 ? conditions.join('，') : '当前筛选条件';
+    return `${summary} 的 ${formatMetricTypeLabel(form.metric_type) || '指标'} 统计`;
+}
+/**
  * 保存最近一次结构化查询上下文。
  */
 function persistContext(selectedRow = null) {
@@ -55,6 +84,50 @@ function persistContext(selectedRow = null) {
         queryResult: resultData.value,
         selectedRow,
     });
+}
+/**
+ * 恢复条件查询页草稿和最近一次查询结果。
+ * 说明：
+ * 1. 先恢复页面草稿，尽量保住未提交的表单；
+ * 2. 若最近一次查询来自条件查询页，再恢复其结果和请求参数；
+ * 3. 这样从明细页返回时，表单和结果都不会丢。
+ */
+function restorePageState() {
+    const draft = getQueryPageDraft('structured-query');
+    if (draft?.formData) {
+        applyRequestPayload(draft.formData);
+    }
+    const context = getLastQueryContext();
+    if (context?.sourcePage !== 'structured-query')
+        return;
+    if (context.requestPayload) {
+        applyRequestPayload(context.requestPayload);
+    }
+    if (context.rawResponse && typeof context.rawResponse === 'object') {
+        resultData.value = context.rawResponse;
+        return;
+    }
+    if (context.queryResult && typeof context.queryResult === 'object') {
+        resultData.value = context.queryResult;
+    }
+}
+/**
+ * 把请求参数回填到结构化查询表单。
+ * 说明：
+ * 这里优先复用后端字段名，避免维护两套映射。
+ */
+function applyRequestPayload(payload) {
+    form.metric_type = String(payload.metric_type || form.metric_type);
+    form.source_scope = String(payload.source_scope || form.source_scope);
+    form.customer_name = String(payload.customer_name || '');
+    form.logistics_company_name = String(payload.logistics_company_name || '');
+    form.region_name = String(payload.region_name || '');
+    form.origin_place = String(payload.origin_place || '');
+    form.transport_mode = String(payload.transport_mode || '');
+    const groupBy = Array.isArray(payload.group_by) ? payload.group_by[0] : payload.group_by;
+    form.group_by = String(groupBy || form.group_by);
+    const yearMonthList = Array.isArray(payload.year_month_list) ? payload.year_month_list : [];
+    monthInput.value = yearMonthList.join(', ') || monthInput.value;
 }
 /**
  * 打开完整明细页。
@@ -95,6 +168,33 @@ function fillExample() {
     form.group_by = 'biz_month';
     monthInput.value = '2025-03';
 }
+/**
+ * 持续缓存结构化查询草稿。
+ * 说明：
+ * 用户在筛选条件中途切页时，回来后仍应看到最近一次输入。
+ */
+watch(() => ({
+    metric_type: form.metric_type,
+    source_scope: form.source_scope,
+    customer_name: form.customer_name,
+    logistics_company_name: form.logistics_company_name,
+    region_name: form.region_name,
+    origin_place: form.origin_place,
+    transport_mode: form.transport_mode,
+    group_by: form.group_by,
+    year_month_list: monthInput.value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean),
+}), (value) => {
+    saveQueryPageDraft({
+        sourcePage: 'structured-query',
+        formData: value,
+    });
+}, { deep: true, immediate: true });
+onMounted(() => {
+    restorePageState();
+});
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
 let __VLS_components;
@@ -621,11 +721,17 @@ const __VLS_184 = __VLS_asFunctionalComponent(QueryResultCard, new QueryResultCa
     ...{ 'onOpenDetail': {} },
     ...{ 'onRowDetail': {} },
     queryResult: (__VLS_ctx.resultData),
+    responseMeta: (__VLS_ctx.resultData?.response_meta ?? null),
+    question: (__VLS_ctx.buildResultQuestion()),
+    requestPayload: (__VLS_ctx.buildPayload()),
 }));
 const __VLS_185 = __VLS_184({
     ...{ 'onOpenDetail': {} },
     ...{ 'onRowDetail': {} },
     queryResult: (__VLS_ctx.resultData),
+    responseMeta: (__VLS_ctx.resultData?.response_meta ?? null),
+    question: (__VLS_ctx.buildResultQuestion()),
+    requestPayload: (__VLS_ctx.buildPayload()),
 }, ...__VLS_functionalComponentArgsRest(__VLS_184));
 let __VLS_187;
 let __VLS_188;
@@ -641,13 +747,30 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
     ...{ class: "page-card" },
     ...{ style: {} },
 });
-__VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({
-    ...{ style: {} },
-});
+const __VLS_192 = {}.ElCollapse;
+/** @type {[typeof __VLS_components.ElCollapse, typeof __VLS_components.elCollapse, typeof __VLS_components.ElCollapse, typeof __VLS_components.elCollapse, ]} */ ;
+// @ts-ignore
+const __VLS_193 = __VLS_asFunctionalComponent(__VLS_192, new __VLS_192({}));
+const __VLS_194 = __VLS_193({}, ...__VLS_functionalComponentArgsRest(__VLS_193));
+__VLS_195.slots.default;
+const __VLS_196 = {}.ElCollapseItem;
+/** @type {[typeof __VLS_components.ElCollapseItem, typeof __VLS_components.elCollapseItem, typeof __VLS_components.ElCollapseItem, typeof __VLS_components.elCollapseItem, ]} */ ;
+// @ts-ignore
+const __VLS_197 = __VLS_asFunctionalComponent(__VLS_196, new __VLS_196({
+    title: "查看本次请求参数（调试）",
+    name: "request-payload",
+}));
+const __VLS_198 = __VLS_197({
+    title: "查看本次请求参数（调试）",
+    name: "request-payload",
+}, ...__VLS_functionalComponentArgsRest(__VLS_197));
+__VLS_199.slots.default;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "mono-block" },
 });
 (JSON.stringify(__VLS_ctx.buildPayload(), null, 2));
+var __VLS_199;
+var __VLS_195;
 /** @type {__VLS_StyleScopedClasses['page-card']} */ ;
 /** @type {__VLS_StyleScopedClasses['page-title']} */ ;
 /** @type {__VLS_StyleScopedClasses['page-subtitle']} */ ;
@@ -663,6 +786,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             resultData: resultData,
             form: form,
             buildPayload: buildPayload,
+            buildResultQuestion: buildResultQuestion,
             openDetail: openDetail,
             openRowDetail: openRowDetail,
             handleQuery: handleQuery,
