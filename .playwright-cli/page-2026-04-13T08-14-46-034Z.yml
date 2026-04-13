@@ -1,0 +1,117 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - complementary [ref=e4]:
+      - generic [ref=e5]: 协鑫集成经营计划部智能平台
+      - menubar [ref=e6]:
+        - menuitem "自然语言查询" [ref=e7] [cursor=pointer]
+        - menuitem "条件查询" [ref=e8] [cursor=pointer]
+        - menuitem "任务与日志" [ref=e9] [cursor=pointer]
+        - menuitem "查询历史" [ref=e10] [cursor=pointer]
+    - generic [ref=e11]:
+      - generic [ref=e13]:
+        - generic [ref=e14]: 物流一期前端查询页第二版
+        - generic [ref=e15]: 在第一版基础上增强结果表格、明细视图和查询历史，便于联调与业务试用。
+      - main [ref=e16]:
+        - generic [ref=e17]:
+          - generic [ref=e18]:
+            - heading "自然语言查询" [level=2] [ref=e19]
+            - paragraph [ref=e20]:
+              - text: 面向业务人员的自然语言入口。当前优先联调后端的
+              - code [ref=e21]: /api/v1/logistics/nl2query/parse-and-query
+              - text: 接口， 用于查看问题解析、模板命中、执行绑定、结果解释和空结果分析。
+            - generic [ref=e22]:
+              - generic [ref=e23]:
+                - generic [ref=e24]: 问题
+                - textbox "问题" [ref=e27]:
+                  - /placeholder: 例如：2025年3月运量是多少；合同编号GCL5010ZJ202503015的明细
+                  - text: 2025年3月和2026年3月运量对比
+              - generic [ref=e28]:
+                - button "开始查询" [ref=e30] [cursor=pointer]:
+                  - generic [ref=e31]: 开始查询
+                - button "示例1" [ref=e33] [cursor=pointer]:
+                  - generic [ref=e34]: 示例1
+                - button "示例2" [ref=e36] [cursor=pointer]:
+                  - generic [ref=e37]: 示例2
+                - button "示例3" [ref=e39] [cursor=pointer]:
+                  - generic [ref=e40]: 示例3
+          - generic [ref=e41]:
+            - generic [ref=e43]:
+              - heading "解析结果" [level=3] [ref=e44]
+              - generic [ref=e56]:
+                - table [ref=e59]:
+                  - rowgroup [ref=e60]:
+                    - row "查询模式 compare" [ref=e209]:
+                      - cell "查询模式" [ref=e62]
+                      - cell "compare" [ref=e210]
+                    - row "指标 shipment_watt" [ref=e64]:
+                      - cell "指标" [ref=e65]
+                      - cell "shipment_watt" [ref=e66]
+                    - row "来源范围 all" [ref=e211]:
+                      - cell "来源范围" [ref=e68]
+                      - cell "all" [ref=e212]
+                    - row "模板ID logistics.compare.cross_year_same_month" [ref=e213]:
+                      - cell "模板ID" [ref=e71]
+                      - cell "logistics.compare.cross_year_same_month" [ref=e214]
+                    - row "SQL模板ID logistics.monthly_compare" [ref=e215]:
+                      - cell "SQL模板ID" [ref=e74]
+                      - cell "logistics.monthly_compare" [ref=e216]
+                    - row "配置版本 a1aa6f66cf76" [ref=e76]:
+                      - cell "配置版本" [ref=e77]
+                      - cell "a1aa6f66cf76" [ref=e78]
+                - table [ref=e81]:
+                  - rowgroup [ref=e82]:
+                    - row "年份月份" [ref=e217]:
+                      - cell "年份月份" [ref=e84]
+                      - cell [ref=e218]
+                    - row "合同编号 -" [ref=e86]:
+                      - cell "合同编号" [ref=e87]
+                      - cell "-" [ref=e88]
+                    - row "物流公司 -" [ref=e89]:
+                      - cell "物流公司" [ref=e90]
+                      - cell "-" [ref=e91]
+                    - row "区域 -" [ref=e92]:
+                      - cell "区域" [ref=e93]
+                      - cell "-" [ref=e94]
+                    - row "运输方式 -" [ref=e95]:
+                      - cell "运输方式" [ref=e96]
+                      - cell "-" [ref=e97]
+                    - row "指标展示名 运量（瓦数口径）" [ref=e98]:
+                      - cell "指标展示名" [ref=e99]
+                      - cell "运量（瓦数口径）" [ref=e100]
+              - button "查看完整 parsed JSON" [ref=e47] [cursor=pointer]:
+                - generic [ref=e48]: 查看完整 parsed JSON
+                - img [ref=e50]
+            - generic [ref=e53]:
+              - heading "查询结果" [level=3] [ref=e55]
+              - alert [ref=e108]:
+                - img [ref=e110]
+                - generic [ref=e113]: OK - 查询执行成功。
+              - table [ref=e116]:
+                - rowgroup [ref=e117]:
+                  - row "结果说明 本次对比查询已完成，返回 1 条对比结果。" [ref=e219]:
+                    - cell "结果说明" [ref=e119]
+                    - cell "本次对比查询已完成，返回 1 条对比结果。" [ref=e220]
+                  - row "执行模式 database" [ref=e121]:
+                    - cell "执行模式" [ref=e122]
+                    - cell "database" [ref=e123]
+                  - row "返回条数 1" [ref=e124]:
+                    - cell "返回条数" [ref=e125]
+                    - cell "1" [ref=e126]
+              - table [ref=e223]:
+                - rowgroup [ref=e224]:
+                  - row "2025-03 1,913,042,840 2026-03 315,532,005" [ref=e225]:
+                    - cell "2025-03" [ref=e226]
+                    - cell "1,913,042,840" [ref=e227]
+                    - cell "2026-03" [ref=e228]
+                    - cell "315,532,005" [ref=e229]
+                  - row "差值 -1,597,510,835 差异率 -83.51%" [ref=e230]:
+                    - cell "差值" [ref=e231]
+                    - cell "-1,597,510,835" [ref=e232]
+                    - cell "差异率" [ref=e233]
+                    - cell "-83.51%" [ref=e234]
+          - generic [ref=e201]:
+            - heading "完整响应" [level=3] [ref=e202]
+            - generic [ref=e203]: "{ \"question\": \"2025年3月和2026年3月运量对比\", \"parsed\": { \"mode\": \"compare\", \"metric_type\": \"shipment_watt\", \"source_scope\": \"all\", \"group_by\": [ \"biz_month\" ], \"order_direction\": \"desc\", \"limit\": 100, \"left\": { \"label\": \"2025-03\", \"year_month_list\": [ \"2025-03\" ] }, \"right\": { \"label\": \"2026-03\", \"year_month_list\": [ \"2026-03\" ] }, \"compare_dim\": null, \"metric_display_name\": \"运量（瓦数口径）\", \"selected_domain\": \"logistics\", \"domain_candidates\": [ { \"domain\": \"logistics\", \"score\": 15, \"hit_keywords\": [ \"运量\" ] }, { \"domain\": \"plan_bom\", \"score\": 0, \"hit_keywords\": [] }, { \"domain\": \"business_analysis\", \"score\": 0, \"hit_keywords\": [] }, { \"domain\": \"material_management\", \"score\": 0, \"hit_keywords\": [] } ], \"domain_route_reason\": \"根据域关键词命中情况进行路由；若未命中则默认回退物流域。\", \"config_version\": \"a1aa6f66cf76\", \"config_version_detail\": { \"version\": \"a1aa6f66cf76\", \"file_count\": 8, \"files\": [ \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/domains/business_analysis/query_templates.yaml\", \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/domains/logistics/query_templates.yaml\", \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/domains/material_management/query_templates.yaml\", \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/domains/plan_bom/query_templates.yaml\", \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/enum_mappings.yaml\", \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/global/domain_keywords.yaml\", \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/metric_dictionary.yaml\", \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/synonyms.yaml\" ] }, \"template_hit\": true, \"template_id\": \"logistics.compare.cross_year_same_month\", \"template_name\": \"跨年同月指标对比\", \"template_domain\": \"logistics\", \"template_score\": 211, \"template_match_reasons\": [ \"模板基础优先级：100 分\", \"模板域与路由域一致：logistics，加 25 分\", \"查询模式命中：compare，加 30 分\", \"指标命中：shipment_watt，加 20 分\", \"关键词命中：对比，加 8 分\", \"关键词命中：和，加 8 分\", \"必填槽位满足：two_periods，加 20 分\" ], \"template_candidates\": [ { \"template_id\": \"logistics.compare.cross_year_same_month\", \"template_name\": \"跨年同月指标对比\", \"template_domain\": \"logistics\", \"score\": 211, \"reasons\": [ \"模板基础优先级：100 分\", \"模板域与路由域一致：logistics，加 25 分\", \"查询模式命中：compare，加 30 分\", \"指标命中：shipment_watt，加 20 分\", \"关键词命中：对比，加 8 分\", \"关键词命中：和，加 8 分\", \"必填槽位满足：two_periods，加 20 分\" ] } ], \"discarded_template_candidates\": [], \"template_conflict_type\": \"single_hit\", \"template_conflict_explanation\": \"仅命中一个可用模板，直接采用。\", \"template_match_explanation\": \"已命中模板，并按模板规则修正查询计划。\", \"sql_template_id\": \"logistics.monthly_compare\", \"normalized_question\": \"2025年3月和2026年3月shipment_watt对比\", \"hit_synonyms\": { \"运量\": \"shipment_watt\" }, \"transport_mode_hits\": {}, \"region_hits\": {}, \"source_scope_hits\": {}, \"current_execution_domain\": \"logistics\", \"year_month_list\": [], \"validation\": { \"ok\": true, \"issues\": [] }, \"execution_binding\": { \"execution_mode\": \"compare\", \"sql_template\": { \"sql_template_id\": \"logistics.monthly_compare\", \"exists\": true, \"path\": \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/sql_templates/logistics/monthly_compare.sql\" }, \"sql_whitelist\": { \"allowed\": true, \"reason\": \"SQL 模板 logistics.monthly_compare 已命中白名单。\", \"matched_rule\": \"allow_by_template_id\" }, \"sql_preview\": { \"rendered\": \"-- 物流跨时间窗口对比模板\\nSELECT\\n 'shipment_watt' AS metric_type,\\n NULL AS compare_dim,\\n 'all' AS source_scope,\\n () AS year_month_list\\nFROM dws_logistics_monthly_metric\\nWHERE 1 = 1;\\n\", \"placeholders\": { \"metric_type\": \"shipment_watt\", \"source_scope\": \"all\", \"group_by\": [ \"biz_month\" ], \"start_date\": null, \"end_date\": null, \"year_month_list\": [], \"compare_dim\": null, \"contract_no\": null, \"task_id\": null, \"logistics_company_name\": null, \"region_name\": null, \"transport_mode\": null } } }, \"execution_audit\": { \"trace_id\": \"9481968ae0d749c5a5f77f42722721d3\", \"question\": \"2025年3月和2026年3月运量对比\", \"selected_domain\": \"logistics\", \"mode\": \"compare\", \"metric_type\": \"shipment_watt\", \"source_scope\": \"all\", \"template_id\": \"logistics.compare.cross_year_same_month\", \"sql_template_id\": \"logistics.monthly_compare\", \"validation_ok\": true, \"validation_issues\": [], \"sql_whitelist_allowed\": true, \"sql_whitelist_reason\": \"SQL 模板 logistics.monthly_compare 已命中白名单。\", \"execution_mode\": \"database\", \"result_count\": 1, \"is_empty_result\": false, \"execution_binding\": { \"execution_mode\": \"compare\", \"sql_template\": { \"sql_template_id\": \"logistics.monthly_compare\", \"exists\": true, \"path\": \"/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/sql_templates/logistics/monthly_compare.sql\" }, \"sql_whitelist\": { \"allowed\": true, \"reason\": \"SQL 模板 logistics.monthly_compare 已命中白名单。\", \"matched_rule\": \"allow_by_template_id\" }, \"sql_preview\": { \"rendered\": \"-- 物流跨时间窗口对比模板\\nSELECT\\n 'shipment_watt' AS metric_type,\\n NULL AS compare_dim,\\n 'all' AS source_scope,\\n () AS year_month_list\\nFROM dws_logistics_monthly_metric\\nWHERE 1 = 1;\\n\", \"placeholders\": { \"metric_type\": \"shipment_watt\", \"source_scope\": \"all\", \"group_by\": [ \"biz_month\" ], \"start_date\": null, \"end_date\": null, \"year_month_list\": [], \"compare_dim\": null, \"contract_no\": null, \"task_id\": null, \"logistics_company_name\": null, \"region_name\": null, \"transport_mode\": null } } } } }, \"query_result\": { \"metric_type\": \"shipment_watt\", \"left_label\": \"2025-03\", \"right_label\": \"2026-03\", \"left_value\": 1913042840, \"right_value\": 315532005, \"diff_value\": -1597510835, \"diff_rate\": -0.835062760539121, \"items\": [], \"query_type\": \"compare\", \"source_scope\": \"all\", \"compare_dim\": null, \"filters\": { \"start_date\": null, \"end_date\": null, \"year_month_list\": [], \"customer_name\": null, \"logistics_company_name\": null, \"region_name\": null, \"warehouse_name\": null, \"transport_mode\": null, \"origin_place\": null, \"contract_no\": null, \"inquiry_no\": null, \"ship_instruction_no\": null, \"sap_order_no\": null, \"vehicle_no\": null, \"task_id\": null, \"product_spec\": null, \"metric_type\": \"shipment_watt\", \"source_scope\": \"all\", \"left\": { \"label\": \"2025-03\", \"start_date\": null, \"end_date\": null, \"year_month_list\": [ \"2025-03\" ] }, \"right\": { \"label\": \"2026-03\", \"start_date\": null, \"end_date\": null, \"year_month_list\": [ \"2026-03\" ] }, \"compare_dim\": null }, \"execution_mode\": \"database\", \"result_explanation\": { \"question\": \"2025年3月和2026年3月运量对比\", \"query_type\": \"compare\", \"metric_type\": \"shipment_watt\", \"source_scope\": \"all\", \"execution_mode\": \"database\", \"result_count\": 1, \"summary\": \"本次对比查询已完成，返回 1 条对比结果。\", \"highlights\": [], \"source_distribution\": {}, \"notes\": [ \"当前结果来自数据库查询。\" ] }, \"status\": { \"code\": \"OK\", \"message\": \"查询执行成功。\", \"success\": true, \"severity\": \"info\", \"execution_mode\": \"database\" } }, \"response_meta\": { \"question\": \"2025年3月和2026年3月运量对比\", \"domain\": \"logistics\", \"mode\": \"compare\", \"metric_type\": \"shipment_watt\", \"source_scope\": \"all\", \"status\": { \"code\": \"OK\", \"message\": \"查询执行成功。\", \"success\": true, \"severity\": \"info\", \"execution_mode\": \"database\" }, \"config_version\": \"a1aa6f66cf76\", \"trace_ready\": true, \"result_count\": 1 } }"
+  - alert [ref=e235]:
+    - img [ref=e237]
+    - paragraph [ref=e239]: 查询成功

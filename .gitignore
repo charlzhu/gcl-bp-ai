@@ -1,0 +1,47 @@
+# 通用
+.DS_Store
+__MACOSX/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.env.local
+
+# Frontend
+node_modules/
+dist/
+
+# IDE
+.idea/
+.vscode/
+
+# Env
+backend/.env
+.env.*.local
+
+# Python
+*.py[cod]
+*.pyd
+*.so
+
+# Test / coverage
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtualenv
+.venv/
+venv/
+
+# Logs / runtime data
+*.log
+data/logs/
+data/files/history_uploads/
+
+# Local DB
+*.sqlite3
+*.db
+

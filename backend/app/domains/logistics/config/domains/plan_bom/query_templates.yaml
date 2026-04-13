@@ -1,0 +1,9 @@
+templates:
+  - id: plan_bom.aggregate.version_change_overview
+    name: BOM版本变更统计（占位模板）
+    priority: 60
+    mode: aggregate
+    required_slots: [single_period_or_year]
+    metric_candidates: [shipment_watt]
+    keywords_any: ["BOM", "版本", "替代料"]
+    group_by: [biz_month]

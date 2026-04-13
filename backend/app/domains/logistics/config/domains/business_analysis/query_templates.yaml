@@ -1,0 +1,9 @@
+templates:
+  - id: business_analysis.aggregate.kpi_overview
+    name: 经营指标统计（占位模板）
+    priority: 60
+    mode: aggregate
+    required_slots: [single_period_or_year]
+    metric_candidates: [shipment_watt]
+    keywords_any: ["经营分析", "毛利", "收入", "利润"]
+    group_by: [biz_month]

@@ -1,0 +1,70 @@
+templates:
+  - id: logistics.compare.cross_year_same_month
+    name: 跨年同月指标对比
+    priority: 100
+    mode: compare
+    required_slots: [ two_periods ]
+    metric_candidates: [ shipment_watt, total_fee, shipment_trip_count, extra_fee ]
+    keywords_any: [ "对比", "比较", "和", "与", "分别" ]
+    compare_dim: null
+    sql_template_id: logistics.monthly_compare
+
+  - id: logistics.aggregate.monthly_metric_total
+    name: 月度指标总量
+    priority: 90
+    mode: aggregate
+    required_slots: [ single_period ]
+    metric_candidates: [ shipment_watt, total_fee, shipment_trip_count, extra_fee ]
+    keywords_any: [ "多少", "总量", "总发运量", "总费用", "运量" ]
+    group_by: [ biz_month ]
+    sql_template_id: logistics.monthly_metric_total
+
+  - id: logistics.aggregate.company_metric_rank
+    name: 物流公司指标排名
+    priority: 95
+    mode: aggregate
+    required_slots: [ single_period ]
+    metric_candidates: [ shipment_watt, total_fee, shipment_trip_count ]
+    keywords_any: [ "物流公司", "承运商", "分别", "排名", "排行" ]
+    group_by: [ logistics_company_name ]
+    order_by: metric
+    order_direction: desc
+    limit: 20
+    sql_template_id: logistics.carrier_month_rank
+
+  - id: logistics.aggregate.region_metric_total
+    name: 区域指标统计
+    priority: 85
+    mode: aggregate
+    required_slots: [ single_period_or_year ]
+    metric_candidates: [ shipment_watt, total_fee, shipment_trip_count ]
+    keywords_any: [ "区域", "华东", "华北", "华南", "华中", "西北", "西南", "东北" ]
+    group_by: [ region_name ]
+
+  - id: logistics.aggregate.transport_metric_total
+    name: 运输方式指标统计
+    priority: 85
+    mode: aggregate
+    required_slots: [ single_period_or_year ]
+    metric_candidates: [ shipment_watt, total_fee, shipment_trip_count ]
+    keywords_any: [ "运输方式", "汽运", "公路", "铁路", "铁运", "水运", "水路", "海运" ]
+    group_by: [ transport_mode ]
+
+  - id: logistics.detail.by_business_no
+    name: 业务编号明细查询
+    domain: logistics
+    mode: detail
+    priority: 110
+    sql_template_id: logistics.detail_by_business_no
+    required_slots: [ business_no ]
+    metric_candidates: [ shipment_watt, total_fee, shipment_trip_count, extra_fee ]
+    keywords_any: [ "明细", "详情", "记录", "列表", "清单", "合同编号", "SAP", "发货指令", "车牌号", "任务ID","询比价编号" ]
+    order_by: biz_date
+    order_direction: desc
+
+
+
+
+
+
+

@@ -1,0 +1,13 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]: 协鑫集成经营计划部智能平台
+    - menubar [ref=e6]:
+      - menuitem "自然语言查询" [ref=e7] [cursor=pointer]
+      - menuitem "条件查询" [ref=e8] [cursor=pointer]
+      - menuitem "任务与日志" [ref=e9] [cursor=pointer]
+      - menuitem "查询历史" [ref=e10] [cursor=pointer]
+  - generic [ref=e11]:
+    - generic [ref=e13]:
+      - generic [ref=e14]: 物流一期前端查询页第二版
+      - generic [ref=e15]: 在第一版基础上增强结果表格、明细视图和查询历史，便于联调与业务试用。
+    - main [ref=e16]

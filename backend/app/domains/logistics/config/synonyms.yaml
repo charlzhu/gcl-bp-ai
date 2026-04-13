@@ -1,0 +1,16 @@
+# 物流域同义词词典配置
+terms:
+  shipment_watt:
+    aliases: ["运量", "发货量", "出货量", "发运量", "瓦数", "mw", "MW"]
+  shipment_trip_count:
+    aliases: ["车次", "趟次", "车辆数"]
+  total_fee:
+    aliases: ["运费", "费用", "总费用", "运输成本", "运输费用"]
+  extra_fee:
+    aliases: ["附加费", "异常费", "额外费用"]
+  logistics_company_name:
+    aliases: ["物流公司", "承运商", "承运单位"]
+  region_name:
+    aliases: ["区域", "销售区域", "大区"]
+  transport_mode:
+    aliases: ["运输方式", "运输类型", "运输渠道"]

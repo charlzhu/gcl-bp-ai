@@ -1,0 +1,1 @@
+"""Plan BOM domain placeholder."""

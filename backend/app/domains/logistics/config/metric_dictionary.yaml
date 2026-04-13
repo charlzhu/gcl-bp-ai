@@ -1,0 +1,18 @@
+# 物流域指标字典配置
+metrics:
+  shipment_watt:
+    display_name: "运量（瓦数口径）"
+    aliases: ["运量", "发货量", "出货量", "发运量", "瓦数", "MW", "mw"]
+    business_note: "当前物流一期默认运量口径按瓦数计算。"
+  shipment_trip_count:
+    display_name: "发运车次"
+    aliases: ["车次", "趟次", "车辆数"]
+    business_note: "历史 Excel 中车辆数/车次已按统一口径处理。"
+  total_fee:
+    display_name: "总费用"
+    aliases: ["总费用", "运费", "运输费用", "运输成本", "费用"]
+    business_note: "默认费用口径优先按总费用统计。"
+  extra_fee:
+    display_name: "附加费"
+    aliases: ["附加费", "异常费", "额外费用"]
+    business_note: "当产品表 extra_cost 为空时，明细侧可按 0 参与展示，但原始层保留 NULL。"

@@ -1,0 +1,1 @@
+"""Business analysis domain placeholder."""

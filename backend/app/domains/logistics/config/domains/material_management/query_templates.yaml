@@ -1,0 +1,9 @@
+templates:
+  - id: material_management.aggregate.inventory_overview
+    name: 物料库存统计（占位模板）
+    priority: 60
+    mode: aggregate
+    required_slots: [single_period_or_year]
+    metric_candidates: [shipment_watt]
+    keywords_any: ["物料", "库存", "缺料", "齐套"]
+    group_by: [biz_month]
