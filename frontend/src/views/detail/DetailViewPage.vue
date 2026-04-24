@@ -17,7 +17,7 @@
 
     <el-alert
       v-if="!context"
-      title="当前没有可展示的查询上下文，请先在自然语言查询页或条件查询页执行一次查询。"
+      title="当前没有可展示的查询上下文，请先在自然语言查询页或物流条件查询页执行一次查询。"
       type="warning"
       :closable="false"
       show-icon
@@ -183,7 +183,7 @@ function showRowDetail(row: Record<string, any>) {
  * 返回来源页面中文名。
  */
 function resolveSourcePageLabel(value: string | undefined) {
-  if (value === 'structured-query') return '条件查询'
+  if (value === 'structured-query') return '物流条件查询'
   if (value === 'nl-query') return '自然语言查询'
   return value || '-'
 }

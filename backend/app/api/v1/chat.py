@@ -14,5 +14,12 @@ def logistics_chat_query(
     request: Request,
     chat_service: ChatService = Depends(get_chat_service),
 ) -> ResponseEnvelope[ChatQueryResponse]:
+    """
+
+    :param payload:
+    :param request:
+    :param chat_service:
+    :return:
+    """
     data = chat_service.ask(payload)
     return success_response(request, data)

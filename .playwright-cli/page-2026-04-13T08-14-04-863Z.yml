@@ -1,6 +1,6 @@
 - generic [ref=e3]:
   - complementary [ref=e4]:
-    - generic [ref=e5]: 协鑫集成经营计划部智能平台
+    - generic [ref=e5]: 经营计划智能助手
     - menubar [ref=e6]:
       - menuitem "自然语言查询" [ref=e7] [cursor=pointer]
       - menuitem "条件查询" [ref=e8] [cursor=pointer]

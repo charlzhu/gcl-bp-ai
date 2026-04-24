@@ -1,11 +1,11 @@
 <template>
   <div>
     <div class="page-card" style="margin-bottom: 20px">
-      <h2 class="page-title">条件查询</h2>
-      <p class="page-subtitle">
-        面向后端 <code>/api/v1/logistics/query-service/aggregate</code> 的结构化查询页。
-        当前第二版在第一版基础上增强了结果表格与明细跳转能力。
-      </p>
+      <h2 class="page-title">物流条件查询</h2>
+<!--      <p class="page-subtitle">-->
+<!--        面向后端 <code>/api/v1/logistics/query-service/aggregate</code> 的结构化查询页。-->
+<!--        当前第二版在第一版基础上增强了结果表格与明细跳转能力。-->
+<!--      </p>-->
 
       <el-form :model="form" label-width="120px">
         <el-row :gutter="16">

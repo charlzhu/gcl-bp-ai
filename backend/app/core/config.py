@@ -1,8 +1,9 @@
+import json
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
@@ -37,21 +38,109 @@ class Settings(BaseSettings):
     milvus_port: int = 19530
     milvus_user: str = ""
     milvus_password: str = ""
-    source_mysql_host: str = "127.0.0.1"
-    source_mysql_port: int = 3306
-    source_mysql_db: str = "source_logistics"
-    source_mysql_user: str = "readonly_user"
-    source_mysql_password: str = ""
+    source_mysql_host: str = "10.76.13.161"
+    source_mysql_port: int = 19531
+    source_mysql_db: str = "jyjh_db"
+    source_mysql_user: str = "jyjhuser_zcc"
+    source_mysql_password: str = "jyjh123!"
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
+    llm_guardrail_enabled: bool = False
+    llm_guardrail_mode: Literal["off", "shadow", "assist"] = "off"
+    llm_guardrail_sample_rate: float = 0.0
+    llm_guardrail_min_confidence: float = 0.9
+    llm_guardrail_a_querykey_whitelist: list[str] = Field(default_factory=list)
+    llm_guardrail_audit_enabled: bool = True
+    llm_clarification_assist_enabled: bool = True
+    llm_clarification_assist_mode: Literal["off", "shadow", "assist"] = "assist"
+    llm_clarification_assist_sample_rate: float = 1.0
+    llm_clarification_assist_min_confidence: float = 0.7
+    llm_clarification_assist_category_whitelist: list[str] = Field(default_factory=list)
+    llm_clarification_assist_audit_enabled: bool = True
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=Path(__file__).resolve().parent.parent.parent / ".env",
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",
     )
+
+    @field_validator("llm_guardrail_mode", mode="before")
+    @classmethod
+    def _normalize_llm_guardrail_mode(cls, value: object) -> object:
+        """兼容旧版 disabled 配置，同时把空值统一收敛成 off。"""
+        if value is None:
+            return "off"
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"", "disabled"}:
+                return "off"
+            return normalized
+        return value
+
+    @field_validator("llm_guardrail_a_querykey_whitelist", mode="before")
+    @classmethod
+    def _parse_llm_guardrail_a_querykey_whitelist(cls, value: object) -> object:
+        """解析 Guardrail A 类白名单。
+
+        说明：
+            1. 兼容 JSON 数组和逗号分隔两种写法；
+            2. 统一去掉空白和空字符串，避免配置误伤；
+            3. 如果未显式配置，则保留空列表，后续走服务默认白名单。
+        """
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except Exception:  # noqa: BLE001
+                    pass
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        return value
+
+    @field_validator("llm_clarification_assist_mode", mode="before")
+    @classmethod
+    def _normalize_llm_clarification_assist_mode(cls, value: object) -> object:
+        """兼容空值和旧版 disabled 写法。"""
+        if value is None:
+            return "off"
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"", "disabled"}:
+                return "off"
+            return normalized
+        return value
+
+    @field_validator("llm_clarification_assist_category_whitelist", mode="before")
+    @classmethod
+    def _parse_llm_clarification_assist_category_whitelist(cls, value: object) -> object:
+        """解析澄清辅助允许增强的澄清类别白名单。"""
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except Exception:  # noqa: BLE001
+                    pass
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        return value
 
     def ensure_runtime_dirs(self) -> None:
         self.file_storage_root.mkdir(parents=True, exist_ok=True)
@@ -80,6 +169,11 @@ class Settings(BaseSettings):
             database=self.source_mysql_db,
             query={"charset": self.mysql_charset},
         ).render_as_string(hide_password=False)
+
+    @property
+    def resolved_source_mysql_dsn(self) -> str:
+        """返回源库连接串，直接使用 .env 中配置的源库账号信息。"""
+        return self.source_mysql_dsn
 
     # Compatibility aliases for the imported skeleton.
     @property
@@ -213,6 +307,30 @@ class Settings(BaseSettings):
     @property
     def LLM_MODEL(self) -> str:
         return self.llm_model
+
+    @property
+    def LLM_GUARDRAIL_ENABLED(self) -> bool:
+        return self.llm_guardrail_enabled
+
+    @property
+    def LLM_GUARDRAIL_MODE(self) -> str:
+        return self.llm_guardrail_mode
+
+    @property
+    def LLM_GUARDRAIL_SAMPLE_RATE(self) -> float:
+        return self.llm_guardrail_sample_rate
+
+    @property
+    def LLM_GUARDRAIL_MIN_CONFIDENCE(self) -> float:
+        return self.llm_guardrail_min_confidence
+
+    @property
+    def LLM_GUARDRAIL_A_QUERYKEY_WHITELIST(self) -> list[str]:
+        return self.llm_guardrail_a_querykey_whitelist
+
+    @property
+    def LLM_GUARDRAIL_AUDIT_ENABLED(self) -> bool:
+        return self.llm_guardrail_audit_enabled
 
 
 @lru_cache

@@ -9,6 +9,7 @@ from decimal import Decimal, InvalidOperation
 import re
 from typing import Iterable, Sequence
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import SessionLocal, SourceSessionLocal
@@ -64,6 +65,8 @@ class LogisticsSystemSyncService:
         repo = LogisticsSyncRepository(db=db, source_db=source_db)
 
         try:
+            # 先补齐物流数据问答 MVP 需要的扩展字段，避免后续 upsert 因列缺失失败。
+            repo.ensure_extended_columns()
             repo.create_task_log(
                 task_id=task_id,
                 task_type="SYS_SYNC",
@@ -72,12 +75,14 @@ class LogisticsSystemSyncService:
             )
 
             if req.sync_companies:
+                self._ensure_source_db_alive(repo)
                 companies = [self._normalize_company_row(row) for row in repo.fetch_companies()]
                 stats.company_count = len(companies)
                 if not req.dry_run:
                     repo.upsert_ods_companies(sync_batch_no, companies)
 
             if req.sync_warehouses:
+                self._ensure_source_db_alive(repo)
                 warehouses = [self._normalize_warehouse_row(row) for row in repo.fetch_warehouses()]
                 stats.warehouse_count = len(warehouses)
                 if not req.dry_run:
@@ -96,6 +101,7 @@ class LogisticsSystemSyncService:
             if req.sync_ship_products:
                 ship_products: list[dict] = []
                 for chunk in self._chunked(ship_task_ids, req.batch_size):
+                    self._ensure_source_db_alive(repo)
                     ship_products.extend(repo.fetch_ship_products_by_task_ids(chunk))
                 normalized_ship_products = [self._normalize_ship_product_row(row) for row in ship_products]
                 stats.ship_product_count = len(normalized_ship_products)
@@ -106,6 +112,7 @@ class LogisticsSystemSyncService:
             if req.sync_assign_tasks:
                 assign_tasks: list[dict] = []
                 for chunk in self._chunked(ship_task_ids, req.batch_size):
+                    self._ensure_source_db_alive(repo)
                     assign_tasks.extend(repo.fetch_assign_tasks_by_ship_task_ids(chunk))
                 normalized_assign_tasks = [self._normalize_assign_task_row(row) for row in assign_tasks]
                 stats.assign_task_count = len(normalized_assign_tasks)
@@ -116,6 +123,7 @@ class LogisticsSystemSyncService:
             if req.sync_assign_details:
                 assign_details: list[dict] = []
                 for chunk in self._chunked(assign_task_ids, req.batch_size):
+                    self._ensure_source_db_alive(repo)
                     assign_details.extend(repo.fetch_assign_details_by_assign_task_ids(chunk))
                 normalized_assign_details = [self._normalize_assign_detail_row(row) for row in assign_details]
                 stats.assign_detail_count = len(normalized_assign_details)
@@ -160,12 +168,37 @@ class LogisticsSystemSyncService:
         except Exception as exc:
             logger.exception("logistics system sync failed")
             db.rollback()
-            source_db.rollback()
+            try:
+                repo.source_db.rollback()
+            except Exception:
+                pass
             self._safe_log_failure(repo=repo, task_id=task_id, req=req, exc=exc)
             raise
         finally:
-            source_db.close()
+            try:
+                repo.source_db.close()
+            except Exception:
+                pass
             db.close()
+
+    def _ensure_source_db_alive(self, repo: LogisticsSyncRepository) -> None:
+        """检查源库连接是否存活，若已断开则重建 session。
+
+        说明：
+            远程 MySQL 5.6 在连接长时间闲置后会主动断开。
+            sync_service 中两次源库查询之间有大量本地 ODS 写入操作，
+            可能导致源库连接被服务器端回收。因此在每次调用源库
+            fetch 方法前，先执行一次轻量 ping 确认连接状态。
+        """
+        try:
+            repo.source_db.execute(text("SELECT 1"))
+        except Exception:
+            logger.warning("源库连接已断开，正在重建 source_db session")
+            try:
+                repo.source_db.close()
+            except Exception:
+                pass
+            repo.source_db = SourceSessionLocal()
 
     def _safe_log_failure(
         self,
@@ -213,6 +246,7 @@ class LogisticsSystemSyncService:
         all_rows: list[dict] = []
         offset = 0
         while True:
+            self._ensure_source_db_alive(repo)
             rows = repo.fetch_ship_tasks(
                 start_date=req.start_date,
                 updated_since=req.updated_since,
@@ -264,9 +298,13 @@ class LogisticsSystemSyncService:
             "source_id": row.get("source_id"),
             "task_id": row.get("task_id"),
             "company_id": row.get("company_id"),
+            "project_name": (row.get("project_name") or "").strip() or None,
+            "pickup_date": row.get("pickup_date"),
             "warehouse_id": row.get("warehouse_id"),
             "status": row.get("status"),
             "ship_type": row.get("ship_type"),
+            "expand_dept": (row.get("expand_dept") or "").strip() or None,
+            "entrusted_person": (row.get("entrusted_person") or "").strip() or None,
             "transport": row.get("transport"),
             "contract_number": row.get("contract_number"),
             "inquiry_number": row.get("inquiry_number"),
@@ -299,6 +337,7 @@ class LogisticsSystemSyncService:
             "product_spec": row.get("product_spec"),
             "power": LogisticsSystemSyncService._normalize_decimal(row.get("power"), fallback_text=row.get("product_spec")),
             "quantity": LogisticsSystemSyncService._normalize_decimal(row.get("quantity")),
+            "price": LogisticsSystemSyncService._normalize_decimal(row.get("price")),
             "unit": row.get("unit"),
             "extra_cost": LogisticsSystemSyncService._normalize_decimal(row.get("extra_cost")),
             "base_code": row.get("base_code"),

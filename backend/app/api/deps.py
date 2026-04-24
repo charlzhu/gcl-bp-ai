@@ -6,10 +6,16 @@ from sqlalchemy.orm import Session
 from backend.app.core.config import Settings, get_settings
 from backend.app.db.session import get_db
 from backend.app.domains.logistics.services.import_service import LogisticsHistoryImportService
+from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
 from backend.app.domains.logistics.services.nl2query_service import LogisticsNL2QueryService
 from backend.app.domains.logistics.services.query_service import LogisticsQueryService as DomainLogisticsQueryService
+from backend.app.domains.logistics.services.rag_service import LogisticsRagService
 from backend.app.domains.logistics.services.serving_refresh_service import LogisticsServingRefreshService
 from backend.app.domains.logistics.services.sync_service import LogisticsSystemSyncService
+from backend.app.domains.plan_bom.repositories.import_repository import PlanBomImportRepository
+from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
+from backend.app.domains.plan_bom.services.excel_import_service import PlanBomExcelImportService
+from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
 from backend.app.repositories.logistics_query_repo import InMemoryLogisticsQueryRepository
 from backend.app.repositories.task_repo import InMemoryTaskRepository
 from backend.app.services.chat_service import ChatService
@@ -110,3 +116,50 @@ def get_domain_nl2query_service(
     domain_query_service: DomainLogisticsQueryService = Depends(get_domain_query_service),
 ) -> LogisticsNL2QueryService:
     return LogisticsNL2QueryService(query_service=domain_query_service)
+
+
+def get_logistics_rag_service(
+    settings: Settings = Depends(get_settings),
+) -> LogisticsRagService:
+    """物流 RAG 服务依赖。
+
+    当前优先返回最小本地版 RAG 服务：
+    1. 文档索引落本地 JSON；
+    2. 查询走本地向量检索；
+    3. 不依赖当前环境必须先接通 Milvus/LLM。
+    """
+    return LogisticsRagService(settings=settings)
+
+
+def get_logistics_data_qa_service(
+    db: Session = Depends(get_db),
+) -> LogisticsDataQaService:
+    """物流数据问答服务依赖。
+
+    当前用于物流结构化数据问答 MVP：
+    1. 负责自然语言到受控查询计划的转换；
+    2. 负责执行白名单 SQL 查询；
+    3. 不承担 BOM 查询、RAG 检索或 Agent 工作流能力。
+    """
+    return LogisticsDataQaService(db=db)
+
+
+def get_plan_bom_import_service(
+    db: Session = Depends(get_db),
+) -> PlanBomExcelImportService:
+    """计划 BOM Excel 入库服务依赖。
+
+    当前只用于 Excel 读取、解析和批次入库，不提供查询、导出或 SAP 接入能力。
+    """
+    return PlanBomExcelImportService(repository=PlanBomImportRepository(db))
+
+
+def get_plan_bom_query_service(
+    db: Session = Depends(get_db),
+) -> PlanBomQueryService:
+    """计划 BOM 基础查询服务依赖。
+
+    当前用于基础材料查询和 compare 里程碑 1 的骨架候选链路，
+    不提供 compare 差异算法、导出或 SAP 接入能力。
+    """
+    return PlanBomQueryService(repository=PlanBomQueryRepository(db))

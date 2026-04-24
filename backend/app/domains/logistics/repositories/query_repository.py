@@ -253,10 +253,15 @@ class LogisticsQueryRepository:
             "items": [],
         }
 
-    def write_query_log(self, db: Session, payload: dict[str, Any]) -> None:
+    def write_query_log(self, db: Session, payload: dict[str, Any]) -> int:
         """写入查询日志表。
 
-        这里不在 repository 内部 commit，由 service 统一控制事务和失败回滚。
+        返回：
+            新写入的 `sys_query_log.id`。
+
+        说明：
+            1. 这里不在 repository 内部 commit，由 service 统一控制事务和失败回滚；
+            2. 某些驱动环境下拿不到 `lastrowid` 时，统一回退为 0。
         """
         sql = text(
             """
@@ -270,7 +275,11 @@ class LogisticsQueryRepository:
             )
             """
         )
-        db.execute(sql, payload)
+        result = db.execute(sql, payload)
+        try:
+            return int(result.lastrowid or 0)
+        except Exception:
+            return 0
 
     def list_query_logs(
         self,

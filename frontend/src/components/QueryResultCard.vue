@@ -161,7 +161,7 @@
         </div>
       </div>
 
-      <el-collapse v-if="presentation.templateInfo" style="margin-bottom: 16px">
+      <el-collapse v-if="props.showTemplateInfo && presentation.templateInfo" style="margin-bottom: 16px">
         <el-collapse-item title="模板命中信息" name="template-info">
           <el-descriptions :column="1" border>
             <el-descriptions-item label="模板状态">
@@ -216,9 +216,12 @@ interface Props {
   question?: string | null
   requestPayload?: Record<string, any> | null
   responseMeta?: Record<string, any> | null
+  showTemplateInfo?: boolean
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  showTemplateInfo: true,
+})
 
 const emit = defineEmits<{
   (e: 'open-detail'): void

@@ -7,6 +7,36 @@ export async function fetchNLQuery(payload) {
     return resp.data;
 }
 /**
+ * 物流数据问答正式页查询。
+ * 说明：
+ * 1. 只对接当前已验收通过的 logistics data-qa 后端接口；
+ * 2. 返回值保持 ApiResponse 外层结构，页面层自行取 data；
+ * 3. 不在前端做任何字段推断或业务补算。
+ */
+export async function fetchLogisticsDataQaQuery(payload) {
+    const resp = await http.post('/logistics/data-qa/query', payload);
+    return resp.data;
+}
+/**
+ * 读取物流数据问答历史列表。
+ * 说明：
+ * 这里直接复用统一查询历史接口，只固定筛选 `DATA_QA`。
+ */
+export async function fetchLogisticsDataQaHistory(params = {}) {
+    return fetchQueryHistory({
+        ...params,
+        query_type: 'DATA_QA',
+    });
+}
+/**
+ * 读取单条物流数据问答历史详情。
+ * 说明：
+ * 回放优先读取历史快照，不重新执行后端查询。
+ */
+export async function fetchLogisticsDataQaHistoryDetail(logId) {
+    return fetchQueryHistoryDetail(logId);
+}
+/**
  * 结构化统计查询。
  */
 export async function fetchAggregateQuery(payload) {

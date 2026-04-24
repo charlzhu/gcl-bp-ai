@@ -125,7 +125,10 @@ class LogisticsQueryService:
                         "execution_mode": "database",
                     }
                 )
+                aggregate_question = self._build_aggregate_question(payload)
+                aggregate_parsed = self._build_aggregate_parsed_snapshot(payload)
                 self._attach_aggregate_contract(payload=payload, query_result=result)
+                aggregate_response_meta = deepcopy(result.get("response_meta") or {})
                 self._safe_write_log(
                     trace_id=trace_id,
                     query_type="AGGREGATE",
@@ -133,6 +136,15 @@ class LogisticsQueryService:
                     metric_type=payload.metric_type,
                     result_count=LogisticsResultCountHelper.extract_count(result),
                     route_type=payload.source_scope,
+                    question_text=aggregate_question,
+                    # aggregate 直连日志也补最小快照，后续历史详情优先消费原生字段。
+                    payload_snapshot=self._build_direct_query_log_payload(
+                        question=aggregate_question,
+                        request_payload=payload.model_dump(),
+                        parsed_snapshot=aggregate_parsed,
+                        query_result=result,
+                        response_meta=aggregate_response_meta,
+                    ),
                 )
                 return result
             except SQLAlchemyError as exc:
@@ -166,13 +178,28 @@ class LogisticsQueryService:
                         "execution_mode": "database",
                     }
                 )
+                detail_question = self._build_detail_question(payload)
+                detail_parsed = self._build_detail_parsed_snapshot(payload)
+                detail_response_meta = self._attach_direct_query_contract(
+                    question=detail_question,
+                    parsed_snapshot=detail_parsed,
+                    query_result=result,
+                )
                 self._safe_write_log(
                     trace_id=trace_id,
                     query_type="DETAIL",
                     payload=payload.model_dump(),
                     metric_type=payload.metric_type,
-                    result_count=result.get("total", 0),
+                    result_count=LogisticsResultCountHelper.extract_count(result),
                     route_type=payload.source_scope,
+                    question_text=detail_question,
+                    payload_snapshot=self._build_direct_query_log_payload(
+                        question=detail_question,
+                        request_payload=payload.model_dump(),
+                        parsed_snapshot=detail_parsed,
+                        query_result=result,
+                        response_meta=detail_response_meta,
+                    ),
                 )
                 return result
             except SQLAlchemyError as exc:
@@ -229,19 +256,38 @@ class LogisticsQueryService:
                 result.update(
                     {
                         "query_type": "compare",
+                        "metric_type": payload.metric_type,
                         "source_scope": payload.source_scope,
                         "compare_dim": payload.compare_dim,
                         "filters": payload.model_dump(),
                         "execution_mode": "database",
                     }
                 )
+                compare_question = self._build_compare_question(payload)
+                compare_parsed = self._build_compare_parsed_snapshot(payload)
+                compare_response_meta = self._attach_direct_query_contract(
+                    question=compare_question,
+                    parsed_snapshot=compare_parsed,
+                    query_result=result,
+                )
+                # compare total-mode 返回的是左右总量三元组，`items` 合法情况下也可能为空。
+                # 日志中的 result_count 不能再直接按 len(items) 计算，否则历史列表和详情会被误判成空结果。
+                compare_result_count = LogisticsResultCountHelper.extract_count(result)
                 self._safe_write_log(
                     trace_id=trace_id,
                     query_type="COMPARE",
                     payload=payload.model_dump(),
                     metric_type=payload.metric_type,
-                    result_count=len(result.get("items", [])),
+                    result_count=compare_result_count,
                     route_type=payload.source_scope,
+                    question_text=compare_question,
+                    payload_snapshot=self._build_direct_query_log_payload(
+                        question=compare_question,
+                        request_payload=payload.model_dump(),
+                        parsed_snapshot=compare_parsed,
+                        query_result=result,
+                        response_meta=compare_response_meta,
+                    ),
                 )
                 return result
             except SQLAlchemyError as exc:
@@ -286,6 +332,9 @@ class LogisticsQueryService:
                 ),
             }
             self._attach_aggregate_contract(payload=payload, query_result=response)
+            aggregate_question = self._build_aggregate_question(payload)
+            aggregate_parsed = self._build_aggregate_parsed_snapshot(payload)
+            aggregate_response_meta = deepcopy(response.get("response_meta") or {})
             self._safe_write_log(
                 trace_id=trace_id,
                 query_type="AGGREGATE",
@@ -293,6 +342,15 @@ class LogisticsQueryService:
                 metric_type=payload.metric_type,
                 result_count=0,
                 route_type=f"{payload.source_scope}:fallback_blocked",
+                question_text=aggregate_question,
+                # 即使 fallback 被阻断，也要把最小快照写入日志，避免历史详情再补造。
+                payload_snapshot=self._build_direct_query_log_payload(
+                    question=aggregate_question,
+                    request_payload=payload.model_dump(),
+                    parsed_snapshot=aggregate_parsed,
+                    query_result=response,
+                    response_meta=aggregate_response_meta,
+                ),
             )
             return response
 
@@ -320,6 +378,9 @@ class LogisticsQueryService:
             "compatibility_notice": self._compatibility_notice(payload),
         }
         self._attach_aggregate_contract(payload=payload, query_result=response)
+        aggregate_question = self._build_aggregate_question(payload)
+        aggregate_parsed = self._build_aggregate_parsed_snapshot(payload)
+        aggregate_response_meta = deepcopy(response.get("response_meta") or {})
         self._safe_write_log(
             trace_id=trace_id,
             query_type="AGGREGATE",
@@ -327,6 +388,15 @@ class LogisticsQueryService:
             metric_type=payload.metric_type,
             result_count=LogisticsResultCountHelper.extract_count(response),
             route_type=f"{payload.source_scope}:fallback",
+            question_text=aggregate_question,
+            # fallback aggregate 也复用统一快照结构，保证 direct query 日志口径一致。
+            payload_snapshot=self._build_direct_query_log_payload(
+                question=aggregate_question,
+                request_payload=payload.model_dump(),
+                parsed_snapshot=aggregate_parsed,
+                query_result=response,
+                response_meta=aggregate_response_meta,
+            ),
         )
         return response
 
@@ -363,13 +433,28 @@ class LogisticsQueryService:
             "execution_mode": "fallback",
             "compatibility_notice": self._compatibility_notice(payload),
         }
+        detail_question = self._build_detail_question(payload)
+        detail_parsed = self._build_detail_parsed_snapshot(payload)
+        detail_response_meta = self._attach_direct_query_contract(
+            question=detail_question,
+            parsed_snapshot=detail_parsed,
+            query_result=response,
+        )
         self._safe_write_log(
             trace_id=trace_id,
             query_type="DETAIL",
             payload=payload.model_dump(),
             metric_type=payload.metric_type,
-            result_count=len(items),
+            result_count=LogisticsResultCountHelper.extract_count(response),
             route_type=f"{payload.source_scope}:fallback",
+            question_text=detail_question,
+            payload_snapshot=self._build_direct_query_log_payload(
+                question=detail_question,
+                request_payload=payload.model_dump(),
+                parsed_snapshot=detail_parsed,
+                query_result=response,
+                response_meta=detail_response_meta,
+            ),
         )
         return response
 
@@ -408,6 +493,7 @@ class LogisticsQueryService:
                 mapped_field=mapping[0],
             )
             response = {
+                "query_type": "compare",
                 "metric_type": payload.metric_type,
                 "left_label": payload.left.label,
                 "right_label": payload.right.label,
@@ -424,6 +510,7 @@ class LogisticsQueryService:
             right_value = self._metric_total(right_records, payload.metric_type)
             diff_value = right_value - left_value
             response = {
+                "query_type": "compare",
                 "metric_type": payload.metric_type,
                 "left_label": payload.left.label,
                 "right_label": payload.right.label,
@@ -438,9 +525,16 @@ class LogisticsQueryService:
                 "compatibility_notice": self._compatibility_notice(payload),
             }
 
-        # compare 在 compare_dim 为空时，返回的是 left/right/diff 三元组，items 可能为空。
-        # 这里不能再简单按 len(items) 记日志，否则会把“有效对比结果”误记成 0 条。
-        compare_result_count = 1 if (not payload.compare_dim) else len(response.get("items", []))
+        compare_question = self._build_compare_question(payload)
+        compare_parsed = self._build_compare_parsed_snapshot(payload)
+        compare_response_meta = self._attach_direct_query_contract(
+            question=compare_question,
+            parsed_snapshot=compare_parsed,
+            query_result=response,
+        )
+        # compare total-mode 的合法结果可能没有 items，因此这里统一复用结果数量提取逻辑。
+        # 这样数据库模式和 fallback 模式的日志口径保持一致，避免历史回放状态漂移。
+        compare_result_count = LogisticsResultCountHelper.extract_count(response)
         self._safe_write_log(
             trace_id=trace_id,
             query_type="COMPARE",
@@ -448,6 +542,14 @@ class LogisticsQueryService:
             metric_type=payload.metric_type,
             result_count=compare_result_count,
             route_type=f"{payload.source_scope}:fallback",
+            question_text=compare_question,
+            payload_snapshot=self._build_direct_query_log_payload(
+                question=compare_question,
+                request_payload=payload.model_dump(),
+                parsed_snapshot=compare_parsed,
+                query_result=response,
+                response_meta=compare_response_meta,
+            ),
         )
         return response
 
@@ -646,6 +748,51 @@ class LogisticsQueryService:
             status=status,
         )
 
+    def _attach_direct_query_contract(
+        self,
+        *,
+        question: str,
+        parsed_snapshot: dict[str, Any],
+        query_result: dict[str, Any],
+    ) -> dict[str, Any]:
+        """给 direct query 结果补最小共享字段。
+
+        说明：
+        1. 当前只服务于 detail / compare 直连查询；
+        2. 保持既有结果结构不变，只增量补共享字段；
+        3. 返回 response_meta，便于日志快照复用，减少后续重复构造。
+        """
+        result_explanation = self.result_explainer.build(
+            question=question,
+            parsed=parsed_snapshot,
+            query_result=query_result,
+        )
+        no_result_analysis = self.no_result_analyzer.analyze(
+            question=question,
+            parsed=parsed_snapshot,
+            query_result=query_result,
+        )
+        status = self.query_response_standardizer.build_status(
+            parsed=parsed_snapshot,
+            query_result=query_result,
+        )
+
+        query_result["status"] = deepcopy(status)
+        query_result["result_explanation"] = deepcopy(result_explanation)
+        if no_result_analysis is not None:
+            query_result["no_result_analysis"] = deepcopy(no_result_analysis)
+        else:
+            query_result.pop("no_result_analysis", None)
+
+        response_meta = self.query_response_standardizer.build_response_meta(
+            question=question,
+            parsed=parsed_snapshot,
+            query_result=query_result,
+            status=status,
+        )
+        query_result["response_meta"] = deepcopy(response_meta)
+        return response_meta
+
     @staticmethod
     def _build_aggregate_parsed_snapshot(payload: LogisticsAggregateQuery) -> dict[str, Any]:
         """为 aggregate 结果解释补一份最小 parsed 快照。
@@ -688,6 +835,138 @@ class LogisticsQueryService:
 
         summary = "，".join(conditions) if conditions else "当前筛选条件"
         return f"{summary} 的 {LogisticsQueryService._metric_type_label(payload.metric_type)} 统计"
+
+    @staticmethod
+    def _build_detail_parsed_snapshot(payload: LogisticsDetailQuery) -> dict[str, Any]:
+        """为 detail 直连查询补一份最小 parsed 快照。"""
+        return {
+            "selected_domain": "logistics",
+            "mode": "detail",
+            "metric_type": payload.metric_type,
+            "source_scope": payload.source_scope,
+            "year_month_list": list(payload.year_month_list),
+            "customer_name": payload.customer_name,
+            "logistics_company_name": payload.logistics_company_name,
+            "region_name": payload.region_name,
+            "warehouse_name": payload.warehouse_name,
+            "transport_mode": payload.transport_mode,
+            "origin_place": payload.origin_place,
+            "contract_no": payload.contract_no,
+            "inquiry_no": payload.inquiry_no,
+            "ship_instruction_no": payload.ship_instruction_no,
+            "sap_order_no": payload.sap_order_no,
+            "task_id": payload.task_id,
+        }
+
+    @staticmethod
+    def _build_detail_question(payload: LogisticsDetailQuery) -> str:
+        """把 detail 条件整理成可读问题标题，供日志和历史页复用。"""
+        for label, value in [
+            ("合同编号", payload.contract_no),
+            ("询比价编号", payload.inquiry_no),
+            ("发货指令", payload.ship_instruction_no),
+            ("SAP 单号", payload.sap_order_no),
+            ("任务编号", payload.task_id),
+            ("车牌号", payload.vehicle_no),
+        ]:
+            if value:
+                return f"{label} {value} 的明细"
+
+        if payload.year_month_list:
+            return f"月份 {'、'.join(payload.year_month_list)} 的明细"
+        return "当前筛选条件的明细"
+
+    @staticmethod
+    def _build_compare_parsed_snapshot(payload: LogisticsCompareQuery) -> dict[str, Any]:
+        """为 compare 直连查询补一份最小 parsed 快照。"""
+        return {
+            "selected_domain": "logistics",
+            "mode": "compare",
+            "metric_type": payload.metric_type,
+            "source_scope": payload.source_scope,
+            "compare_dim": payload.compare_dim,
+            "left": payload.left.model_dump(),
+            "right": payload.right.model_dump(),
+            "customer_name": payload.customer_name,
+            "logistics_company_name": payload.logistics_company_name,
+            "region_name": payload.region_name,
+            "warehouse_name": payload.warehouse_name,
+            "transport_mode": payload.transport_mode,
+            "origin_place": payload.origin_place,
+        }
+
+    @staticmethod
+    def _build_compare_question(payload: LogisticsCompareQuery) -> str:
+        """把 compare 条件整理成可读问题标题，供日志和历史页复用。"""
+        metric_label = LogisticsQueryService._metric_type_label(payload.metric_type)
+        if payload.compare_dim:
+            return f"{payload.left.label} 与 {payload.right.label} 的 {metric_label} 按 {payload.compare_dim} 对比"
+        return f"{payload.left.label} 与 {payload.right.label} 的 {metric_label} 对比"
+
+    @staticmethod
+    def _build_direct_query_log_payload(
+        *,
+        question: str,
+        request_payload: dict[str, Any],
+        parsed_snapshot: dict[str, Any],
+        query_result: dict[str, Any],
+        response_meta: dict[str, Any],
+    ) -> dict[str, Any]:
+        """构建 direct query 的最小历史快照。
+
+        说明：
+        1. 这里保留原始请求参数，避免后续历史重查丢失输入；
+        2. 同时补上 parsed / response_meta / query_result 最小快照，减少历史详情对兼容补造的依赖；
+        3. items 仍做截断保护，避免日志体积无限膨胀。
+        """
+        safe_items = query_result.get("items") if isinstance(query_result.get("items"), list) else []
+        limited_items = deepcopy(safe_items[:20])
+        result_count = LogisticsResultCountHelper.extract_count(query_result)
+        return {
+            "question": question,
+            "request_payload": deepcopy(request_payload),
+            "parsed": deepcopy(parsed_snapshot),
+            "execution_summary": {
+                "execution_mode": query_result.get("execution_mode"),
+                "result_count": result_count,
+            },
+            "response_meta": {
+                "question": response_meta.get("question"),
+                "domain": response_meta.get("domain"),
+                "mode": response_meta.get("mode"),
+                "metric_type": response_meta.get("metric_type"),
+                "source_scope": response_meta.get("source_scope"),
+                "status": deepcopy(response_meta.get("status")),
+                "trace_ready": response_meta.get("trace_ready"),
+                "result_count": response_meta.get("result_count"),
+            },
+            "query_result": {
+                "query_type": query_result.get("query_type"),
+                "metric_type": query_result.get("metric_type"),
+                "source_scope": query_result.get("source_scope"),
+                "filters": deepcopy(query_result.get("filters")),
+                "execution_mode": query_result.get("execution_mode"),
+                "status": deepcopy(query_result.get("status")),
+                "summary": deepcopy(query_result.get("summary")),
+                "total": query_result.get("total"),
+                "page": query_result.get("page"),
+                "page_size": query_result.get("page_size"),
+                "compare_dim": query_result.get("compare_dim"),
+                "left_label": query_result.get("left_label"),
+                "right_label": query_result.get("right_label"),
+                "left_value": query_result.get("left_value"),
+                "right_value": query_result.get("right_value"),
+                "diff_value": query_result.get("diff_value"),
+                "diff_rate": query_result.get("diff_rate"),
+                "compatibility_notice": deepcopy(query_result.get("compatibility_notice")),
+                "result_explanation": deepcopy(query_result.get("result_explanation")),
+                "no_result_analysis": deepcopy(query_result.get("no_result_analysis")),
+                "items": limited_items,
+                "item_count": len(safe_items),
+                "result_count": result_count,
+                "items_truncated": len(safe_items) > len(limited_items),
+            },
+        }
 
     @staticmethod
     def _metric_type_label(metric_type: str) -> str:
@@ -816,6 +1095,8 @@ class LogisticsQueryService:
         metric_type: str,
         result_count: int,
         route_type: str,
+        question_text: str | None = None,
+        payload_snapshot: dict[str, Any] | None = None,
     ) -> None:
         """尽力写入查询日志。
 
@@ -829,8 +1110,10 @@ class LogisticsQueryService:
                 {
                     "trace_id": trace_id or "local-dev",
                     "query_type": query_type,
-                    "question_text": None,
-                    "request_payload": json.dumps(payload, ensure_ascii=False),
+                    "question_text": question_text,
+                    # 这里统一允许写入“原始请求 + 最小快照”的增强载荷。
+                    # 使用 default=str，避免 Decimal、日期等对象导致日志序列化失败。
+                    "request_payload": json.dumps(payload_snapshot or payload, ensure_ascii=False, default=str),
                     "route_type": route_type,
                     "metric_type": metric_type,
                     "result_count": result_count,

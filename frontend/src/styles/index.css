@@ -1,8 +1,21 @@
 :root {
-  color: #1f2329;
-  background: #f5f7fa;
-  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
-    "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  color: #16181d;
+  background: #e7e9fb;
+  font-family: "Avenir Next", "SF Pro Display", "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", sans-serif;
+  --app-bg: #e7e9fb;
+  --app-bg-glow: rgba(151, 168, 255, 0.28);
+  --panel-bg: rgba(255, 255, 255, 0.9);
+  --panel-border: rgba(128, 144, 255, 0.18);
+  --panel-shadow: 0 22px 50px rgba(50, 68, 149, 0.12);
+  --panel-shadow-soft: 0 10px 30px rgba(58, 76, 154, 0.08);
+  --text-main: #16181d;
+  --text-subtle: #697188;
+  --text-faint: #9198ad;
+  --accent: #7d8cff;
+  --accent-strong: #3b4ef6;
+  --accent-soft: rgba(125, 140, 255, 0.14);
+  --surface-muted: rgba(245, 247, 255, 0.88);
 }
 
 * {
@@ -14,26 +27,31 @@ body,
 #app {
   margin: 0;
   min-height: 100%;
-  background: #f5f7fa;
+  background:
+    radial-gradient(circle at top left, var(--app-bg-glow) 0, rgba(255, 255, 255, 0) 28%),
+    linear-gradient(180deg, #eef0ff 0%, var(--app-bg) 100%);
 }
 
 .page-card {
-  background: #fff;
-  border-radius: 16px;
+  background: var(--panel-bg);
+  border-radius: 24px;
   padding: 20px;
-  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06);
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--panel-shadow-soft);
+  backdrop-filter: blur(18px);
 }
 
 .page-title {
   margin: 0 0 16px;
-  font-size: 22px;
-  font-weight: 700;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 .page-subtitle {
   margin: 0 0 20px;
-  color: #6b7280;
-  line-height: 1.6;
+  color: var(--text-subtle);
+  line-height: 1.75;
 }
 
 .mono-block {
@@ -58,4 +76,16 @@ body,
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
+}
+
+.soft-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(122, 136, 255, 0.14);
+  color: var(--text-subtle);
+  font-size: 12px;
 }

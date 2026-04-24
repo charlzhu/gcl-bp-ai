@@ -22,6 +22,9 @@ from backend.app.utils.time_utils import format_month, shift_month
 
 
 class ChatService:
+    """
+    对话服务
+    """
     def __init__(
         self,
         *,

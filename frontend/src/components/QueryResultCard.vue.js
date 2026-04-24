@@ -2,7 +2,9 @@ import { computed } from 'vue';
 import { ElMessage } from 'element-plus';
 import ResultTable from '@/components/ResultTable.vue';
 import { buildQueryResultPresentation, formatExecutionModeLabel, formatMetricTypeLabel, formatQueryTypeLabel, formatSourceScopeLabel, } from '@/utils/queryResultPresentation';
-const props = defineProps();
+const props = withDefaults(defineProps(), {
+    showTemplateInfo: true,
+});
 const emit = defineEmits();
 /**
  * 表格数据兜底为数组，避免模板层重复做空值判断。
@@ -136,6 +138,9 @@ function formatRate(value) {
     return '-';
 }
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
+const __VLS_withDefaultsArg = (function (t) { return t; })({
+    showTemplateInfo: true,
+});
 const __VLS_ctx = {};
 let __VLS_components;
 let __VLS_directives;
@@ -535,7 +540,7 @@ if (__VLS_ctx.hasDisplayPayload) {
         });
         (__VLS_ctx.formatRate(props.queryResult?.diff_rate));
     }
-    if (__VLS_ctx.presentation.templateInfo) {
+    if (props.showTemplateInfo && __VLS_ctx.presentation.templateInfo) {
         const __VLS_52 = {}.ElCollapse;
         /** @type {[typeof __VLS_components.ElCollapse, typeof __VLS_components.elCollapse, typeof __VLS_components.ElCollapse, typeof __VLS_components.elCollapse, ]} */ ;
         // @ts-ignore
@@ -747,6 +752,7 @@ const __VLS_self = (await import('vue')).defineComponent({
     },
     __typeEmits: {},
     __typeProps: {},
+    props: {},
 });
 export default (await import('vue')).defineComponent({
     setup() {
@@ -754,5 +760,6 @@ export default (await import('vue')).defineComponent({
     },
     __typeEmits: {},
     __typeProps: {},
+    props: {},
 });
 ; /* PartiallyEnd: #4569/main.vue */

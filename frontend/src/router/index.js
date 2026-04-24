@@ -2,7 +2,15 @@ import { createRouter, createWebHistory } from 'vue-router';
 const routes = [
     {
         path: '/',
-        redirect: '/nl-query',
+        redirect: '/logistics/data-qa',
+    },
+    {
+        path: '/logistics/data-qa',
+        component: () => import('@/views/logistics-data-qa/LogisticsDataQaPage.vue'),
+    },
+    {
+        path: '/logistics/data-qa/history',
+        component: () => import('@/views/logistics-data-qa/LogisticsDataQaHistoryPage.vue'),
     },
     {
         path: '/nl-query',
@@ -23,6 +31,10 @@ const routes = [
     {
         path: '/detail-view',
         component: () => import('@/views/detail/DetailViewPage.vue'),
+    },
+    {
+        path: '/plan-bom/detail-query',
+        component: () => import('@/views/plan-bom/PlanBomDetailQueryPage.vue'),
     },
 ];
 const router = createRouter({

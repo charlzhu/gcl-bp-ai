@@ -8,6 +8,73 @@ export interface LogisticsNLQueryPayload {
 }
 
 /**
+ * 物流数据问答请求体。
+ * 说明：
+ * 当前正式页只支持单个自然语言问题输入，不扩展复杂表单。
+ */
+export interface LogisticsDataQaPayload {
+  question: string
+}
+
+/**
+ * 物流数据问答结果表。
+ */
+export interface LogisticsDataQaTable {
+  columns: string[]
+  rows: Record<string, any>[]
+}
+
+/**
+ * 物流数据问答查询计划。
+ * 说明：
+ * 前端只展示，不参与任何业务推断。
+ */
+export interface LogisticsDataQaPlan {
+  domain: 'logistics'
+  intent: string
+  query_key?: string | null
+  metrics: string[]
+  dimensions: string[]
+  filters: Record<string, any>
+  group_by: string[]
+  sort: Array<Record<string, any>>
+  limit?: number | null
+  needs_clarification: boolean
+  clarification_questions: string[]
+  unsupported_reason?: string | null
+}
+
+/**
+ * 物流数据问答状态。
+ * 说明：
+ * 前端正式页直接使用这个状态做成功、澄清、暂不支持、空结果和错误态展示。
+ */
+export interface LogisticsDataQaStatus {
+  code: string
+  message: string
+  success: boolean
+  severity: string
+}
+
+/**
+ * 物流数据问答结果。
+ */
+export interface LogisticsDataQaResult {
+  answer_summary: string
+  result_table: LogisticsDataQaTable
+  calculation_logic: string[]
+  data_scope: Record<string, any>
+  query_plan: LogisticsDataQaPlan
+  warnings: string[]
+  needs_clarification: boolean
+  clarification_questions: string[]
+  supported: boolean
+  status?: LogisticsDataQaStatus | null
+  history_log_id?: number | null
+  history_ready?: boolean
+}
+
+/**
  * 结构化统计查询请求体。
  * 说明：
  * 这里只保留前端第二版最常用字段，后续可以按后端 schema 扩展。
@@ -118,6 +185,44 @@ export interface QueryHistoryResponse {
 export async function fetchNLQuery(payload: LogisticsNLQueryPayload) {
   const resp = await http.post('/logistics/nl2query/parse-and-query', payload)
   return resp.data
+}
+
+/**
+ * 物流数据问答正式页查询。
+ * 说明：
+ * 1. 只对接当前已验收通过的 logistics data-qa 后端接口；
+ * 2. 返回值保持 ApiResponse 外层结构，页面层自行取 data；
+ * 3. 不在前端做任何字段推断或业务补算。
+ */
+export async function fetchLogisticsDataQaQuery(payload: LogisticsDataQaPayload) {
+  const resp = await http.post('/logistics/data-qa/query', payload)
+  return resp.data as {
+    code: number
+    message: string
+    trace_id?: string | null
+    data?: LogisticsDataQaResult | null
+  }
+}
+
+/**
+ * 读取物流数据问答历史列表。
+ * 说明：
+ * 这里直接复用统一查询历史接口，只固定筛选 `DATA_QA`。
+ */
+export async function fetchLogisticsDataQaHistory(params: QueryHistoryParams = {}) {
+  return fetchQueryHistory({
+    ...params,
+    query_type: 'DATA_QA',
+  })
+}
+
+/**
+ * 读取单条物流数据问答历史详情。
+ * 说明：
+ * 回放优先读取历史快照，不重新执行后端查询。
+ */
+export async function fetchLogisticsDataQaHistoryDetail(logId: number) {
+  return fetchQueryHistoryDetail(logId)
 }
 
 /**

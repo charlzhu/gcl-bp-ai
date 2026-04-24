@@ -6,6 +6,10 @@ from backend.app.schemas.health import HealthData, SystemConfigData
 
 
 class HealthService:
+    """
+    健康服务
+    """
+
     def __init__(self, settings: Settings) -> None:
         self.settings = settings
 

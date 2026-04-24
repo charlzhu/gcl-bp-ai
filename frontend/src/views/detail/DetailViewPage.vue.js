@@ -63,7 +63,7 @@ function showRowDetail(row) {
  */
 function resolveSourcePageLabel(value) {
     if (value === 'structured-query')
-        return '条件查询';
+        return '物流条件查询';
     if (value === 'nl-query')
         return '自然语言查询';
     return value || '-';
@@ -184,14 +184,14 @@ if (!__VLS_ctx.context) {
     /** @type {[typeof __VLS_components.ElAlert, typeof __VLS_components.elAlert, ]} */ ;
     // @ts-ignore
     const __VLS_21 = __VLS_asFunctionalComponent(__VLS_20, new __VLS_20({
-        title: "当前没有可展示的查询上下文，请先在自然语言查询页或条件查询页执行一次查询。",
+        title: "当前没有可展示的查询上下文，请先在自然语言查询页或物流条件查询页执行一次查询。",
         type: "warning",
         closable: (false),
         showIcon: true,
         ...{ class: "page-card" },
     }));
     const __VLS_22 = __VLS_21({
-        title: "当前没有可展示的查询上下文，请先在自然语言查询页或条件查询页执行一次查询。",
+        title: "当前没有可展示的查询上下文，请先在自然语言查询页或物流条件查询页执行一次查询。",
         type: "warning",
         closable: (false),
         showIcon: true,
