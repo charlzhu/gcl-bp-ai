@@ -3,6 +3,7 @@ uvicorn[standard]==0.30.6
 
 sqlalchemy==2.0.35
 pymysql==1.1.1
+cryptography==42.0.8
 alembic==1.13.3
 
 pydantic==2.9.2
@@ -20,6 +21,7 @@ httpx==0.27.2
 loguru==0.7.2
 
 pytest==8.3.3
+playwright==1.51.0
 
 # 当前 BOM 主线如果没有实际启用 Milvus，可先注释掉；
 # 等你后面要跑向量库相关模块时再打开。

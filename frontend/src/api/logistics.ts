@@ -42,6 +42,7 @@ export interface LogisticsDataQaPlan {
   needs_clarification: boolean
   clarification_questions: string[]
   unsupported_reason?: string | null
+  unsupported_suggestions?: string[]
 }
 
 /**
@@ -54,6 +55,56 @@ export interface LogisticsDataQaStatus {
   message: string
   success: boolean
   severity: string
+}
+
+/**
+ * 物流 data-qa 答案表达层输出。
+ * 说明：
+ * 1. 后端只在确定性查询结果之后生成该结构；
+ * 2. 前端只按 display_type 渲染，不反向推断 A/B/C；
+ * 3. 字段缺失时必须回退到原有 result_table / answer_summary 展示。
+ */
+export interface LogisticsDataQaPresentation {
+  display_type:
+    | 'narrative'
+    | 'summary_cards'
+    | 'table'
+    | 'line_chart'
+    | 'bar_chart'
+    | 'mixed'
+    | 'clarification'
+    | 'unsupported'
+    | 'empty_result'
+    | 'error'
+  title?: string
+  answer?: string
+  highlights?: string[]
+  chart_spec?: {
+    chart_type?: 'line' | 'bar' | null
+    title?: string
+    x_axis?: string
+    y_axis?: string[]
+    series?: Array<Record<string, any>>
+    unit?: string | null
+    data?: Record<string, any>[]
+  } | null
+  table_spec?: LogisticsDataQaTable | null
+  cards?: Array<{
+    label: string
+    value: any
+    unit?: string | null
+    description?: string | null
+  }>
+  follow_up?: {
+    questions?: string[]
+    examples?: string[]
+  } | null
+  unsupported_explanation?: {
+    reason?: string
+    suggestions?: string[]
+  } | null
+  caveats?: string[]
+  debug?: Record<string, any>
 }
 
 /**
@@ -72,6 +123,7 @@ export interface LogisticsDataQaResult {
   status?: LogisticsDataQaStatus | null
   history_log_id?: number | null
   history_ready?: boolean
+  presentation?: LogisticsDataQaPresentation | null
 }
 
 /**

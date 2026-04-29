@@ -58,6 +58,16 @@ class Settings(BaseSettings):
     llm_clarification_assist_min_confidence: float = 0.7
     llm_clarification_assist_category_whitelist: list[str] = Field(default_factory=list)
     llm_clarification_assist_audit_enabled: bool = True
+    llm_unsupported_assist_enabled: bool = True
+    llm_unsupported_assist_mode: Literal["off", "shadow", "assist"] = "assist"
+    llm_unsupported_assist_sample_rate: float = 1.0
+    llm_unsupported_assist_min_confidence: float = 0.7
+    llm_unsupported_assist_category_whitelist: list[str] = Field(default_factory=list)
+    llm_unsupported_assist_audit_enabled: bool = True
+    llm_answer_presentation_enabled: bool = True
+    llm_answer_presentation_model: str = ""
+    llm_answer_presentation_timeout: float = 6.0
+    llm_answer_presentation_max_retries: int = 0
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parent.parent.parent / ".env",
@@ -124,6 +134,41 @@ class Settings(BaseSettings):
     @classmethod
     def _parse_llm_clarification_assist_category_whitelist(cls, value: object) -> object:
         """解析澄清辅助允许增强的澄清类别白名单。"""
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except Exception:  # noqa: BLE001
+                    pass
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        return value
+
+    @field_validator("llm_unsupported_assist_mode", mode="before")
+    @classmethod
+    def _normalize_llm_unsupported_assist_mode(cls, value: object) -> object:
+        """兼容空值和旧版 disabled 写法。"""
+        if value is None:
+            return "off"
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"", "disabled"}:
+                return "off"
+            return normalized
+        return value
+
+    @field_validator("llm_unsupported_assist_category_whitelist", mode="before")
+    @classmethod
+    def _parse_llm_unsupported_assist_category_whitelist(cls, value: object) -> object:
+        """解析拒答解释辅助允许增强的 C 类类别白名单。"""
         if value is None:
             return []
         if isinstance(value, list):
@@ -331,6 +376,22 @@ class Settings(BaseSettings):
     @property
     def LLM_GUARDRAIL_AUDIT_ENABLED(self) -> bool:
         return self.llm_guardrail_audit_enabled
+
+    @property
+    def LLM_ANSWER_PRESENTATION_ENABLED(self) -> bool:
+        return self.llm_answer_presentation_enabled
+
+    @property
+    def LLM_ANSWER_PRESENTATION_MODEL(self) -> str:
+        return self.llm_answer_presentation_model
+
+    @property
+    def LLM_ANSWER_PRESENTATION_TIMEOUT(self) -> float:
+        return self.llm_answer_presentation_timeout
+
+    @property
+    def LLM_ANSWER_PRESENTATION_MAX_RETRIES(self) -> int:
+        return self.llm_answer_presentation_max_retries
 
 
 @lru_cache

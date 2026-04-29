@@ -3,11 +3,15 @@ import { createRouter, createWebHistory } from 'vue-router'
 const routes = [
   {
     path: '/',
-    redirect: '/logistics/data-qa',
+    redirect: '/smart-chat',
+  },
+  {
+    path: '/smart-chat',
+    component: () => import('@/views/business-chat/BusinessChatPage.vue'),
   },
   {
     path: '/logistics/data-qa',
-    component: () => import('@/views/logistics-data-qa/LogisticsDataQaPage.vue'),
+    redirect: '/smart-chat',
   },
   {
     path: '/logistics/data-qa/history',
@@ -36,6 +40,14 @@ const routes = [
   {
     path: '/plan-bom/detail-query',
     component: () => import('@/views/plan-bom/PlanBomDetailQueryPage.vue'),
+  },
+  {
+    path: '/bom-data',
+    component: () => import('@/views/plan-bom/BomDataManagementPage.vue'),
+  },
+  {
+    path: '/trial-guide',
+    component: () => import('@/views/trial/TrialGuidePage.vue'),
   },
 ]
 

@@ -14,7 +14,10 @@ from backend.app.domains.logistics.services.serving_refresh_service import Logis
 from backend.app.domains.logistics.services.sync_service import LogisticsSystemSyncService
 from backend.app.domains.plan_bom.repositories.import_repository import PlanBomImportRepository
 from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
+from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
 from backend.app.domains.plan_bom.services.excel_import_service import PlanBomExcelImportService
+from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
+from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
 from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
 from backend.app.repositories.logistics_query_repo import InMemoryLogisticsQueryRepository
 from backend.app.repositories.task_repo import InMemoryTaskRepository
@@ -163,3 +166,20 @@ def get_plan_bom_query_service(
     不提供 compare 差异算法、导出或 SAP 接入能力。
     """
     return PlanBomQueryService(repository=PlanBomQueryRepository(db))
+
+
+def get_plan_bom_qa_service(
+    db: Session = Depends(get_db),
+) -> PlanBomQaService:
+    """计划 BOM 自然语言问答服务依赖。
+
+    当前复用计划 BOM 已有 repository/query service，并补充独立 NLU 与表达层；
+    不复用物流 query_key，也不让 LLM 直接生成事实性答案。
+    """
+    repository = PlanBomQueryRepository(db)
+    return PlanBomQaService(
+        repository=repository,
+        query_service=PlanBomQueryService(repository=repository),
+        nlu_service=PlanBomNluCenterService(repository=repository),
+        presentation_service=PlanBomAnswerPresentationService(),
+    )

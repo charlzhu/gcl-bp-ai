@@ -713,7 +713,6 @@ function buildAnswerView(item: NLConversationItem) {
   margin-top: auto;
   margin-bottom: 10px;
   padding: 14px 18px 14px;
-  //border-radius: 22px;
 }
 
 .nl-query-form :deep(.el-form-item) {
@@ -810,7 +809,6 @@ function buildAnswerView(item: NLConversationItem) {
   border: 1px solid #dde7ed;
   border-radius: 24px;
   box-shadow: 0 16px 38px rgba(34, 60, 86, 0.08);
-  //padding: 22px 24px;
 }
 
 @media (max-width: 960px) {
