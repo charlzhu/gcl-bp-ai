@@ -1,0 +1,554 @@
+{
+  "generated_at": "2026-04-26T19:25:19",
+  "source_ledger": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/logistics_903_master_ledger.json",
+  "batch_id": "A-W3-P1",
+  "coverage_before_batch": {
+    "current_a_total": 652,
+    "precise_covered_before_batch": 380,
+    "uncovered_a_before_batch": 272,
+    "selectable_uncovered_with_query_key": 272
+  },
+  "selection_rule": "优先选择 Wave1/Wave2/Wave3 新进 A 中尚未进入精确断言、且已有受控 query_key 的高价值题。",
+  "items": [
+    {
+      "plan_id": "A-W3-P1-001",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ146",
+      "question": "2023年一季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-002",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ147",
+      "question": "2023年一季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-003",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ149",
+      "question": "2023年二季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-004",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ150",
+      "question": "2023年二季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-005",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ152",
+      "question": "2023年三季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-006",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ153",
+      "question": "2023年三季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-007",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ155",
+      "question": "2023年四季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-008",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ156",
+      "question": "2023年四季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-009",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ158",
+      "question": "2024年一季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-010",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ159",
+      "question": "2024年一季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-011",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ161",
+      "question": "2024年二季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-012",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ162",
+      "question": "2024年二季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-013",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ164",
+      "question": "2024年三季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-014",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ165",
+      "question": "2024年三季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-015",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ167",
+      "question": "2024年四季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-016",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ168",
+      "question": "2024年四季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-017",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ170",
+      "question": "2025年一季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-018",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ171",
+      "question": "2025年一季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-019",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ173",
+      "question": "2025年二季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-020",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ174",
+      "question": "2025年二季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-021",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ176",
+      "question": "2025年三季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-022",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ177",
+      "question": "2025年三季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-023",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ179",
+      "question": "2025年四季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-024",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ180",
+      "question": "2025年四季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-025",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ466",
+      "question": "2024年客户华阳发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-026",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ468",
+      "question": "2024年客户创维客户发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-027",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ470",
+      "question": "2024年客户海南创维新能源投资有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-028",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ472",
+      "question": "2024年客户广东粤电阳西新能源有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-029",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ474",
+      "question": "2024年客户华润新能源（皮山）有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-030",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ476",
+      "question": "2025年客户华阳发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    }
+  ]
+}

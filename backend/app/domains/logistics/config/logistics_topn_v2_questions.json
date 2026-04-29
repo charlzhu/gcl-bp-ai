@@ -1,0 +1,3120 @@
+{
+  "generated_at": "2026-04-24T09:03:13",
+  "recommended_topn_size": 80,
+  "items": [
+    {
+      "question_id": "Q008",
+      "question": "江苏省历史发运的总费用是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "聚合/地点",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_total_fee_by_province",
+      "theme_tags": [
+        "区域/省份类",
+        "费用/成本类"
+      ],
+      "family": "线路/城市运价类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 20,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 46
+      },
+      "runtime_evidence_score": 138,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 246,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 1,
+      "priority": "P1"
+    },
+    {
+      "question_id": "RAW038",
+      "question": "统计一下24年创维客户发货的项目地运费金额超过20万的收货地址，并分别列出询比价和招标的发运量",
+      "source_group": "73",
+      "source_label": "原始业务问法",
+      "category_label": "原始业务问法",
+      "difficulty": "L-raw",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "客户/项目类",
+        "费用/成本类",
+        "运量/车次类"
+      ],
+      "family": "客户/项目分析类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "涉及费用/单瓦成本等核心成本指标",
+        "与客户/项目经营分析直接相关"
+      ],
+      "business_value_score": 30,
+      "source_score": 40,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 38
+      },
+      "runtime_evidence_score": 114,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 206,
+      "current_blocker_reason": "当前历史台账缺少稳定的询比价/招标拆分字段，无法可靠回答高运费项目地的采购方式拆分结果，应正式转入 C 类。",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 2,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ570",
+      "question": "2026年1月份英赋嘉总计运费是多少钱？",
+      "source_group": "600",
+      "source_label": "2026承运商经营",
+      "category_label": "2026承运商经营",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_total_fee_by_filters",
+      "theme_tags": [
+        "2026系统类",
+        "费用/成本类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 25,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 34
+      },
+      "runtime_evidence_score": 102,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 205,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 3,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ528",
+      "question": "2026年1月份单瓦运输成本是多少？",
+      "source_group": "600",
+      "source_label": "2026实时经营",
+      "category_label": "2026实时经营",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_unit_fee_per_watt",
+      "theme_tags": [
+        "2026系统类",
+        "费用/成本类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 25,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 32
+      },
+      "runtime_evidence_score": 96,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 199,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 4,
+      "priority": "P1"
+    },
+    {
+      "question_id": "Q047",
+      "question": "江苏省发运记录中，按客户名称统计前5名客户的总费用和总瓦数。",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_top_customers_fee_and_mw_by_province",
+      "theme_tags": [
+        "区域/省份类",
+        "客户/项目类",
+        "费用/成本类",
+        "运量/车次类"
+      ],
+      "family": "客户/项目分析类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "涉及费用/单瓦成本等核心成本指标",
+        "支持区域、省份、基地层面的管理看板",
+        "与客户/项目经营分析直接相关"
+      ],
+      "business_value_score": 38,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 24
+      },
+      "runtime_evidence_score": 72,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 198,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 5,
+      "priority": "P1"
+    },
+    {
+      "question_id": "RAW067",
+      "question": "问题1：25年全年17.5共发运多少车",
+      "source_group": "73",
+      "source_label": "对照/改写问法",
+      "category_label": "对照/改写问法",
+      "difficulty": "L-raw",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_vehicle_type_trip_count",
+      "theme_tags": [
+        "其他"
+      ],
+      "family": "线路/城市运价类",
+      "business_value_reasons": [],
+      "business_value_score": 0,
+      "source_score": 40,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 32
+      },
+      "runtime_evidence_score": 96,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 194,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 6,
+      "priority": "P1"
+    },
+    {
+      "question_id": "RAW036",
+      "question": "26年招标和询比价，发运量分别是多少",
+      "source_group": "73",
+      "source_label": "原始业务问法",
+      "category_label": "原始业务问法",
+      "difficulty": "L-raw",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_mw_by_procurement_type",
+      "theme_tags": [
+        "2026系统类",
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 16,
+      "source_score": 40,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 192,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 7,
+      "priority": "P1"
+    },
+    {
+      "question_id": "RAW029",
+      "question": "帮我看下23年发往乌鲁木齐13m每车的运费均价是多少",
+      "source_group": "73",
+      "source_label": "原始业务问法",
+      "category_label": "原始业务问法",
+      "difficulty": "L-raw",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_route_pricing_analysis",
+      "theme_tags": [
+        "费用/成本类"
+      ],
+      "family": "线路/城市运价类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标"
+      ],
+      "business_value_score": 12,
+      "source_score": 40,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 188,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 8,
+      "priority": "P1"
+    },
+    {
+      "question_id": "RAW043",
+      "question": "问题2：26年 经营计划 运费是多少",
+      "source_group": "73",
+      "source_label": "对照/改写问法",
+      "category_label": "对照/改写问法",
+      "difficulty": "L-raw",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_special_total_fee",
+      "theme_tags": [
+        "2026系统类",
+        "费用/成本类"
+      ],
+      "family": "特殊业务口径类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 18,
+      "source_score": 40,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 24
+      },
+      "runtime_evidence_score": 72,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 188,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 9,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ518",
+      "question": "2025年各承运商按运费排名前十分别是谁？",
+      "source_group": "600",
+      "source_label": "承运商排名",
+      "category_label": "承运商排名",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "carrier_metric_ranking",
+      "theme_tags": [
+        "承运商类",
+        "排名类",
+        "费用/成本类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "可用于承运商经营评价和签收看数",
+        "适合管理汇报中的排名与对比场景"
+      ],
+      "business_value_score": 29,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 185,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 10,
+      "priority": "P1"
+    },
+    {
+      "question_id": "Q268",
+      "question": "2026年送达城市任务量排名前十的是哪些城市？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "地点/排名",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_task_count_ranking",
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类",
+        "排名类"
+      ],
+      "family": "线路/城市运价类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板",
+        "适合管理汇报中的排名与对比场景",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 22,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 24
+      },
+      "runtime_evidence_score": 72,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 182,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 11,
+      "priority": "P1"
+    },
+    {
+      "question_id": "RAW049",
+      "question": "1.项目名称：国科新能源有限公司 已发出总运量是多少",
+      "source_group": "73",
+      "source_label": "原始业务问法",
+      "category_label": "原始业务问法",
+      "difficulty": "L-raw",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "客户/项目类",
+        "运量/车次类"
+      ],
+      "family": "客户/项目分析类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "与客户/项目经营分析直接相关"
+      ],
+      "business_value_score": 18,
+      "source_score": 40,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 34
+      },
+      "runtime_evidence_score": 102,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 182,
+      "current_blocker_reason": "当前 MVP 暂未把项目名称做成稳定可复用统计维度，项目名称口径问题应正式转入 C 类。",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 12,
+      "priority": "P1"
+    },
+    {
+      "question_id": "Q256",
+      "question": "历史台账中总发运瓦数最高的前10个客户是谁？",
+      "source_group": "230",
+      "source_label": "原357题-历史台账专项",
+      "category_label": "聚合/客户/统计",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_customer_mw_ranking",
+      "theme_tags": [
+        "客户/项目类",
+        "排名类",
+        "运量/车次类"
+      ],
+      "family": "客户/项目分析类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "与客户/项目经营分析直接相关",
+        "适合管理汇报中的排名与对比场景"
+      ],
+      "business_value_score": 26,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 22
+      },
+      "runtime_evidence_score": 66,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 180,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 13,
+      "priority": "P1"
+    },
+    {
+      "question_id": "Q291",
+      "question": "2026年assign_detail中的supplier_price分布如何？高价离群点集中在哪些任务或承运商？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "统计/费用/离群",
+      "difficulty": "L2",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "承运商类",
+        "预测/诊断类"
+      ],
+      "family": "预测/诊断/开放讨论类",
+      "business_value_reasons": [
+        "可用于承运商经营评价和签收看数",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 15,
+      "source_score": 30,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 40
+      },
+      "runtime_evidence_score": 120,
+      "penalty_reasons": [
+        "诊断分析类问题仍需先锁定统计标准"
+      ],
+      "penalty_score": -8,
+      "total_score": 179,
+      "current_blocker_reason": "supplier_price 分布和高价离群点诊断当前超出一期结构化统计边界，应正式转入 C 类不支持。",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 14,
+      "priority": "P1"
+    },
+    {
+      "question_id": "Q275",
+      "question": "哪些承运商的送货单解析成功率最高，哪些最低？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "比较/回单解析/承运商",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_parse_success_rate_by_carrier",
+      "theme_tags": [
+        "2026系统类",
+        "承运商类",
+        "排名类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "可用于承运商经营评价和签收看数",
+        "适合管理汇报中的排名与对比场景"
+      ],
+      "business_value_score": 17,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 24
+      },
+      "runtime_evidence_score": 72,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 177,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 15,
+      "priority": "P1"
+    },
+    {
+      "question_id": "Q280",
+      "question": "2026年extra_cost_audited=1的主任务有多少个？主要集中在哪些承运商和省份？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "异常/费用",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_extra_cost_audited_concentration",
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类",
+        "承运商类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "可用于承运商经营评价和签收看数",
+        "支持区域、省份、基地层面的管理看板",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 23,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 20
+      },
+      "runtime_evidence_score": 60,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 171,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 16,
+      "priority": "P1"
+    },
+    {
+      "question_id": "Q267",
+      "question": "2026年各送达省份的delivery_distance填充率分别是多少？填充率最低的前十个省份是谁？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "地点/数据完整性",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_delivery_distance_fill_rate_by_province",
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类",
+        "排名类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板",
+        "适合管理汇报中的排名与对比场景",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 22,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 20
+      },
+      "runtime_evidence_score": 60,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 170,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 17,
+      "priority": "P1"
+    },
+    {
+      "question_id": "Q287",
+      "question": "2026年任务表中是否存在company_id在承运商主数据表里找不到映射的任务？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "主数据/完整性",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_company_mapping_gap",
+      "theme_tags": [
+        "2026系统类",
+        "承运商类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "可用于承运商经营评价和签收看数",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 15,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 22
+      },
+      "runtime_evidence_score": 66,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 169,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 18,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ002",
+      "question": "2023年华东区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 19,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ006",
+      "question": "2023年华南区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 20,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ010",
+      "question": "2023年华中区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 21,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ014",
+      "question": "2023年华北区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 22,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ018",
+      "question": "2023年西南区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 23,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ022",
+      "question": "2023年西北区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 24,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ026",
+      "question": "2024年华东区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 25,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ030",
+      "question": "2024年华南区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 26,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ034",
+      "question": "2024年华中区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 27,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ038",
+      "question": "2024年华北区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 28,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ042",
+      "question": "2024年西南区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 29,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ046",
+      "question": "2024年西北区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 30,
+      "priority": "P1"
+    },
+    {
+      "question_id": "SQ050",
+      "question": "2025年华东区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 31,
+      "priority": "P2"
+    },
+    {
+      "question_id": "SQ054",
+      "question": "2025年华南区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 32,
+      "priority": "P2"
+    },
+    {
+      "question_id": "SQ058",
+      "question": "2025年华中区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 33,
+      "priority": "P2"
+    },
+    {
+      "question_id": "SQ062",
+      "question": "2025年华北区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 34,
+      "priority": "P2"
+    },
+    {
+      "question_id": "SQ066",
+      "question": "2025年西南区域总发运件数是多少？",
+      "source_group": "600",
+      "source_label": "区域年度汇总",
+      "category_label": "区域年度汇总",
+      "difficulty": "L1",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_quantity_by_region",
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 8,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 26
+      },
+      "runtime_evidence_score": 78,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 164,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 35,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q055",
+      "question": "苏州城市发运中，不同物流公司的平均单价/车是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_city_carrier_avg_fee_per_trip",
+      "theme_tags": [
+        "区域/省份类",
+        "承运商类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "可用于承运商经营评价和签收看数",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 17,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 18
+      },
+      "runtime_evidence_score": 54,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 159,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 36,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q056",
+      "question": "合肥城市发运中，不同物流公司的平均单价/车是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_city_carrier_avg_fee_per_trip",
+      "theme_tags": [
+        "区域/省份类",
+        "承运商类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "可用于承运商经营评价和签收看数",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 17,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 18
+      },
+      "runtime_evidence_score": 54,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 159,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 37,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q059",
+      "question": "湖州城市发运中，不同物流公司的平均单价/车是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_city_carrier_avg_fee_per_trip",
+      "theme_tags": [
+        "区域/省份类",
+        "承运商类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "可用于承运商经营评价和签收看数",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 17,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 18
+      },
+      "runtime_evidence_score": 54,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 159,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 38,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q338",
+      "question": "“异常费用太高的城市有哪些？”——系统至少需要追问什么？",
+      "source_group": "230",
+      "source_label": "原357题-边界澄清专项",
+      "category_label": "澄清/异常费用",
+      "difficulty": "L4",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "区域/省份类",
+        "费用/成本类"
+      ],
+      "family": "线路/城市运价类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 20,
+      "source_score": 30,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 28
+      },
+      "runtime_evidence_score": 84,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 156,
+      "current_blocker_reason": "该题属于系统追问策略设计，不属于正式业务数据问答范围，应正式转入 C 类。",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 39,
+      "priority": "P2"
+    },
+    {
+      "question_id": "SQ522",
+      "question": "2026年1-2月各承运商按单瓦成本排名前十分别是谁？",
+      "source_group": "600",
+      "source_label": "承运商排名",
+      "category_label": "承运商排名",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "carrier_metric_ranking",
+      "theme_tags": [
+        "2026系统类",
+        "承运商类",
+        "排名类",
+        "费用/成本类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "可用于承运商经营评价和签收看数",
+        "适合管理汇报中的排名与对比场景",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 35,
+      "source_score": 20,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 14
+      },
+      "runtime_evidence_score": 42,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 155,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 40,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q057",
+      "question": "徐州城市发运中，不同物流公司的平均单价/车是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_city_carrier_avg_fee_per_trip",
+      "theme_tags": [
+        "区域/省份类",
+        "承运商类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "可用于承运商经营评价和签收看数",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 17,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 16
+      },
+      "runtime_evidence_score": 48,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 153,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 41,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q058",
+      "question": "昭通城市发运中，不同物流公司的平均单价/车是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_city_carrier_avg_fee_per_trip",
+      "theme_tags": [
+        "区域/省份类",
+        "承运商类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "可用于承运商经营评价和签收看数",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 17,
+      "source_score": 30,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 16
+      },
+      "runtime_evidence_score": 48,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 153,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 42,
+      "priority": "P2"
+    },
+    {
+      "question_id": "RAW009",
+      "question": "我想要知道 26 年目前为止所有的运量总和是多少",
+      "source_group": "73",
+      "source_label": "原始业务问法",
+      "category_label": "原始业务问法",
+      "difficulty": "L-raw",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "sys_mw_and_trip_count",
+      "theme_tags": [
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标"
+      ],
+      "business_value_score": 10,
+      "source_score": 40,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 14
+      },
+      "runtime_evidence_score": 42,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 150,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 43,
+      "priority": "P2"
+    },
+    {
+      "question_id": "RAW069",
+      "question": "华东区域2025年各省发运量分别是多少",
+      "source_group": "73",
+      "source_label": "原始业务问法",
+      "category_label": "原始业务问法",
+      "difficulty": "L-raw",
+      "current_status": "A",
+      "recommended_status": "A",
+      "lane": "A-稳定增强",
+      "pool_source": "current_top200_a_not_precise",
+      "query_key": "hist_mw_by_region_province",
+      "theme_tags": [
+        "区域/省份类",
+        "运量/车次类"
+      ],
+      "family": "区域/省份/基地汇总类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 18,
+      "source_score": 40,
+      "lane_score": 40,
+      "calculability_score": 18,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 10
+      },
+      "runtime_evidence_score": 30,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 146,
+      "current_blocker_reason": "当前已进入 A 类，但尚未全部纳入更严格精确断言回归。",
+      "next_phase_path": "A-继续精确断言增强",
+      "enter_next_phase": true,
+      "rank": 44,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q223",
+      "question": "最近物流成本是不是变高了？",
+      "source_group": "230",
+      "source_label": "原357题-物流澄清/矛盾",
+      "category_label": "-",
+      "difficulty": "L4",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "其他"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [],
+      "business_value_score": 0,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 19
+      },
+      "runtime_evidence_score": 57,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 131,
+      "current_blocker_reason": "缺少明确统计时间范围，仍需先澄清年份或月份。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 45,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q249",
+      "question": "历史台账中路程/KM与元/瓦是否呈显著正相关？哪些区域相关性最强？",
+      "source_group": "230",
+      "source_label": "原357题-历史台账专项",
+      "category_label": "统计/推理",
+      "difficulty": "L3",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "区域/省份类",
+        "费用/成本类",
+        "预测/诊断类"
+      ],
+      "family": "预测/诊断/开放讨论类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 20,
+      "source_score": 30,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 18
+      },
+      "runtime_evidence_score": 54,
+      "penalty_reasons": [
+        "诊断分析类问题仍需先锁定统计标准"
+      ],
+      "penalty_score": -8,
+      "total_score": 118,
+      "current_blocker_reason": "相关性强弱和显著性分析当前仍超出一期结构化统计边界，应正式转入 C 类不支持。",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 46,
+      "priority": "P2"
+    },
+    {
+      "question_id": "SQ538",
+      "question": "2026年1月份合肥基地总发运量是多少MW？",
+      "source_group": "600",
+      "source_label": "2026基地经营",
+      "category_label": "2026基地经营",
+      "difficulty": "L2",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类",
+        "运量/车次类"
+      ],
+      "family": "区域/省份/基地汇总类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "支持区域、省份、基地层面的管理看板",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 31,
+      "source_score": 20,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 14
+      },
+      "runtime_evidence_score": 42,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 115,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 47,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q021",
+      "question": "规格为GCL-NT10/78GDF-640W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "聚合",
+      "difficulty": "L1",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标"
+      ],
+      "business_value_score": 10,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 7
+      },
+      "runtime_evidence_score": 21,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 105,
+      "current_blocker_reason": "缺少明确统计时间范围，仍需先澄清年份或月份。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 48,
+      "priority": "P2"
+    },
+    {
+      "question_id": "SQ466",
+      "question": "2024年客户华阳发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "source_label": "客户项目地分析",
+      "category_label": "客户项目地分析",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "客户/项目类",
+        "费用/成本类"
+      ],
+      "family": "客户/项目分析类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "与客户/项目经营分析直接相关"
+      ],
+      "business_value_score": 20,
+      "source_score": 20,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 7
+      },
+      "runtime_evidence_score": 21,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 105,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 49,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q016",
+      "question": "按运输方式统计，公路对应的发运记录数是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "聚合/比较",
+      "difficulty": "L1",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "其他"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [],
+      "business_value_score": 0,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 7
+      },
+      "runtime_evidence_score": 21,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 95,
+      "current_blocker_reason": "缺少明确统计时间范围，仍需先澄清年份或月份。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 50,
+      "priority": "P2"
+    },
+    {
+      "question_id": "RAW065",
+      "question": "2026年1月份额外费用产生多少金额，分别是什么项目？什么原因产生的？",
+      "source_group": "73",
+      "source_label": "原始业务问法",
+      "category_label": "原始业务问法",
+      "difficulty": "L-raw",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "客户/项目类",
+        "费用/成本类"
+      ],
+      "family": "客户/项目分析类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "与客户/项目经营分析直接相关",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 33,
+      "source_score": 40,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 95,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 51,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q262",
+      "question": "2026物流任务表中，各任务状态（PREASSIGN、ASSIGNED、PRESIGNFOR、SIGNEDFOR）的数量分别是多少？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "聚合/状态",
+      "difficulty": "L1",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 6,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 4
+      },
+      "runtime_evidence_score": 12,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 92,
+      "current_blocker_reason": "缺少拆分维度或结果口径，当前仍需先澄清。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 52,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q259",
+      "question": "历史台账中的水路记录有多少条？主要集中在哪些省份和月份？",
+      "source_group": "230",
+      "source_label": "原357题-历史台账专项",
+      "category_label": "边界/地点/时间",
+      "difficulty": "L1",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "区域/省份类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板",
+        "适合月度经营跟踪和趋势对比"
+      ],
+      "business_value_score": 15,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 89,
+      "current_blocker_reason": "缺少明确统计时间范围，仍需先澄清年份或月份。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 53,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q071",
+      "question": "2026年送达省份为江苏省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类"
+      ],
+      "family": "线路/城市运价类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 14,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 54,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q072",
+      "question": "2026年送达省份为安徽省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类"
+      ],
+      "family": "线路/城市运价类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 14,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 55,
+      "priority": "P2"
+    },
+    {
+      "question_id": "Q073",
+      "question": "2026年送达省份为云南省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 14,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 56,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q074",
+      "question": "2026年送达省份为浙江省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 14,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 57,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q075",
+      "question": "2026年送达省份为四川省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "地点/统计",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 14,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 58,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q264",
+      "question": "2026年各送达省份中，PREASSIGN待派车任务最多的是哪些省份？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "地点/状态/统计",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "支持区域、省份、基地层面的管理看板",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 14,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 59,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q288",
+      "question": "2026年平均每个物流任务包含多少条ship_product明细？明细数最高的任务是哪几个？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "聚合/产品",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "排名类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "适合管理汇报中的排名与对比场景",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 14,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 60,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q296",
+      "question": "2026年仓库维度的分配任务量排名如何？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "排名/仓库",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "排名类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "适合管理汇报中的排名与对比场景",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 14,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 61,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q306",
+      "question": "2026年派车任务量最高的前20位司机是谁？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "司机/工作量",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "排名类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "适合管理汇报中的排名与对比场景",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 14,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 62,
+      "priority": "P3"
+    },
+    {
+      "question_id": "RAW002",
+      "question": "2026年1月额外费用总额及项目、金额、原因明细",
+      "source_group": "73",
+      "source_label": "原始业务问法",
+      "category_label": "原始业务问法",
+      "difficulty": "L-raw",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "客户/项目类",
+        "费用/成本类"
+      ],
+      "family": "客户/项目分析类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "与客户/项目经营分析直接相关",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 26,
+      "source_score": 40,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 63,
+      "priority": "P3"
+    },
+    {
+      "question_id": "RAW008",
+      "question": "请帮我做一份季度经营计划模板请提供2026年1月物流业务中所有额外费用的总额，并列出每项额外费用的具体项目名称、对应金额及产生原因说明",
+      "source_group": "73",
+      "source_label": "混合需求问法",
+      "category_label": "混合需求问法",
+      "difficulty": "L-raw",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "客户/项目类",
+        "费用/成本类"
+      ],
+      "family": "客户/项目分析类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "与客户/项目经营分析直接相关",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 26,
+      "source_score": 40,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 88,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 64,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q281",
+      "question": "2026年各月份的reconciliation_status填充率分别是多少？",
+      "source_group": "230",
+      "source_label": "原357题-2026任务专项",
+      "category_label": "对账/时间/统计",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类"
+      ],
+      "family": "2026系统状态与数据质量类",
+      "business_value_reasons": [
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 13,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 87,
+      "current_blocker_reason": "缺少拆分维度或结果口径，当前仍需先澄清。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 65,
+      "priority": "P3"
+    },
+    {
+      "question_id": "SQ550",
+      "question": "2026年1月份运输方式为铁路的运输总量是多少MW？",
+      "source_group": "600",
+      "source_label": "2026运输方式",
+      "category_label": "2026运输方式",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 23,
+      "source_score": 20,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 87,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 66,
+      "priority": "P3"
+    },
+    {
+      "question_id": "SQ552",
+      "question": "2026年2月份运输方式为铁路的运输总量是多少MW？",
+      "source_group": "600",
+      "source_label": "2026运输方式",
+      "category_label": "2026运输方式",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 23,
+      "source_score": 20,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 87,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 67,
+      "priority": "P3"
+    },
+    {
+      "question_id": "SQ556",
+      "question": "2026年1月份运输方式为公路的运输总量是多少MW？",
+      "source_group": "600",
+      "source_label": "2026运输方式",
+      "category_label": "2026运输方式",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 23,
+      "source_score": 20,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 87,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 68,
+      "priority": "P3"
+    },
+    {
+      "question_id": "SQ558",
+      "question": "2026年2月份运输方式为公路的运输总量是多少MW？",
+      "source_group": "600",
+      "source_label": "2026运输方式",
+      "category_label": "2026运输方式",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 23,
+      "source_score": 20,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 87,
+      "current_blocker_reason": "当前问题缺少关键时间、指标、异常定义或比较口径，应先澄清再执行查询。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 69,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q258",
+      "question": "备注中包含“倒运”或“中转”的记录，其总费用占历史物流总费用的比例是多少？",
+      "source_group": "230",
+      "source_label": "原357题-历史台账专项",
+      "category_label": "统计/异常/文本",
+      "difficulty": "L2",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "费用/成本类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标"
+      ],
+      "business_value_score": 12,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 86,
+      "current_blocker_reason": "缺少明确统计时间范围，仍需先澄清年份或月份。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 70,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q022",
+      "question": "规格为GCL-NT10/72GDF-590W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "聚合",
+      "difficulty": "L1",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标"
+      ],
+      "business_value_score": 10,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 84,
+      "current_blocker_reason": "缺少明确统计时间范围，仍需先澄清年份或月份。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 71,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q023",
+      "question": "规格为GCL-NT10/72GDF-585W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "聚合",
+      "difficulty": "L1",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标"
+      ],
+      "business_value_score": 10,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 84,
+      "current_blocker_reason": "缺少明确统计时间范围，仍需先澄清年份或月份。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 72,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q024",
+      "question": "规格为GCL-NT12R/66GDF-620W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "聚合",
+      "difficulty": "L1",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标"
+      ],
+      "business_value_score": 10,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 84,
+      "current_blocker_reason": "缺少明确统计时间范围，仍需先澄清年份或月份。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 73,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q025",
+      "question": "规格为GCL-NT12/66GDF-710W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "source_label": "原357题-物流主体",
+      "category_label": "聚合",
+      "difficulty": "L1",
+      "current_status": "B",
+      "recommended_status": "B",
+      "lane": "B-候选收口",
+      "pool_source": "remaining_903",
+      "query_key": null,
+      "theme_tags": [
+        "运量/车次类"
+      ],
+      "family": "综合统计类",
+      "business_value_reasons": [
+        "涉及发运量/MW等核心经营指标"
+      ],
+      "business_value_score": 10,
+      "source_score": 30,
+      "lane_score": 34,
+      "calculability_score": 10,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 84,
+      "current_blocker_reason": "缺少明确统计时间范围，仍需先澄清年份或月份。",
+      "next_phase_path": "B-候选收口",
+      "enter_next_phase": true,
+      "rank": 74,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q250",
+      "question": "2024年长距离订单（路程≥1500KM）中，不同物流公司的平均总费用排名如何？",
+      "source_group": "230",
+      "source_label": "原357题-历史台账专项",
+      "category_label": "比较/统计/地点",
+      "difficulty": "L2",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "承运商类",
+        "排名类",
+        "费用/成本类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "可用于承运商经营评价和签收看数",
+        "适合管理汇报中的排名与对比场景"
+      ],
+      "business_value_score": 29,
+      "source_score": 30,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 81,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 75,
+      "priority": "P3"
+    },
+    {
+      "question_id": "Q325",
+      "question": "若extra_cost_audited任务持续增加，未来一个月额外费用审核压力会集中在哪些承运商和省份？",
+      "source_group": "230",
+      "source_label": "原357题-预测推理专项",
+      "category_label": "预测/成本/费用审核",
+      "difficulty": "L3",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类",
+        "承运商类",
+        "费用/成本类"
+      ],
+      "family": "承运商经营与排名类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "可用于承运商经营评价和签收看数",
+        "支持区域、省份、基地层面的管理看板"
+      ],
+      "business_value_score": 29,
+      "source_score": 30,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 0
+      },
+      "runtime_evidence_score": 0,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 81,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 76,
+      "priority": "P3"
+    },
+    {
+      "question_id": "SQ539",
+      "question": "2026年1月份合肥基地总运费是多少？",
+      "source_group": "600",
+      "source_label": "2026基地经营",
+      "category_label": "2026基地经营",
+      "difficulty": "L2",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类",
+        "费用/成本类"
+      ],
+      "family": "区域/省份/基地汇总类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "支持区域、省份、基地层面的管理看板",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 33,
+      "source_score": 20,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 2
+      },
+      "runtime_evidence_score": 6,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 81,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 77,
+      "priority": "P3"
+    },
+    {
+      "question_id": "SQ542",
+      "question": "2026年2月份合肥基地总运费是多少？",
+      "source_group": "600",
+      "source_label": "2026基地经营",
+      "category_label": "2026基地经营",
+      "difficulty": "L2",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类",
+        "费用/成本类"
+      ],
+      "family": "区域/省份/基地汇总类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "支持区域、省份、基地层面的管理看板",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 33,
+      "source_score": 20,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 2
+      },
+      "runtime_evidence_score": 6,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 81,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 78,
+      "priority": "P3"
+    },
+    {
+      "question_id": "SQ545",
+      "question": "2026年1月份阜宁基地总运费是多少？",
+      "source_group": "600",
+      "source_label": "2026基地经营",
+      "category_label": "2026基地经营",
+      "difficulty": "L2",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类",
+        "费用/成本类"
+      ],
+      "family": "区域/省份/基地汇总类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "支持区域、省份、基地层面的管理看板",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 33,
+      "source_score": 20,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 2
+      },
+      "runtime_evidence_score": 6,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 81,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 79,
+      "priority": "P3"
+    },
+    {
+      "question_id": "SQ548",
+      "question": "2026年2月份阜宁基地总运费是多少？",
+      "source_group": "600",
+      "source_label": "2026基地经营",
+      "category_label": "2026基地经营",
+      "difficulty": "L2",
+      "current_status": "C",
+      "recommended_status": "C",
+      "lane": "C-边界观察",
+      "pool_source": "current_top200_c",
+      "query_key": null,
+      "theme_tags": [
+        "2026系统类",
+        "区域/省份类",
+        "费用/成本类"
+      ],
+      "family": "区域/省份/基地汇总类",
+      "business_value_reasons": [
+        "涉及费用/单瓦成本等核心成本指标",
+        "支持区域、省份、基地层面的管理看板",
+        "适合月度经营跟踪和趋势对比",
+        "覆盖 2026 正式系统经营看数"
+      ],
+      "business_value_score": 33,
+      "source_score": 20,
+      "lane_score": 18,
+      "calculability_score": 4,
+      "runtime_evidence": {
+        "poc_hits": 0,
+        "audit_hits": 2
+      },
+      "runtime_evidence_score": 6,
+      "penalty_reasons": [],
+      "penalty_score": 0,
+      "total_score": 81,
+      "current_blocker_reason": "C-明确不支持",
+      "next_phase_path": "C-边界保留",
+      "enter_next_phase": true,
+      "rank": 80,
+      "priority": "P3"
+    }
+  ]
+}

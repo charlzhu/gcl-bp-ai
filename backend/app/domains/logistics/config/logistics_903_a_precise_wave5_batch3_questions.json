@@ -1,0 +1,753 @@
+{
+  "generated_at": "2026-04-26T21:19:05",
+  "source_ledger": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/logistics_903_master_ledger.json",
+  "batch_id": "A-W5-P3",
+  "coverage_before_batch": {
+    "current_a_total": 656,
+    "precise_covered_before_batch": 440,
+    "uncovered_a_before_batch": 216,
+    "selectable_uncovered_with_query_key": 216,
+    "uncovered_query_key_breakdown": {
+      "sys_delivery_note_parse_status_distribution": 5,
+      "sys_avg_loading_trucks_by_province": 5,
+      "hist_remark_keyword_fee_ratio": 1,
+      "sys_task_status_province_ranking": 2,
+      "sys_procurement_task_distribution": 1,
+      "sys_reconciliation_fill_rate_by_month": 1,
+      "sys_ship_product_detail_stats": 1,
+      "sys_driver_task_ranking": 1,
+      "hist_monthly_trip_count_summary": 24,
+      "hist_route_aggregate_summary": 132,
+      "hist_origin_vehicle_metric_summary": 24,
+      "hist_vehicle_type_trip_count": 4,
+      "hist_mw_summary": 4,
+      "hist_total_fee_summary": 4,
+      "sys_unit_fee_per_watt": 1,
+      "sys_extra_fee_summary": 4,
+      "sys_mw_and_trip_count": 2
+    }
+  },
+  "selection_rule": "优先选择当前 A 中尚未精确断言、query_key 高频且业务价值高的题，重点补 Wave1/Wave2/Wave3/Wave4 新迁入 A。",
+  "items": [
+    {
+      "plan_id": "A-W5-P3-001",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ431",
+      "question": "2024年客户广东粤电阳西新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-002",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ437",
+      "question": "2024年客户江苏苏美达电力运营有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-003",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ445",
+      "question": "2025年客户广东粤电阳西新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-004",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ451",
+      "question": "2025年客户江苏苏美达电力运营有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-005",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ295",
+      "question": "2024年多式联运运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-006",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ298",
+      "question": "2025年公路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-007",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ301",
+      "question": "2025年铁路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-008",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ304",
+      "question": "2025年多式联运运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-009",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q067",
+      "question": "2026年派车任务中，回单解析状态为0的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-010",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q068",
+      "question": "2026年派车任务中，回单解析状态为1的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-011",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q069",
+      "question": "2026年派车任务中，回单解析状态为3的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-012",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q070",
+      "question": "2026年派车任务中，回单解析状态为4的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-013",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q274",
+      "question": "2026年派车任务的送货单解析状态分布（0/1/3/4）分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-014",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q071",
+      "question": "2026年送达省份为江苏省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-015",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q072",
+      "question": "2026年送达省份为安徽省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-016",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q073",
+      "question": "2026年送达省份为云南省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-017",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q074",
+      "question": "2026年送达省份为浙江省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-018",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q075",
+      "question": "2026年送达省份为四川省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-019",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ540",
+      "question": "2026年1月份合肥基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "sys_extra_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-020",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ543",
+      "question": "2026年2月份合肥基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "sys_extra_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-021",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ546",
+      "question": "2026年1月份阜宁基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "sys_extra_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-022",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ549",
+      "question": "2026年2月份阜宁基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "sys_extra_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-023",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q264",
+      "question": "2026年各送达省份中，PREASSIGN待派车任务最多的是哪些省份？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_task_status_province_ranking",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-024",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ583",
+      "question": "2026年哪些省份的PREASSIGN待派车任务最多？",
+      "source_group": "600",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_task_status_province_ranking",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-025",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q258",
+      "question": "备注中包含“倒运”或“中转”的记录，其总费用占历史物流总费用的比例是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "query_key": "hist_remark_keyword_fee_ratio",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-026",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q306",
+      "question": "2026年派车任务量最高的前20位司机是谁？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_driver_task_ranking",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-027",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q265",
+      "question": "2026年有采购方式标记的任务中，询比价与招标的任务量分别是多少？占比多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_procurement_task_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-028",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q281",
+      "question": "2026年各月份的reconciliation_status填充率分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_reconciliation_fill_rate_by_month",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-029",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q288",
+      "question": "2026年平均每个物流任务包含多少条ship_product明细？明细数最高的任务是哪几个？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "query_key": "sys_ship_product_detail_stats",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-030",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ181",
+      "question": "2023年合肥基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-031",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ182",
+      "question": "2023年合肥基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-032",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ183",
+      "question": "2023年合肥基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-033",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ184",
+      "question": "2023年合肥基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-034",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ185",
+      "question": "2023年合肥基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-035",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ186",
+      "question": "2023年合肥基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-036",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ187",
+      "question": "2023年合肥基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-037",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ188",
+      "question": "2023年合肥基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-038",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ189",
+      "question": "2023年合肥基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-039",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ190",
+      "question": "2023年合肥基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-040",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ191",
+      "question": "2023年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    }
+  ]
+}

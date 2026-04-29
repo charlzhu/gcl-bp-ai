@@ -1,0 +1,1178 @@
+{
+  "generated_at": "2026-04-26T14:56:23",
+  "batch_id": "B2A-P2",
+  "result_database": "logistics_ai",
+  "selection_rule": "B->A 正式迁移题中 B2A-P2 批次 30 条。",
+  "items": [
+    {
+      "plan_id": "B2A-PREC-026",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ425",
+      "question": "2024年客户华阳总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年全年客户华阳总运费为2,637,477元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "2637477",
+          "shipment_mw": "200.186",
+          "row_count": 184,
+          "scope_label": "2024年全年",
+          "denominator_total_fee": "352897194",
+          "total_fee_share_pct": 0.75
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-027",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ427",
+      "question": "2024年客户创维客户总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年全年客户创维客户总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年全年",
+          "denominator_total_fee": "352897194",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-028",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ429",
+      "question": "2024年客户海南创维新能源投资有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年全年客户海南创维新能源投资有限公司总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年全年",
+          "denominator_total_fee": "352897194",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-029",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ433",
+      "question": "2024年客户华润新能源（皮山）有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年全年客户华润新能源（皮山）有限公司总运费为20,723,203元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "20723203",
+          "shipment_mw": "480.413",
+          "row_count": 88,
+          "scope_label": "2024年全年",
+          "denominator_total_fee": "352897194",
+          "total_fee_share_pct": 5.87
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-030",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ435",
+      "question": "2024年客户国科新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年全年客户国科新能源有限公司总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年全年",
+          "denominator_total_fee": "352897194",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-031",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ439",
+      "question": "2025年客户华阳总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年全年客户华阳总运费为6,504,344元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "6504344",
+          "shipment_mw": "410.065",
+          "row_count": 351,
+          "scope_label": "2025年全年",
+          "denominator_total_fee": "347268541",
+          "total_fee_share_pct": 1.87
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-032",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ441",
+      "question": "2025年客户创维客户总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年全年客户创维客户总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年全年",
+          "denominator_total_fee": "347268541",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-033",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ443",
+      "question": "2025年客户海南创维新能源投资有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年全年客户海南创维新能源投资有限公司总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年全年",
+          "denominator_total_fee": "347268541",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-034",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ447",
+      "question": "2025年客户华润新能源（皮山）有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年全年客户华润新能源（皮山）有限公司总运费为9,848元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "9848",
+          "shipment_mw": "0.006",
+          "row_count": 1,
+          "scope_label": "2025年全年",
+          "denominator_total_fee": "347268541",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-035",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ449",
+      "question": "2025年客户国科新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年全年客户国科新能源有限公司总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年全年",
+          "denominator_total_fee": "347268541",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-036",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ493",
+      "question": "2025年经营计划场景下的总运费是多少？",
+      "source_group": "600",
+      "family": "特殊业务口径类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年全年承运商经营计划场景下的总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年全年",
+          "denominator_total_fee": "347268541",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-037",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ496",
+      "question": "2025年辅料送样场景下的总运费是多少？",
+      "source_group": "600",
+      "family": "特殊业务口径类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年全年承运商辅料送样场景下的总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年全年",
+          "denominator_total_fee": "347268541",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-038",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ074",
+      "question": "2024年1月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年1月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年1月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-039",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ077",
+      "question": "2024年2月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年2月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年2月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-040",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ080",
+      "question": "2024年3月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年3月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年3月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-041",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ083",
+      "question": "2024年4月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年4月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年4月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-042",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ086",
+      "question": "2024年5月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年5月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年5月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-043",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ089",
+      "question": "2024年6月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年6月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年6月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-044",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ092",
+      "question": "2024年7月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年7月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年7月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-045",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ095",
+      "question": "2024年8月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年8月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年8月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-046",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ098",
+      "question": "2024年9月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年9月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年9月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-047",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ101",
+      "question": "2024年10月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年10月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年10月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-048",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ104",
+      "question": "2024年11月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年11月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年11月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-049",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ107",
+      "question": "2024年12月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年12月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年12月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-050",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ110",
+      "question": "2025年1月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年1月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年1月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-051",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ113",
+      "question": "2025年2月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年2月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年2月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-052",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ116",
+      "question": "2025年3月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年3月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年3月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-053",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ119",
+      "question": "2025年4月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年4月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年4月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-054",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ122",
+      "question": "2025年5月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年5月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年5月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    },
+    {
+      "plan_id": "B2A-PREC-055",
+      "batch_id": "B2A-P2",
+      "batch_name": "Round2：历史区域/客户/运输方式费用题",
+      "question_id": "SQ125",
+      "question": "2025年6月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由正式 data-qa 主链路执行并固化响应快照。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年6月总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年6月",
+          "denominator_total_fee": null,
+          "total_fee_share_pct": null
+        }
+      ]
+    }
+  ]
+}

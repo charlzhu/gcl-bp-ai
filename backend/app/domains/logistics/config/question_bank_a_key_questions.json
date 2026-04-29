@@ -1,0 +1,202 @@
+[
+  {
+    "regression_id": "AKEY01",
+    "acceptance_id": "Q01",
+    "question_bank_id": "Q241",
+    "question": "2024年江苏省各城市总费用排名前五的是哪些？",
+    "query_key": "hist_total_fee_city_rank",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q01",
+    "assertion_scope": "关键数值精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].total_fee"]
+  },
+  {
+    "regression_id": "AKEY02",
+    "acceptance_id": "Q02",
+    "question_bank_id": "RAW064",
+    "question": "25年合肥发广东省，17.5车，每月平均运费是多少？",
+    "query_key": "hist_avg_fee_by_month",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q02",
+    "assertion_scope": "月度表格与摘要双口径精确断言",
+    "assertion_fields": ["result_table.rows[*].biz_month", "result_table.rows[*].avg_fee", "answer_summary"]
+  },
+  {
+    "regression_id": "AKEY03",
+    "acceptance_id": "Q03",
+    "question_bank_id": "Q031",
+    "question": "华东区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+    "query_key": "hist_avg_fee_per_watt_by_transport",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q03",
+    "assertion_scope": "关键运输方式与元瓦值断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].transport_mode", "result_table.rows[*].avg_fee_per_watt"]
+  },
+  {
+    "regression_id": "AKEY04",
+    "acceptance_id": "Q04",
+    "question_bank_id": "Q242",
+    "question": "2025年各月额外费用占总费用比重最高的是哪一个月？",
+    "query_key": "hist_extra_fee_ratio_peak_month",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q04",
+    "assertion_scope": "峰值月份与关键比例断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].biz_month", "result_table.rows[*].extra_fee_ratio"]
+  },
+  {
+    "regression_id": "AKEY05",
+    "acceptance_id": "Q05",
+    "question_bank_id": "RAW033",
+    "question": "帮我查一下23年阜宁基地晶茂物流运输总运费多少钱？",
+    "query_key": "hist_total_fee_by_origin_and_carrier",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q05",
+    "assertion_scope": "总费用精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].total_fee"]
+  },
+  {
+    "regression_id": "AKEY06",
+    "acceptance_id": "Q06",
+    "question_bank_id": "RAW001",
+    "question": "2026年1月份总发运量（MW）和总车次",
+    "query_key": "sys_mw_and_trip_count",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q06",
+    "assertion_scope": "MW 与车次精确断言",
+    "assertion_fields": ["result_table.rows[0].shipment_mw", "result_table.rows[0].shipment_trip_count", "answer_summary"]
+  },
+  {
+    "regression_id": "AKEY07",
+    "acceptance_id": "Q07",
+    "question_bank_id": "SQ004",
+    "question": "2023年华东区域总车次是多少？",
+    "query_key": "hist_trip_count_by_region",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q07",
+    "assertion_scope": "区域车次精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].shipment_trip_count"]
+  },
+  {
+    "regression_id": "AKEY08",
+    "acceptance_id": "Q08",
+    "question_bank_id": "Q003",
+    "question": "华南区域在历史物流台账中的总发运件数是多少？",
+    "query_key": "hist_quantity_by_region",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q08",
+    "assertion_scope": "区域件数精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].shipment_count"]
+  },
+  {
+    "regression_id": "AKEY09",
+    "acceptance_id": "Q09",
+    "question_bank_id": "SQ008",
+    "question": "2023年华南区域总车次是多少？",
+    "query_key": "hist_trip_count_by_region",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q09",
+    "assertion_scope": "区域车次精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].shipment_trip_count"]
+  },
+  {
+    "regression_id": "AKEY10",
+    "acceptance_id": "Q10",
+    "question_bank_id": "RAW034",
+    "question": "华润新能源（皮山）有限公司 项目 24年发运量是多少？",
+    "query_key": "hist_customer_mw",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q10",
+    "assertion_scope": "客户项目 MW 精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].shipment_mw"]
+  },
+  {
+    "regression_id": "AKEY11",
+    "acceptance_id": "Q11",
+    "question_bank_id": "Q001",
+    "question": "华东区域在历史物流台账中的总发运件数是多少？",
+    "query_key": "hist_quantity_by_region",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q11",
+    "assertion_scope": "区域件数精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].shipment_count"]
+  },
+  {
+    "regression_id": "AKEY12",
+    "acceptance_id": "Q12",
+    "question_bank_id": "Q004",
+    "question": "华北区域在历史物流台账中的总发运件数是多少？",
+    "query_key": "hist_quantity_by_region",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q12",
+    "assertion_scope": "区域件数精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].shipment_count"]
+  },
+  {
+    "regression_id": "AKEY13",
+    "acceptance_id": "Q13",
+    "question_bank_id": "Q006",
+    "question": "西北区域在历史物流台账中的总发运件数是多少？",
+    "query_key": "hist_quantity_by_region",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q13",
+    "assertion_scope": "区域件数精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].shipment_count"]
+  },
+  {
+    "regression_id": "AKEY14",
+    "acceptance_id": "Q14",
+    "question_bank_id": "Q032",
+    "question": "西南区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+    "query_key": "hist_avg_fee_per_watt_by_transport",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q14",
+    "assertion_scope": "运输方式排序与元瓦值断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].transport_mode", "result_table.rows[*].avg_fee_per_watt"]
+  },
+  {
+    "regression_id": "AKEY15",
+    "acceptance_id": "Q15",
+    "question_bank_id": "Q007",
+    "question": "东北区域在历史物流台账中的总发运件数是多少？",
+    "query_key": "hist_quantity_by_region",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q15",
+    "assertion_scope": "区域件数精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].shipment_count"]
+  },
+  {
+    "regression_id": "AKEY16",
+    "acceptance_id": "Q16",
+    "question_bank_id": "Q263",
+    "question": "2026年各承运商的SIGNEDFOR签收率分别是多少？排名前十和后十是谁？",
+    "query_key": "sys_signedfor_rate_by_carrier",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q16",
+    "assertion_scope": "前十/后十成员精确断言",
+    "assertion_fields": ["result_table.rows[*].bucket", "result_table.rows[*].company_name", "result_table.rows[*].signedfor_rate"]
+  },
+  {
+    "regression_id": "AKEY17",
+    "acceptance_id": "Q17",
+    "question_bank_id": "Q245",
+    "question": "2024年同一客户由多个始发地发货的客户有多少个？分别是哪些客户？",
+    "query_key": "hist_multi_origin_customers",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q17",
+    "assertion_scope": "客户总数与样例客户断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].customer_name", "result_table.rows[*].origin_place_count"]
+  },
+  {
+    "regression_id": "AKEY18",
+    "acceptance_id": "Q18",
+    "question_bank_id": "Q286",
+    "question": "承运商主数据表中是否存在\"已建档但2026年没有任何任务\"的物流公司？",
+    "query_key": "sys_companies_without_tasks",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q18",
+    "assertion_scope": "存在性与结果结构断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[*].company_name"]
+  },
+  {
+    "regression_id": "AKEY19",
+    "acceptance_id": "Q19",
+    "question_bank_id": "Q042",
+    "question": "对比2023年华东区域计划发运件数与实际发运件数的偏差率。",
+    "query_key": "hist_plan_actual_deviation",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q19",
+    "assertion_scope": "计划件数、实际件数和偏差率精确断言",
+    "assertion_fields": ["result_table.rows[0].plan_qty_total", "result_table.rows[0].actual_qty_total", "answer_summary"]
+  },
+  {
+    "regression_id": "AKEY20",
+    "acceptance_id": "Q20",
+    "question_bank_id": "Q043",
+    "question": "对比2024年西北区域计划发运件数与实际发运件数的偏差率。",
+    "query_key": "hist_plan_actual_deviation",
+    "standard_answer_source": "backend/app/domains/logistics/config/data_qa_acceptance_questions.json#Q20",
+    "assertion_scope": "计划件数、实际件数和偏差率精确断言",
+    "assertion_fields": ["answer_summary", "result_table.rows[0].deviation_rate"]
+  }
+]

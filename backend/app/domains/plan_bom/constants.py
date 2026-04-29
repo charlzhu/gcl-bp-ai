@@ -1,0 +1,146 @@
+"""计划 BOM 一期常量定义。
+
+本文件只保存数据模型阶段需要共享的稳定枚举值，避免后续模型、入库、
+查询和导出实现各自硬编码字符串。
+"""
+
+# Excel 开发期来源。后续 SAP 接入时新增 SAP 来源，但本里程碑不实现 SAP 逻辑。
+SOURCE_TYPE_EXCEL = "EXCEL"
+SOURCE_TYPE_SAP = "SAP"
+
+# Excel 旧数据保留标记，来自正式数据源切换规则。
+SOURCE_TAG_MANUAL_IMPORT = "manual_import_source"
+
+# 导入批次和导出任务的通用状态。
+STATUS_PENDING = "pending"
+STATUS_RUNNING = "running"
+STATUS_SUCCESS = "success"
+STATUS_FAILED = "failed"
+STATUS_EXPIRED = "expired"
+
+# BOM 一期核心材料归类编码，查询实现阶段会按“物料名称 + 描述”落到这些类别。
+MATERIAL_CATEGORY_GLASS = "glass"
+MATERIAL_CATEGORY_GAP_FILM = "gap_film"
+MATERIAL_CATEGORY_INTERCONNECT_BAR = "interconnect_bar"
+MATERIAL_CATEGORY_BUSBAR = "busbar"
+MATERIAL_CATEGORY_JUNCTION_BOX = "junction_box"
+MATERIAL_CATEGORY_OTHER = "other"
+
+# BOM 查询共享字段与状态码。当前同时服务 detail 和 compare 骨架，不扩展到导出。
+DOMAIN_PLAN_BOM = "plan_bom"
+EXECUTION_MODE_DIRECT = "direct"
+QUERY_TYPE_PLAN_BOM_DETAIL = "detail"
+QUERY_TYPE_PLAN_BOM_COMPARE = "compare"
+QUERY_TYPE_PLAN_BOM_CANDIDATE_LIST = "candidate_list"
+CANDIDATE_SCOPE_ORDER_IDENTITY = "order_identity"
+CANDIDATE_SCOPE_FILE_INSTANCE = "file_instance"
+CANDIDATE_SCOPE_VERSION = "version"
+PLAN_BOM_COMPARE_ROUTE_TYPE = "plan_bom_compare"
+
+STATUS_CODE_OK = "OK"
+STATUS_CODE_EMPTY_RESULT = "EMPTY_RESULT"
+STATUS_CODE_CANDIDATE_REQUIRED = "CANDIDATE_REQUIRED"
+STATUS_CODE_VERSION_NEED_CONFIRM = "VERSION_NEED_CONFIRM"
+STATUS_CODE_PARAMETER_INVALID = "PARAMETER_INVALID"
+
+# compare 里程碑 3 的历史快照体积控制策略。
+# 说明：
+# 1. 候选态不需要无限制写入全量候选，只保留前 N 条预览和总数；
+# 2. 差异快照只保留受控条数的 only_left / only_right / changed / same 明细；
+# 3. 完整明细仍以实时重新计算为准，历史回放只返回受控快照。
+PLAN_BOM_COMPARE_SNAPSHOT_CANDIDATE_LIMIT = 10
+PLAN_BOM_COMPARE_SNAPSHOT_DIFF_LIMIT = 20
+PLAN_BOM_COMPARE_SNAPSHOT_SAME_LIMIT = 10
+
+CORE_MATERIAL_CATEGORIES = (
+    MATERIAL_CATEGORY_GLASS,
+    MATERIAL_CATEGORY_GAP_FILM,
+    MATERIAL_CATEGORY_INTERCONNECT_BAR,
+    MATERIAL_CATEGORY_BUSBAR,
+    MATERIAL_CATEGORY_JUNCTION_BOX,
+)
+
+MATERIAL_CATEGORY_LABELS = {
+    MATERIAL_CATEGORY_GLASS: "玻璃",
+    MATERIAL_CATEGORY_GAP_FILM: "间隙膜",
+    MATERIAL_CATEGORY_INTERCONNECT_BAR: "互联条",
+    MATERIAL_CATEGORY_BUSBAR: "汇流条",
+    MATERIAL_CATEGORY_JUNCTION_BOX: "接线盒",
+    MATERIAL_CATEGORY_OTHER: "其他",
+}
+
+# 真实 BOM 中常见的非材料噪音关键词。
+# 这些行通常属于虚拟件、图纸、标签或印字说明，不应作为 5 类核心材料返回。
+PLAN_BOM_NOISE_NAME_KEYWORDS = (
+    "搭配虚拟件",
+    "模块虚拟件",
+)
+PLAN_BOM_NOISE_DESCRIPTION_KEYWORDS = (
+    "图纸",
+    "总装图",
+    "叠层图",
+    "裁切图",
+    "印字说明",
+    "标准物料标签",
+)
+PLAN_BOM_NOISE_SAP_CODE_KEYWORDS = (
+    "RD-",
+    "/RD-",
+)
+
+# 真实 Excel 中材料区结束后常见的区块头，用于阻止材料解析继续吞入修订区、图纸区和审批区。
+PLAN_BOM_SECTION_STOP_KEYWORDS = (
+    "注",
+    "备注",
+    "修订版本",
+    "编制/日期",
+    "审核/日期",
+    "会签/日期",
+    "批准/日期",
+    "文控文件号",
+    "文控版本",
+    "图纸名称",
+    "系统图号",
+    "系统版本",
+    "图纸顺序",
+)
+
+__all__ = [
+    "SOURCE_TYPE_EXCEL",
+    "SOURCE_TYPE_SAP",
+    "SOURCE_TAG_MANUAL_IMPORT",
+    "STATUS_PENDING",
+    "STATUS_RUNNING",
+    "STATUS_SUCCESS",
+    "STATUS_FAILED",
+    "STATUS_EXPIRED",
+    "MATERIAL_CATEGORY_GLASS",
+    "MATERIAL_CATEGORY_GAP_FILM",
+    "MATERIAL_CATEGORY_INTERCONNECT_BAR",
+    "MATERIAL_CATEGORY_BUSBAR",
+    "MATERIAL_CATEGORY_JUNCTION_BOX",
+    "MATERIAL_CATEGORY_OTHER",
+    "DOMAIN_PLAN_BOM",
+    "EXECUTION_MODE_DIRECT",
+    "QUERY_TYPE_PLAN_BOM_DETAIL",
+    "QUERY_TYPE_PLAN_BOM_COMPARE",
+    "QUERY_TYPE_PLAN_BOM_CANDIDATE_LIST",
+    "CANDIDATE_SCOPE_ORDER_IDENTITY",
+    "CANDIDATE_SCOPE_FILE_INSTANCE",
+    "CANDIDATE_SCOPE_VERSION",
+    "PLAN_BOM_COMPARE_ROUTE_TYPE",
+    "STATUS_CODE_OK",
+    "STATUS_CODE_EMPTY_RESULT",
+    "STATUS_CODE_CANDIDATE_REQUIRED",
+    "STATUS_CODE_VERSION_NEED_CONFIRM",
+    "STATUS_CODE_PARAMETER_INVALID",
+    "PLAN_BOM_COMPARE_SNAPSHOT_CANDIDATE_LIMIT",
+    "PLAN_BOM_COMPARE_SNAPSHOT_DIFF_LIMIT",
+    "PLAN_BOM_COMPARE_SNAPSHOT_SAME_LIMIT",
+    "CORE_MATERIAL_CATEGORIES",
+    "MATERIAL_CATEGORY_LABELS",
+    "PLAN_BOM_NOISE_NAME_KEYWORDS",
+    "PLAN_BOM_NOISE_DESCRIPTION_KEYWORDS",
+    "PLAN_BOM_NOISE_SAP_CODE_KEYWORDS",
+    "PLAN_BOM_SECTION_STOP_KEYWORDS",
+]

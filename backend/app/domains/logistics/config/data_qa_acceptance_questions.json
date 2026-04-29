@@ -1,0 +1,175 @@
+[
+  {
+    "id": "Q01",
+    "category": "费用类",
+    "question": "2024年江苏省各城市总费用排名前五的是哪些？",
+    "expected_contains": ["3462229"],
+    "expected_note": "2024年江苏省总运费为3462229元。"
+  },
+  {
+    "id": "Q02",
+    "category": "费用类",
+    "question": "25年合肥发广东省，17.5车，每月平均运费是多少？",
+    "validation_mode": "q02_monthly_avg_fee",
+    "expected_monthly_rows": [
+      {"biz_month": "2025-01", "avg_fee": 19182},
+      {"biz_month": "2025-03", "avg_fee": 13597},
+      {"biz_month": "2025-04", "avg_fee": 21011},
+      {"biz_month": "2025-05", "avg_fee": 12403},
+      {"biz_month": "2025-06", "avg_fee": 9788},
+      {"biz_month": "2025-07", "avg_fee": 10062},
+      {"biz_month": "2025-08", "avg_fee": 22788},
+      {"biz_month": "2025-09", "avg_fee": 14741},
+      {"biz_month": "2025-10", "avg_fee": 9136},
+      {"biz_month": "2025-11", "avg_fee": 9847},
+      {"biz_month": "2025-12", "avg_fee": 9800}
+    ],
+    "expected_summary_values": {
+      "overall_sample_avg": 13089,
+      "avg_of_monthly_avgs": 13851
+    },
+    "expected_note": "该题应返回按月平均运费表；当前以 logistics_ai 明细结果为正式基线，2025-04=21011，整体样本平均为13089，月均值再平均为13851。"
+  },
+  {
+    "id": "Q03",
+    "category": "费用类",
+    "question": "华东区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+    "expected_contains": ["公路", "0.0285"],
+    "expected_note": "华东区域各运输方式平均元/瓦从低到高依次为：公路0.0285元/W。"
+  },
+  {
+    "id": "Q04",
+    "category": "费用类",
+    "question": "2025年各月额外费用占总费用比重最高的是哪一个月？",
+    "expected_contains": ["8月", "434700", "1.2"],
+    "expected_note": "2025年额外费用占比最高的是8月，当月额外费用434700元，占当月总费用的1.2%。"
+  },
+  {
+    "id": "Q05",
+    "category": "费用类",
+    "question": "帮我查一下23年阜宁基地晶茂物流运输总运费多少钱？",
+    "expected_contains": ["7252245"],
+    "expected_note": "根据当前筛选口径，总运费为7252245元。"
+  },
+  {
+    "id": "Q06",
+    "category": "运量类",
+    "question": "2026年1月份总发运量（MW）和总车次",
+    "validation_mode": "q06_mw_trip_count",
+    "expected_shipment_mw": "864.728",
+    "expected_shipment_trip_count": 564,
+    "expected_note": "2026年1月份总发运量为864.728MW，合计车次为564。"
+  },
+  {
+    "id": "Q07",
+    "category": "运量类",
+    "question": "2023年华东区域总车次是多少？",
+    "expected_contains": ["3655"],
+    "expected_note": "根据当前筛选口径，合计发运3655车次。"
+  },
+  {
+    "id": "Q08",
+    "category": "运量类",
+    "question": "华南区域在历史物流台账中的总发运件数是多少？",
+    "expected_contains": ["4143332"],
+    "expected_note": "华南区域总发运件数为4143332件。"
+  },
+  {
+    "id": "Q09",
+    "category": "运量类",
+    "question": "2023年华南区域总车次是多少？",
+    "expected_contains": ["1267"],
+    "expected_note": "根据当前筛选口径，合计发运1267车次。"
+  },
+  {
+    "id": "Q10",
+    "category": "运量类",
+    "question": "华润新能源（皮山）有限公司 项目 24年发运量是多少？",
+    "expected_contains": ["480.413"],
+    "expected_note": "2024年华润新能源（皮山）有限公司总发运量为480.413MW。"
+  },
+  {
+    "id": "Q11",
+    "category": "区域筛选",
+    "question": "华东区域在历史物流台账中的总发运件数是多少？",
+    "expected_contains": ["13877138"],
+    "expected_note": "华东区域总发运件数为13877138件。"
+  },
+  {
+    "id": "Q12",
+    "category": "区域筛选",
+    "question": "华北区域在历史物流台账中的总发运件数是多少？",
+    "expected_contains": ["6867961"],
+    "expected_note": "华北区域总发运件数为6867961件。"
+  },
+  {
+    "id": "Q13",
+    "category": "区域筛选",
+    "question": "西北区域在历史物流台账中的总发运件数是多少？",
+    "expected_contains": ["22024760"],
+    "expected_note": "西北区域总发运件数为22024760件。"
+  },
+  {
+    "id": "Q14",
+    "category": "区域筛选",
+    "question": "西南区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+    "expected_contains": ["铁路", "0.0271", "公路", "0.0577"],
+    "expected_note": "西南区域各运输方式平均元/瓦从低到高依次为：铁路0.0271元/W；公路0.0577元/W。"
+  },
+  {
+    "id": "Q15",
+    "category": "区域筛选",
+    "question": "东北区域在历史物流台账中的总发运件数是多少？",
+    "expected_contains": ["465546"],
+    "expected_note": "东北区域总发运件数为465546件。"
+  },
+  {
+    "id": "Q16",
+    "category": "客户承运商",
+    "question": "2026年各承运商的SIGNEDFOR签收率分别是多少？排名前十和后十是谁？",
+    "validation_mode": "q16_signedfor_rank",
+    "expected_top10_companies": [
+      "浙江海舜供应链管理有限公司",
+      "苏州威洋供应链有限公司",
+      "远孚物流集团有限公司"
+    ],
+    "expected_bottom10_companies": [
+      "常州安提物流有限公司"
+    ],
+    "expected_note": "2026年承运商签收率前十应包含浙江海舜、苏州威洋、远孚；常州安提应在后十。"
+  },
+  {
+    "id": "Q17",
+    "category": "客户承运商",
+    "question": "2024年同一客户由多个始发地发货的客户有多少个？分别是哪些客户？",
+    "validation_mode": "q17_multi_origin_customers",
+    "expected_customer_count": 119,
+    "expected_contains": ["一道新能源科技股份有限公司", "上海临港弘博新能源发展有限公司"],
+    "expected_note": "2024年同一客户由多个始发地发货的客户共有119个。"
+  },
+  {
+    "id": "Q18",
+    "category": "客户承运商",
+    "question": "承运商主数据表中是否存在\"已建档但2026年没有任何任务\"的物流公司？",
+    "expected_contains": ["存在"],
+    "expected_note": "应能判断是否存在已建档但2026年无任务的物流公司。"
+  },
+  {
+    "id": "Q19",
+    "category": "跨年对比",
+    "question": "对比2023年华东区域计划发运件数与实际发运件数的偏差率。",
+    "validation_mode": "q19_plan_actual_deviation",
+    "expected_plan_qty_total": 2927394,
+    "expected_actual_qty_total": 2930747,
+    "expected_deviation_rate_display": "0.1",
+    "expected_deviation_rate_exact": "0.1145",
+    "expected_note": "2023年华东区域严格按件数口径统计，plan_qty_total=2927394，actual_qty_total=2930747，deviation_rate=0.1145%，对外展示可写0.1%。"
+  },
+  {
+    "id": "Q20",
+    "category": "跨年对比",
+    "question": "对比2024年西北区域计划发运件数与实际发运件数的偏差率。",
+    "expected_contains": ["0.2"],
+    "expected_note": "2024年西北区域实际发运件数较计划提高0.2%。"
+  }
+]

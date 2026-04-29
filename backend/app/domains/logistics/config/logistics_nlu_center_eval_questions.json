@@ -1,0 +1,492 @@
+{
+  "version": "v1",
+  "description": "物流域 NLU Center v1 评测集。样本覆盖 A 标准题、A 同义变体、B 澄清、C 不支持、多问题、极短口语和真实业务口吻。",
+  "auto_expand_sources": {
+    "enabled": true,
+    "description": "评测脚本会在人工种子样本基础上，从 C2A、BCR、903 总账、Top200、TopN v2 产物中自动抽取代表题，形成 80-120 条可复跑评测集。",
+    "targets": {
+      "c2a_precise_a": 24,
+      "bcr_clarification": 24,
+      "ledger_c_unsupported": 12,
+      "top200_a": 8,
+      "topn_v2_a": 8
+    }
+  },
+  "items": [
+    {
+      "case_id": "A_STD_001",
+      "bucket": "a_standard",
+      "question": "2026年1月份总发运量是多少MW？总共发了多少车次？",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["sys_mw_and_trip_count"],
+      "expected_metrics": ["shipment_mw", "shipment_trip_count"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "A_STD_002",
+      "bucket": "a_standard",
+      "question": "2023年华东区域总车次是多少？",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_trip_count_by_region"],
+      "expected_metrics": ["shipment_trip_count"],
+      "expected_source_scope": "historical_2023_2025"
+    },
+    {
+      "case_id": "A_STD_003",
+      "bucket": "a_standard",
+      "question": "华东区域在历史物流台账中的总发运件数是多少？",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_quantity_by_region"],
+      "expected_metrics": ["shipment_quantity"],
+      "expected_source_scope": "historical_2023_2025"
+    },
+    {
+      "case_id": "A_STD_004",
+      "bucket": "a_standard",
+      "question": "2026年各承运商的SIGNEDFOR签收率分别是多少？排名前十和后十是谁？",
+      "expected_intent": "ranking",
+      "expected_route": "answerable",
+      "expected_query_keys": ["sys_signedfor_rate_by_carrier"],
+      "expected_metrics": ["signedfor_rate"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "A_VAR_001",
+      "bucket": "a_variant",
+      "question": "26年1月发了多少MW，多少车？",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["sys_mw_and_trip_count"],
+      "expected_metrics": ["shipment_mw", "shipment_trip_count"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "A_VAR_002",
+      "bucket": "a_variant",
+      "question": "帮我看下26年1月运量和车次",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["sys_mw_and_trip_count"],
+      "expected_metrics": ["shipment_mw", "shipment_trip_count"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "A_VAR_003",
+      "bucket": "a_variant",
+      "question": "华东各运输方式元瓦从低到高排一下",
+      "expected_intent": "ranking",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_avg_fee_per_watt_by_transport"],
+      "expected_metrics": ["unit_fee_per_watt"],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "A_VAR_004",
+      "bucket": "a_variant",
+      "question": "2025年合肥到广东17.5车按月均费是多少",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_avg_fee_by_month"],
+      "expected_metrics": ["avg_fee", "total_fee"],
+      "expected_source_scope": "historical_2023_2025"
+    },
+    {
+      "case_id": "A_VAR_005",
+      "bucket": "a_variant",
+      "question": "2026物流公司 signedfor 比例排行榜前后十",
+      "expected_intent": "ranking",
+      "expected_route": "answerable",
+      "expected_query_keys": ["sys_signedfor_rate_by_carrier"],
+      "expected_metrics": ["signedfor_rate"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "B_001",
+      "bucket": "b_clarification",
+      "question": "最近物流成本是不是变高了？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": ["total_fee", "unit_fee_per_watt"],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "B_002",
+      "bucket": "b_clarification",
+      "question": "哪个承运商最差？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "B_003",
+      "bucket": "b_clarification",
+      "question": "华东发运有没有异常？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": ["shipment_mw"],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "B_004",
+      "bucket": "b_clarification",
+      "question": "江苏省历史发运的总费用是多少？",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_total_fee_by_province"],
+      "expected_metrics": ["total_fee"],
+      "expected_source_scope": "historical_2023_2025"
+    },
+    {
+      "case_id": "B_005",
+      "bucket": "a_variant",
+      "question": "按运输方式统计，公路对应的发运记录数是多少？",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_transport_mode_record_summary"],
+      "expected_metrics": ["record_count"],
+      "expected_source_scope": "historical_2023_2025"
+    },
+    {
+      "case_id": "C_001",
+      "bucket": "c_unsupported",
+      "question": "预测下个月物流费用会是多少？",
+      "expected_intent": "unsupported",
+      "expected_route": "unsupported",
+      "expected_query_keys": [],
+      "expected_metrics": ["total_fee"],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "C_002",
+      "bucket": "c_unsupported",
+      "question": "当前在途任务预计什么时候到？",
+      "expected_intent": "unsupported",
+      "expected_route": "unsupported",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "C_003",
+      "bucket": "c_unsupported",
+      "question": "设计一个在途风险评分模型",
+      "expected_intent": "unsupported",
+      "expected_route": "unsupported",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "C_004",
+      "bucket": "c_unsupported",
+      "question": "哪些额外费用项目最多？分别是什么原因？",
+      "expected_intent": "unsupported",
+      "expected_route": "unsupported",
+      "expected_query_keys": [],
+      "expected_metrics": ["total_fee"],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "M_001",
+      "bucket": "multi_intent",
+      "question": "帮我看下 2026 年 1 月总发运量和车次，再看一下各承运商运费排名。",
+      "expected_intent": "multi_intent",
+      "expected_route": "multi_intent",
+      "expected_query_keys": ["sys_mw_and_trip_count"],
+      "expected_metrics": ["shipment_mw", "shipment_trip_count", "total_fee"],
+      "expected_source_scope": "system_2026",
+      "expected_multi_intent": true
+    },
+    {
+      "case_id": "M_002",
+      "bucket": "multi_intent",
+      "question": "查一下2025年华东区域总发运量，同时看一下各区域发运量排名。",
+      "expected_intent": "multi_intent",
+      "expected_route": "multi_intent",
+      "expected_query_keys": ["hist_mw_summary", "hist_mw_by_all_regions"],
+      "expected_metrics": ["shipment_mw"],
+      "expected_source_scope": "historical_2023_2025",
+      "expected_multi_intent": true
+    },
+    {
+      "case_id": "SHORT_001",
+      "bucket": "short_colloquial",
+      "question": "分别是多少？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "SHORT_002",
+      "bucket": "short_colloquial",
+      "question": "最近怎么样？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "BIZ_001",
+      "bucket": "business_tone",
+      "question": "老板要看26年1月物流整体出货规模和总车数，先给我个数。",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["sys_mw_and_trip_count"],
+      "expected_metrics": ["shipment_mw", "shipment_trip_count"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "BIZ_002",
+      "bucket": "business_tone",
+      "question": "华东今年有没有明显不正常的发运情况？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": ["shipment_mw"],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "A_REAL_001",
+      "bucket": "real_business_tone",
+      "question": "老板要看26年1-2月累计运量和车数，先给个汇总。",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["sys_mw_and_trip_count"],
+      "expected_metrics": ["shipment_mw", "shipment_trip_count"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "A_REAL_002",
+      "bucket": "real_business_tone",
+      "question": "帮我拉一下2025年华东总车次。",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_trip_count_by_region"],
+      "expected_metrics": ["shipment_trip_count"],
+      "expected_source_scope": "historical_2023_2025"
+    },
+    {
+      "case_id": "A_REAL_003",
+      "bucket": "a_variant",
+      "question": "25年合肥发广东17米五每月均价给我看下。",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_route_pricing_analysis"],
+      "expected_metrics": ["avg_fee"],
+      "expected_source_scope": "historical_2023_2025"
+    },
+    {
+      "case_id": "A_REAL_004",
+      "bucket": "a_variant",
+      "question": "华东运输方式单瓦成本从低到高排个序。",
+      "expected_intent": "ranking",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_avg_fee_per_watt_by_transport"],
+      "expected_metrics": ["unit_fee_per_watt"],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "A_REAL_005",
+      "bucket": "real_business_tone",
+      "question": "26年1月份英赋嘉总运费多少？",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["sys_total_fee_by_filters"],
+      "expected_metrics": ["total_fee"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "A_REAL_006",
+      "bucket": "a_variant",
+      "question": "2026年SIGNEDFOR按承运商签收率排前后十。",
+      "expected_intent": "ranking",
+      "expected_route": "answerable",
+      "expected_query_keys": ["sys_signedfor_rate_by_carrier"],
+      "expected_metrics": ["signedfor_rate"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "A_REAL_007",
+      "bucket": "a_variant",
+      "question": "25年晶茂在阜宁始发总运费多少？",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_total_fee_by_origin_and_carrier"],
+      "expected_metrics": ["total_fee"],
+      "expected_source_scope": "historical_2023_2025"
+    },
+    {
+      "case_id": "B_REAL_001",
+      "bucket": "real_business_tone",
+      "question": "这几天物流有没有明显异常？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "B_REAL_002",
+      "bucket": "b_clarification",
+      "question": "哪个物流供应商表现最不好？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "B_REAL_003",
+      "bucket": "b_clarification",
+      "question": "多式联运今年效果怎么样？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "B_REAL_004",
+      "bucket": "b_clarification",
+      "question": "2026年经营计划总发运量是多少？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": ["shipment_mw"],
+      "expected_source_scope": "system_2026"
+    },
+    {
+      "case_id": "B_REAL_005",
+      "bucket": "a_variant",
+      "question": "2024年多式联运运输总运费是多少？",
+      "expected_intent": "aggregate",
+      "expected_route": "answerable",
+      "expected_query_keys": ["hist_total_fee_summary"],
+      "expected_metrics": ["total_fee"],
+      "expected_source_scope": "historical_2023_2025"
+    },
+    {
+      "case_id": "C_REAL_001",
+      "bucket": "c_unsupported",
+      "question": "估一下下季度物流费用区间。",
+      "expected_intent": "unsupported",
+      "expected_route": "unsupported",
+      "expected_query_keys": [],
+      "expected_metrics": ["total_fee"],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "C_REAL_002",
+      "bucket": "c_unsupported",
+      "question": "这票车什么时候能到客户现场？",
+      "expected_intent": "unsupported",
+      "expected_route": "unsupported",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "C_REAL_003",
+      "bucket": "c_unsupported",
+      "question": "帮我设计一套物流异常治理原则。",
+      "expected_intent": "unsupported",
+      "expected_route": "unsupported",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "C_REAL_004",
+      "bucket": "c_unsupported",
+      "question": "分析 supplier_price 高价离群点集中在哪些线路。",
+      "expected_intent": "unsupported",
+      "expected_route": "unsupported",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "C_REAL_005",
+      "bucket": "c_unsupported",
+      "question": "预测未来三个月各区域发运量趋势。",
+      "expected_intent": "unsupported",
+      "expected_route": "unsupported",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "M_REAL_001",
+      "bucket": "multi_intent",
+      "question": "先看2026年1月总运量和车次，同时看SIGNEDFOR签收率承运商排名。",
+      "expected_intent": "multi_intent",
+      "expected_route": "multi_intent",
+      "expected_query_keys": ["sys_mw_and_trip_count"],
+      "expected_metrics": ["shipment_mw", "shipment_trip_count", "signedfor_rate"],
+      "expected_source_scope": "system_2026",
+      "expected_multi_intent": true
+    },
+    {
+      "case_id": "M_REAL_002",
+      "bucket": "multi_intent",
+      "question": "查2025年华东发运量，再对比各区域发运量排名。",
+      "expected_intent": "multi_intent",
+      "expected_route": "multi_intent",
+      "expected_query_keys": ["hist_mw_summary", "hist_mw_by_all_regions"],
+      "expected_metrics": ["shipment_mw"],
+      "expected_source_scope": "historical_2023_2025",
+      "expected_multi_intent": true
+    },
+    {
+      "case_id": "M_REAL_003",
+      "bucket": "multi_intent",
+      "question": "先看2024年多式联运总运费，然后看哪个承运商最差。",
+      "expected_intent": "multi_intent",
+      "expected_route": "multi_intent",
+      "expected_query_keys": [],
+      "expected_metrics": ["total_fee"],
+      "expected_source_scope": "historical_2023_2025",
+      "expected_multi_intent": true
+    },
+    {
+      "case_id": "SHORT_REAL_001",
+      "bucket": "short_colloquial",
+      "question": "运费呢？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": ["total_fee"],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "SHORT_REAL_002",
+      "bucket": "short_colloquial",
+      "question": "哪家最差？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    },
+    {
+      "case_id": "SHORT_REAL_003",
+      "bucket": "short_colloquial",
+      "question": "1月发多少？",
+      "expected_intent": "clarification",
+      "expected_route": "clarification",
+      "expected_query_keys": [],
+      "expected_metrics": [],
+      "expected_source_scope": "unknown"
+    }
+  ]
+}

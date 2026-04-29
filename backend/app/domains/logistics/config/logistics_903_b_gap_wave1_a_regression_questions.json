@@ -1,0 +1,1478 @@
+{
+  "generated_at": "2026-04-26T15:07:15",
+  "source_report": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tmp/logistics_question_bank/logistics_903_b_gap_wave1_report.json",
+  "items": [
+    {
+      "question_id": "SQ075",
+      "question": "2024年1月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ078",
+      "question": "2024年2月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ081",
+      "question": "2024年3月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ084",
+      "question": "2024年4月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ087",
+      "question": "2024年5月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ090",
+      "question": "2024年6月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ093",
+      "question": "2024年7月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ096",
+      "question": "2024年8月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ099",
+      "question": "2024年9月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ102",
+      "question": "2024年10月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ105",
+      "question": "2024年11月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ108",
+      "question": "2024年12月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ111",
+      "question": "2025年1月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ114",
+      "question": "2025年2月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ117",
+      "question": "2025年3月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ120",
+      "question": "2025年4月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ123",
+      "question": "2025年5月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ126",
+      "question": "2025年6月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ129",
+      "question": "2025年7月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ132",
+      "question": "2025年8月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ135",
+      "question": "2025年9月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ138",
+      "question": "2025年10月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ141",
+      "question": "2025年11月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ144",
+      "question": "2025年12月份总车次是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_monthly_trip_count_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ181",
+      "question": "2023年合肥基地发往江苏省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ182",
+      "question": "2023年合肥基地发往江苏省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ183",
+      "question": "2023年合肥基地发往浙江省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ184",
+      "question": "2023年合肥基地发往浙江省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ185",
+      "question": "2023年合肥基地发往上海市的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ186",
+      "question": "2023年合肥基地发往上海市的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ187",
+      "question": "2023年合肥基地发往安徽省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ188",
+      "question": "2023年合肥基地发往安徽省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ189",
+      "question": "2023年合肥基地发往广东省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ190",
+      "question": "2023年合肥基地发往广东省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ191",
+      "question": "2023年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ192",
+      "question": "2023年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ193",
+      "question": "2023年阜宁基地发往江苏省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ194",
+      "question": "2023年阜宁基地发往江苏省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ195",
+      "question": "2023年阜宁基地发往浙江省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ196",
+      "question": "2023年阜宁基地发往浙江省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ197",
+      "question": "2023年阜宁基地发往上海市的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ198",
+      "question": "2023年阜宁基地发往上海市的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ199",
+      "question": "2023年阜宁基地发往安徽省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ200",
+      "question": "2023年阜宁基地发往安徽省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ201",
+      "question": "2023年阜宁基地发往广东省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ202",
+      "question": "2023年阜宁基地发往广东省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ203",
+      "question": "2023年阜宁基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ204",
+      "question": "2023年阜宁基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ205",
+      "question": "2024年合肥基地发往江苏省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ206",
+      "question": "2024年合肥基地发往江苏省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ207",
+      "question": "2024年合肥基地发往浙江省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ208",
+      "question": "2024年合肥基地发往浙江省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ209",
+      "question": "2024年合肥基地发往上海市的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ210",
+      "question": "2024年合肥基地发往上海市的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ211",
+      "question": "2024年合肥基地发往安徽省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ212",
+      "question": "2024年合肥基地发往安徽省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ213",
+      "question": "2024年合肥基地发往广东省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ214",
+      "question": "2024年合肥基地发往广东省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ215",
+      "question": "2024年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ216",
+      "question": "2024年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ217",
+      "question": "2024年阜宁基地发往江苏省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ218",
+      "question": "2024年阜宁基地发往江苏省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ219",
+      "question": "2024年阜宁基地发往浙江省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ220",
+      "question": "2024年阜宁基地发往浙江省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ221",
+      "question": "2024年阜宁基地发往上海市的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ222",
+      "question": "2024年阜宁基地发往上海市的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ223",
+      "question": "2024年阜宁基地发往安徽省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ224",
+      "question": "2024年阜宁基地发往安徽省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ225",
+      "question": "2024年阜宁基地发往广东省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ226",
+      "question": "2024年阜宁基地发往广东省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ227",
+      "question": "2024年阜宁基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ228",
+      "question": "2024年阜宁基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ229",
+      "question": "2025年合肥基地发往江苏省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ230",
+      "question": "2025年合肥基地发往江苏省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ231",
+      "question": "2025年合肥基地发往浙江省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ232",
+      "question": "2025年合肥基地发往浙江省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ233",
+      "question": "2025年合肥基地发往上海市的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ234",
+      "question": "2025年合肥基地发往上海市的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ235",
+      "question": "2025年合肥基地发往安徽省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ236",
+      "question": "2025年合肥基地发往安徽省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ237",
+      "question": "2025年合肥基地发往广东省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ238",
+      "question": "2025年合肥基地发往广东省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ239",
+      "question": "2025年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ240",
+      "question": "2025年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ241",
+      "question": "2025年阜宁基地发往江苏省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ242",
+      "question": "2025年阜宁基地发往江苏省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ243",
+      "question": "2025年阜宁基地发往浙江省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ244",
+      "question": "2025年阜宁基地发往浙江省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ245",
+      "question": "2025年阜宁基地发往上海市的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ246",
+      "question": "2025年阜宁基地发往上海市的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ247",
+      "question": "2025年阜宁基地发往安徽省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ248",
+      "question": "2025年阜宁基地发往安徽省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ249",
+      "question": "2025年阜宁基地发往广东省的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ250",
+      "question": "2025年阜宁基地发往广东省的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ251",
+      "question": "2025年阜宁基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ252",
+      "question": "2025年阜宁基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ254",
+      "question": "2024年合肥基地17.5车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ255",
+      "question": "2024年合肥基地17.5车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ257",
+      "question": "2024年合肥基地13m车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ258",
+      "question": "2024年合肥基地13m车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ259",
+      "question": "2024年合肥基地9.6车全年共发运多少车次？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ260",
+      "question": "2024年合肥基地9.6车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ261",
+      "question": "2024年合肥基地9.6车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ263",
+      "question": "2024年阜宁基地17.5车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ264",
+      "question": "2024年阜宁基地17.5车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ266",
+      "question": "2024年阜宁基地13m车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ267",
+      "question": "2024年阜宁基地13m车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ268",
+      "question": "2024年阜宁基地9.6车全年共发运多少车次？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ269",
+      "question": "2024年阜宁基地9.6车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ270",
+      "question": "2024年阜宁基地9.6车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ272",
+      "question": "2025年合肥基地17.5车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ273",
+      "question": "2025年合肥基地17.5车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ275",
+      "question": "2025年合肥基地13m车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ276",
+      "question": "2025年合肥基地13m车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ277",
+      "question": "2025年合肥基地9.6车全年共发运多少车次？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ278",
+      "question": "2025年合肥基地9.6车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ279",
+      "question": "2025年合肥基地9.6车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ281",
+      "question": "2025年阜宁基地17.5车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ282",
+      "question": "2025年阜宁基地17.5车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ284",
+      "question": "2025年阜宁基地13m车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ285",
+      "question": "2025年阜宁基地13m车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ286",
+      "question": "2025年阜宁基地9.6车全年共发运多少车次？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ287",
+      "question": "2025年阜宁基地9.6车平均单车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ288",
+      "question": "2025年阜宁基地9.6车平均单瓦价是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "综合统计类",
+      "expected_query_key": "hist_origin_vehicle_metric_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ316",
+      "question": "2023年合肥基地发往广州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ317",
+      "question": "2023年合肥基地发往广州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ318",
+      "question": "2023年合肥基地发往乌鲁木齐的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ319",
+      "question": "2023年合肥基地发往乌鲁木齐的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ320",
+      "question": "2023年合肥基地发往苏州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ321",
+      "question": "2023年合肥基地发往苏州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ322",
+      "question": "2023年合肥基地发往宁波的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ323",
+      "question": "2023年合肥基地发往宁波的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ324",
+      "question": "2023年合肥基地发往南昌的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ325",
+      "question": "2023年合肥基地发往南昌的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ326",
+      "question": "2023年合肥基地发往福州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ327",
+      "question": "2023年合肥基地发往福州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ328",
+      "question": "2023年合肥基地发往海口的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ329",
+      "question": "2023年合肥基地发往海口的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ330",
+      "question": "2023年合肥基地发往南宁的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ331",
+      "question": "2023年合肥基地发往南宁的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ332",
+      "question": "2023年合肥基地发往徐州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ333",
+      "question": "2023年合肥基地发往徐州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ334",
+      "question": "2023年合肥基地发往温州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ335",
+      "question": "2023年合肥基地发往温州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ336",
+      "question": "2024年合肥基地发往广州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ337",
+      "question": "2024年合肥基地发往广州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ338",
+      "question": "2024年合肥基地发往乌鲁木齐的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ339",
+      "question": "2024年合肥基地发往乌鲁木齐的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ340",
+      "question": "2024年合肥基地发往苏州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ341",
+      "question": "2024年合肥基地发往苏州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ342",
+      "question": "2024年合肥基地发往宁波的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ343",
+      "question": "2024年合肥基地发往宁波的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ344",
+      "question": "2024年合肥基地发往南昌的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ345",
+      "question": "2024年合肥基地发往南昌的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ346",
+      "question": "2024年合肥基地发往福州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ347",
+      "question": "2024年合肥基地发往福州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ348",
+      "question": "2024年合肥基地发往海口的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ349",
+      "question": "2024年合肥基地发往海口的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ350",
+      "question": "2024年合肥基地发往南宁的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ351",
+      "question": "2024年合肥基地发往南宁的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ352",
+      "question": "2024年合肥基地发往徐州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ353",
+      "question": "2024年合肥基地发往徐州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ354",
+      "question": "2024年合肥基地发往温州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ355",
+      "question": "2024年合肥基地发往温州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ356",
+      "question": "2025年合肥基地发往广州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ357",
+      "question": "2025年合肥基地发往广州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ358",
+      "question": "2025年合肥基地发往乌鲁木齐的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ359",
+      "question": "2025年合肥基地发往乌鲁木齐的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ360",
+      "question": "2025年合肥基地发往苏州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ361",
+      "question": "2025年合肥基地发往苏州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ362",
+      "question": "2025年合肥基地发往宁波的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ363",
+      "question": "2025年合肥基地发往宁波的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ364",
+      "question": "2025年合肥基地发往南昌的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ365",
+      "question": "2025年合肥基地发往南昌的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ366",
+      "question": "2025年合肥基地发往福州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ367",
+      "question": "2025年合肥基地发往福州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ368",
+      "question": "2025年合肥基地发往海口的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ369",
+      "question": "2025年合肥基地发往海口的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ370",
+      "question": "2025年合肥基地发往南宁的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ371",
+      "question": "2025年合肥基地发往南宁的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ372",
+      "question": "2025年合肥基地发往徐州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ373",
+      "question": "2025年合肥基地发往徐州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ374",
+      "question": "2025年合肥基地发往温州的平均运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ375",
+      "question": "2025年合肥基地发往温州的平均每车运费是多少？",
+      "source_group": "B-gap Wave1",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "expected_status_code": "OK"
+    }
+  ]
+}

@@ -1,0 +1,740 @@
+{
+  "EXT067": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 12,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "ORG011": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 12,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "EXT001": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00067"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 14,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\15um\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2459*1128*2mm\\压花\\半钢化\\双镀膜\\-\\有价值",
+      "光伏玻璃\\GCL\\2459*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5683无涂釉\\有价值"
+    ]
+  },
+  "EXT021": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00104"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 14,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\超高透,透光率≥94.5%\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值",
+      "光伏玻璃\\彩虹\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\CG01超高透,透光率≥94.5%\\有价值"
+    ]
+  },
+  "EXT069": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 12,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "EXT070": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃"
+    ],
+    "row_count": 10,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "EXT073": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 12,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "EXT075": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "接线盒"
+    ],
+    "row_count": 2,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "ORG013": {
+    "classification": "A",
+    "intent": "multi_order_material_table",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00048",
+      "GCL-XXJC-JSPS-2026-00097",
+      "GCL-XXJC-JSPS-2026-00127"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 35,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值",
+      "光伏玻璃\\GCL\\2459*1128*2mm\\压花\\半钢化\\双镀膜\\-\\有价值"
+    ]
+  },
+  "EXT003": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00127"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 11,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2459*1128*2mm\\压花\\半钢化\\双镀膜\\-\\有价值",
+      "光伏玻璃\\GCL\\2459*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5683无涂釉\\有价值",
+      "接线盒\\谐通\\PV-XT1609Nxyz\\PV-XT101.2\\+400/-200mm\\1500V\\25A\\XT4050M-B\\三分体含连接器线长\\-\\有价值"
+    ]
+  },
+  "EXT013": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00096"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 11,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\超高透,透光率≥94.5%\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值",
+      "接线盒\\GCL\\GCL-N1xyz\\GCL-02\\+400/-200mm\\1500V\\27A\\GCL4045-B\\三分体含连接器线长\\-\\有价值"
+    ]
+  },
+  "EXT015": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00115"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 11,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\超高透,透光率≥94.5%\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值",
+      "接线盒\\GCL\\GCL-N1xyz\\GCL-02(6mm²线缆)\\1400mm\\1500V\\27A\\GCL4045-B\\三分体含连接器线长\\-\\有价值"
+    ]
+  },
+  "EXT017": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00077"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 14,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\15um\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值"
+    ]
+  },
+  "EXT019": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00097"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 13,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值",
+      "接线盒\\GCL\\GCL-N1xyz\\GCL-01\\1000mm\\1500V\\30A\\GCL5045\\三分体含连接器线长\\-\\有价值"
+    ]
+  },
+  "EXT023": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2025-01073"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 15,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值",
+      "接线盒\\GCL\\GCL-N1xyz\\GCL-01\\+300/-200mm\\1500V\\27A\\GCL4045-B\\三分体含连接器线长\\-\\有价值",
+      "汇流条\\0.25*4mm\\反光\\GCL\\轴装\\5050\\-\\有价值"
+    ]
+  },
+  "EXT027": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00111"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 11,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\超高透,透光率≥94.5%\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值",
+      "接线盒\\GCL\\GCL-N1xyz\\GCL-02(6mm²线缆)\\1200mm\\1500V\\27A\\GCL4045-B\\三分体含连接器线长\\-\\有价值"
+    ]
+  },
+  "EXT058": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 26,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "EXT061": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 44,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "EXT064": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "互联条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 30,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "EXT068": {
+    "classification": "A",
+    "intent": "cross_order_material_compare",
+    "orders": [],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 12,
+    "columns": [
+      "diff_type",
+      "material_category",
+      "left_order",
+      "left_description",
+      "right_order",
+      "right_description",
+      "changed_fields"
+    ],
+    "display_type": "comparison_table",
+    "sample_descriptions": []
+  },
+  "EXT081": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00067"
+    ],
+    "materials": [
+      "接线盒"
+    ],
+    "row_count": 1,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "接线盒\\GCL\\GCL-N1xyz\\GCL-02\\+300/-200mm\\1500V\\25A\\GCL4045\\三分体含连接器线长\\-\\有价值"
+    ]
+  },
+  "EXT082": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00114"
+    ],
+    "materials": [
+      "玻璃"
+    ],
+    "row_count": 2,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "光伏玻璃\\彩虹\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\CG01超高透,透光率≥94.5%\\有价值",
+      "光伏玻璃\\彩虹\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值"
+    ]
+  },
+  "EXT086": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00114"
+    ],
+    "materials": [
+      "接线盒"
+    ],
+    "row_count": 1,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "接线盒\\谐通\\PV-XT1609Nxyz\\EVO2(6mm²线缆)\\1200mm\\1500V\\30A\\XT4550M-B\\三分体含连接器线长\\-\\有价值"
+    ]
+  },
+  "EXT106": {
+    "classification": "A",
+    "intent": "multi_order_material_table",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00104",
+      "GCL-XXJC-JSPS-2026-00109",
+      "GCL-XXJC-JSPS-2026-00114"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 35,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\超高透,透光率≥94.5%\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值",
+      "光伏玻璃\\彩虹\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\CG01超高透,透光率≥94.5%\\有价值"
+    ]
+  },
+  "ORG005": {
+    "classification": "A",
+    "intent": "single_order_material_specs",
+    "orders": [
+      "GCL-XXJC-JSPS-2026-00104"
+    ],
+    "materials": [
+      "互联条",
+      "接线盒",
+      "汇流条",
+      "玻璃",
+      "间隙膜"
+    ],
+    "row_count": 14,
+    "columns": [
+      "order_no",
+      "order_name",
+      "version_no",
+      "material_category",
+      "material_name",
+      "description",
+      "sap_code",
+      "standard_usage",
+      "unit",
+      "source_file"
+    ],
+    "display_type": "table",
+    "sample_descriptions": [
+      "互联条\\GCL\\φ0.24mm\\6040\\常规\\-\\有价值",
+      "互联条\\GCL\\φ0.26mm\\6040\\低电阻\\-\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\超高透,透光率≥94.5%\\有价值",
+      "光伏玻璃\\GCL\\2376*1128*2mm\\压花\\半钢化\\非镀膜\\GCL/XXJC/2-RD-5682无涂釉\\有价值",
+      "光伏玻璃\\彩虹\\2376*1128*2mm\\压花\\半钢化\\双镀膜\\CG01超高透,透光率≥94.5%\\有价值"
+    ]
+  }
+}

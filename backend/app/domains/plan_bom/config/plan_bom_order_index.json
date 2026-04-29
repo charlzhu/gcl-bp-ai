@@ -1,0 +1,512 @@
+[
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00127",
+    "order_name": "NT10/78GDF（泰州中来 -2026-00127）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_9012c47fe6f1f4e8625fcafb36b07e2259574adf",
+    "file_instance_key": "excel_file_6f76337de96318cc40c2fbb1bdcbc7df0c8720be",
+    "effective_date": "2026-03-05",
+    "raw_file_name": "NT1078GDF(µ│░σ╖₧Σ╕¡µ¥Ñ-2026-00127)Billofmaterials-B.xls",
+    "aliases": [
+      "00127",
+      "2026-00127",
+      "GCL-XXJC-JSPS-2026-00127",
+      "NT10/78GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00106",
+    "order_name": "NT10/78GDF(江苏汉腾-2026-00106)Bill of materials",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_dbd8234d0d843336da2cee1755a3a673d23ac3b5",
+    "file_instance_key": "excel_file_b6889d281185b462426b46fdaf25a7950430e356",
+    "effective_date": "2026-03-20",
+    "raw_file_name": "NT1078GDF(µ▒ƒΦïÅµ▒ëΦà╛-2026-00106)Billofmaterials-A.xls",
+    "aliases": [
+      "00106",
+      "2026-00106",
+      "GCL-XXJC-JSPS-2026-00106",
+      "NT10/78GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00067",
+    "order_name": "NT10/78GDF（哥伦比亚COEXITO -2026-00067）",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_f4ffbcbe43dd78d303a1284a66b819613ff22740",
+    "file_instance_key": "excel_file_75c7713b07c0b7151aacea282a9ed29a76759caf",
+    "effective_date": "2026-02-02",
+    "raw_file_name": "NT1078GDF(σôÑΣ╝ªµ»öΣ║ÜCOEXITO-2026-00067)Billofmaterials-A.xls",
+    "aliases": [
+      "00067",
+      "2026-00067",
+      "GCL-XXJC-JSPS-2026-00067",
+      "NT10/78GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00067",
+    "order_name": "NT10/78GDF（哥伦比亚COEXITO -2026-00067）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_f4ffbcbe43dd78d303a1284a66b819613ff22740",
+    "file_instance_key": "excel_file_3495fffac2f2b662ca5960802f78081a422631bb",
+    "effective_date": "2026-02-02",
+    "raw_file_name": "NT1078GDF(σôÑΣ╝ªµ»öΣ║ÜCOEXITO-2026-00067)Billofmaterials-B.xls",
+    "aliases": [
+      "00067",
+      "2026-00067",
+      "GCL-XXJC-JSPS-2026-00067",
+      "NT10/78GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00106",
+    "order_name": "NT10/78GDF(石家庄科林-2026-00106)Bill of materials",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_adc5f64b1546e0ae5a9e84edaaa00dc937315626",
+    "file_instance_key": "excel_file_5a604ffc0cc3941e543545970f3b2b87c44385cb",
+    "effective_date": "2026-02-27",
+    "raw_file_name": "NT1078GDF(τƒ│σ«╢σ║äτºæµ₧ù-2026-00106)Billofmaterials-A (2).xls",
+    "aliases": [
+      "00106",
+      "2026-00106",
+      "GCL-XXJC-JSPS-2026-00106",
+      "NT10/78GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00082",
+    "order_name": "NT12/66GDF（柬埔寨太阳花-2026-00082）",
+    "version_no": "A2",
+    "order_identity_key": "excel_inst_74cc00eb25e77b61e3acc7ba594d3a113464aad1",
+    "file_instance_key": "excel_file_c1fc80078965dfae007ad13d8f2ff6dddc5bd0e1",
+    "effective_date": "2026-02-28",
+    "raw_file_name": "NT1266GDF(µƒ¼σƒöσ»¿σñ¬Θÿ│Φè▒-2026-00082)Billofmaterials-C.xls",
+    "aliases": [
+      "00082",
+      "2026-00082",
+      "GCL-XXJC-JSPS-2026-00082",
+      "NT12/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00103",
+    "order_name": "NT12/66GDF（萨尔瓦多Compania-2026-00103）",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_8c253ae998a96905e1eb89ca53fdea244ee76a83",
+    "file_instance_key": "excel_file_995f46e09146fa532c1a6f77e25ae9a26649c477",
+    "effective_date": "2026-02-13",
+    "raw_file_name": "NT1266GDF(ΦÉ¿σ░öτôªσñÜCompania-2026-00103)Billofmaterials-A.xls",
+    "aliases": [
+      "00103",
+      "2026-00103",
+      "GCL-XXJC-JSPS-2026-00103",
+      "NT12/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00048",
+    "order_name": "NT12/66GDF（苏格兰-2026-00048）",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_fc056c71bb636dd5d2bd1a62c3e6848dcedcce1f",
+    "file_instance_key": "excel_file_ca50170c8f60247ee214b3a8267b97897da80d32",
+    "effective_date": "2026-01-27",
+    "raw_file_name": "NT1266GDF(ΦïÅµá╝σà░-2026-00048)Billofmaterials-A.xls",
+    "aliases": [
+      "00048",
+      "2026-00048",
+      "GCL-XXJC-JSPS-2026-00048",
+      "NT12/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00048",
+    "order_name": "NT12/66GDF（苏格兰-2026-00048）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_fc056c71bb636dd5d2bd1a62c3e6848dcedcce1f",
+    "file_instance_key": "excel_file_9a239b34cb0de64434dec31996ac4c58d048f40c",
+    "effective_date": "2026-01-27",
+    "raw_file_name": "NT1266GDF(ΦïÅµá╝σà░-2026-00048)Billofmaterials-B(2).xls",
+    "aliases": [
+      "00048",
+      "2026-00048",
+      "GCL-XXJC-JSPS-2026-00048",
+      "NT12/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00087",
+    "order_name": "NT12/66GDF（苏州康达尔-2026-00087）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_c778f429ad2f869a8bc0f20f51df737ef409afeb",
+    "file_instance_key": "excel_file_797b04013566a45cc4ebeaa0380ab45dab178e89",
+    "effective_date": "2026-02-13",
+    "raw_file_name": "NT1266GDF(ΦïÅσ╖₧σ║╖Φ╛╛σ░ö-2026-00087)Billofmaterials-B.xls",
+    "aliases": [
+      "00087",
+      "2026-00087",
+      "GCL-XXJC-JSPS-2026-00087",
+      "NT12/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2025-01063",
+    "order_name": "NT12/66GDF（国科华鑫仙居--2025-01063）",
+    "version_no": "A4",
+    "order_identity_key": "excel_inst_3ad6079f141ccfeac59cb96f83a486cc1c20adb0",
+    "file_instance_key": "excel_file_ddd2a69ef9deb13e504cf6818cbf42a0bd53a219",
+    "effective_date": "2026-01-08",
+    "raw_file_name": "NT1266GDF(σ¢╜τºæσìÄΘæ½Σ╗Öσ▒à-2025-01063)Billofmaterials-E.xls",
+    "aliases": [
+      "01063",
+      "2025-01063",
+      "GCL-XXJC-JSPS-2025-01063",
+      "NT12/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00099",
+    "order_name": "NT12/66GDF（多米尼加Sistemi-2026-00099）",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_bf72c6c9e06343be7042462b557526526a33d7c4",
+    "file_instance_key": "excel_file_fb61a9f5b997ebca89772944ab984e6019e18808",
+    "effective_date": "2026-02-13",
+    "raw_file_name": "NT1266GDF(σñÜτ▒│σ░╝σèáSistemi-2026-00099)Billofmaterials-A.xls",
+    "aliases": [
+      "00099",
+      "2026-00099",
+      "GCL-XXJC-JSPS-2026-00099",
+      "NT12/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2025-00844",
+    "order_name": "NT12/66GDF（天合富家新-2025-00844）",
+    "version_no": "A2",
+    "order_identity_key": "excel_inst_f5418d2a9bf036d8095141d5a95f793eb6817c21",
+    "file_instance_key": "excel_file_e47c02939c3704c96f29a55b9bceb1daa8f80505",
+    "effective_date": "2026-02-09",
+    "raw_file_name": "NT1266GDF(σñ⌐σÉêσ»îσ«╢µû░-2025-00844)Billofmaterials-C.xls",
+    "aliases": [
+      "00844",
+      "2025-00844",
+      "GCL-XXJC-JSPS-2025-00844",
+      "NT12/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00097",
+    "order_name": "NT12R/66GDF（意大利-2026-00097）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_5fd0a22308519f06abcab3761a8cbc4640156d48",
+    "file_instance_key": "excel_file_9c7c6bbd71054ddfe65b6d8ea5e9f559bd0f966a",
+    "effective_date": "2026-02-13",
+    "raw_file_name": "NT12R66GDF(µäÅσñºσê⌐-2026-00097)Billofmaterials-B.xls",
+    "aliases": [
+      "00097",
+      "2026-00097",
+      "GCL-XXJC-JSPS-2026-00097",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00097",
+    "order_name": "NT12R/66GDF（意大利-2026-00097）",
+    "version_no": "A2",
+    "order_identity_key": "excel_inst_5fd0a22308519f06abcab3761a8cbc4640156d48",
+    "file_instance_key": "excel_file_625465384bce474c3258ed78a45cb541d5365c6c",
+    "effective_date": "2026-02-25",
+    "raw_file_name": "NT12R66GDF(µäÅσñºσê⌐-2026-00097)Billofmaterials-C.xls",
+    "aliases": [
+      "00097",
+      "2026-00097",
+      "GCL-XXJC-JSPS-2026-00097",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00109",
+    "order_name": "NT12R/66GDF（日本Krannich-2026-00109）",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_662f678a2e95c2d6055210a210bfb0ccee2c7924",
+    "file_instance_key": "excel_file_1bcac25d4a0a086174fbc27f4083f562df93a624",
+    "effective_date": "2026-02-13",
+    "raw_file_name": "NT12R66GDF(µùÑµ£¼Krannich-2026-00109)Billofmaterials-A.xls",
+    "aliases": [
+      "00109",
+      "2026-00109",
+      "GCL-XXJC-JSPS-2026-00109",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00109",
+    "order_name": "NT12R/66GDF（日本Krannich-2026-00109）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_662f678a2e95c2d6055210a210bfb0ccee2c7924",
+    "file_instance_key": "excel_file_b63fd674df8ae55c500685d69764ac20396979f6",
+    "effective_date": "2026-02-13",
+    "raw_file_name": "NT12R66GDF(µùÑµ£¼Krannich-2026-00109)Billofmaterials-B.xls",
+    "aliases": [
+      "00109",
+      "2026-00109",
+      "GCL-XXJC-JSPS-2026-00109",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00104",
+    "order_name": "NT12R/66GDF(法国-2026-00104)Bill of materials",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_ebf40c7f79b2fb1432f9bb86e47f875c64896bf4",
+    "file_instance_key": "excel_file_6fe22cc7b509b814584d6fd34138bdb21f116840",
+    "effective_date": "2026-02-24",
+    "raw_file_name": "NT12R66GDF(µ│òσ¢╜-2026-00104)Billofmaterials-B (2).xls",
+    "aliases": [
+      "00104",
+      "2026-00104",
+      "GCL-XXJC-JSPS-2026-00104",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00114",
+    "order_name": "NT12R/66GDF（法国Synapsun-2026-00114）",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_3abcfd972dd920e8f084ae1bfcc3b3241e926919",
+    "file_instance_key": "excel_file_de004a62ba3477a32431a9fa7363061680194dd5",
+    "effective_date": "2026-02-28",
+    "raw_file_name": "NT12R66GDF(µ│òσ¢╜Synapsun-2026-00114)Billofmaterials-A.xls",
+    "aliases": [
+      "00114",
+      "2026-00114",
+      "GCL-XXJC-JSPS-2026-00114",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2025-01073",
+    "order_name": "NT12R/66GDF（深圳建融-2025-01073）",
+    "version_no": "A3",
+    "order_identity_key": "excel_inst_20479ad8a928af2ab907f1d1d2dd36ec2affb9d3",
+    "file_instance_key": "excel_file_1630e0d82a62870e3688b4e4db1653a81eec260c",
+    "effective_date": "2025-12-03",
+    "raw_file_name": "NT12R66GDF(µ╖▒σ£│σ╗║Φ₧ìΘÆóΦ╛╣µíå-2025-01073)Billofmaterials-D(1).xls",
+    "aliases": [
+      "01073",
+      "2025-01073",
+      "GCL-XXJC-JSPS-2025-01073",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00102",
+    "order_name": "NT12R/66GDF（菲律宾LUCA-2026-00102）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_ffc7b14d846be4331368f40dd5d473ee18701d9a",
+    "file_instance_key": "excel_file_2edbc714f0aa66c1ca327c196d7b91e5fb18344e",
+    "effective_date": "2026-02-24",
+    "raw_file_name": "NT12R66GDF(ΦÅ▓σ╛ïσ«╛LUCA-2026-00102)Billofmaterials-B.xls",
+    "aliases": [
+      "00102",
+      "2026-00102",
+      "GCL-XXJC-JSPS-2026-00102",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00111",
+    "order_name": "NT12R/66GDF(西班牙SII-2026-00111)Bill of materials",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_d7196571463cf147520343be32afae09eb00d03b",
+    "file_instance_key": "excel_file_43b448b51c7c1284726cb0d44f48a4e6a814b633",
+    "effective_date": "2026-02-24",
+    "raw_file_name": "NT12R66GDF(ΦÑ┐τÅ¡τëÖSII-2026-00111)Billofmaterials-A.xls",
+    "aliases": [
+      "00111",
+      "2026-00111",
+      "GCL-XXJC-JSPS-2026-00111",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00120",
+    "order_name": "NT12R/66GDF(肯尼亚Nationwide-2026-00120)Bill of materials",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_0f7cc6513b7c70a9326232d3cff4db744059fb57",
+    "file_instance_key": "excel_file_eec07505a4c6a0edf998606e645cdeabf40bc8bc",
+    "effective_date": "2026-02-27",
+    "raw_file_name": "NT12R66GDF(Φé»σ░╝Σ║ÜNationwide-2026-00120)Billofmaterials-A (2).xls",
+    "aliases": [
+      "00120",
+      "2026-00120",
+      "GCL-XXJC-JSPS-2026-00120",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00120",
+    "order_name": "NT12R/66GDF(肯尼亚Nationwide-2026-00120)Bill of materials",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_0f7cc6513b7c70a9326232d3cff4db744059fb57",
+    "file_instance_key": "excel_file_36e9e3eff3acce0aacc1bb8f12a3c0ea05807df2",
+    "effective_date": "2026-02-27",
+    "raw_file_name": "NT12R66GDF(Φé»σ░╝Σ║ÜNationwide-2026-00120)Billofmaterials-A (3).xls",
+    "aliases": [
+      "00120",
+      "2026-00120",
+      "GCL-XXJC-JSPS-2026-00120",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00117",
+    "order_name": "NT12R/66GDF（印尼Hijau-2026-00117）",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_32b7f11363166d83f5bea4faf566c25c760f11c0",
+    "file_instance_key": "excel_file_3e7ea72a930bd3d96c4e4f89a53bb70bb1360ff3",
+    "effective_date": "2026-03-03",
+    "raw_file_name": "NT12R66GDF(σì░σ░╝Hijau-2026-00117)Billofmaterials-A.xls",
+    "aliases": [
+      "00117",
+      "2026-00117",
+      "GCL-XXJC-JSPS-2026-00117",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00096",
+    "order_name": "NT12R/66GDF(印尼宾坦岛-2026-00096)Bill of materials",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_e5024d28527e1a1446e6b524b46563e932c2d029",
+    "file_instance_key": "excel_file_563939c1194b8b1d2ea1f0f7e92d296880ba02fa",
+    "effective_date": "2026-02-09",
+    "raw_file_name": "NT12R66GDF(σì░σ░╝σ«╛σ¥ªσ▓¢-2026-00096)Billofmaterials-A.xls",
+    "aliases": [
+      "00096",
+      "2026-00096",
+      "GCL-XXJC-JSPS-2026-00096",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00121",
+    "order_name": "NT12R/66GDF（危地马拉ECOLUMEN-2026-00121）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_f1e8f2e2d900c5a228e372e4b999d613a0d35335",
+    "file_instance_key": "excel_file_dca84cbc207498bca0d6761b9e1ef8729a3a97f6",
+    "effective_date": "2026-02-28",
+    "raw_file_name": "NT12R66GDF(σì▒σ£░Θ⌐¼µïëECOLUMEN-2026-00121)Billofmaterials-B.xls",
+    "aliases": [
+      "00121",
+      "2026-00121",
+      "GCL-XXJC-JSPS-2026-00121",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00107",
+    "order_name": "NT12R/66GDF（多米尼加Escala-2026-00107）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_6e0afdf3898760cca5488927af84c514193f7d5e",
+    "file_instance_key": "excel_file_fb3013b35fa814e3e8128083c9f914a1bf138ee4",
+    "effective_date": "2026-02-13",
+    "raw_file_name": "NT12R66GDF(σñÜτ▒│σ░╝σèáEscala-2026-00107)Billofmaterials-B.xls",
+    "aliases": [
+      "00107",
+      "2026-00107",
+      "GCL-XXJC-JSPS-2026-00107",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00115",
+    "order_name": "NT12R/66GDF(哥伦比亚Amara-2026-00115)Bill of materials",
+    "version_no": "A0",
+    "order_identity_key": "excel_inst_dfd2a8ca4ee70bd629dcfd8ff84cfd079c33b032",
+    "file_instance_key": "excel_file_4aec870c4cf7a524d893ee01949b00d1adaf38b1",
+    "effective_date": "2026-02-24",
+    "raw_file_name": "NT12R66GDF(σôÑΣ╝ªµ»öΣ║ÜAmara-2026-00115)Billofmaterials-A (1).xls",
+    "aliases": [
+      "00115",
+      "2026-00115",
+      "GCL-XXJC-JSPS-2026-00115",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00077",
+    "order_name": "NT12R/66GDF(德国Anumar-2026-00077)Bill of materials",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_9935bc3c6a53ef49ed3937d7775b33392d5aab8b",
+    "file_instance_key": "excel_file_fb9a84eaf1258902dd8c4555f720ca7f0bb9021e",
+    "effective_date": "2026-02-09",
+    "raw_file_name": "NT12R66GDF(σ╛╖σ¢╜Anumar-2026-00077)Billofmaterials-B.xls",
+    "aliases": [
+      "00077",
+      "2026-00077",
+      "GCL-XXJC-JSPS-2026-00077",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00077",
+    "order_name": "NT12R/66GDF(德国Anumar-2026-00077)Bill of materials",
+    "version_no": "A2",
+    "order_identity_key": "excel_inst_9935bc3c6a53ef49ed3937d7775b33392d5aab8b",
+    "file_instance_key": "excel_file_bbfd1b60d229bdd4a6954f5796234f08993fd000",
+    "effective_date": "2026-02-25",
+    "raw_file_name": "NT12R66GDF(σ╛╖σ¢╜Anumar-2026-00077)Billofmaterials-C.xls",
+    "aliases": [
+      "00077",
+      "2026-00077",
+      "GCL-XXJC-JSPS-2026-00077",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00113",
+    "order_name": "NT12R/66GDF（德国Kumandra-2026-00113）",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_bec0496dd108ab9f31319b0970846e895823c121",
+    "file_instance_key": "excel_file_fe463f5ca82df8e4720b18137b333310f1b9de49",
+    "effective_date": "2026-02-25",
+    "raw_file_name": "NT12R66GDF(σ╛╖σ¢╜KumandraΦè£µ╣ûτö╡µ▒á-2026-00113)Billofmaterials-B.xls",
+    "aliases": [
+      "00113",
+      "2026-00113",
+      "GCL-XXJC-JSPS-2026-00113",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2026-00061",
+    "order_name": "NT12R/66GDF(突尼斯MIM2A-2026-00061)Bill of materials",
+    "version_no": "A1",
+    "order_identity_key": "excel_inst_fd4c704b7f2ef13ccfce1771e8d9c66b644ce377",
+    "file_instance_key": "excel_file_d35c6de8f68d8d4791f6086961009d3769a6daf2",
+    "effective_date": "2026-01-28",
+    "raw_file_name": "NT12R66GDF(τ¬üσ░╝µû»MIM2A-2026-00061)Billofmaterials-B.xls",
+    "aliases": [
+      "00061",
+      "2026-00061",
+      "GCL-XXJC-JSPS-2026-00061",
+      "NT12R/66GDF"
+    ]
+  },
+  {
+    "order_no": "GCL-XXJC-JSPS-2025-01220",
+    "order_name": "NT12R/78GDF(华电南通-2025-01220)Bill of materials",
+    "version_no": "A3",
+    "order_identity_key": "excel_inst_85450dad557c9ffaa20434ba94d11022f04ce1c2",
+    "file_instance_key": "excel_file_9af23a0e894a30731060b35646052ce6b447d7f2",
+    "effective_date": "2026-02-25",
+    "raw_file_name": "NT12R78GDF(σìÄτö╡σìùΘÇÜ-2025-01220)Billofmaterials-D.xls",
+    "aliases": [
+      "01220",
+      "2025-01220",
+      "GCL-XXJC-JSPS-2025-01220",
+      "NT12R/78GDF"
+    ]
+  }
+]

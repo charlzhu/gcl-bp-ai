@@ -1,0 +1,1722 @@
+{
+  "generated_at": "2026-04-26T23:14:24",
+  "source_question_set": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/logistics_903_a_precise_acceptance_batch4_questions.json",
+  "batch_id": "A-ACCEPTANCE-B4",
+  "coverage_before_batch": {
+    "current_a_total": 656,
+    "precise_covered_before_batch": 480,
+    "uncovered_a_before_batch": 176,
+    "selectable_uncovered_with_query_key": 176,
+    "uncovered_query_key_breakdown": {
+      "hist_monthly_trip_count_summary": 24,
+      "hist_route_aggregate_summary": 121,
+      "hist_origin_vehicle_metric_summary": 24,
+      "hist_vehicle_type_trip_count": 4,
+      "sys_unit_fee_per_watt": 1,
+      "sys_mw_and_trip_count": 2
+    }
+  },
+  "selection_rule": "优先选择当前 A 中尚未精确断言、query_key 高频、业务价值高且易受口径变化影响的题。",
+  "items": [
+    {
+      "plan_id": "A-ACCEPT-B4-001",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ192",
+      "question": "2023年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往广西总发运量为77.845MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "31709",
+          "shipment_mw": "77.845",
+          "row_count": 78,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-002",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ193",
+      "question": "2023年阜宁基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往江苏平均运费为6,847元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "6847",
+          "shipment_mw": "99.382",
+          "row_count": 96,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-003",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ194",
+      "question": "2023年阜宁基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往江苏总发运量为99.382MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "6847",
+          "shipment_mw": "99.382",
+          "row_count": 96,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-004",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ195",
+      "question": "2023年阜宁基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往浙江平均运费为8,135元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "8135",
+          "shipment_mw": "20.285",
+          "row_count": 27,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-005",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ196",
+      "question": "2023年阜宁基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往浙江总发运量为20.285MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "8135",
+          "shipment_mw": "20.285",
+          "row_count": 27,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-006",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ197",
+      "question": "2023年阜宁基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往上海平均运费为5,776元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "5776",
+          "shipment_mw": "8.386",
+          "row_count": 14,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-007",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ198",
+      "question": "2023年阜宁基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往上海总发运量为8.386MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "5776",
+          "shipment_mw": "8.386",
+          "row_count": 14,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-008",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ199",
+      "question": "2023年阜宁基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往安徽平均运费为10,423元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "10423",
+          "shipment_mw": "70.373",
+          "row_count": 63,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-009",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ200",
+      "question": "2023年阜宁基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往安徽总发运量为70.373MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "10423",
+          "shipment_mw": "70.373",
+          "row_count": 63,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-010",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ201",
+      "question": "2023年阜宁基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往广东平均运费为29,370元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "29370",
+          "shipment_mw": "19.680",
+          "row_count": 23,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-011",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ202",
+      "question": "2023年阜宁基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往广东总发运量为19.680MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "29370",
+          "shipment_mw": "19.680",
+          "row_count": 23,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-012",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ203",
+      "question": "2023年阜宁基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往广西平均运费为98,335元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "98335",
+          "shipment_mw": "91.307",
+          "row_count": 32,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-013",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ204",
+      "question": "2023年阜宁基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地发往广西总发运量为91.307MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "98335",
+          "shipment_mw": "91.307",
+          "row_count": 32,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-014",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ205",
+      "question": "2024年合肥基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往江苏平均运费为4,862元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "4862",
+          "shipment_mw": "222.806",
+          "row_count": 284,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-015",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ206",
+      "question": "2024年合肥基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往江苏总发运量为222.806MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "4862",
+          "shipment_mw": "222.806",
+          "row_count": 284,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-016",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ207",
+      "question": "2024年合肥基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往浙江平均运费为9,522元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "9522",
+          "shipment_mw": "156.669",
+          "row_count": 178,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-017",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ208",
+      "question": "2024年合肥基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往浙江总发运量为156.669MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "9522",
+          "shipment_mw": "156.669",
+          "row_count": 178,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-018",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ209",
+      "question": "2024年合肥基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往上海平均运费为5,465元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "5465",
+          "shipment_mw": "38.296",
+          "row_count": 70,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-019",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ210",
+      "question": "2024年合肥基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往上海总发运量为38.296MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "5465",
+          "shipment_mw": "38.296",
+          "row_count": 70,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-020",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ211",
+      "question": "2024年合肥基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往安徽平均运费为3,347元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "3347",
+          "shipment_mw": "244.548",
+          "row_count": 277,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-021",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ212",
+      "question": "2024年合肥基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往安徽总发运量为244.548MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "3347",
+          "shipment_mw": "244.548",
+          "row_count": 277,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-022",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ213",
+      "question": "2024年合肥基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往广东平均运费为24,695元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "24695",
+          "shipment_mw": "313.954",
+          "row_count": 264,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-023",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ214",
+      "question": "2024年合肥基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往广东总发运量为313.954MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "24695",
+          "shipment_mw": "313.954",
+          "row_count": 264,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-024",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ215",
+      "question": "2024年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往广西平均运费为47,157元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "47157",
+          "shipment_mw": "276.912",
+          "row_count": 143,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-025",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ216",
+      "question": "2024年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年合肥基地发往广西总发运量为276.912MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "47157",
+          "shipment_mw": "276.912",
+          "row_count": 143,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-026",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ217",
+      "question": "2024年阜宁基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往江苏平均运费为5,958元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "5958",
+          "shipment_mw": "391.676",
+          "row_count": 349,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-027",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ218",
+      "question": "2024年阜宁基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往江苏总发运量为391.676MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "5958",
+          "shipment_mw": "391.676",
+          "row_count": 349,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-028",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ219",
+      "question": "2024年阜宁基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往浙江平均运费为9,990元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "9990",
+          "shipment_mw": "129.207",
+          "row_count": 156,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-029",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ220",
+      "question": "2024年阜宁基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往浙江总发运量为129.207MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "9990",
+          "shipment_mw": "129.207",
+          "row_count": 156,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-030",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ221",
+      "question": "2024年阜宁基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往上海平均运费为2,944元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "2944",
+          "shipment_mw": "7.694",
+          "row_count": 24,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-031",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ222",
+      "question": "2024年阜宁基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往上海总发运量为7.694MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "2944",
+          "shipment_mw": "7.694",
+          "row_count": 24,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-032",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ223",
+      "question": "2024年阜宁基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往安徽平均运费为8,754元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "8754",
+          "shipment_mw": "320.746",
+          "row_count": 282,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-033",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ224",
+      "question": "2024年阜宁基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往安徽总发运量为320.746MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "8754",
+          "shipment_mw": "320.746",
+          "row_count": 282,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-034",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ225",
+      "question": "2024年阜宁基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往广东平均运费为22,128元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "22128",
+          "shipment_mw": "190.476",
+          "row_count": 231,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-035",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ226",
+      "question": "2024年阜宁基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往广东总发运量为190.476MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "22128",
+          "shipment_mw": "190.476",
+          "row_count": 231,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-036",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ227",
+      "question": "2024年阜宁基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往广西平均运费为46,788元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "46788",
+          "shipment_mw": "284.137",
+          "row_count": 182,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-037",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ228",
+      "question": "2024年阜宁基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年阜宁基地发往广西总发运量为284.137MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "46788",
+          "shipment_mw": "284.137",
+          "row_count": 182,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-038",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ229",
+      "question": "2025年合肥基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往江苏平均运费为3,816元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "3816",
+          "shipment_mw": "362.185",
+          "row_count": 540,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-039",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ230",
+      "question": "2025年合肥基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往江苏总发运量为362.185MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "3816",
+          "shipment_mw": "362.185",
+          "row_count": 540,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-040",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ231",
+      "question": "2025年合肥基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往浙江平均运费为9,298元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "9298",
+          "shipment_mw": "365.657",
+          "row_count": 398,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-041",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ232",
+      "question": "2025年合肥基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往浙江总发运量为365.657MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "9298",
+          "shipment_mw": "365.657",
+          "row_count": 398,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-042",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ233",
+      "question": "2025年合肥基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往上海平均运费为4,285元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "4285",
+          "shipment_mw": "138.993",
+          "row_count": 257,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-043",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ234",
+      "question": "2025年合肥基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往上海总发运量为138.993MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "4285",
+          "shipment_mw": "138.993",
+          "row_count": 257,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-044",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ235",
+      "question": "2025年合肥基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往安徽平均运费为2,192元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "2192",
+          "shipment_mw": "357.420",
+          "row_count": 553,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-045",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ236",
+      "question": "2025年合肥基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往安徽总发运量为357.420MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "2192",
+          "shipment_mw": "357.420",
+          "row_count": 553,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-046",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ237",
+      "question": "2025年合肥基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往广东平均运费为14,054元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "14054",
+          "shipment_mw": "313.256",
+          "row_count": 435,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-047",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ238",
+      "question": "2025年合肥基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往广东总发运量为313.256MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "14054",
+          "shipment_mw": "313.256",
+          "row_count": 435,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-048",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ239",
+      "question": "2025年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往广西平均运费为31,029元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "31029",
+          "shipment_mw": "257.644",
+          "row_count": 189,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-049",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ240",
+      "question": "2025年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往广西总发运量为257.644MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "31029",
+          "shipment_mw": "257.644",
+          "row_count": 189,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-050",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ241",
+      "question": "2025年阜宁基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年阜宁基地发往江苏平均运费为5,233元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "5233",
+          "shipment_mw": "665.686",
+          "row_count": 391,
+          "metric": "avg_fee"
+        }
+      ]
+    }
+  ]
+}

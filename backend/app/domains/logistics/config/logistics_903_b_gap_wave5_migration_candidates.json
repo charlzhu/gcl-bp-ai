@@ -1,0 +1,6 @@
+{
+  "generated_at": "2026-04-26T21:24:20",
+  "source_review_report": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tmp/logistics_question_bank/logistics_903_b_wave5_executable_review_report.json",
+  "migration_rule": "只有原题真实 data-qa 主链路稳定 OK、非澄清、非拒答、结果非空，且不是通用 query_key 误吸收，才允许进入 Wave5 B->A 迁移候选。",
+  "items": []
+}

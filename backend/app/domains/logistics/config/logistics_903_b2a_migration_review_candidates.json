@@ -1,0 +1,772 @@
+{
+  "generated_at": "2026-04-26T14:11:50",
+  "source_report": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tmp/logistics_question_bank/logistics_903_semantic_closure_full_report.json",
+  "migration_rule": "仅包含原问已能通过真实 data-qa 行为复核的 B->A 直接迁移候选；补槽后才可答的题不直接迁移。",
+  "items": [
+    {
+      "question_id": "SQ003",
+      "question": "2023年华东区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ007",
+      "question": "2023年华南区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ425",
+      "question": "2024年客户华阳总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ011",
+      "question": "2023年华中区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ427",
+      "question": "2024年客户创维客户总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ493",
+      "question": "2025年经营计划场景下的总运费是多少？",
+      "source_group": "600",
+      "family": "特殊业务口径类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ015",
+      "question": "2023年华北区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ429",
+      "question": "2024年客户海南创维新能源投资有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ019",
+      "question": "2023年西南区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ023",
+      "question": "2023年西北区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ433",
+      "question": "2024年客户华润新能源（皮山）有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ496",
+      "question": "2025年辅料送样场景下的总运费是多少？",
+      "source_group": "600",
+      "family": "特殊业务口径类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ027",
+      "question": "2024年华东区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ435",
+      "question": "2024年客户国科新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ031",
+      "question": "2024年华南区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ035",
+      "question": "2024年华中区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ439",
+      "question": "2025年客户华阳总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "Q239",
+      "question": "2025年西南区域通过铁路发运的总费用是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ039",
+      "question": "2024年华北区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ441",
+      "question": "2025年客户创维客户总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ043",
+      "question": "2024年西南区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ443",
+      "question": "2025年客户海南创维新能源投资有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ047",
+      "question": "2024年西北区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ051",
+      "question": "2025年华东区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ447",
+      "question": "2025年客户华润新能源（皮山）有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ055",
+      "question": "2025年华南区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ449",
+      "question": "2025年客户国科新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ059",
+      "question": "2025年华中区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ063",
+      "question": "2025年华北区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ067",
+      "question": "2025年西南区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ071",
+      "question": "2025年西北区域总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ290",
+      "question": "2024年公路运输的总运费是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ293",
+      "question": "2024年铁路运输的总运费是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ296",
+      "question": "2024年多式联运运输的总运费是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ299",
+      "question": "2025年公路运输的总运费是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ302",
+      "question": "2025年铁路运输的总运费是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ305",
+      "question": "2025年多式联运运输的总运费是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ539",
+      "question": "2026年1月份合肥基地总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "sys_total_fee_by_filters",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ542",
+      "question": "2026年2月份合肥基地总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "sys_total_fee_by_filters",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ550",
+      "question": "2026年1月份运输方式为铁路的运输总量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "sys_mw_and_trip_count",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ545",
+      "question": "2026年1月份阜宁基地总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "sys_total_fee_by_filters",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ556",
+      "question": "2026年1月份运输方式为公路的运输总量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "sys_mw_and_trip_count",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ548",
+      "question": "2026年2月份阜宁基地总运费是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "recommended_status": "A",
+      "query_key": "sys_total_fee_by_filters",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ558",
+      "question": "2026年2月份运输方式为公路的运输总量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "recommended_status": "A",
+      "query_key": "sys_mw_and_trip_count",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ074",
+      "question": "2024年1月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ077",
+      "question": "2024年2月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ080",
+      "question": "2024年3月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ083",
+      "question": "2024年4月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ086",
+      "question": "2024年5月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ089",
+      "question": "2024年6月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ092",
+      "question": "2024年7月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ095",
+      "question": "2024年8月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ098",
+      "question": "2024年9月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ101",
+      "question": "2024年10月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ104",
+      "question": "2024年11月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ107",
+      "question": "2024年12月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ110",
+      "question": "2025年1月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ113",
+      "question": "2025年2月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ116",
+      "question": "2025年3月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ119",
+      "question": "2025年4月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ122",
+      "question": "2025年5月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ125",
+      "question": "2025年6月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ128",
+      "question": "2025年7月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ131",
+      "question": "2025年8月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ134",
+      "question": "2025年9月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ137",
+      "question": "2025年10月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ140",
+      "question": "2025年11月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ143",
+      "question": "2025年12月份总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ377",
+      "question": "2023年晶茂物流全年总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ381",
+      "question": "2023年苏州晶茂物流全年总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ385",
+      "question": "2023年英赋嘉全年总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ389",
+      "question": "2024年晶茂物流全年总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ393",
+      "question": "2024年苏州晶茂物流全年总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ397",
+      "question": "2024年英赋嘉全年总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ401",
+      "question": "2025年晶茂物流全年总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ405",
+      "question": "2025年苏州晶茂物流全年总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ409",
+      "question": "2025年英赋嘉全年总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ413",
+      "question": "2024年晶茂物流运费占全年总运费的比例是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ415",
+      "question": "2024年苏州晶茂物流运费占全年总运费的比例是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ417",
+      "question": "2024年英赋嘉运费占全年总运费的比例是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ419",
+      "question": "2025年晶茂物流运费占全年总运费的比例是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ421",
+      "question": "2025年苏州晶茂物流运费占全年总运费的比例是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ423",
+      "question": "2025年英赋嘉运费占全年总运费的比例是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ487",
+      "question": "2025年招标场景下的总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    },
+    {
+      "question_id": "SQ490",
+      "question": "2025年询比价场景下的总运费是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "recommended_status": "A",
+      "query_key": "hist_total_fee_summary",
+      "migration_basis": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、query_key 稳定。"
+    }
+  ]
+}

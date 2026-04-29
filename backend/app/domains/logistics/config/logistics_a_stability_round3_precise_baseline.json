@@ -1,0 +1,2199 @@
+{
+  "generated_at": "2026-04-24T10:09:38",
+  "result_database": "logistics_ai",
+  "selection_rule": "A-稳定增强池 Round3：当前已进入 A、优先级为 P3、尚未纳入更严格精确断言的 Top200 题。",
+  "items": [
+    {
+      "regression_id": "ASTABR3-001",
+      "question_id": "Q009",
+      "question": "安徽省历史发运的总费用是多少？",
+      "priority": "P3",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史累计安徽省总费用为7,665,825元。",
+      "expected_columns": [
+        "scope_label",
+        "province",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "7665825",
+          "shipment_mw": "1426.230",
+          "row_count": 1632,
+          "scope_label": "2023-2025历史累计",
+          "province": "安徽"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-002",
+      "question_id": "Q010",
+      "question": "广东省历史发运的总费用是多少？",
+      "priority": "P3",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史累计广东省总费用为29,689,911元。",
+      "expected_columns": [
+        "scope_label",
+        "province",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "29689911",
+          "shipment_mw": "1273.049",
+          "row_count": 1349,
+          "scope_label": "2023-2025历史累计",
+          "province": "广东"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-003",
+      "question_id": "Q011",
+      "question": "云南省历史发运的总费用是多少？",
+      "priority": "P3",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史累计云南省总费用为73,011,788元。",
+      "expected_columns": [
+        "scope_label",
+        "province",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "73011788",
+          "shipment_mw": "2248.527",
+          "row_count": 1935,
+          "scope_label": "2023-2025历史累计",
+          "province": "云南"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-004",
+      "question_id": "Q012",
+      "question": "新疆省历史发运的总费用是多少？",
+      "priority": "P3",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史累计新疆省总费用为414,196,035元。",
+      "expected_columns": [
+        "scope_label",
+        "province",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "414196035",
+          "shipment_mw": "10548.871",
+          "row_count": 2452,
+          "scope_label": "2023-2025历史累计",
+          "province": "新疆"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-005",
+      "question_id": "Q013",
+      "question": "河北省历史发运的总费用是多少？",
+      "priority": "P3",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史累计河北省总费用为24,235,746元。",
+      "expected_columns": [
+        "scope_label",
+        "province",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "24235746",
+          "shipment_mw": "1709.705",
+          "row_count": 996,
+          "scope_label": "2023-2025历史累计",
+          "province": "河北"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-006",
+      "question_id": "Q014",
+      "question": "浙江省历史发运的总费用是多少？",
+      "priority": "P3",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史累计浙江省总费用为12,762,601元。",
+      "expected_columns": [
+        "scope_label",
+        "province",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "12762601",
+          "shipment_mw": "1133.718",
+          "row_count": 1185,
+          "scope_label": "2023-2025历史累计",
+          "province": "浙江"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-007",
+      "question_id": "Q015",
+      "question": "山东省历史发运的总费用是多少？",
+      "priority": "P3",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史累计山东省总费用为20,006,728元。",
+      "expected_columns": [
+        "scope_label",
+        "province",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "20006728",
+          "shipment_mw": "2317.123",
+          "row_count": 1383,
+          "scope_label": "2023-2025历史累计",
+          "province": "山东"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-008",
+      "question_id": "Q269",
+      "question": "2026年project_name维度任务量排名前十的项目有哪些？",
+      "priority": "P3",
+      "query_key": "sys_task_count_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年按项目统计的任务量排名结果已返回。",
+      "expected_columns": [
+        "dimension_value",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "dimension_value": "海南创维新能源投资有限公司-715-1-660",
+          "task_count": 12
+        },
+        {
+          "dimension_value": "华阳集团（阳泉）新能源销售有限公司-585-3-792",
+          "task_count": 11
+        },
+        {
+          "dimension_value": "中国大唐集团有限公司物资分公司-715-7-660",
+          "task_count": 9
+        },
+        {
+          "dimension_value": "华电新能盐城新能源有限公司 -735-1-660",
+          "task_count": 9
+        },
+        {
+          "dimension_value": "华电新能盐城新能源有限公司 -735-4-660",
+          "task_count": 8
+        },
+        {
+          "dimension_value": "海南创维新能源投资有限公司。-715-1-660",
+          "task_count": 8
+        },
+        {
+          "dimension_value": "华润新能源光伏发电（昭通）有限公司-715-5-858",
+          "task_count": 7
+        },
+        {
+          "dimension_value": "海南创维新能源投资有限公司-730-4-660",
+          "task_count": 7
+        },
+        {
+          "dimension_value": "海南创维新能源投资有限公司，-715-1-660",
+          "task_count": 7
+        },
+        {
+          "dimension_value": "华阳集团（阳泉）新能源销售有限公司-585-2-792",
+          "task_count": 6
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-009",
+      "question_id": "SQ515",
+      "question": "2024年各承运商按运费排名前十分别是谁？",
+      "priority": "P3",
+      "query_key": "carrier_metric_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年各承运商按总运费排名前十结果已返回。",
+      "expected_columns": [
+        "carrier_name",
+        "total_fee",
+        "shipment_mw",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "total_fee": "100740588",
+          "shipment_mw": "3129.829"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "total_fee": "97398970",
+          "shipment_mw": "3098.933"
+        },
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "total_fee": "60106217",
+          "shipment_mw": "2683.650"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "total_fee": "38018043",
+          "shipment_mw": "1385.260"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "total_fee": "19807539",
+          "shipment_mw": "895.037"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "total_fee": "11016890",
+          "shipment_mw": "852.924"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "total_fee": "7104810",
+          "shipment_mw": "409.212"
+        },
+        {
+          "carrier_name": "四川长虹民生物流股份有限公司",
+          "total_fee": "5753492",
+          "shipment_mw": "232.140"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "total_fee": "4410565",
+          "shipment_mw": "173.525"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "total_fee": "2063854",
+          "shipment_mw": "175.489"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-010",
+      "question_id": "SQ516",
+      "question": "2024年各承运商按单瓦成本排名前十分别是谁？",
+      "priority": "P3",
+      "query_key": "carrier_metric_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年各承运商按单瓦成本排名前十结果已返回。",
+      "expected_columns": [
+        "carrier_name",
+        "unit_fee_per_watt",
+        "total_fee",
+        "shipment_mw",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "顺丰快递",
+          "unit_fee_per_watt": "0.38769799",
+          "total_fee": "14686",
+          "shipment_mw": "0.038"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "unit_fee_per_watt": "0.03218725",
+          "total_fee": "100740588",
+          "shipment_mw": "3129.829"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "unit_fee_per_watt": "0.03142984",
+          "total_fee": "97398970",
+          "shipment_mw": "3098.933"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "unit_fee_per_watt": "0.02744470",
+          "total_fee": "38018043",
+          "shipment_mw": "1385.260"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "unit_fee_per_watt": "0.02541749",
+          "total_fee": "4410565",
+          "shipment_mw": "173.525"
+        },
+        {
+          "carrier_name": "四川长虹民生物流股份有限公司",
+          "unit_fee_per_watt": "0.02478457",
+          "total_fee": "5753492",
+          "shipment_mw": "232.140"
+        },
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "unit_fee_per_watt": "0.02239719",
+          "total_fee": "60106217",
+          "shipment_mw": "2683.650"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "unit_fee_per_watt": "0.02213040",
+          "total_fee": "19807539",
+          "shipment_mw": "895.037"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "unit_fee_per_watt": "0.01736217",
+          "total_fee": "7104810",
+          "shipment_mw": "409.212"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "unit_fee_per_watt": "0.01614606",
+          "total_fee": "1430728",
+          "shipment_mw": "88.612"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-011",
+      "question_id": "SQ519",
+      "question": "2025年各承运商按单瓦成本排名前十分别是谁？",
+      "priority": "P3",
+      "query_key": "carrier_metric_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各承运商按单瓦成本排名前十结果已返回。",
+      "expected_columns": [
+        "carrier_name",
+        "unit_fee_per_watt",
+        "total_fee",
+        "shipment_mw",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "unit_fee_per_watt": "0.16949153",
+          "total_fee": "800",
+          "shipment_mw": "0.005"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "unit_fee_per_watt": "0.02690129",
+          "total_fee": "39354451",
+          "shipment_mw": "1462.921"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "unit_fee_per_watt": "0.02669442",
+          "total_fee": "1292186",
+          "shipment_mw": "48.407"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "unit_fee_per_watt": "0.02533388",
+          "total_fee": "72342708",
+          "shipment_mw": "2855.571"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "unit_fee_per_watt": "0.02506504",
+          "total_fee": "8139548",
+          "shipment_mw": "324.737"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "unit_fee_per_watt": "0.02406367",
+          "total_fee": "81156591",
+          "shipment_mw": "3372.578"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "unit_fee_per_watt": "0.02232719",
+          "total_fee": "559701",
+          "shipment_mw": "25.068"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "unit_fee_per_watt": "0.02023519",
+          "total_fee": "489458",
+          "shipment_mw": "24.188"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "unit_fee_per_watt": "0.01950549",
+          "total_fee": "24011380",
+          "shipment_mw": "1231.006"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "unit_fee_per_watt": "0.01684720",
+          "total_fee": "528090",
+          "shipment_mw": "31.346"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-012",
+      "question_id": "SQ521",
+      "question": "2026年1-2月各承运商按运费排名前十分别是谁？",
+      "priority": "P3",
+      "query_key": "carrier_metric_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月各承运商按总运费排名前十结果已返回。",
+      "expected_columns": [
+        "carrier_name",
+        "total_fee",
+        "shipment_mw",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "total_fee": "1506312.00",
+          "task_count": 121
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "total_fee": "1365780.00",
+          "task_count": 11
+        },
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "total_fee": "1080675.00",
+          "task_count": 140
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "total_fee": "677100.00",
+          "task_count": 15
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "total_fee": "554027.00",
+          "task_count": 49
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "total_fee": "516960.00",
+          "task_count": 5
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "total_fee": "411260.00",
+          "task_count": 44
+        },
+        {
+          "carrier_name": "无锡奥创供应链管理有限公司",
+          "total_fee": "367139.00",
+          "task_count": 18
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "total_fee": "342818.00",
+          "task_count": 19
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "total_fee": "305136.00",
+          "task_count": 36
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-013",
+      "question_id": "SQ532",
+      "question": "2026年2月份单瓦运输成本是多少？",
+      "priority": "P3",
+      "query_key": "sys_unit_fee_per_watt",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月按当前系统口径统计的单瓦运输成本为0.014578元/瓦。",
+      "expected_columns": [
+        "unit_fee_per_watt",
+        "total_fee",
+        "extra_fee_amount",
+        "shipment_mw",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count",
+        "power_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "1893970.00",
+          "extra_fee_amount": "2600.00",
+          "task_count": 135,
+          "parse_fail_count": "1",
+          "price_missing_count": "0",
+          "shipment_mw": "129.922",
+          "power_missing_count": "29",
+          "unit_fee_per_watt": "0.014578"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-014",
+      "question_id": "SQ562",
+      "question": "2026年1月份晶茂物流总计运费是多少钱？",
+      "priority": "P3",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月承运商晶茂物流按当前系统口径统计的总运费为453,463.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "453463.00",
+          "task_count": 83,
+          "parse_fail_count": "1",
+          "price_missing_count": "1"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-015",
+      "question_id": "SQ564",
+      "question": "2026年2月份晶茂物流总计运费是多少钱？",
+      "priority": "P3",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月承运商晶茂物流按当前系统口径统计的总运费为627,212.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "627212.00",
+          "task_count": 57,
+          "parse_fail_count": "1",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-016",
+      "question_id": "SQ566",
+      "question": "2026年1月份苏州晶茂物流总计运费是多少钱？",
+      "priority": "P3",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月承运商苏州晶茂物流按当前系统口径统计的总运费为453,463.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "453463.00",
+          "task_count": 83,
+          "parse_fail_count": "1",
+          "price_missing_count": "1"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-017",
+      "question_id": "SQ568",
+      "question": "2026年2月份苏州晶茂物流总计运费是多少钱？",
+      "priority": "P3",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月承运商苏州晶茂物流按当前系统口径统计的总运费为627,212.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "627212.00",
+          "task_count": 57,
+          "parse_fail_count": "1",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-018",
+      "question_id": "SQ572",
+      "question": "2026年2月份英赋嘉总计运费是多少钱？",
+      "priority": "P3",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月承运商英赋嘉按当前系统口径统计的总运费为65,100.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "65100.00",
+          "task_count": 4,
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-019",
+      "question_id": "RAW003",
+      "question": "25年全年 17.5 车型发运多少车",
+      "priority": "P3",
+      "query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年17.5车合计发运13,861车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "13861"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-020",
+      "question_id": "RAW016",
+      "question": "25年物流供应商发货量分别是多少",
+      "priority": "P3",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "3730.136",
+          "shipment_share_pct": "21.47",
+          "total_fee": "58250425"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3372.578",
+          "shipment_share_pct": "19.41",
+          "total_fee": "81156591"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "shipment_mw": "2855.571",
+          "shipment_share_pct": "16.44",
+          "total_fee": "72342708"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "2069.921",
+          "shipment_share_pct": "11.91",
+          "total_fee": "30645973"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "1462.921",
+          "shipment_share_pct": "8.42",
+          "total_fee": "39354451"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "1231.006",
+          "shipment_share_pct": "7.08",
+          "total_fee": "24011380"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "768.916",
+          "shipment_share_pct": "4.43",
+          "total_fee": "12120414"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "592.451",
+          "shipment_share_pct": "3.41",
+          "total_fee": "7224172"
+        },
+        {
+          "carrier_name": "常州安提物流有限公司",
+          "shipment_mw": "419.476",
+          "shipment_share_pct": "2.41",
+          "total_fee": "6205392"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "324.737",
+          "shipment_share_pct": "1.87",
+          "total_fee": "8139548"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "109.607",
+          "shipment_share_pct": "0.63",
+          "total_fee": "1086259"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "108.044",
+          "shipment_share_pct": "0.62",
+          "total_fee": "1410026"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "92.960",
+          "shipment_share_pct": "0.54",
+          "total_fee": "1299930"
+        },
+        {
+          "carrier_name": "浙江海舜供应链管理有限公司",
+          "shipment_mw": "68.935",
+          "shipment_share_pct": "0.40",
+          "total_fee": "876193"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "shipment_mw": "48.407",
+          "shipment_share_pct": "0.28",
+          "total_fee": "1292186"
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "shipment_mw": "38.642",
+          "shipment_share_pct": "0.22",
+          "total_fee": "274844"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "shipment_mw": "31.346",
+          "shipment_share_pct": "0.18",
+          "total_fee": "528090"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "25.068",
+          "shipment_share_pct": "0.14",
+          "total_fee": "559701"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "shipment_mw": "24.188",
+          "shipment_share_pct": "0.14",
+          "total_fee": "489458"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "0.005",
+          "shipment_share_pct": "0.00",
+          "total_fee": "800"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-021",
+      "question_id": "RAW017",
+      "question": "25年物流公司发货量分别是多少",
+      "priority": "P3",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "3730.136",
+          "shipment_share_pct": "21.47",
+          "total_fee": "58250425"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3372.578",
+          "shipment_share_pct": "19.41",
+          "total_fee": "81156591"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "shipment_mw": "2855.571",
+          "shipment_share_pct": "16.44",
+          "total_fee": "72342708"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "2069.921",
+          "shipment_share_pct": "11.91",
+          "total_fee": "30645973"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "1462.921",
+          "shipment_share_pct": "8.42",
+          "total_fee": "39354451"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "1231.006",
+          "shipment_share_pct": "7.08",
+          "total_fee": "24011380"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "768.916",
+          "shipment_share_pct": "4.43",
+          "total_fee": "12120414"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "592.451",
+          "shipment_share_pct": "3.41",
+          "total_fee": "7224172"
+        },
+        {
+          "carrier_name": "常州安提物流有限公司",
+          "shipment_mw": "419.476",
+          "shipment_share_pct": "2.41",
+          "total_fee": "6205392"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "324.737",
+          "shipment_share_pct": "1.87",
+          "total_fee": "8139548"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "109.607",
+          "shipment_share_pct": "0.63",
+          "total_fee": "1086259"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "108.044",
+          "shipment_share_pct": "0.62",
+          "total_fee": "1410026"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "92.960",
+          "shipment_share_pct": "0.54",
+          "total_fee": "1299930"
+        },
+        {
+          "carrier_name": "浙江海舜供应链管理有限公司",
+          "shipment_mw": "68.935",
+          "shipment_share_pct": "0.40",
+          "total_fee": "876193"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "shipment_mw": "48.407",
+          "shipment_share_pct": "0.28",
+          "total_fee": "1292186"
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "shipment_mw": "38.642",
+          "shipment_share_pct": "0.22",
+          "total_fee": "274844"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "shipment_mw": "31.346",
+          "shipment_share_pct": "0.18",
+          "total_fee": "528090"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "25.068",
+          "shipment_share_pct": "0.14",
+          "total_fee": "559701"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "shipment_mw": "24.188",
+          "shipment_share_pct": "0.14",
+          "total_fee": "489458"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "0.005",
+          "shipment_share_pct": "0.00",
+          "total_fee": "800"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-022",
+      "question_id": "RAW020",
+      "question": "25年各家物流发运量",
+      "priority": "P3",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "3730.136",
+          "shipment_share_pct": "21.47",
+          "total_fee": "58250425"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3372.578",
+          "shipment_share_pct": "19.41",
+          "total_fee": "81156591"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "shipment_mw": "2855.571",
+          "shipment_share_pct": "16.44",
+          "total_fee": "72342708"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "2069.921",
+          "shipment_share_pct": "11.91",
+          "total_fee": "30645973"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "1462.921",
+          "shipment_share_pct": "8.42",
+          "total_fee": "39354451"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "1231.006",
+          "shipment_share_pct": "7.08",
+          "total_fee": "24011380"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "768.916",
+          "shipment_share_pct": "4.43",
+          "total_fee": "12120414"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "592.451",
+          "shipment_share_pct": "3.41",
+          "total_fee": "7224172"
+        },
+        {
+          "carrier_name": "常州安提物流有限公司",
+          "shipment_mw": "419.476",
+          "shipment_share_pct": "2.41",
+          "total_fee": "6205392"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "324.737",
+          "shipment_share_pct": "1.87",
+          "total_fee": "8139548"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "109.607",
+          "shipment_share_pct": "0.63",
+          "total_fee": "1086259"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "108.044",
+          "shipment_share_pct": "0.62",
+          "total_fee": "1410026"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "92.960",
+          "shipment_share_pct": "0.54",
+          "total_fee": "1299930"
+        },
+        {
+          "carrier_name": "浙江海舜供应链管理有限公司",
+          "shipment_mw": "68.935",
+          "shipment_share_pct": "0.40",
+          "total_fee": "876193"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "shipment_mw": "48.407",
+          "shipment_share_pct": "0.28",
+          "total_fee": "1292186"
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "shipment_mw": "38.642",
+          "shipment_share_pct": "0.22",
+          "total_fee": "274844"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "shipment_mw": "31.346",
+          "shipment_share_pct": "0.18",
+          "total_fee": "528090"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "25.068",
+          "shipment_share_pct": "0.14",
+          "total_fee": "559701"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "shipment_mw": "24.188",
+          "shipment_share_pct": "0.14",
+          "total_fee": "489458"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "0.005",
+          "shipment_share_pct": "0.00",
+          "total_fee": "800"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-023",
+      "question_id": "RAW021",
+      "question": "25年各家物流发运量分别是多少",
+      "priority": "P3",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "3730.136",
+          "shipment_share_pct": "21.47",
+          "total_fee": "58250425"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3372.578",
+          "shipment_share_pct": "19.41",
+          "total_fee": "81156591"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "shipment_mw": "2855.571",
+          "shipment_share_pct": "16.44",
+          "total_fee": "72342708"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "2069.921",
+          "shipment_share_pct": "11.91",
+          "total_fee": "30645973"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "1462.921",
+          "shipment_share_pct": "8.42",
+          "total_fee": "39354451"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "1231.006",
+          "shipment_share_pct": "7.08",
+          "total_fee": "24011380"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "768.916",
+          "shipment_share_pct": "4.43",
+          "total_fee": "12120414"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "592.451",
+          "shipment_share_pct": "3.41",
+          "total_fee": "7224172"
+        },
+        {
+          "carrier_name": "常州安提物流有限公司",
+          "shipment_mw": "419.476",
+          "shipment_share_pct": "2.41",
+          "total_fee": "6205392"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "324.737",
+          "shipment_share_pct": "1.87",
+          "total_fee": "8139548"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "109.607",
+          "shipment_share_pct": "0.63",
+          "total_fee": "1086259"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "108.044",
+          "shipment_share_pct": "0.62",
+          "total_fee": "1410026"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "92.960",
+          "shipment_share_pct": "0.54",
+          "total_fee": "1299930"
+        },
+        {
+          "carrier_name": "浙江海舜供应链管理有限公司",
+          "shipment_mw": "68.935",
+          "shipment_share_pct": "0.40",
+          "total_fee": "876193"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "shipment_mw": "48.407",
+          "shipment_share_pct": "0.28",
+          "total_fee": "1292186"
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "shipment_mw": "38.642",
+          "shipment_share_pct": "0.22",
+          "total_fee": "274844"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "shipment_mw": "31.346",
+          "shipment_share_pct": "0.18",
+          "total_fee": "528090"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "25.068",
+          "shipment_share_pct": "0.14",
+          "total_fee": "559701"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "shipment_mw": "24.188",
+          "shipment_share_pct": "0.14",
+          "total_fee": "489458"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "0.005",
+          "shipment_share_pct": "0.00",
+          "total_fee": "800"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-024",
+      "question_id": "RAW023",
+      "question": "2025年各物流承运商年度运输量各是多少",
+      "priority": "P3",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "3730.136",
+          "shipment_share_pct": "21.47",
+          "total_fee": "58250425"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3372.578",
+          "shipment_share_pct": "19.41",
+          "total_fee": "81156591"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "shipment_mw": "2855.571",
+          "shipment_share_pct": "16.44",
+          "total_fee": "72342708"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "2069.921",
+          "shipment_share_pct": "11.91",
+          "total_fee": "30645973"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "1462.921",
+          "shipment_share_pct": "8.42",
+          "total_fee": "39354451"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "1231.006",
+          "shipment_share_pct": "7.08",
+          "total_fee": "24011380"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "768.916",
+          "shipment_share_pct": "4.43",
+          "total_fee": "12120414"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "592.451",
+          "shipment_share_pct": "3.41",
+          "total_fee": "7224172"
+        },
+        {
+          "carrier_name": "常州安提物流有限公司",
+          "shipment_mw": "419.476",
+          "shipment_share_pct": "2.41",
+          "total_fee": "6205392"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "324.737",
+          "shipment_share_pct": "1.87",
+          "total_fee": "8139548"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "109.607",
+          "shipment_share_pct": "0.63",
+          "total_fee": "1086259"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "108.044",
+          "shipment_share_pct": "0.62",
+          "total_fee": "1410026"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "92.960",
+          "shipment_share_pct": "0.54",
+          "total_fee": "1299930"
+        },
+        {
+          "carrier_name": "浙江海舜供应链管理有限公司",
+          "shipment_mw": "68.935",
+          "shipment_share_pct": "0.40",
+          "total_fee": "876193"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "shipment_mw": "48.407",
+          "shipment_share_pct": "0.28",
+          "total_fee": "1292186"
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "shipment_mw": "38.642",
+          "shipment_share_pct": "0.22",
+          "total_fee": "274844"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "shipment_mw": "31.346",
+          "shipment_share_pct": "0.18",
+          "total_fee": "528090"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "25.068",
+          "shipment_share_pct": "0.14",
+          "total_fee": "559701"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "shipment_mw": "24.188",
+          "shipment_share_pct": "0.14",
+          "total_fee": "489458"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "0.005",
+          "shipment_share_pct": "0.00",
+          "total_fee": "800"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-025",
+      "question_id": "RAW024",
+      "question": "25年各家物流承运量是多少",
+      "priority": "P3",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "3730.136",
+          "shipment_share_pct": "21.47",
+          "total_fee": "58250425"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3372.578",
+          "shipment_share_pct": "19.41",
+          "total_fee": "81156591"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "shipment_mw": "2855.571",
+          "shipment_share_pct": "16.44",
+          "total_fee": "72342708"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "2069.921",
+          "shipment_share_pct": "11.91",
+          "total_fee": "30645973"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "1462.921",
+          "shipment_share_pct": "8.42",
+          "total_fee": "39354451"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "1231.006",
+          "shipment_share_pct": "7.08",
+          "total_fee": "24011380"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "768.916",
+          "shipment_share_pct": "4.43",
+          "total_fee": "12120414"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "592.451",
+          "shipment_share_pct": "3.41",
+          "total_fee": "7224172"
+        },
+        {
+          "carrier_name": "常州安提物流有限公司",
+          "shipment_mw": "419.476",
+          "shipment_share_pct": "2.41",
+          "total_fee": "6205392"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "324.737",
+          "shipment_share_pct": "1.87",
+          "total_fee": "8139548"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "109.607",
+          "shipment_share_pct": "0.63",
+          "total_fee": "1086259"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "108.044",
+          "shipment_share_pct": "0.62",
+          "total_fee": "1410026"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "92.960",
+          "shipment_share_pct": "0.54",
+          "total_fee": "1299930"
+        },
+        {
+          "carrier_name": "浙江海舜供应链管理有限公司",
+          "shipment_mw": "68.935",
+          "shipment_share_pct": "0.40",
+          "total_fee": "876193"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "shipment_mw": "48.407",
+          "shipment_share_pct": "0.28",
+          "total_fee": "1292186"
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "shipment_mw": "38.642",
+          "shipment_share_pct": "0.22",
+          "total_fee": "274844"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "shipment_mw": "31.346",
+          "shipment_share_pct": "0.18",
+          "total_fee": "528090"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "25.068",
+          "shipment_share_pct": "0.14",
+          "total_fee": "559701"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "shipment_mw": "24.188",
+          "shipment_share_pct": "0.14",
+          "total_fee": "489458"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "0.005",
+          "shipment_share_pct": "0.00",
+          "total_fee": "800"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-026",
+      "question_id": "RAW027",
+      "question": "23年合肥发往西北地区的总运量是多少",
+      "priority": "P3",
+      "query_key": "hist_mw_summary",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年西北区域合肥基地总发运量为2508.516MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "2508.516"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-027",
+      "question_id": "RAW039",
+      "question": "025年始发地合肥，车型 17.5 ，发出了多少车？",
+      "priority": "P3",
+      "query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年17.5车合计发运13,861车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "13861"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-028",
+      "question_id": "RAW047",
+      "question": "问题1：24年 1-12月 每个月的江苏省的17.5均价是多少",
+      "priority": "P3",
+      "query_key": "hist_route_pricing_analysis",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年江苏17.5车每月平均运费已按月份返回。",
+      "expected_columns": [
+        "biz_month",
+        "avg_fee",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "biz_month": "2024-01",
+          "avg_fee": "8087",
+          "row_count": 33
+        },
+        {
+          "biz_month": "2024-02",
+          "avg_fee": "5417",
+          "row_count": 7
+        },
+        {
+          "biz_month": "2024-03",
+          "avg_fee": "6277",
+          "row_count": 14
+        },
+        {
+          "biz_month": "2024-04",
+          "avg_fee": "6382",
+          "row_count": 35
+        },
+        {
+          "biz_month": "2024-05",
+          "avg_fee": "5499",
+          "row_count": 20
+        },
+        {
+          "biz_month": "2024-06",
+          "avg_fee": "4799",
+          "row_count": 28
+        },
+        {
+          "biz_month": "2024-07",
+          "avg_fee": "6029",
+          "row_count": 12
+        },
+        {
+          "biz_month": "2024-08",
+          "avg_fee": "6278",
+          "row_count": 12
+        },
+        {
+          "biz_month": "2024-09",
+          "avg_fee": "6986",
+          "row_count": 23
+        },
+        {
+          "biz_month": "2024-10",
+          "avg_fee": "4537",
+          "row_count": 28
+        },
+        {
+          "biz_month": "2024-11",
+          "avg_fee": "7846",
+          "row_count": 54
+        },
+        {
+          "biz_month": "2024-12",
+          "avg_fee": "6413",
+          "row_count": 45
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-029",
+      "question_id": "RAW053",
+      "question": "问题1：对比24年和25年合肥发广州 17.5运价",
+      "priority": "P3",
+      "query_key": "hist_route_pricing_analysis",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年与2025年合肥发广州17.5车运价对比已按年份返回。",
+      "expected_columns": [
+        "biz_year",
+        "avg_fee",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "biz_year": 2024,
+          "avg_fee": "11442",
+          "row_count": 2
+        },
+        {
+          "biz_year": 2025,
+          "avg_fee": "52400",
+          "row_count": 1
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-030",
+      "question_id": "RAW061",
+      "question": "问题2.25年 合肥发广州 17.5报价，最高价和最低价是多少",
+      "priority": "P3",
+      "query_key": "hist_route_pricing_analysis",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥发广州17.5车最高价为52,400元，最低价为52,400元。",
+      "expected_columns": [
+        "min_fee",
+        "max_fee",
+        "avg_fee",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "min_fee": "52400",
+          "max_fee": "52400",
+          "avg_fee": "52400",
+          "row_count": 1
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-031",
+      "question_id": "RAW063",
+      "question": "25年 合肥发广州 17.5报价，最高价和最低价是多少",
+      "priority": "P3",
+      "query_key": "hist_route_pricing_analysis",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥发广州17.5车最高价为52,400元，最低价为52,400元。",
+      "expected_columns": [
+        "min_fee",
+        "max_fee",
+        "avg_fee",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "min_fee": "52400",
+          "max_fee": "52400",
+          "avg_fee": "52400",
+          "row_count": 1
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-032",
+      "question_id": "RAW072",
+      "question": "问题1：25年物流公司发货量分别是多少",
+      "priority": "P3",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "3730.136",
+          "shipment_share_pct": "21.47",
+          "total_fee": "58250425"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3372.578",
+          "shipment_share_pct": "19.41",
+          "total_fee": "81156591"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "shipment_mw": "2855.571",
+          "shipment_share_pct": "16.44",
+          "total_fee": "72342708"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "2069.921",
+          "shipment_share_pct": "11.91",
+          "total_fee": "30645973"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "1462.921",
+          "shipment_share_pct": "8.42",
+          "total_fee": "39354451"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "1231.006",
+          "shipment_share_pct": "7.08",
+          "total_fee": "24011380"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "768.916",
+          "shipment_share_pct": "4.43",
+          "total_fee": "12120414"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "592.451",
+          "shipment_share_pct": "3.41",
+          "total_fee": "7224172"
+        },
+        {
+          "carrier_name": "常州安提物流有限公司",
+          "shipment_mw": "419.476",
+          "shipment_share_pct": "2.41",
+          "total_fee": "6205392"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "324.737",
+          "shipment_share_pct": "1.87",
+          "total_fee": "8139548"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "109.607",
+          "shipment_share_pct": "0.63",
+          "total_fee": "1086259"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "108.044",
+          "shipment_share_pct": "0.62",
+          "total_fee": "1410026"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "92.960",
+          "shipment_share_pct": "0.54",
+          "total_fee": "1299930"
+        },
+        {
+          "carrier_name": "浙江海舜供应链管理有限公司",
+          "shipment_mw": "68.935",
+          "shipment_share_pct": "0.40",
+          "total_fee": "876193"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "shipment_mw": "48.407",
+          "shipment_share_pct": "0.28",
+          "total_fee": "1292186"
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "shipment_mw": "38.642",
+          "shipment_share_pct": "0.22",
+          "total_fee": "274844"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "shipment_mw": "31.346",
+          "shipment_share_pct": "0.18",
+          "total_fee": "528090"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "25.068",
+          "shipment_share_pct": "0.14",
+          "total_fee": "559701"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "shipment_mw": "24.188",
+          "shipment_share_pct": "0.14",
+          "total_fee": "489458"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "0.005",
+          "shipment_share_pct": "0.00",
+          "total_fee": "800"
+        }
+      ]
+    },
+    {
+      "regression_id": "ASTABR3-033",
+      "question_id": "RAW073",
+      "question": "问题2：2025年各物流承运商年度运输量各是多少",
+      "priority": "P3",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "3730.136",
+          "shipment_share_pct": "21.47",
+          "total_fee": "58250425"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3372.578",
+          "shipment_share_pct": "19.41",
+          "total_fee": "81156591"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "shipment_mw": "2855.571",
+          "shipment_share_pct": "16.44",
+          "total_fee": "72342708"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "2069.921",
+          "shipment_share_pct": "11.91",
+          "total_fee": "30645973"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "1462.921",
+          "shipment_share_pct": "8.42",
+          "total_fee": "39354451"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "1231.006",
+          "shipment_share_pct": "7.08",
+          "total_fee": "24011380"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "768.916",
+          "shipment_share_pct": "4.43",
+          "total_fee": "12120414"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "592.451",
+          "shipment_share_pct": "3.41",
+          "total_fee": "7224172"
+        },
+        {
+          "carrier_name": "常州安提物流有限公司",
+          "shipment_mw": "419.476",
+          "shipment_share_pct": "2.41",
+          "total_fee": "6205392"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "324.737",
+          "shipment_share_pct": "1.87",
+          "total_fee": "8139548"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "109.607",
+          "shipment_share_pct": "0.63",
+          "total_fee": "1086259"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "108.044",
+          "shipment_share_pct": "0.62",
+          "total_fee": "1410026"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "92.960",
+          "shipment_share_pct": "0.54",
+          "total_fee": "1299930"
+        },
+        {
+          "carrier_name": "浙江海舜供应链管理有限公司",
+          "shipment_mw": "68.935",
+          "shipment_share_pct": "0.40",
+          "total_fee": "876193"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "shipment_mw": "48.407",
+          "shipment_share_pct": "0.28",
+          "total_fee": "1292186"
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "shipment_mw": "38.642",
+          "shipment_share_pct": "0.22",
+          "total_fee": "274844"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "shipment_mw": "31.346",
+          "shipment_share_pct": "0.18",
+          "total_fee": "528090"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "25.068",
+          "shipment_share_pct": "0.14",
+          "total_fee": "559701"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "shipment_mw": "24.188",
+          "shipment_share_pct": "0.14",
+          "total_fee": "489458"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "0.005",
+          "shipment_share_pct": "0.00",
+          "total_fee": "800"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,922 @@
+{
+  "generated_at": "2026-04-26T23:14:24",
+  "source_ledger": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/logistics_903_master_ledger.json",
+  "batch_id": "A-ACCEPTANCE-B4",
+  "coverage_before_batch": {
+    "current_a_total": 656,
+    "precise_covered_before_batch": 480,
+    "uncovered_a_before_batch": 176,
+    "selectable_uncovered_with_query_key": 176,
+    "uncovered_query_key_breakdown": {
+      "hist_monthly_trip_count_summary": 24,
+      "hist_route_aggregate_summary": 121,
+      "hist_origin_vehicle_metric_summary": 24,
+      "hist_vehicle_type_trip_count": 4,
+      "sys_unit_fee_per_watt": 1,
+      "sys_mw_and_trip_count": 2
+    }
+  },
+  "selection_rule": "优先选择当前 A 中尚未精确断言、query_key 高频、业务价值高且易受口径变化影响的题。",
+  "items": [
+    {
+      "plan_id": "A-ACCEPT-B4-001",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ192",
+      "question": "2023年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-002",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ193",
+      "question": "2023年阜宁基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-003",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ194",
+      "question": "2023年阜宁基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-004",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ195",
+      "question": "2023年阜宁基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-005",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ196",
+      "question": "2023年阜宁基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-006",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ197",
+      "question": "2023年阜宁基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-007",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ198",
+      "question": "2023年阜宁基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-008",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ199",
+      "question": "2023年阜宁基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-009",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ200",
+      "question": "2023年阜宁基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-010",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ201",
+      "question": "2023年阜宁基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-011",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ202",
+      "question": "2023年阜宁基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-012",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ203",
+      "question": "2023年阜宁基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-013",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ204",
+      "question": "2023年阜宁基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-014",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ205",
+      "question": "2024年合肥基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-015",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ206",
+      "question": "2024年合肥基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-016",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ207",
+      "question": "2024年合肥基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-017",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ208",
+      "question": "2024年合肥基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-018",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ209",
+      "question": "2024年合肥基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-019",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ210",
+      "question": "2024年合肥基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-020",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ211",
+      "question": "2024年合肥基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-021",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ212",
+      "question": "2024年合肥基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-022",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ213",
+      "question": "2024年合肥基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-023",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ214",
+      "question": "2024年合肥基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-024",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ215",
+      "question": "2024年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-025",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ216",
+      "question": "2024年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-026",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ217",
+      "question": "2024年阜宁基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-027",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ218",
+      "question": "2024年阜宁基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-028",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ219",
+      "question": "2024年阜宁基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-029",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ220",
+      "question": "2024年阜宁基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-030",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ221",
+      "question": "2024年阜宁基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-031",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ222",
+      "question": "2024年阜宁基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-032",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ223",
+      "question": "2024年阜宁基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-033",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ224",
+      "question": "2024年阜宁基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-034",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ225",
+      "question": "2024年阜宁基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-035",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ226",
+      "question": "2024年阜宁基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-036",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ227",
+      "question": "2024年阜宁基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-037",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ228",
+      "question": "2024年阜宁基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-038",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ229",
+      "question": "2025年合肥基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-039",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ230",
+      "question": "2025年合肥基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-040",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ231",
+      "question": "2025年合肥基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-041",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ232",
+      "question": "2025年合肥基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-042",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ233",
+      "question": "2025年合肥基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-043",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ234",
+      "question": "2025年合肥基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-044",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ235",
+      "question": "2025年合肥基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-045",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ236",
+      "question": "2025年合肥基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-046",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ237",
+      "question": "2025年合肥基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-047",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ238",
+      "question": "2025年合肥基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-048",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ239",
+      "question": "2025年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-049",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ240",
+      "question": "2025年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    },
+    {
+      "plan_id": "A-ACCEPT-B4-050",
+      "batch_id": "A-ACCEPTANCE-B4",
+      "question_id": "SQ241",
+      "question": "2025年阜宁基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ]
+    }
+  ]
+}

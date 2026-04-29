@@ -1,0 +1,6 @@
+{
+  "generated_at": "2026-04-27T00:37:20",
+  "source_report": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tmp/logistics_question_bank/logistics_903_b_gap_wave2_report.json",
+  "migration_rule": "Wave2 真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、结果非空。",
+  "items": []
+}

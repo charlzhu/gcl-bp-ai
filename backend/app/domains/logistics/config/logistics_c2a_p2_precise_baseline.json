@@ -1,0 +1,1022 @@
+{
+  "generated_at": "2026-04-24T15:09:21",
+  "batch_id": "C2A-P2",
+  "result_database": "logistics_ai",
+  "selection_rule": "C Round2 新迁入 A 中 C2A-P2 批次 30 条。",
+  "items": [
+    {
+      "plan_id": "C2A-PREC-031",
+      "question_id": "SQ461",
+      "question": "2026年1-2月客户华润新能源（皮山）有限公司总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月客户华润新能源（皮山）有限公司按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-032",
+      "question_id": "SQ463",
+      "question": "2026年1-2月客户国科新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月客户国科新能源有限公司按当前系统口径统计的总运费为399,875.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "399875.00",
+          "task_count": 12,
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-033",
+      "question_id": "SQ465",
+      "question": "2026年1-2月客户江苏苏美达电力运营有限公司总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月客户江苏苏美达电力运营有限公司按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-034",
+      "question_id": "SQ499",
+      "question": "2026年1-2月招标场景下的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月承运商1-招标场景下的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-035",
+      "question_id": "SQ502",
+      "question": "2026年1-2月询比价场景下的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月承运商1-询比价场景下的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-036",
+      "question_id": "SQ527",
+      "question": "2026年1月份总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月承运商总按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-037",
+      "question_id": "SQ531",
+      "question": "2026年2月份总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月承运商总按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-038",
+      "question_id": "SQ535",
+      "question": "2026年1-2月累计总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月承运商1-累计按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-039",
+      "question_id": "SQ551",
+      "question": "2026年1月份运输方式为铁路的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月承运商运输方式为铁路的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-040",
+      "question_id": "SQ553",
+      "question": "2026年2月份运输方式为铁路的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月承运商运输方式为铁路的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-041",
+      "question_id": "SQ555",
+      "question": "2026年1-2月累计运输方式为铁路的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月承运商1-累计运输方式为铁路的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-042",
+      "question_id": "SQ557",
+      "question": "2026年1月份运输方式为公路的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月承运商运输方式为公路的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-043",
+      "question_id": "SQ559",
+      "question": "2026年2月份运输方式为公路的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月承运商运输方式为公路的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-044",
+      "question_id": "SQ561",
+      "question": "2026年1-2月累计运输方式为公路的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月承运商1-累计运输方式为公路的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-045",
+      "question_id": "SQ498",
+      "question": "2026年1-2月招标场景下的总发运量是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_mw_by_procurement_type",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年招标、询比价等采购方式对应的发运量拆分已返回。",
+      "expected_columns": [
+        "procurement_type",
+        "shipment_mw",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "procurement_type": "招标",
+          "shipment_mw": "730.803",
+          "task_count": 237
+        },
+        {
+          "procurement_type": "询比价",
+          "shipment_mw": "519.845",
+          "task_count": 747
+        },
+        {
+          "procurement_type": "未填充",
+          "shipment_mw": "0.000",
+          "task_count": 8
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-046",
+      "question_id": "SQ501",
+      "question": "2026年1-2月询比价场景下的总发运量是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_mw_by_procurement_type",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年招标、询比价等采购方式对应的发运量拆分已返回。",
+      "expected_columns": [
+        "procurement_type",
+        "shipment_mw",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "procurement_type": "招标",
+          "shipment_mw": "730.803",
+          "task_count": 237
+        },
+        {
+          "procurement_type": "询比价",
+          "shipment_mw": "519.845",
+          "task_count": 747
+        },
+        {
+          "procurement_type": "未填充",
+          "shipment_mw": "0.000",
+          "task_count": 8
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-047",
+      "question_id": "SQ424",
+      "question": "2024年客户华阳总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华阳总发运量为199.429MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 199.429,
+          "matched_customer_names": [
+            "华阳集团（阳泉）新能源销售有限公司",
+            "华阳集团（阳泉）新能源销售有限公司(常规包装",
+            "华阳集团（阳泉）新能源销售有限公司（常规包装）",
+            "华阳集团（阳泉）新能源销售有限公司(鑫阳光包装）",
+            "华阳集团（阳泉）新能源销售有限公司客诉组件"
+          ],
+          "scope_label": "2024年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-048",
+      "question_id": "SQ426",
+      "question": "2024年客户创维客户总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年创维客户总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2024年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-049",
+      "question_id": "SQ428",
+      "question": "2024年客户海南创维新能源投资有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年海南创维新能源投资有限公司总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2024年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-050",
+      "question_id": "SQ430",
+      "question": "2024年客户广东粤电阳西新能源有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年广东粤电阳西新能源有限公司总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2024年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-051",
+      "question_id": "SQ432",
+      "question": "2024年客户华润新能源（皮山）有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华润新能源（皮山）有限公司总发运量为480.413MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 480.413,
+          "matched_customer_names": [
+            "华润新能源（皮山）有限公司",
+            "华润新能源（皮山）有限公司客诉组件"
+          ],
+          "scope_label": "2024年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-052",
+      "question_id": "SQ434",
+      "question": "2024年客户国科新能源有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年国科新能源有限公司总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2024年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-053",
+      "question_id": "SQ436",
+      "question": "2024年客户江苏苏美达电力运营有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年江苏苏美达电力运营有限公司总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2024年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-054",
+      "question_id": "SQ438",
+      "question": "2025年客户华阳总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华阳总发运量为410.064MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 410.064,
+          "matched_customer_names": [
+            "华阳集团（阳泉）新能源销售有限公司",
+            "华阳集团（阳泉）新能源销售有限公司-585-1-146",
+            "华阳集团（阳泉）新能源销售有限公司-585-1-792",
+            "华阳集团（阳泉）新能源销售有限公司-585-10-792",
+            "华阳集团（阳泉）新能源销售有限公司-585-2-792",
+            "华阳集团（阳泉）新能源销售有限公司-585-3-792",
+            "华阳集团（阳泉）新能源销售有限公司-585-4-792",
+            "华阳集团（阳泉）新能源销售有限公司-585-5-792",
+            "华阳集团（阳泉）新能源销售有限公司-585-7-792",
+            "华阳集团（阳泉）新能源销售有限公司-585-8-792",
+            "华阳集团（阳泉）新能源销售有限公司-620-1-720",
+            "华阳集团（阳泉）新能源销售有限公司-700-2-660",
+            "华阳集团（阳泉）新能源销售有限公司-700-2-660+632",
+            "华阳集团（阳泉）新能源销售有限公司-700-3-660",
+            "华阳集团（阳泉）新能源销售有限公司-GD",
+            "华阳集团（阳泉）新能源销售有限公司2-585-1-792",
+            "华阳集团（阳泉）新能源销售有限公司2-585-10-792",
+            "华阳集团（阳泉）新能源销售有限公司2-585-2-792",
+            "华阳集团（阳泉）新能源销售有限公司2-585-5-792",
+            "华阳集团（阳泉）新能源销售有限公司2-585-6-792",
+            "华阳集团（阳泉）新能源销售有限公司2-585-7-792",
+            "华阳集团（阳泉）新能源销售有限公司2-585-8-792"
+          ],
+          "scope_label": "2025年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-055",
+      "question_id": "SQ440",
+      "question": "2025年客户创维客户总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年创维客户总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2025年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-056",
+      "question_id": "SQ442",
+      "question": "2025年客户海南创维新能源投资有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年海南创维新能源投资有限公司总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2025年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-057",
+      "question_id": "SQ444",
+      "question": "2025年客户广东粤电阳西新能源有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年广东粤电阳西新能源有限公司总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2025年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-058",
+      "question_id": "SQ446",
+      "question": "2025年客户华润新能源（皮山）有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华润新能源（皮山）有限公司总发运量为0.006MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0.006,
+          "matched_customer_names": [
+            "华润新能源（皮山）有限公司 客诉10件"
+          ],
+          "scope_label": "2025年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-059",
+      "question_id": "SQ448",
+      "question": "2025年客户国科新能源有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年国科新能源有限公司总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2025年"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-060",
+      "question_id": "SQ450",
+      "question": "2025年客户江苏苏美达电力运营有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_customer_mw",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年江苏苏美达电力运营有限公司总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 0,
+          "matched_customer_names": [],
+          "scope_label": "2025年"
+        }
+      ]
+    }
+  ]
+}

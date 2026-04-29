@@ -1,0 +1,570 @@
+{
+  "generated_at": "2026-04-24T10:09:37",
+  "selection_rule": "当前已进入 A、优先级为 P3、已在 Top200、但仍未纳入更严格精确断言的题。",
+  "summary": {
+    "selected_questions": 33
+  },
+  "items": [
+    {
+      "regression_id": "ASTABR3-001",
+      "question_id": "Q009",
+      "question": "安徽省历史发运的总费用是多少？",
+      "priority": "P3",
+      "source_group": "230",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-002",
+      "question_id": "Q010",
+      "question": "广东省历史发运的总费用是多少？",
+      "priority": "P3",
+      "source_group": "230",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-003",
+      "question_id": "Q011",
+      "question": "云南省历史发运的总费用是多少？",
+      "priority": "P3",
+      "source_group": "230",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-004",
+      "question_id": "Q012",
+      "question": "新疆省历史发运的总费用是多少？",
+      "priority": "P3",
+      "source_group": "230",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-005",
+      "question_id": "Q013",
+      "question": "河北省历史发运的总费用是多少？",
+      "priority": "P3",
+      "source_group": "230",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-006",
+      "question_id": "Q014",
+      "question": "浙江省历史发运的总费用是多少？",
+      "priority": "P3",
+      "source_group": "230",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-007",
+      "question_id": "Q015",
+      "question": "山东省历史发运的总费用是多少？",
+      "priority": "P3",
+      "source_group": "230",
+      "family": "区域/省份/基地汇总类",
+      "query_key": "hist_total_fee_by_province",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-008",
+      "question_id": "Q269",
+      "question": "2026年project_name维度任务量排名前十的项目有哪些？",
+      "priority": "P3",
+      "source_group": "230",
+      "family": "客户/项目分析类",
+      "query_key": "sys_task_count_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-009",
+      "question_id": "SQ515",
+      "question": "2024年各承运商按运费排名前十分别是谁？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "承运商经营与排名类",
+      "query_key": "carrier_metric_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-010",
+      "question_id": "SQ516",
+      "question": "2024年各承运商按单瓦成本排名前十分别是谁？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "承运商经营与排名类",
+      "query_key": "carrier_metric_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-011",
+      "question_id": "SQ519",
+      "question": "2025年各承运商按单瓦成本排名前十分别是谁？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "承运商经营与排名类",
+      "query_key": "carrier_metric_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-012",
+      "question_id": "SQ521",
+      "question": "2026年1-2月各承运商按运费排名前十分别是谁？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "承运商经营与排名类",
+      "query_key": "carrier_metric_ranking",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-013",
+      "question_id": "SQ532",
+      "question": "2026年2月份单瓦运输成本是多少？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "sys_unit_fee_per_watt",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-014",
+      "question_id": "SQ562",
+      "question": "2026年1月份晶茂物流总计运费是多少钱？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-015",
+      "question_id": "SQ564",
+      "question": "2026年2月份晶茂物流总计运费是多少钱？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-016",
+      "question_id": "SQ566",
+      "question": "2026年1月份苏州晶茂物流总计运费是多少钱？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-017",
+      "question_id": "SQ568",
+      "question": "2026年2月份苏州晶茂物流总计运费是多少钱？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-018",
+      "question_id": "SQ572",
+      "question": "2026年2月份英赋嘉总计运费是多少钱？",
+      "priority": "P3",
+      "source_group": "600",
+      "family": "综合统计类",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-019",
+      "question_id": "RAW003",
+      "question": "25年全年 17.5 车型发运多少车",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "线路/城市运价类",
+      "query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-020",
+      "question_id": "RAW016",
+      "question": "25年物流供应商发货量分别是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "承运商经营与排名类",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-021",
+      "question_id": "RAW017",
+      "question": "25年物流公司发货量分别是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "承运商经营与排名类",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-022",
+      "question_id": "RAW020",
+      "question": "25年各家物流发运量",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "综合统计类",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-023",
+      "question_id": "RAW021",
+      "question": "25年各家物流发运量分别是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "综合统计类",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-024",
+      "question_id": "RAW023",
+      "question": "2025年各物流承运商年度运输量各是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "承运商经营与排名类",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-025",
+      "question_id": "RAW024",
+      "question": "25年各家物流承运量是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "综合统计类",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-026",
+      "question_id": "RAW027",
+      "question": "23年合肥发往西北地区的总运量是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "线路/城市运价类",
+      "query_key": "hist_mw_summary",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-027",
+      "question_id": "RAW039",
+      "question": "025年始发地合肥，车型 17.5 ，发出了多少车？",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "线路/城市运价类",
+      "query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-028",
+      "question_id": "RAW047",
+      "question": "问题1：24年 1-12月 每个月的江苏省的17.5均价是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_pricing_analysis",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-029",
+      "question_id": "RAW053",
+      "question": "问题1：对比24年和25年合肥发广州 17.5运价",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_pricing_analysis",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-030",
+      "question_id": "RAW061",
+      "question": "问题2.25年 合肥发广州 17.5报价，最高价和最低价是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_pricing_analysis",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-031",
+      "question_id": "RAW063",
+      "question": "25年 合肥发广州 17.5报价，最高价和最低价是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "线路/城市运价类",
+      "query_key": "hist_route_pricing_analysis",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-032",
+      "question_id": "RAW072",
+      "question": "问题1：25年物流公司发货量分别是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "承运商经营与排名类",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    },
+    {
+      "regression_id": "ASTABR3-033",
+      "question_id": "RAW073",
+      "question": "问题2：2025年各物流承运商年度运输量各是多少",
+      "priority": "P3",
+      "source_group": "73",
+      "family": "承运商经营与排名类",
+      "query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_a_stability_round3_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "selection_reason": "当前已进入 A、业务优先级为 P3、尚未纳入更严格精确断言，作为 A-稳定增强池收尾批纳管。"
+    }
+  ]
+}

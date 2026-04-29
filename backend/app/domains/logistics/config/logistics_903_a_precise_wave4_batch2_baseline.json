@@ -1,0 +1,1051 @@
+{
+  "generated_at": "2026-04-26T20:33:50",
+  "source_question_set": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/logistics_903_a_precise_wave4_batch2_questions.json",
+  "batch_id": "A-W4-P2",
+  "coverage_before_batch": {
+    "current_a_total": 652,
+    "precise_covered_before_batch": 410,
+    "uncovered_a_before_batch": 242,
+    "selectable_uncovered_with_query_key": 242
+  },
+  "selection_rule": "优先选择 Wave1/Wave2 新迁入 A 中尚未进入精确断言、且 query_key 高频或易错的题。",
+  "items": [
+    {
+      "plan_id": "A-W4-P2-001",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q016",
+      "question": "按运输方式统计，公路对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年、2024年、2025年历史台账中，公路口径发运记录数为20,717条，占全部历史记录85.49%。",
+      "expected_columns": [
+        "transport_mode",
+        "record_count",
+        "total_record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "公路",
+          "record_count": 20717,
+          "total_record_count": 24234,
+          "record_share_pct": 85.49
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-002",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q017",
+      "question": "按运输方式统计，铁路对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年、2024年、2025年历史台账中，铁路口径发运记录数为3,499条，占全部历史记录14.44%。",
+      "expected_columns": [
+        "transport_mode",
+        "record_count",
+        "total_record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "铁路",
+          "record_count": 3499,
+          "total_record_count": 24234,
+          "record_share_pct": 14.44
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-003",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q018",
+      "question": "按运输方式统计，水路对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年、2024年、2025年历史台账中，水路口径发运记录数为18条，占全部历史记录0.07%。",
+      "expected_columns": [
+        "transport_mode",
+        "record_count",
+        "total_record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "水路",
+          "record_count": 18,
+          "total_record_count": 24234,
+          "record_share_pct": 0.07
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-004",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q019",
+      "question": "按运输方式统计，汽运对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年、2024年、2025年历史台账中，公路口径发运记录数为20,717条，占全部历史记录85.49%。",
+      "expected_columns": [
+        "transport_mode",
+        "record_count",
+        "total_record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "公路",
+          "record_count": 20717,
+          "total_record_count": 24234,
+          "record_share_pct": 85.49
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-005",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q020",
+      "question": "按运输方式统计，铁运对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年、2024年、2025年历史台账中，铁路口径发运记录数为3,499条，占全部历史记录14.44%。",
+      "expected_columns": [
+        "transport_mode",
+        "record_count",
+        "total_record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "铁路",
+          "record_count": 3499,
+          "total_record_count": 24234,
+          "record_share_pct": 14.44
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-006",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q243",
+      "question": "将“公路/汽运”口径统一后，2023-2025公路类运输的发运件数占比是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年、2025年历史台账中，公路口径发运记录数为14,425条，占全部历史记录83.94%。",
+      "expected_columns": [
+        "transport_mode",
+        "record_count",
+        "total_record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "公路",
+          "record_count": 14425,
+          "total_record_count": 17185,
+          "record_share_pct": 83.94
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-007",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q259",
+      "question": "历史台账中的水路记录有多少条？主要集中在哪些省份和月份？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年、2024年、2025年历史台账中，水路口径发运记录数为18条，占全部历史记录0.07%。",
+      "expected_columns": [
+        "transport_mode",
+        "record_count",
+        "total_record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "水路",
+          "record_count": 18,
+          "total_record_count": 24234,
+          "record_share_pct": 0.07
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-008",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ291",
+      "question": "2024年公路运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年公路单瓦运输成本为0.02261276元/瓦。",
+      "expected_columns": [
+        "unit_fee_per_watt",
+        "total_fee_amount",
+        "extra_fee_amount",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "total_fee_amount": "212211584",
+          "extra_fee_amount": "999424",
+          "shipment_mw": "9384.594",
+          "unit_fee_per_watt": "0.02261276"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-009",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ294",
+      "question": "2024年铁路运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年铁路单瓦运输成本为0.03453932元/瓦。",
+      "expected_columns": [
+        "unit_fee_per_watt",
+        "total_fee_amount",
+        "extra_fee_amount",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "total_fee_amount": "140685610",
+          "extra_fee_amount": "470847",
+          "shipment_mw": "4073.202",
+          "unit_fee_per_watt": "0.03453932"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-010",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ297",
+      "question": "2024年多式联运运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年多式联运单瓦运输成本为0元/瓦。",
+      "expected_columns": [
+        "unit_fee_per_watt",
+        "total_fee_amount",
+        "extra_fee_amount",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "total_fee_amount": null,
+          "extra_fee_amount": null,
+          "shipment_mw": null,
+          "unit_fee_per_watt": null
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-011",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ300",
+      "question": "2025年公路运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年公路单瓦运输成本为0.01742933元/瓦。",
+      "expected_columns": [
+        "unit_fee_per_watt",
+        "total_fee_amount",
+        "extra_fee_amount",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "total_fee_amount": "199494651",
+          "extra_fee_amount": "888642",
+          "shipment_mw": "11445.914",
+          "unit_fee_per_watt": "0.01742933"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-012",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ303",
+      "question": "2025年铁路运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年铁路单瓦运输成本为0.02496910元/瓦。",
+      "expected_columns": [
+        "unit_fee_per_watt",
+        "total_fee_amount",
+        "extra_fee_amount",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "total_fee_amount": "145996305",
+          "extra_fee_amount": "230500",
+          "shipment_mw": "5847.079",
+          "unit_fee_per_watt": "0.02496910"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-013",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ306",
+      "question": "2025年多式联运运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年多式联运单瓦运输成本为0元/瓦。",
+      "expected_columns": [
+        "unit_fee_per_watt",
+        "total_fee_amount",
+        "extra_fee_amount",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "total_fee_amount": null,
+          "extra_fee_amount": null,
+          "shipment_mw": null,
+          "unit_fee_per_watt": null
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-014",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q021",
+      "question": "规格为GCL-NT10/78GDF-640W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史台账中，规格GCL-NT10/78GDF-640W的总发运瓦数为669,762,560W，折合669.763MW。",
+      "expected_columns": [
+        "shipment_watt",
+        "shipment_mw",
+        "row_count",
+        "matched_spec_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "669.763",
+          "shipment_watt": "669762560",
+          "row_count": 1115,
+          "matched_spec_count": 128
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-015",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q022",
+      "question": "规格为GCL-NT10/72GDF-590W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史台账中，规格GCL-NT10/72GDF-590W的总发运瓦数为3,196,361,095W，折合3196.361MW。",
+      "expected_columns": [
+        "shipment_watt",
+        "shipment_mw",
+        "row_count",
+        "matched_spec_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "3196.361",
+          "shipment_watt": "3196361095",
+          "row_count": 2183,
+          "matched_spec_count": 201
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-016",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q023",
+      "question": "规格为GCL-NT10/72GDF-585W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史台账中，规格GCL-NT10/72GDF-585W的总发运瓦数为3,360,235,671W，折合3360.236MW。",
+      "expected_columns": [
+        "shipment_watt",
+        "shipment_mw",
+        "row_count",
+        "matched_spec_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "3360.236",
+          "shipment_watt": "3360235671",
+          "row_count": 1418,
+          "matched_spec_count": 59
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-017",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q024",
+      "question": "规格为GCL-NT12R/66GDF-620W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史台账中，规格GCL-NT12R/66GDF-620W的总发运瓦数为5,749,033,950W，折合5749.034MW。",
+      "expected_columns": [
+        "shipment_watt",
+        "shipment_mw",
+        "row_count",
+        "matched_spec_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "5749.034",
+          "shipment_watt": "5749033950",
+          "row_count": 2589,
+          "matched_spec_count": 169
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-018",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q025",
+      "question": "规格为GCL-NT12/66GDF-710W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史台账中，规格GCL-NT12/66GDF-710W的总发运瓦数为3,223,404,755W，折合3223.405MW。",
+      "expected_columns": [
+        "shipment_watt",
+        "shipment_mw",
+        "row_count",
+        "matched_spec_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "3223.405",
+          "shipment_watt": "3223404755",
+          "row_count": 2296,
+          "matched_spec_count": 223
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-019",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q063",
+      "question": "2026年物流任务中状态为PREASSIGN的任务数量及占比是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年主任务表状态分布已返回。",
+      "expected_columns": [
+        "status",
+        "task_count",
+        "task_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "status": "PREASSIGN",
+          "task_count": 4,
+          "task_share_pct": 0.4
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-020",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q064",
+      "question": "2026年物流任务中状态为ASSIGNED的任务数量及占比是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年主任务表状态分布已返回。",
+      "expected_columns": [
+        "status",
+        "task_count",
+        "task_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "status": "ASSIGNED",
+          "task_count": 154,
+          "task_share_pct": 15.52
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-021",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q065",
+      "question": "2026年物流任务中状态为SIGNEDFOR的任务数量及占比是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年主任务表状态分布已返回。",
+      "expected_columns": [
+        "status",
+        "task_count",
+        "task_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "status": "SIGNEDFOR",
+          "task_count": 834,
+          "task_share_pct": 84.07
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-022",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q066",
+      "question": "2026年物流任务中状态为PRESIGNFOR的任务数量及占比是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年主任务表状态分布已返回。",
+      "expected_columns": [
+        "status",
+        "task_count",
+        "task_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "status": "PRESIGNFOR",
+          "task_count": 0,
+          "task_share_pct": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-023",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q262",
+      "question": "2026物流任务表中，各任务状态（PREASSIGN、ASSIGNED、PRESIGNFOR、SIGNEDFOR）的数量分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年主任务表状态分布已返回。",
+      "expected_columns": [
+        "status",
+        "task_count",
+        "task_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "status": "SIGNEDFOR",
+          "task_count": 834,
+          "task_share_pct": 84.07
+        },
+        {
+          "status": "ASSIGNED",
+          "task_count": 154,
+          "task_share_pct": 15.52
+        },
+        {
+          "status": "PREASSIGN",
+          "task_count": 4,
+          "task_share_pct": 0.4
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-024",
+      "batch_id": "A-W4-P2",
+      "question_id": "Q271",
+      "question": "2026年派车任务表中，各状态（PREALLOCATE、ALLOCATED、ENTER、LEAVE）的数量分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年派车任务表状态分布已返回。",
+      "expected_columns": [
+        "status",
+        "task_count",
+        "task_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "status": "PREALLOCATE",
+          "task_count": 1529,
+          "task_share_pct": 52.02
+        },
+        {
+          "status": "ENTER",
+          "task_count": 1129,
+          "task_share_pct": 38.41
+        },
+        {
+          "status": "ALLOCATED",
+          "task_count": 280,
+          "task_share_pct": 9.53
+        },
+        {
+          "status": "LEAVE",
+          "task_count": 1,
+          "task_share_pct": 0.03
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-025",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ478",
+      "question": "2025年客户创维客户发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年客户创维客户地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-026",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ480",
+      "question": "2025年客户海南创维新能源投资有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年客户海南创维新能源投资有限公司地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-027",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ482",
+      "question": "2025年客户广东粤电阳西新能源有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年客户广东粤电阳西新能源有限公司地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-028",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ484",
+      "question": "2025年客户华润新能源（皮山）有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年客户华润新能源（皮山）有限公司地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-029",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ289",
+      "question": "2024年公路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年公路运输总发运量为9384.594MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "9384.594"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W4-P2-030",
+      "batch_id": "A-W4-P2",
+      "question_id": "SQ292",
+      "question": "2024年铁路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年铁路运输总发运量为4073.202MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "4073.202"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,1910 @@
+{
+  "generated_at": "2026-04-26T19:25:20",
+  "source_question_set": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/logistics_903_a_precise_wave3_batch1_questions.json",
+  "batch_id": "A-W3-P1",
+  "coverage_before_batch": {
+    "current_a_total": 652,
+    "precise_covered_before_batch": 380,
+    "uncovered_a_before_batch": 272,
+    "selectable_uncovered_with_query_key": 272
+  },
+  "selection_rule": "优先选择 Wave1/Wave2/Wave3 新进 A 中尚未进入精确断言、且已有受控 query_key 的高价值题。",
+  "items": [
+    {
+      "plan_id": "A-W3-P1-001",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ146",
+      "question": "2023年一季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年Q1各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "华东",
+          "total_fee": "1441262",
+          "shipment_mw": "128.873",
+          "row_count": 173
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "404223",
+          "shipment_mw": "31.411",
+          "row_count": 28
+        },
+        {
+          "region_name": "西南",
+          "total_fee": "225101",
+          "shipment_mw": "4.501",
+          "row_count": 8
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "221318",
+          "shipment_mw": "7.840",
+          "row_count": 17
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "131270",
+          "shipment_mw": "6.614",
+          "row_count": 7
+        },
+        {
+          "region_name": "西北",
+          "total_fee": "9800",
+          "shipment_mw": "0.512",
+          "row_count": 1
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-002",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ147",
+      "question": "2023年一季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年Q1各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.05001011",
+          "shipment_mw": "4.501",
+          "row_count": 8
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02822944",
+          "shipment_mw": "7.840",
+          "row_count": 17
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01984800",
+          "shipment_mw": "6.614",
+          "row_count": 7
+        },
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.01915934",
+          "shipment_mw": "0.512",
+          "row_count": 1
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01286870",
+          "shipment_mw": "31.411",
+          "row_count": 28
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.01118361",
+          "shipment_mw": "128.873",
+          "row_count": 173
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-003",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ149",
+      "question": "2023年二季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年Q2各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "total_fee": "8012230",
+          "shipment_mw": "176.337",
+          "row_count": 80
+        },
+        {
+          "region_name": "西北",
+          "total_fee": "5536721",
+          "shipment_mw": "206.396",
+          "row_count": 88
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "4972515",
+          "shipment_mw": "517.556",
+          "row_count": 533
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "3636790",
+          "shipment_mw": "171.053",
+          "row_count": 100
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "2591133",
+          "shipment_mw": "208.682",
+          "row_count": 189
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "2029035",
+          "shipment_mw": "74.169",
+          "row_count": 92
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "106240",
+          "shipment_mw": "2.943",
+          "row_count": 6
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-004",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ150",
+      "question": "2023年二季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年Q2各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.04543703",
+          "shipment_mw": "176.337",
+          "row_count": 80
+        },
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.03609413",
+          "shipment_mw": "2.943",
+          "row_count": 6
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02735689",
+          "shipment_mw": "74.169",
+          "row_count": 92
+        },
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.02682572",
+          "shipment_mw": "206.396",
+          "row_count": 88
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.02126119",
+          "shipment_mw": "171.053",
+          "row_count": 100
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01241668",
+          "shipment_mw": "208.682",
+          "row_count": 189
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.00960768",
+          "shipment_mw": "517.556",
+          "row_count": 533
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-005",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ152",
+      "question": "2023年三季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年Q3各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "total_fee": "29532711",
+          "shipment_mw": "686.762",
+          "row_count": 188
+        },
+        {
+          "region_name": "西南",
+          "total_fee": "16858400",
+          "shipment_mw": "419.939",
+          "row_count": 213
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "5316056",
+          "shipment_mw": "181.179",
+          "row_count": 152
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "3137871",
+          "shipment_mw": "337.187",
+          "row_count": 373
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "1641163",
+          "shipment_mw": "114.071",
+          "row_count": 123
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "1591733",
+          "shipment_mw": "81.478",
+          "row_count": 57
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "530843",
+          "shipment_mw": "10.000",
+          "row_count": 7
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-006",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ153",
+      "question": "2023年三季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年Q3各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.05308327",
+          "shipment_mw": "10.000",
+          "row_count": 7
+        },
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.04300284",
+          "shipment_mw": "686.762",
+          "row_count": 188
+        },
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.04014492",
+          "shipment_mw": "419.939",
+          "row_count": 213
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02934150",
+          "shipment_mw": "181.179",
+          "row_count": 152
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01953583",
+          "shipment_mw": "81.478",
+          "row_count": 57
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01438716",
+          "shipment_mw": "114.071",
+          "row_count": 123
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.00930602",
+          "shipment_mw": "337.187",
+          "row_count": 373
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-007",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ155",
+      "question": "2023年四季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年Q4各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "total_fee": "117603419",
+          "shipment_mw": "2555.182",
+          "row_count": 505
+        },
+        {
+          "region_name": "西南",
+          "total_fee": "36923191",
+          "shipment_mw": "816.213",
+          "row_count": 292
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "10152400",
+          "shipment_mw": "464.946",
+          "row_count": 209
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "8315739",
+          "shipment_mw": "272.657",
+          "row_count": 146
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "7803870",
+          "shipment_mw": "680.780",
+          "row_count": 510
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "4598071",
+          "shipment_mw": "333.925",
+          "row_count": 253
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "77979",
+          "shipment_mw": "2.399",
+          "row_count": 6
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-008",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ156",
+      "question": "2023年四季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年Q4各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.04602546",
+          "shipment_mw": "2555.182",
+          "row_count": 505
+        },
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.04523719",
+          "shipment_mw": "816.213",
+          "row_count": 292
+        },
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.03250723",
+          "shipment_mw": "2.399",
+          "row_count": 6
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.03049885",
+          "shipment_mw": "272.657",
+          "row_count": 146
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.02183567",
+          "shipment_mw": "464.946",
+          "row_count": 209
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01376978",
+          "shipment_mw": "333.925",
+          "row_count": 253
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.01146314",
+          "shipment_mw": "680.780",
+          "row_count": 510
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-009",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ158",
+      "question": "2024年一季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年Q1各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "total_fee": "11351489",
+          "shipment_mw": "294.068",
+          "row_count": 191
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "5636884",
+          "shipment_mw": "527.133",
+          "row_count": 432
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "3129316",
+          "shipment_mw": "109.791",
+          "row_count": 96
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "3026922",
+          "shipment_mw": "176.749",
+          "row_count": 148
+        },
+        {
+          "region_name": "西北",
+          "total_fee": "2824117",
+          "shipment_mw": "80.282",
+          "row_count": 29
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "371133",
+          "shipment_mw": "25.724",
+          "row_count": 13
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "74700",
+          "shipment_mw": "3.007",
+          "row_count": 1
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-010",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ159",
+      "question": "2024年一季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年Q1各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.03860157",
+          "shipment_mw": "294.068",
+          "row_count": 191
+        },
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.03517729",
+          "shipment_mw": "80.282",
+          "row_count": 29
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02850256",
+          "shipment_mw": "109.791",
+          "row_count": 96
+        },
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.02484435",
+          "shipment_mw": "3.007",
+          "row_count": 1
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01712557",
+          "shipment_mw": "176.749",
+          "row_count": 148
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01442772",
+          "shipment_mw": "25.724",
+          "row_count": 13
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.01069347",
+          "shipment_mw": "527.133",
+          "row_count": 432
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-011",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ161",
+      "question": "2024年二季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年Q2各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "total_fee": "141602273",
+          "shipment_mw": "3435.696",
+          "row_count": 571
+        },
+        {
+          "region_name": "西南",
+          "total_fee": "12176643",
+          "shipment_mw": "372.433",
+          "row_count": 163
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "9221819",
+          "shipment_mw": "333.178",
+          "row_count": 251
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "5832340",
+          "shipment_mw": "619.448",
+          "row_count": 631
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "4270547",
+          "shipment_mw": "271.467",
+          "row_count": 296
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "822034",
+          "shipment_mw": "50.485",
+          "row_count": 52
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "59652",
+          "shipment_mw": "2.326",
+          "row_count": 2
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-012",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ162",
+      "question": "2024年二季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年Q2各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.04121501",
+          "shipment_mw": "3435.696",
+          "row_count": 571
+        },
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.03269487",
+          "shipment_mw": "372.433",
+          "row_count": 163
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02767832",
+          "shipment_mw": "333.178",
+          "row_count": 251
+        },
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.02564795",
+          "shipment_mw": "2.326",
+          "row_count": 2
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01628283",
+          "shipment_mw": "50.485",
+          "row_count": 52
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01573135",
+          "shipment_mw": "271.467",
+          "row_count": 296
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.00941539",
+          "shipment_mw": "619.448",
+          "row_count": 631
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-013",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ164",
+      "question": "2024年三季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年Q3各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "total_fee": "33643864",
+          "shipment_mw": "875.841",
+          "row_count": 183
+        },
+        {
+          "region_name": "西南",
+          "total_fee": "27145627",
+          "shipment_mw": "713.465",
+          "row_count": 300
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "8735578",
+          "shipment_mw": "388.418",
+          "row_count": 276
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "8048415",
+          "shipment_mw": "977.232",
+          "row_count": 535
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "6654059",
+          "shipment_mw": "382.306",
+          "row_count": 180
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "2533026",
+          "shipment_mw": "190.481",
+          "row_count": 270
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "62737",
+          "shipment_mw": "1.902",
+          "row_count": 4
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-014",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ165",
+      "question": "2024年三季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年Q3各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.03841320",
+          "shipment_mw": "875.841",
+          "row_count": 183
+        },
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.03804757",
+          "shipment_mw": "713.465",
+          "row_count": 300
+        },
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.03298163",
+          "shipment_mw": "1.902",
+          "row_count": 4
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02249017",
+          "shipment_mw": "388.418",
+          "row_count": 276
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01740504",
+          "shipment_mw": "382.306",
+          "row_count": 180
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01329807",
+          "shipment_mw": "190.481",
+          "row_count": 270
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.00823593",
+          "shipment_mw": "977.232",
+          "row_count": 535
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-015",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ167",
+      "question": "2024年四季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年Q4各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "total_fee": "16633387",
+          "shipment_mw": "549.048",
+          "row_count": 340
+        },
+        {
+          "region_name": "西北",
+          "total_fee": "16141550",
+          "shipment_mw": "550.418",
+          "row_count": 215
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "12437726",
+          "shipment_mw": "818.025",
+          "row_count": 267
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "9463513",
+          "shipment_mw": "1099.125",
+          "row_count": 935
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "6248753",
+          "shipment_mw": "243.500",
+          "row_count": 210
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "4609336",
+          "shipment_mw": "362.788",
+          "row_count": 453
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "139757",
+          "shipment_mw": "3.460",
+          "row_count": 5
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-016",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ168",
+      "question": "2024年四季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年Q4各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.04039424",
+          "shipment_mw": "3.460",
+          "row_count": 5
+        },
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.03029494",
+          "shipment_mw": "549.048",
+          "row_count": 340
+        },
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.02932596",
+          "shipment_mw": "550.418",
+          "row_count": 215
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02566225",
+          "shipment_mw": "243.500",
+          "row_count": 210
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01520459",
+          "shipment_mw": "818.025",
+          "row_count": 267
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01270531",
+          "shipment_mw": "362.788",
+          "row_count": 453
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.00861005",
+          "shipment_mw": "1099.125",
+          "row_count": 935
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-017",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ170",
+      "question": "2025年一季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年Q1各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "total_fee": "19925456",
+          "shipment_mw": "764.908",
+          "row_count": 408
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "9964552",
+          "shipment_mw": "1271.713",
+          "row_count": 1181
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "8863028",
+          "shipment_mw": "384.642",
+          "row_count": 295
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "4492065",
+          "shipment_mw": "380.834",
+          "row_count": 310
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "2061051",
+          "shipment_mw": "149.946",
+          "row_count": 124
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "1932110",
+          "shipment_mw": "94.055",
+          "row_count": 144
+        },
+        {
+          "region_name": "西北",
+          "total_fee": "1570614",
+          "shipment_mw": "84.683",
+          "row_count": 84
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-018",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ171",
+      "question": "2025年一季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年Q1各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.02604949",
+          "shipment_mw": "764.908",
+          "row_count": 408
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02304228",
+          "shipment_mw": "384.642",
+          "row_count": 295
+        },
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.02054230",
+          "shipment_mw": "94.055",
+          "row_count": 144
+        },
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.01854691",
+          "shipment_mw": "84.683",
+          "row_count": 84
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01374529",
+          "shipment_mw": "149.946",
+          "row_count": 124
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01179533",
+          "shipment_mw": "380.834",
+          "row_count": 310
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.00783553",
+          "shipment_mw": "1271.713",
+          "row_count": 1181
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-019",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ173",
+      "question": "2025年二季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年Q2各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "total_fee": "43584664",
+          "shipment_mw": "2014.470",
+          "row_count": 454
+        },
+        {
+          "region_name": "西南",
+          "total_fee": "19903131",
+          "shipment_mw": "717.931",
+          "row_count": 445
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "8494981",
+          "shipment_mw": "572.074",
+          "row_count": 323
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "7847569",
+          "shipment_mw": "1026.082",
+          "row_count": 903
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "6519548",
+          "shipment_mw": "283.920",
+          "row_count": 252
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "3387496",
+          "shipment_mw": "270.692",
+          "row_count": 257
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "3336889",
+          "shipment_mw": "149.781",
+          "row_count": 68
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-020",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ174",
+      "question": "2025年二季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年Q2各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.02772289",
+          "shipment_mw": "717.931",
+          "row_count": 445
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02296266",
+          "shipment_mw": "283.920",
+          "row_count": 252
+        },
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.02227843",
+          "shipment_mw": "149.781",
+          "row_count": 68
+        },
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.02163580",
+          "shipment_mw": "2014.470",
+          "row_count": 454
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01484945",
+          "shipment_mw": "572.074",
+          "row_count": 323
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.01251423",
+          "shipment_mw": "270.692",
+          "row_count": 257
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.00764809",
+          "shipment_mw": "1026.082",
+          "row_count": 903
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-021",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ176",
+      "question": "2025年三季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年Q3各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "total_fee": "58802860",
+          "shipment_mw": "2210.631",
+          "row_count": 462
+        },
+        {
+          "region_name": "西南",
+          "total_fee": "31184890",
+          "shipment_mw": "1098.897",
+          "row_count": 318
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "14144337",
+          "shipment_mw": "746.072",
+          "row_count": 215
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "3006745",
+          "shipment_mw": "133.303",
+          "row_count": 147
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "2018911",
+          "shipment_mw": "204.245",
+          "row_count": 178
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "2003900",
+          "shipment_mw": "289.228",
+          "row_count": 459
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "151702",
+          "shipment_mw": "7.252",
+          "row_count": 17
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-022",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ177",
+      "question": "2025年三季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年Q3各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.02837835",
+          "shipment_mw": "1098.897",
+          "row_count": 318
+        },
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.02660003",
+          "shipment_mw": "2210.631",
+          "row_count": 462
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02255574",
+          "shipment_mw": "133.303",
+          "row_count": 147
+        },
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.02091977",
+          "shipment_mw": "7.252",
+          "row_count": 17
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01895840",
+          "shipment_mw": "746.072",
+          "row_count": 215
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.00988475",
+          "shipment_mw": "204.245",
+          "row_count": 178
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.00692846",
+          "shipment_mw": "289.228",
+          "row_count": 459
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-023",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ179",
+      "question": "2025年四季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年Q4各区域运费已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西南",
+          "total_fee": "34420630",
+          "shipment_mw": "1196.279",
+          "row_count": 1750
+        },
+        {
+          "region_name": "西北",
+          "total_fee": "33531286",
+          "shipment_mw": "1119.408",
+          "row_count": 825
+        },
+        {
+          "region_name": "华北",
+          "total_fee": "13914816",
+          "shipment_mw": "831.463",
+          "row_count": 961
+        },
+        {
+          "region_name": "华东",
+          "total_fee": "7101698",
+          "shipment_mw": "996.626",
+          "row_count": 1530
+        },
+        {
+          "region_name": "华南",
+          "total_fee": "2570261",
+          "shipment_mw": "122.872",
+          "row_count": 213
+        },
+        {
+          "region_name": "华中",
+          "total_fee": "2270432",
+          "shipment_mw": "240.880",
+          "row_count": 481
+        },
+        {
+          "region_name": "东北",
+          "total_fee": "262920",
+          "shipment_mw": "12.026",
+          "row_count": 25
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-024",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ180",
+      "question": "2025年四季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年Q4各区域单瓦运输成本已按区域排序返回。",
+      "expected_columns": [
+        "region_name",
+        "unit_fee_per_watt",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "unit_fee_per_watt": "0.02995448",
+          "shipment_mw": "1119.408",
+          "row_count": 825
+        },
+        {
+          "region_name": "西南",
+          "unit_fee_per_watt": "0.02877307",
+          "shipment_mw": "1196.279",
+          "row_count": 1750
+        },
+        {
+          "region_name": "东北",
+          "unit_fee_per_watt": "0.02186199",
+          "shipment_mw": "12.026",
+          "row_count": 25
+        },
+        {
+          "region_name": "华南",
+          "unit_fee_per_watt": "0.02091813",
+          "shipment_mw": "122.872",
+          "row_count": 213
+        },
+        {
+          "region_name": "华北",
+          "unit_fee_per_watt": "0.01673534",
+          "shipment_mw": "831.463",
+          "row_count": 961
+        },
+        {
+          "region_name": "华中",
+          "unit_fee_per_watt": "0.00942558",
+          "shipment_mw": "240.880",
+          "row_count": 481
+        },
+        {
+          "region_name": "华东",
+          "unit_fee_per_watt": "0.00712574",
+          "shipment_mw": "996.626",
+          "row_count": 1530
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-025",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ466",
+      "question": "2024年客户华阳发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年客户华阳地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-026",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ468",
+      "question": "2024年客户创维客户发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年客户创维客户地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-027",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ470",
+      "question": "2024年客户海南创维新能源投资有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年客户海南创维新能源投资有限公司地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-028",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ472",
+      "question": "2024年客户广东粤电阳西新能源有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年客户广东粤电阳西新能源有限公司地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-029",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ474",
+      "question": "2024年客户华润新能源（皮山）有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年客户华润新能源（皮山）有限公司地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W3-P1-030",
+      "batch_id": "A-W3-P1",
+      "question_id": "SQ476",
+      "question": "2025年客户华阳发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年客户华阳地中，哪些收货地址的发货项目地中，运费超过200,000元的收货地址共0个。",
+      "expected_columns": [
+        "address",
+        "province",
+        "city",
+        "total_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "address": "无",
+          "province": null,
+          "city": null,
+          "total_fee": 0,
+          "shipment_mw": 0,
+          "row_count": 0
+        }
+      ]
+    }
+  ]
+}

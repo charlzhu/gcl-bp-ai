@@ -1,0 +1,235 @@
+{
+  "version": "v1",
+  "description": "物流域 NLU Center v1 统一术语归一配置。该文件只服务语言理解层，不直接改变正式 data-qa planner 裁决。",
+  "metric_synonyms": [
+    {
+      "canonical": "shipment_mw",
+      "canonical_text": "发运量",
+      "field_mapping": ["actual_watt", "shipment_mw"],
+      "query_key_examples": ["hist_mw_summary", "sys_mw_and_trip_count", "hist_customer_mw"],
+      "variants": ["发运量", "发运", "运量", "发货量", "承运量", "运输量", "总出货规模", "出货规模", "总MW", "总瓦数", "发运瓦数", "运输总量"]
+    },
+    {
+      "canonical": "shipment_quantity",
+      "canonical_text": "发运件数",
+      "field_mapping": ["shipment_count", "actual_qty"],
+      "query_key_examples": ["hist_quantity_by_region", "hist_plan_actual_deviation"],
+      "variants": ["件数", "发运件数", "总件数", "实际件数", "计划件数", "组件数量"]
+    },
+    {
+      "canonical": "shipment_trip_count",
+      "canonical_text": "车次",
+      "field_mapping": ["trip_count", "vehicle_trip_count"],
+      "query_key_examples": ["sys_mw_and_trip_count", "hist_trip_count_by_region", "hist_vehicle_type_trip_count"],
+      "variants": ["车次", "车辆数", "车数", "总车数", "发了多少车", "多少车", "多少趟车", "跑了多少车次"]
+    },
+    {
+      "canonical": "total_fee",
+      "canonical_text": "总运费",
+      "field_mapping": ["total_fee", "fee_amount"],
+      "query_key_examples": ["hist_total_fee_by_province", "sys_total_fee_by_filters", "sys_special_total_fee"],
+      "variants": ["总费用", "总运费", "运费", "费用", "运输费用", "费用合计", "用车运费", "用车总费用", "总计运费", "物流成本", "成本", "额外费用"]
+    },
+    {
+      "canonical": "avg_fee",
+      "canonical_text": "平均运费",
+      "field_mapping": ["avg_fee", "avg_fee_per_trip"],
+      "query_key_examples": ["hist_avg_fee_by_month", "hist_route_pricing_analysis", "hist_city_carrier_avg_fee_per_trip"],
+      "variants": ["平均运费", "月均运费", "月均费", "均价", "平均单车运费", "每车运费", "单价/车", "运价", "报价"]
+    },
+    {
+      "canonical": "unit_fee_per_watt",
+      "canonical_text": "单瓦成本",
+      "field_mapping": ["fee_per_watt", "unit_fee_per_watt"],
+      "query_key_examples": ["hist_unit_fee_per_watt", "sys_unit_fee_per_watt", "hist_avg_fee_per_watt_by_transport"],
+      "variants": ["单瓦价", "元瓦", "元/瓦", "单瓦运输成本", "单瓦成本", "平均元瓦", "平均元/瓦"]
+    },
+    {
+      "canonical": "signedfor_rate",
+      "canonical_text": "SIGNEDFOR签收率",
+      "field_mapping": ["signedfor_rate", "task_status"],
+      "query_key_examples": ["sys_signedfor_rate_by_carrier"],
+      "variants": ["签收率", "SIGNEDFOR比例", "SIGNEDFOR签收率", "已签收比例", "签收比例"]
+    },
+    {
+      "canonical": "fill_rate",
+      "canonical_text": "填充率",
+      "field_mapping": ["fill_rate"],
+      "query_key_examples": ["sys_delivery_distance_fill_rate_by_province"],
+      "variants": ["填充率", "字段完整率", "填写完整性", "完整率"]
+    },
+    {
+      "canonical": "parse_success_rate",
+      "canonical_text": "解析成功率",
+      "field_mapping": ["parse_success_rate"],
+      "query_key_examples": ["sys_parse_success_rate_by_carrier"],
+      "variants": ["解析成功率", "送货单解析成功率", "解析通过率"]
+    }
+  ],
+  "dimension_synonyms": [
+    {
+      "canonical": "carrier",
+      "canonical_text": "承运商",
+      "field_mapping": ["carrier_name", "company_name"],
+      "variants": ["物流公司", "承运商", "物流供应商", "供应商", "运输公司"]
+    },
+    {
+      "canonical": "customer",
+      "canonical_text": "客户",
+      "field_mapping": ["customer_name"],
+      "variants": ["客户", "最终客户", "客户名称", "客户名"]
+    },
+    {
+      "canonical": "project",
+      "canonical_text": "项目",
+      "field_mapping": ["project_name"],
+      "variants": ["项目", "项目名称", "项目地"]
+    },
+    {
+      "canonical": "region",
+      "canonical_text": "区域",
+      "field_mapping": ["region_name"],
+      "variants": ["区域", "大区", "华东", "华北", "华南", "华中", "西北", "西南", "东北"]
+    },
+    {
+      "canonical": "province",
+      "canonical_text": "省份",
+      "field_mapping": ["province", "delivery_province"],
+      "variants": ["省", "省份", "目的省", "送达省份"]
+    },
+    {
+      "canonical": "city",
+      "canonical_text": "城市",
+      "field_mapping": ["city", "delivery_city"],
+      "variants": ["城市", "送达城市", "目的城市", "市"]
+    },
+    {
+      "canonical": "base",
+      "canonical_text": "基地",
+      "field_mapping": ["base_code", "base_name", "origin_place"],
+      "variants": ["基地", "始发基地", "合肥基地", "阜宁基地"]
+    },
+    {
+      "canonical": "transport_type",
+      "canonical_text": "运输方式",
+      "field_mapping": ["transport_mode", "ship_type"],
+      "variants": ["运输方式", "公路", "汽运", "铁路", "铁运", "多式联运", "水路"]
+    },
+    {
+      "canonical": "vehicle_type",
+      "canonical_text": "车型",
+      "field_mapping": ["required_vehicle_type", "vehicle_type"],
+      "variants": ["车型", "17.5", "17米五", "17米5", "17.5车", "13m", "13米", "13米车"]
+    },
+    {
+      "canonical": "procurement_type",
+      "canonical_text": "采购方式",
+      "field_mapping": ["procurement_type"],
+      "variants": ["采购方式", "招标", "询比价", "经营计划", "辅料送样", "普通发运"]
+    }
+  ],
+  "filter_synonyms": [
+    {
+      "canonical": "origin_place",
+      "canonical_text": "始发地",
+      "field_mapping": ["origin_place"],
+      "variants": ["始发地", "始发", "发货地", "从合肥", "合肥发", "阜宁发"]
+    },
+    {
+      "canonical": "destination_province",
+      "canonical_text": "目的省份",
+      "field_mapping": ["province", "delivery_province"],
+      "variants": ["目的省", "目的省份", "发往江苏", "发往广东", "送达省份"]
+    },
+    {
+      "canonical": "destination_city",
+      "canonical_text": "目的城市",
+      "field_mapping": ["city", "delivery_city"],
+      "variants": ["目的城市", "送达城市", "收货城市"]
+    },
+    {
+      "canonical": "status",
+      "canonical_text": "任务状态",
+      "field_mapping": ["task_status"],
+      "variants": ["SIGNEDFOR", "PREASSIGN", "ASSIGNED", "PRESIGNFOR", "PREALLOCATE", "ALLOCATED", "ENTER", "LEAVE", "状态"]
+    },
+    {
+      "canonical": "special_business_type",
+      "canonical_text": "特殊业务口径",
+      "field_mapping": ["special_scope", "procurement_type"],
+      "variants": ["经营计划", "经营计划部", "辅料送样", "刘娟用车", "刘娟"]
+    }
+  ],
+  "time_synonyms": [
+    {
+      "canonical": "year",
+      "variants": ["26年", "2026年", "25年", "2025年", "24年", "2024年", "23年", "2023年"]
+    },
+    {
+      "canonical": "month",
+      "variants": ["1月", "一月", "1月份", "2月", "二月", "2月份", "3月", "三月", "3月份"]
+    },
+    {
+      "canonical": "date_range",
+      "variants": ["1-2月", "1至2月", "1月和2月", "近7天", "近30天", "近一个月", "近三个月"]
+    },
+    {
+      "canonical": "year_to_date",
+      "variants": ["截至目前", "当前累计", "年初至今", "今年累计", "当前为止"]
+    }
+  ],
+  "text_replacements": {
+    "运量": "发运量",
+    "发货量": "发运量",
+    "承运量": "发运量",
+    "运输量": "发运量",
+    "总出货规模": "发运量",
+    "出货规模": "发运量",
+    "总费用": "总运费",
+    "费用": "总运费",
+    "物流成本": "总运费",
+    "成本": "总运费",
+    "运输费用": "总运费",
+    "费用合计": "总运费",
+    "单瓦价": "单瓦成本",
+    "元瓦": "单瓦成本",
+    "元/瓦": "单瓦成本",
+    "单瓦运输成本": "单瓦成本",
+    "月均费": "平均运费",
+    "车辆数": "车次",
+    "车数": "车次",
+    "总车数": "车次",
+    "多少车": "车次",
+    "多少趟车": "车次",
+    "物流公司": "承运商",
+    "物流供应商": "承运商",
+    "汽运": "公路",
+    "铁运": "铁路",
+    "17米五": "17.5",
+    "17米5": "17.5",
+    "17.5车": "17.5",
+    "13米": "13m",
+    "13米车": "13m",
+    "26年": "2026年",
+    "25年": "2025年",
+    "24年": "2024年",
+    "23年": "2023年",
+    "一月": "1月",
+    "二月": "2月",
+    "三月": "3月",
+    "1月份": "1月",
+    "2月份": "2月",
+    "3月份": "3月",
+    "1至2月": "1-2月",
+    "1月和2月": "1-2月",
+    "截至目前": "年初至今",
+    "当前累计": "年初至今",
+    "今年累计": "年初至今"
+  },
+  "unreliable_slots": {
+    "warehouse": "当前一期按路线 1 暂不把仓库维度作为可靠统计维度。",
+    "eta": "当前缺少受控 ETA 模型和在途轨迹推理链路。",
+    "forecast": "当前只回答已发生数据统计，不编造未来预测。",
+    "extra_fee_detail_reason": "当前只固化额外费用总额，未固化项目/原因/明细口径。"
+  }
+}

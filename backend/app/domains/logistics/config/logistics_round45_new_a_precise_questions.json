@@ -1,0 +1,111 @@
+[
+  {
+    "regression_id": "R45A001",
+    "source_round": "Round4",
+    "question_id": "RAW052",
+    "question": "帮我看一下从合肥基地始发，26年1-2月客户：海南创维新能源投资有限公司 总运费多少",
+    "query_key": "sys_total_fee_by_filters",
+    "standard_answer_source": "logistics_ai 当前主链路快照（2026系统口径，2026-04-23）",
+    "assertion_scope": "2026系统总运费精确断言",
+    "assertion_fields": [
+      "status.code",
+      "query_plan.query_key",
+      "answer_summary",
+      "result_table.rows[0].total_fee",
+      "result_table.rows[0].task_count"
+    ],
+    "expected_answer_summary": "2026年1月、2月合肥基地客户海南创维新能源投资有限公司按当前系统口径统计的总运费为38,294.00元。",
+    "expected_row_assertions": {
+      "total_fee": "38294.00",
+      "task_count": 4
+    }
+  },
+  {
+    "regression_id": "R45A002",
+    "source_round": "Round4",
+    "question_id": "RAW056",
+    "question": "帮我查一下2026年阜宁基地1月份晶茂物流总计运费是多少钱",
+    "query_key": "sys_total_fee_by_filters",
+    "standard_answer_source": "logistics_ai 当前主链路快照（2026系统口径，2026-04-23）",
+    "assertion_scope": "2026系统总运费精确断言",
+    "assertion_fields": [
+      "status.code",
+      "query_plan.query_key",
+      "answer_summary",
+      "result_table.rows[0].total_fee",
+      "result_table.rows[0].task_count"
+    ],
+    "expected_answer_summary": "2026年1月阜宁基地承运商晶茂物流按当前系统口径统计的总运费为234,202.00元。",
+    "expected_row_assertions": {
+      "total_fee": "234202.00",
+      "task_count": 25
+    }
+  },
+  {
+    "regression_id": "R45A003",
+    "source_round": "Round5",
+    "question_id": "RAW057",
+    "question": "2月份单W运输成本是多少（（2月运费总价格+额外费用）/运输组件总W数）",
+    "query_key": "sys_unit_fee_per_watt",
+    "standard_answer_source": "logistics_ai 当前主链路快照（2026系统口径，2026-04-23）",
+    "assertion_scope": "2026系统单瓦运输成本精确断言",
+    "assertion_fields": [
+      "status.code",
+      "query_plan.query_key",
+      "answer_summary",
+      "result_table.rows[0].total_fee",
+      "result_table.rows[0].extra_fee_amount",
+      "result_table.rows[0].shipment_mw",
+      "result_table.rows[0].unit_fee_per_watt"
+    ],
+    "expected_answer_summary": "2026年2月按（总运费+额外费用）/总发运瓦数口径统计的单瓦运输成本为0.014598元/瓦。",
+    "expected_row_assertions": {
+      "total_fee": "1893970.00",
+      "extra_fee_amount": "2600.00",
+      "shipment_mw": "129.922",
+      "unit_fee_per_watt": "0.014598"
+    }
+  },
+  {
+    "regression_id": "R45A004",
+    "source_round": "Round5",
+    "question_id": "RAW011",
+    "question": "帮我查询2026 年的运量综合",
+    "query_key": "sys_mw_and_trip_count",
+    "standard_answer_source": "logistics_ai 当前主链路快照（2026系统口径，2026-04-23）",
+    "assertion_scope": "2026截至目前累计运量综合精确断言",
+    "assertion_fields": [
+      "status.code",
+      "query_plan.query_key",
+      "answer_summary",
+      "result_table.rows[0].shipment_mw",
+      "result_table.rows[0].shipment_trip_count"
+    ],
+    "expected_answer_summary": "2026年截至目前累计合计发运量为2501.297MW，合计车次为2,260。",
+    "expected_row_assertions": {
+      "shipment_mw": "2501.297",
+      "shipment_trip_count": 2260
+    }
+  },
+  {
+    "regression_id": "R45A005",
+    "source_round": "Round5",
+    "question_id": "RAW025",
+    "question": "合肥发江苏 17.5 车运费",
+    "query_key": "hist_route_pricing_analysis",
+    "standard_answer_source": "logistics_ai 当前主链路快照（2023-2025历史口径，2026-04-23）",
+    "assertion_scope": "2023-2025历史累计平均运费精确断言",
+    "assertion_fields": [
+      "status.code",
+      "query_plan.query_key",
+      "answer_summary",
+      "result_table.rows[0].avg_fee",
+      "result_table.rows[0].row_count"
+    ],
+    "expected_answer_summary": "2023-2025历史累计合肥发江苏17.5车平均运费为6,163元。",
+    "expected_row_assertions": {
+      "avg_fee": "6163",
+      "row_count": 532
+    }
+  }
+]

@@ -1,0 +1,1576 @@
+{
+  "generated_at": "2026-04-26T21:19:06",
+  "source_question_set": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/logistics_903_a_precise_wave5_batch3_questions.json",
+  "batch_id": "A-W5-P3",
+  "coverage_before_batch": {
+    "current_a_total": 656,
+    "precise_covered_before_batch": 440,
+    "uncovered_a_before_batch": 216,
+    "selectable_uncovered_with_query_key": 216,
+    "uncovered_query_key_breakdown": {
+      "sys_delivery_note_parse_status_distribution": 5,
+      "sys_avg_loading_trucks_by_province": 5,
+      "hist_remark_keyword_fee_ratio": 1,
+      "sys_task_status_province_ranking": 2,
+      "sys_procurement_task_distribution": 1,
+      "sys_reconciliation_fill_rate_by_month": 1,
+      "sys_ship_product_detail_stats": 1,
+      "sys_driver_task_ranking": 1,
+      "hist_monthly_trip_count_summary": 24,
+      "hist_route_aggregate_summary": 132,
+      "hist_origin_vehicle_metric_summary": 24,
+      "hist_vehicle_type_trip_count": 4,
+      "hist_mw_summary": 4,
+      "hist_total_fee_summary": 4,
+      "sys_unit_fee_per_watt": 1,
+      "sys_extra_fee_summary": 4,
+      "sys_mw_and_trip_count": 2
+    }
+  },
+  "selection_rule": "优先选择当前 A 中尚未精确断言、query_key 高频且业务价值高的题，重点补 Wave1/Wave2/Wave3/Wave4 新迁入 A。",
+  "items": [
+    {
+      "plan_id": "A-W5-P3-001",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ431",
+      "question": "2024年客户广东粤电阳西新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年全年客户广东粤电阳西新能源有限公司总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年全年",
+          "denominator_total_fee": "352897194",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-002",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ437",
+      "question": "2024年客户江苏苏美达电力运营有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年全年客户江苏苏美达电力运营有限公司总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2024年全年",
+          "denominator_total_fee": "352897194",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-003",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ445",
+      "question": "2025年客户广东粤电阳西新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年全年客户广东粤电阳西新能源有限公司总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年全年",
+          "denominator_total_fee": "347268541",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-004",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ451",
+      "question": "2025年客户江苏苏美达电力运营有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年全年客户江苏苏美达电力运营有限公司总运费为0元。",
+      "expected_columns": [
+        "scope_label",
+        "total_fee",
+        "shipment_mw",
+        "row_count",
+        "denominator_total_fee",
+        "total_fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "shipment_mw": null,
+          "row_count": 0,
+          "scope_label": "2025年全年",
+          "denominator_total_fee": "347268541",
+          "total_fee_share_pct": 0.0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-005",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ295",
+      "question": "2024年多式联运运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年多式联运运输总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": null
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-006",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ298",
+      "question": "2025年公路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年公路运输总发运量为11445.914MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "11445.914"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-007",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ301",
+      "question": "2025年铁路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年铁路运输总发运量为5847.079MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "5847.079"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-008",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ304",
+      "question": "2025年多式联运运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年多式联运运输总发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": null
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-009",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q067",
+      "question": "2026年派车任务中，回单解析状态为0的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年派车任务回单解析状态分布已返回。",
+      "expected_columns": [
+        "delivery_note_parse_status",
+        "record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "delivery_note_parse_status": "0",
+          "record_count": 566,
+          "record_share_pct": 19.81
+        },
+        {
+          "delivery_note_parse_status": "1",
+          "record_count": 2093,
+          "record_share_pct": 73.26
+        },
+        {
+          "delivery_note_parse_status": "4",
+          "record_count": 198,
+          "record_share_pct": 6.93
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-010",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q068",
+      "question": "2026年派车任务中，回单解析状态为1的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年派车任务回单解析状态分布已返回。",
+      "expected_columns": [
+        "delivery_note_parse_status",
+        "record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "delivery_note_parse_status": "0",
+          "record_count": 566,
+          "record_share_pct": 19.81
+        },
+        {
+          "delivery_note_parse_status": "1",
+          "record_count": 2093,
+          "record_share_pct": 73.26
+        },
+        {
+          "delivery_note_parse_status": "4",
+          "record_count": 198,
+          "record_share_pct": 6.93
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-011",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q069",
+      "question": "2026年派车任务中，回单解析状态为3的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年派车任务回单解析状态分布已返回。",
+      "expected_columns": [
+        "delivery_note_parse_status",
+        "record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "delivery_note_parse_status": "0",
+          "record_count": 566,
+          "record_share_pct": 19.81
+        },
+        {
+          "delivery_note_parse_status": "1",
+          "record_count": 2093,
+          "record_share_pct": 73.26
+        },
+        {
+          "delivery_note_parse_status": "4",
+          "record_count": 198,
+          "record_share_pct": 6.93
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-012",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q070",
+      "question": "2026年派车任务中，回单解析状态为4的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年派车任务回单解析状态分布已返回。",
+      "expected_columns": [
+        "delivery_note_parse_status",
+        "record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "delivery_note_parse_status": "0",
+          "record_count": 566,
+          "record_share_pct": 19.81
+        },
+        {
+          "delivery_note_parse_status": "1",
+          "record_count": 2093,
+          "record_share_pct": 73.26
+        },
+        {
+          "delivery_note_parse_status": "4",
+          "record_count": 198,
+          "record_share_pct": 6.93
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-013",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q274",
+      "question": "2026年派车任务的送货单解析状态分布（0/1/3/4）分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年派车任务回单解析状态分布已返回。",
+      "expected_columns": [
+        "delivery_note_parse_status",
+        "record_count",
+        "record_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "delivery_note_parse_status": "0",
+          "record_count": 566,
+          "record_share_pct": 19.81
+        },
+        {
+          "delivery_note_parse_status": "1",
+          "record_count": 2093,
+          "record_share_pct": 73.26
+        },
+        {
+          "delivery_note_parse_status": "4",
+          "record_count": 198,
+          "record_share_pct": 6.93
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-014",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q071",
+      "question": "2026年送达省份为江苏省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年送达省份为江苏省的任务中，平均装车数为12.936。",
+      "expected_columns": [
+        "province",
+        "avg_loading_trucks",
+        "task_count",
+        "non_null_task_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_loading_trucks": "12.936",
+          "task_count": 206,
+          "non_null_task_count": "204",
+          "province": "江苏省"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-015",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q072",
+      "question": "2026年送达省份为安徽省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年送达省份为安徽省的任务中，平均装车数为11.365。",
+      "expected_columns": [
+        "province",
+        "avg_loading_trucks",
+        "task_count",
+        "non_null_task_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_loading_trucks": "11.365",
+          "task_count": 200,
+          "non_null_task_count": "189",
+          "province": "安徽省"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-016",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q073",
+      "question": "2026年送达省份为云南省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年送达省份为云南省的任务中，平均装车数为19.545。",
+      "expected_columns": [
+        "province",
+        "avg_loading_trucks",
+        "task_count",
+        "non_null_task_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_loading_trucks": "19.545",
+          "task_count": 33,
+          "non_null_task_count": "33",
+          "province": "云南省"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-017",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q074",
+      "question": "2026年送达省份为浙江省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年送达省份为浙江省的任务中，平均装车数为19.057。",
+      "expected_columns": [
+        "province",
+        "avg_loading_trucks",
+        "task_count",
+        "non_null_task_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_loading_trucks": "19.057",
+          "task_count": 70,
+          "non_null_task_count": "70",
+          "province": "浙江省"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-018",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q075",
+      "question": "2026年送达省份为四川省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年送达省份为四川省的任务中，平均装车数为14.692。",
+      "expected_columns": [
+        "province",
+        "avg_loading_trucks",
+        "task_count",
+        "non_null_task_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_loading_trucks": "14.692",
+          "task_count": 26,
+          "non_null_task_count": "26",
+          "province": "四川省"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-019",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ540",
+      "question": "2026年1月份合肥基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_extra_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月合肥基地额外费用总额为0.00元。",
+      "expected_columns": [
+        "extra_fee_amount",
+        "task_count",
+        "detail_count"
+      ],
+      "expected_rows": [
+        {
+          "extra_fee_amount": null,
+          "task_count": 0,
+          "detail_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-020",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ543",
+      "question": "2026年2月份合肥基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_extra_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月合肥基地额外费用总额为0.00元。",
+      "expected_columns": [
+        "extra_fee_amount",
+        "task_count",
+        "detail_count"
+      ],
+      "expected_rows": [
+        {
+          "extra_fee_amount": null,
+          "task_count": 0,
+          "detail_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-021",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ546",
+      "question": "2026年1月份阜宁基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_extra_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月阜宁基地额外费用总额为0.00元。",
+      "expected_columns": [
+        "extra_fee_amount",
+        "task_count",
+        "detail_count"
+      ],
+      "expected_rows": [
+        {
+          "extra_fee_amount": null,
+          "task_count": 0,
+          "detail_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-022",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ549",
+      "question": "2026年2月份阜宁基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_extra_fee_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月阜宁基地额外费用总额为0.00元。",
+      "expected_columns": [
+        "extra_fee_amount",
+        "task_count",
+        "detail_count"
+      ],
+      "expected_rows": [
+        {
+          "extra_fee_amount": null,
+          "task_count": 0,
+          "detail_count": 0
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-023",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q264",
+      "question": "2026年各送达省份中，PREASSIGN待派车任务最多的是哪些省份？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_province_ranking",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年PREASSIGN状态任务最多的送达省份已返回。",
+      "expected_columns": [
+        "delivery_province",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "delivery_province": "上海市",
+          "task_count": 1
+        },
+        {
+          "delivery_province": "云南省",
+          "task_count": 1
+        },
+        {
+          "delivery_province": "山西省",
+          "task_count": 1
+        },
+        {
+          "delivery_province": "湖南省",
+          "task_count": 1
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-024",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ583",
+      "question": "2026年哪些省份的PREASSIGN待派车任务最多？",
+      "source_group": "600",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_province_ranking",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年PREASSIGN状态任务最多的送达省份已返回。",
+      "expected_columns": [
+        "delivery_province",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "delivery_province": "上海市",
+          "task_count": 1
+        },
+        {
+          "delivery_province": "云南省",
+          "task_count": 1
+        },
+        {
+          "delivery_province": "山西省",
+          "task_count": 1
+        },
+        {
+          "delivery_province": "湖南省",
+          "task_count": 1
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-025",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q258",
+      "question": "备注中包含“倒运”或“中转”的记录，其总费用占历史物流总费用的比例是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_remark_keyword_fee_ratio",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史台账备注包含倒运/中转的记录总费用为0元，占历史总费用0%。",
+      "expected_columns": [
+        "keywords",
+        "keyword_total_fee",
+        "total_fee",
+        "keyword_record_count",
+        "total_record_count",
+        "fee_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "keyword_total_fee": "0",
+          "total_fee": "973566819",
+          "keyword_record_count": "0",
+          "total_record_count": 24234,
+          "fee_share_pct": 0.0,
+          "keywords": [
+            "倒运",
+            "中转"
+          ]
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-026",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q306",
+      "question": "2026年派车任务量最高的前20位司机是谁？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_driver_task_ranking",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年派车任务量最高的司机排名已返回。",
+      "expected_columns": [
+        "driver_name",
+        "assign_task_count"
+      ],
+      "expected_rows": [
+        {
+          "driver_name": "钱久军",
+          "assign_task_count": 12
+        },
+        {
+          "driver_name": "鲍广岩",
+          "assign_task_count": 12
+        },
+        {
+          "driver_name": "潘伟伟",
+          "assign_task_count": 10
+        },
+        {
+          "driver_name": "刘长城",
+          "assign_task_count": 9
+        },
+        {
+          "driver_name": "陈劲松",
+          "assign_task_count": 9
+        },
+        {
+          "driver_name": "高仕",
+          "assign_task_count": 9
+        },
+        {
+          "driver_name": "魏志松",
+          "assign_task_count": 9
+        },
+        {
+          "driver_name": "钱兰兰",
+          "assign_task_count": 8
+        },
+        {
+          "driver_name": "陈浩",
+          "assign_task_count": 8
+        },
+        {
+          "driver_name": "马雷",
+          "assign_task_count": 8
+        },
+        {
+          "driver_name": "梁超",
+          "assign_task_count": 7
+        },
+        {
+          "driver_name": "董善培",
+          "assign_task_count": 7
+        },
+        {
+          "driver_name": "袁同军",
+          "assign_task_count": 7
+        },
+        {
+          "driver_name": "赵越",
+          "assign_task_count": 7
+        },
+        {
+          "driver_name": "高广言",
+          "assign_task_count": 7
+        },
+        {
+          "driver_name": "孙作为",
+          "assign_task_count": 6
+        },
+        {
+          "driver_name": "张军",
+          "assign_task_count": 6
+        },
+        {
+          "driver_name": "李玉才",
+          "assign_task_count": 6
+        },
+        {
+          "driver_name": "于利乾",
+          "assign_task_count": 5
+        },
+        {
+          "driver_name": "周如刚",
+          "assign_task_count": 5
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-027",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q265",
+      "question": "2026年有采购方式标记的任务中，询比价与招标的任务量分别是多少？占比多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_procurement_task_distribution",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年有采购方式标记的任务中，各采购方式任务量与占比已返回。",
+      "expected_columns": [
+        "procurement_type",
+        "task_count",
+        "task_share_pct"
+      ],
+      "expected_rows": [
+        {
+          "procurement_type": "询比价",
+          "task_count": 747,
+          "task_share_pct": 75.91
+        },
+        {
+          "procurement_type": "招标",
+          "task_count": 237,
+          "task_share_pct": 24.09
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-028",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q281",
+      "question": "2026年各月份的reconciliation_status填充率分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_reconciliation_fill_rate_by_month",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年各月份 reconciliation_status 填充率已返回。",
+      "expected_columns": [
+        "biz_month",
+        "fill_rate",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "biz_month": "2026-01",
+          "fill_rate": "100.00",
+          "task_count": 373
+        },
+        {
+          "biz_month": "2026-02",
+          "fill_rate": "100.00",
+          "task_count": 133
+        },
+        {
+          "biz_month": "2026-03",
+          "fill_rate": "100.00",
+          "task_count": 264
+        },
+        {
+          "biz_month": "2026-04",
+          "fill_rate": "100.00",
+          "task_count": 222
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-029",
+      "batch_id": "A-W5-P3",
+      "question_id": "Q288",
+      "question": "2026年平均每个物流任务包含多少条ship_product明细？明细数最高的任务是哪几个？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_ship_product_detail_stats",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年平均每个物流任务包含1.050条 ship_product 明细，明细数最高的任务已返回。",
+      "expected_columns": [
+        "task_id",
+        "project_name",
+        "detail_count"
+      ],
+      "expected_rows": [
+        {
+          "task_id": "平均值",
+          "project_name": null,
+          "detail_count": "1.050"
+        },
+        {
+          "task_id": "11895",
+          "project_name": "苏格兰外送第一、二批/意大利订单外送-715/720/615/620-1-150",
+          "detail_count": 6
+        },
+        {
+          "task_id": "11719",
+          "project_name": "山东昶迈新能源有限公司/山东安宇光伏科技有限公司/河北塞航新能源科技有限公司/山东光福华夏新能源有限公司-620-1-4",
+          "detail_count": 4
+        },
+        {
+          "task_id": "11871",
+          "project_name": "600件210N钢边框研发实验物料调拨（合肥调拨广德）2-/-1-8",
+          "detail_count": 4
+        },
+        {
+          "task_id": "12115",
+          "project_name": "合肥美的合康光伏科技有限公司/美的西安项目-730-1-388",
+          "detail_count": 4
+        },
+        {
+          "task_id": "11381",
+          "project_name": "哥伦比亚50件实验-715/720-1-50",
+          "detail_count": 3
+        },
+        {
+          "task_id": "12018",
+          "project_name": "华电新能盐城新能源有限公司/华电南通新能源有限公司​-735/710/590-1-212",
+          "detail_count": 3
+        },
+        {
+          "task_id": "11165",
+          "project_name": "六枝乌江水电新能源有限公司-590/550-3-540*2+410",
+          "detail_count": 2
+        },
+        {
+          "task_id": "11186",
+          "project_name": "哥伦比亚可靠性实验-715/720-1-11",
+          "detail_count": 2
+        },
+        {
+          "task_id": "11213",
+          "project_name": "深圳市建融新能源科技有限公司-590-1-288",
+          "detail_count": 2
+        },
+        {
+          "task_id": "11217",
+          "project_name": "调拨电池及托盘-/-1-1",
+          "detail_count": 2
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-030",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ181",
+      "question": "2023年合肥基地发往江苏省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往江苏平均运费为5,269元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "5269",
+          "shipment_mw": "227.162",
+          "row_count": 284,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-031",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ182",
+      "question": "2023年合肥基地发往江苏省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往江苏总发运量为227.162MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "5269",
+          "shipment_mw": "227.162",
+          "row_count": 284,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-032",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ183",
+      "question": "2023年合肥基地发往浙江省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往浙江平均运费为8,440元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "8440",
+          "shipment_mw": "78.316",
+          "row_count": 110,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-033",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ184",
+      "question": "2023年合肥基地发往浙江省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往浙江总发运量为78.316MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "8440",
+          "shipment_mw": "78.316",
+          "row_count": 110,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-034",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ185",
+      "question": "2023年合肥基地发往上海市的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往上海平均运费为6,403元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "6403",
+          "shipment_mw": "36.898",
+          "row_count": 70,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-035",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ186",
+      "question": "2023年合肥基地发往上海市的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往上海总发运量为36.898MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "6403",
+          "shipment_mw": "36.898",
+          "row_count": 70,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-036",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ187",
+      "question": "2023年合肥基地发往安徽省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往安徽平均运费为4,155元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "4155",
+          "shipment_mw": "213.901",
+          "row_count": 229,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-037",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ188",
+      "question": "2023年合肥基地发往安徽省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往安徽总发运量为213.901MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "4155",
+          "shipment_mw": "213.901",
+          "row_count": 229,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-038",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ189",
+      "question": "2023年合肥基地发往广东省的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往广东平均运费为33,675元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "33675",
+          "shipment_mw": "333.641",
+          "row_count": 266,
+          "metric": "avg_fee"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-039",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ190",
+      "question": "2023年合肥基地发往广东省的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往广东总发运量为333.641MW。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "33675",
+          "shipment_mw": "333.641",
+          "row_count": 266,
+          "metric": "shipment_mw"
+        }
+      ]
+    },
+    {
+      "plan_id": "A-W5-P3-040",
+      "batch_id": "A-W5-P3",
+      "question_id": "SQ191",
+      "question": "2023年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "source_group": "600",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_route_aggregate_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照，经正式 data-qa 主链路执行后固化。",
+      "assertion_scope": "精确断言 status.code、query_plan.query_key、answer_summary、result_table.columns、result_table.rows。",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年合肥基地发往广西平均运费为31,709元。",
+      "expected_columns": [
+        "metric",
+        "avg_fee",
+        "shipment_mw",
+        "row_count"
+      ],
+      "expected_rows": [
+        {
+          "avg_fee": "31709",
+          "shipment_mw": "77.845",
+          "row_count": 78,
+          "metric": "avg_fee"
+        }
+      ]
+    }
+  ]
+}

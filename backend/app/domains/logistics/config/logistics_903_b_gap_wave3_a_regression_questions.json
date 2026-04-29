@@ -1,0 +1,202 @@
+{
+  "generated_at": "2026-04-26T19:33:36",
+  "source_migration_config": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/logistics_903_b_gap_wave3_migration_candidates.json",
+  "summary": {
+    "total_questions": 24,
+    "expected_status_code": "OK"
+  },
+  "items": [
+    {
+      "question_id": "SQ146",
+      "question": "2023年一季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ147",
+      "question": "2023年一季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ149",
+      "question": "2023年二季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ150",
+      "question": "2023年二季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ152",
+      "question": "2023年三季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ153",
+      "question": "2023年三季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ155",
+      "question": "2023年四季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ156",
+      "question": "2023年四季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ158",
+      "question": "2024年一季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ159",
+      "question": "2024年一季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ161",
+      "question": "2024年二季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ162",
+      "question": "2024年二季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ164",
+      "question": "2024年三季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ165",
+      "question": "2024年三季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ167",
+      "question": "2024年四季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ168",
+      "question": "2024年四季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ170",
+      "question": "2025年一季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ171",
+      "question": "2025年一季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ173",
+      "question": "2025年二季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ174",
+      "question": "2025年二季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ176",
+      "question": "2025年三季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ177",
+      "question": "2025年三季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ179",
+      "question": "2025年四季度各区域运费分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ180",
+      "question": "2025年四季度各区域单瓦运输成本分别是多少？",
+      "source_group": "600",
+      "family": "综合统计类",
+      "expected_query_key": "hist_quarter_region_metric",
+      "expected_status_code": "OK"
+    }
+  ]
+}

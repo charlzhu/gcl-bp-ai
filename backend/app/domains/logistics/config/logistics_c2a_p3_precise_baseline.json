@@ -1,0 +1,1370 @@
+{
+  "generated_at": "2026-04-24T15:40:05",
+  "batch_id": "C2A-P3",
+  "result_database": "logistics_ai",
+  "selection_rule": "C Round2 新迁入 A 中 C2A-P3 批次 30 条。",
+  "items": [
+    {
+      "plan_id": "C2A-PREC-061",
+      "question_id": "SQ514",
+      "question": "2024年各承运商按发运量排名前十分别是谁？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "承运商经营与排名类",
+      "expected_query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3129.829",
+          "shipment_share_pct": "23.26",
+          "total_fee": "100740588"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "3098.933",
+          "shipment_share_pct": "23.03",
+          "total_fee": "97398970"
+        },
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "2683.650",
+          "shipment_share_pct": "19.94",
+          "total_fee": "60106217"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "1385.260",
+          "shipment_share_pct": "10.29",
+          "total_fee": "38018043"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "895.037",
+          "shipment_share_pct": "6.65",
+          "total_fee": "19807539"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "852.924",
+          "shipment_share_pct": "6.34",
+          "total_fee": "11016890"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "409.212",
+          "shipment_share_pct": "3.04",
+          "total_fee": "7104810"
+        },
+        {
+          "carrier_name": "四川长虹民生物流股份有限公司",
+          "shipment_mw": "232.140",
+          "shipment_share_pct": "1.72",
+          "total_fee": "5753492"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "175.489",
+          "shipment_share_pct": "1.30",
+          "total_fee": "2063854"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "173.525",
+          "shipment_share_pct": "1.29",
+          "total_fee": "4410565"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "102.528",
+          "shipment_share_pct": "0.76",
+          "total_fee": "1580741"
+        },
+        {
+          "carrier_name": "南京瑞顺物流有限公司",
+          "shipment_mw": "93.558",
+          "shipment_share_pct": "0.70",
+          "total_fee": "1458433"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "88.612",
+          "shipment_share_pct": "0.66",
+          "total_fee": "1430728"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "87.820",
+          "shipment_share_pct": "0.65",
+          "total_fee": "1279917"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "38.341",
+          "shipment_share_pct": "0.28",
+          "total_fee": "577781"
+        },
+        {
+          "carrier_name": "中国物流合肥有限公司",
+          "shipment_mw": "10.900",
+          "shipment_share_pct": "0.08",
+          "total_fee": "133940"
+        },
+        {
+          "carrier_name": "顺丰快递",
+          "shipment_mw": "0.038",
+          "shipment_share_pct": "0.00",
+          "total_fee": "14686"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-062",
+      "question_id": "SQ517",
+      "question": "2025年各承运商按发运量排名前十分别是谁？",
+      "source_group": "600",
+      "priority": "P3",
+      "family": "承运商经营与排名类",
+      "expected_query_key": "hist_carrier_kpi_by_year",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各物流承运商的发运量、占比和运费总额已汇总返回。",
+      "expected_columns": [
+        "carrier_name",
+        "shipment_mw",
+        "shipment_share_pct",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "carrier_name": "苏州晶茂物流有限公司",
+          "shipment_mw": "3730.136",
+          "shipment_share_pct": "21.47",
+          "total_fee": "58250425"
+        },
+        {
+          "carrier_name": "浙江英赋嘉供应链科技股份有限公司",
+          "shipment_mw": "3372.578",
+          "shipment_share_pct": "19.41",
+          "total_fee": "81156591"
+        },
+        {
+          "carrier_name": "西安京东讯成物流有限公司",
+          "shipment_mw": "2855.571",
+          "shipment_share_pct": "16.44",
+          "total_fee": "72342708"
+        },
+        {
+          "carrier_name": "宿迁市昆仑物流有限公司",
+          "shipment_mw": "2069.921",
+          "shipment_share_pct": "11.91",
+          "total_fee": "30645973"
+        },
+        {
+          "carrier_name": "杭州菜鸟橙运供应链管理有限公司",
+          "shipment_mw": "1462.921",
+          "shipment_share_pct": "8.42",
+          "total_fee": "39354451"
+        },
+        {
+          "carrier_name": "上海安点物流有限公司",
+          "shipment_mw": "1231.006",
+          "shipment_share_pct": "7.08",
+          "total_fee": "24011380"
+        },
+        {
+          "carrier_name": "远孚物流集团有限公司",
+          "shipment_mw": "768.916",
+          "shipment_share_pct": "4.43",
+          "total_fee": "12120414"
+        },
+        {
+          "carrier_name": "苏州威洋供应链有限公司",
+          "shipment_mw": "592.451",
+          "shipment_share_pct": "3.41",
+          "total_fee": "7224172"
+        },
+        {
+          "carrier_name": "常州安提物流有限公司",
+          "shipment_mw": "419.476",
+          "shipment_share_pct": "2.41",
+          "total_fee": "6205392"
+        },
+        {
+          "carrier_name": "江苏远邦物流有限公司",
+          "shipment_mw": "324.737",
+          "shipment_share_pct": "1.87",
+          "total_fee": "8139548"
+        },
+        {
+          "carrier_name": "江苏久鼎供应链管理有限公司",
+          "shipment_mw": "109.607",
+          "shipment_share_pct": "0.63",
+          "total_fee": "1086259"
+        },
+        {
+          "carrier_name": "中国邮政速递物流股份有限公司南京市分公司",
+          "shipment_mw": "108.044",
+          "shipment_share_pct": "0.62",
+          "total_fee": "1410026"
+        },
+        {
+          "carrier_name": "青岛日日顺供应链有限公司",
+          "shipment_mw": "92.960",
+          "shipment_share_pct": "0.54",
+          "total_fee": "1299930"
+        },
+        {
+          "carrier_name": "浙江海舜供应链管理有限公司",
+          "shipment_mw": "68.935",
+          "shipment_share_pct": "0.40",
+          "total_fee": "876193"
+        },
+        {
+          "carrier_name": "四川安仕吉供应链管理有限公司",
+          "shipment_mw": "48.407",
+          "shipment_share_pct": "0.28",
+          "total_fee": "1292186"
+        },
+        {
+          "carrier_name": "广州交通集团物流有限公司",
+          "shipment_mw": "38.642",
+          "shipment_share_pct": "0.22",
+          "total_fee": "274844"
+        },
+        {
+          "carrier_name": "江苏通泽国际货运代理有限公司",
+          "shipment_mw": "31.346",
+          "shipment_share_pct": "0.18",
+          "total_fee": "528090"
+        },
+        {
+          "carrier_name": "江苏鲲越国际物流有限公司",
+          "shipment_mw": "25.068",
+          "shipment_share_pct": "0.14",
+          "total_fee": "559701"
+        },
+        {
+          "carrier_name": "浙江交投物流集团有限公司",
+          "shipment_mw": "24.188",
+          "shipment_share_pct": "0.14",
+          "total_fee": "489458"
+        },
+        {
+          "carrier_name": "佛山市南海丰冠运输有限公司",
+          "shipment_mw": "0.005",
+          "shipment_share_pct": "0.00",
+          "total_fee": "800"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-063",
+      "question_id": "SQ145",
+      "question": "2023年一季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "3448.851"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "1664.396"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "1416.990"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "724.090"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "688.089"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "535.845"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "15.342"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-064",
+      "question_id": "SQ148",
+      "question": "2023年二季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "3448.851"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "1664.396"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "1416.990"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "724.090"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "688.089"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "535.845"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "15.342"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-065",
+      "question_id": "SQ151",
+      "question": "2023年三季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "3448.851"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "1664.396"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "1416.990"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "724.090"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "688.089"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "535.845"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "15.342"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-066",
+      "question_id": "SQ154",
+      "question": "2023年四季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "3448.851"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "1664.396"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "1416.990"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "724.090"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "688.089"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "535.845"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "15.342"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-067",
+      "question_id": "SQ157",
+      "question": "2024年一季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "4942.238"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "3222.938"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "1929.015"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "1276.539"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "1074.887"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "1001.485"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "10.695"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-068",
+      "question_id": "SQ160",
+      "question": "2024年二季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "4942.238"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "3222.938"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "1929.015"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "1276.539"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "1074.887"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "1001.485"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "10.695"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-069",
+      "question_id": "SQ163",
+      "question": "2024年三季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "4942.238"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "3222.938"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "1929.015"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "1276.539"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "1074.887"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "1001.485"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "10.695"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-070",
+      "question_id": "SQ166",
+      "question": "2024年四季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "4942.238"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "3222.938"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "1929.015"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "1276.539"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "1074.887"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "1001.485"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "10.695"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-071",
+      "question_id": "SQ169",
+      "question": "2025年一季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "5429.193"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "3778.016"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "3583.648"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "2299.555"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "1096.650"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "924.737"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "263.114"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-072",
+      "question_id": "SQ172",
+      "question": "2025年二季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "5429.193"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "3778.016"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "3583.648"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "2299.555"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "1096.650"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "924.737"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "263.114"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-073",
+      "question_id": "SQ175",
+      "question": "2025年三季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "5429.193"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "3778.016"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "3583.648"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "2299.555"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "1096.650"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "924.737"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "263.114"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-074",
+      "question_id": "SQ178",
+      "question": "2025年四季度各区域发运量分别是多少？请按区域排序展示。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年各区域发运量汇总已返回。",
+      "expected_columns": [
+        "region_name",
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "region_name": "西北",
+          "shipment_mw": "5429.193"
+        },
+        {
+          "region_name": "西南",
+          "shipment_mw": "3778.016"
+        },
+        {
+          "region_name": "华东",
+          "shipment_mw": "3583.648"
+        },
+        {
+          "region_name": "华北",
+          "shipment_mw": "2299.555"
+        },
+        {
+          "region_name": "华中",
+          "shipment_mw": "1096.650"
+        },
+        {
+          "region_name": "华南",
+          "shipment_mw": "924.737"
+        },
+        {
+          "region_name": "东北",
+          "shipment_mw": "263.114"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-075",
+      "question_id": "SQ591",
+      "question": "基于2024年前期数据，预测未来3个月各区域发运量变化趋势。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "预测/诊断/开放讨论类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "UNSUPPORTED_QUESTION",
+      "expected_answer_summary": "当前问题需要预测未来费用、趋势或波动区间，现阶段物流数据问答只回答已发生数据的统计结果，不编造预测值。 可改问方向：可以改问：2023–2025 年各月物流总费用是多少？；可以改问：2026 年已发生月份的运费、发运量或单瓦成本是多少？",
+      "expected_columns": [],
+      "expected_rows": []
+    },
+    {
+      "plan_id": "C2A-PREC-076",
+      "question_id": "SQ595",
+      "question": "基于2025年前期数据，预测未来3个月各区域发运量变化趋势。",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "预测/诊断/开放讨论类",
+      "expected_query_key": "hist_mw_by_all_regions",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "UNSUPPORTED_QUESTION",
+      "expected_answer_summary": "当前问题需要预测未来费用、趋势或波动区间，现阶段物流数据问答只回答已发生数据的统计结果，不编造预测值。 可改问方向：可以改问：2023–2025 年各月物流总费用是多少？；可以改问：2026 年已发生月份的运费、发运量或单瓦成本是多少？",
+      "expected_columns": [],
+      "expected_rows": []
+    },
+    {
+      "plan_id": "C2A-PREC-077",
+      "question_id": "SQ253",
+      "question": "2024年合肥基地17.5车全年共发运多少车次？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年17.5车合计发运12,554车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "12554"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-078",
+      "question_id": "SQ256",
+      "question": "2024年合肥基地13m车全年共发运多少车次？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年13车合计发运14,627车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "14627"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-079",
+      "question_id": "SQ262",
+      "question": "2024年阜宁基地17.5车全年共发运多少车次？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年17.5车合计发运12,554车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "12554"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-080",
+      "question_id": "SQ265",
+      "question": "2024年阜宁基地13m车全年共发运多少车次？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年13车合计发运14,627车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "14627"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-081",
+      "question_id": "SQ271",
+      "question": "2025年合肥基地17.5车全年共发运多少车次？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年17.5车合计发运13,861车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "13861"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-082",
+      "question_id": "SQ274",
+      "question": "2025年合肥基地13m车全年共发运多少车次？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年13车合计发运20,329车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "20329"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-083",
+      "question_id": "SQ280",
+      "question": "2025年阜宁基地17.5车全年共发运多少车次？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年17.5车合计发运13,861车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "13861"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-084",
+      "question_id": "SQ283",
+      "question": "2025年阜宁基地13m车全年共发运多少车次？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "线路/城市运价类",
+      "expected_query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年13车合计发运20,329车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "20329"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-085",
+      "question_id": "SQ001",
+      "question": "2023年华东区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年华东区域总发运量为1664.396MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1664.396"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-086",
+      "question_id": "SQ005",
+      "question": "2023年华南区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年华南区域总发运量为535.845MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "535.845"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-087",
+      "question_id": "SQ009",
+      "question": "2023年华中区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年华中区域总发运量为688.089MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "688.089"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-088",
+      "question_id": "SQ013",
+      "question": "2023年华北区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年华北区域总发运量为724.090MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "724.090"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-089",
+      "question_id": "SQ017",
+      "question": "2023年西南区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年西南区域总发运量为1416.990MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1416.990"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-090",
+      "question_id": "SQ021",
+      "question": "2023年西北区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年西北区域总发运量为3448.851MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "3448.851"
+        }
+      ]
+    }
+  ]
+}

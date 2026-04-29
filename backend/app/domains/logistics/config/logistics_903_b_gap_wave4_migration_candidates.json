@@ -1,0 +1,55 @@
+{
+  "generated_at": "2026-04-26T20:35:26",
+  "source_report": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tmp/logistics_question_bank/logistics_903_b_gap_wave4_report.json",
+  "migration_rule": "Wave4 真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、结果非空，且不是通用 query_key 误吸收开放诊断题。",
+  "items": [
+    {
+      "migration_id": "B-GAP-W4-001",
+      "question_id": "SQ431",
+      "question": "2024年客户广东粤电阳西新能源有限公司总运费是多少？",
+      "source": "B-gap Wave4 final classification migration review",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "capability_id": "B-GAP-W4-001",
+      "query_key": "hist_total_fee_summary",
+      "recommended_status": "A",
+      "migration_reason": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、结果非空，可进入 Wave4 B->A 迁移复核。 对应能力项：B-GAP-W4-001。"
+    },
+    {
+      "migration_id": "B-GAP-W4-002",
+      "question_id": "SQ437",
+      "question": "2024年客户江苏苏美达电力运营有限公司总运费是多少？",
+      "source": "B-gap Wave4 final classification migration review",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "capability_id": "B-GAP-W4-001",
+      "query_key": "hist_total_fee_summary",
+      "recommended_status": "A",
+      "migration_reason": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、结果非空，可进入 Wave4 B->A 迁移复核。 对应能力项：B-GAP-W4-001。"
+    },
+    {
+      "migration_id": "B-GAP-W4-003",
+      "question_id": "SQ445",
+      "question": "2025年客户广东粤电阳西新能源有限公司总运费是多少？",
+      "source": "B-gap Wave4 final classification migration review",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "capability_id": "B-GAP-W4-001",
+      "query_key": "hist_total_fee_summary",
+      "recommended_status": "A",
+      "migration_reason": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、结果非空，可进入 Wave4 B->A 迁移复核。 对应能力项：B-GAP-W4-001。"
+    },
+    {
+      "migration_id": "B-GAP-W4-004",
+      "question_id": "SQ451",
+      "question": "2025年客户江苏苏美达电力运营有限公司总运费是多少？",
+      "source": "B-gap Wave4 final classification migration review",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "capability_id": "B-GAP-W4-001",
+      "query_key": "hist_total_fee_summary",
+      "recommended_status": "A",
+      "migration_reason": "真实 data-qa 主链路返回 OK、supported=true、非澄清、非拒答、结果非空，可进入 Wave4 B->A 迁移复核。 对应能力项：B-GAP-W4-001。"
+    }
+  ]
+}

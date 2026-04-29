@@ -1,0 +1,498 @@
+{
+  "generated_at": "2026-04-27T00:00:00",
+  "source_ledger": "backend/app/domains/logistics/config/logistics_903_master_ledger.json",
+  "batch_id": "B-GAP-WAVE2-A-REGRESSION",
+  "summary": {
+    "total_questions": 61
+  },
+  "items": [
+    {
+      "question_id": "Q016",
+      "question": "按运输方式统计，公路对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q017",
+      "question": "按运输方式统计，铁路对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q018",
+      "question": "按运输方式统计，水路对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q019",
+      "question": "按运输方式统计，汽运对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q020",
+      "question": "按运输方式统计，铁运对应的发运记录数是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q021",
+      "question": "规格为GCL-NT10/78GDF-640W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q022",
+      "question": "规格为GCL-NT10/72GDF-590W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q023",
+      "question": "规格为GCL-NT10/72GDF-585W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q024",
+      "question": "规格为GCL-NT12R/66GDF-620W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q025",
+      "question": "规格为GCL-NT12/66GDF-710W的历史发运总瓦数是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q063",
+      "question": "2026年物流任务中状态为PREASSIGN的任务数量及占比是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q064",
+      "question": "2026年物流任务中状态为ASSIGNED的任务数量及占比是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q065",
+      "question": "2026年物流任务中状态为SIGNEDFOR的任务数量及占比是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q066",
+      "question": "2026年物流任务中状态为PRESIGNFOR的任务数量及占比是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q067",
+      "question": "2026年派车任务中，回单解析状态为0的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q068",
+      "question": "2026年派车任务中，回单解析状态为1的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q069",
+      "question": "2026年派车任务中，回单解析状态为3的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q070",
+      "question": "2026年派车任务中，回单解析状态为4的记录数量是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q071",
+      "question": "2026年送达省份为江苏省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q072",
+      "question": "2026年送达省份为安徽省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q073",
+      "question": "2026年送达省份为云南省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q074",
+      "question": "2026年送达省份为浙江省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q075",
+      "question": "2026年送达省份为四川省的任务中，平均装车数（loading_trucks）是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_avg_loading_trucks_by_province",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q243",
+      "question": "将“公路/汽运”口径统一后，2023-2025公路类运输的发运件数占比是多少？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q258",
+      "question": "备注中包含“倒运”或“中转”的记录，其总费用占历史物流总费用的比例是多少？",
+      "source_group": "230",
+      "family": "综合统计类",
+      "expected_query_key": "hist_remark_keyword_fee_ratio",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q259",
+      "question": "历史台账中的水路记录有多少条？主要集中在哪些省份和月份？",
+      "source_group": "230",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q262",
+      "question": "2026物流任务表中，各任务状态（PREASSIGN、ASSIGNED、PRESIGNFOR、SIGNEDFOR）的数量分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q264",
+      "question": "2026年各送达省份中，PREASSIGN待派车任务最多的是哪些省份？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_province_ranking",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q265",
+      "question": "2026年有采购方式标记的任务中，询比价与招标的任务量分别是多少？占比多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_procurement_task_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q271",
+      "question": "2026年派车任务表中，各状态（PREALLOCATE、ALLOCATED、ENTER、LEAVE）的数量分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q274",
+      "question": "2026年派车任务的送货单解析状态分布（0/1/3/4）分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_delivery_note_parse_status_distribution",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q281",
+      "question": "2026年各月份的reconciliation_status填充率分别是多少？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_reconciliation_fill_rate_by_month",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q288",
+      "question": "2026年平均每个物流任务包含多少条ship_product明细？明细数最高的任务是哪几个？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_ship_product_detail_stats",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "Q306",
+      "question": "2026年派车任务量最高的前20位司机是谁？",
+      "source_group": "230",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_driver_task_ranking",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ289",
+      "question": "2024年公路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ291",
+      "question": "2024年公路运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ292",
+      "question": "2024年铁路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ294",
+      "question": "2024年铁路运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ295",
+      "question": "2024年多式联运运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ297",
+      "question": "2024年多式联运运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ298",
+      "question": "2025年公路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ300",
+      "question": "2025年公路运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ301",
+      "question": "2025年铁路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ303",
+      "question": "2025年铁路运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ304",
+      "question": "2025年多式联运运输的总发运量是多少MW？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_mw_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ306",
+      "question": "2025年多式联运运输的平均单瓦成本是多少？",
+      "source_group": "600",
+      "family": "运输方式分析类",
+      "expected_query_key": "hist_unit_fee_per_watt",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ466",
+      "question": "2024年客户华阳发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ468",
+      "question": "2024年客户创维客户发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ470",
+      "question": "2024年客户海南创维新能源投资有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ472",
+      "question": "2024年客户广东粤电阳西新能源有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ474",
+      "question": "2024年客户华润新能源（皮山）有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ476",
+      "question": "2025年客户华阳发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ478",
+      "question": "2025年客户创维客户发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ480",
+      "question": "2025年客户海南创维新能源投资有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ482",
+      "question": "2025年客户广东粤电阳西新能源有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ484",
+      "question": "2025年客户华润新能源（皮山）有限公司发货的项目地中，哪些收货地址的运费超过20万元？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ540",
+      "question": "2026年1月份合肥基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_extra_fee_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ543",
+      "question": "2026年2月份合肥基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_extra_fee_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ546",
+      "question": "2026年1月份阜宁基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_extra_fee_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ549",
+      "question": "2026年2月份阜宁基地额外费用总额是多少？",
+      "source_group": "600",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_extra_fee_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ583",
+      "question": "2026年哪些省份的PREASSIGN待派车任务最多？",
+      "source_group": "600",
+      "family": "2026系统状态与数据质量类",
+      "expected_query_key": "sys_task_status_province_ranking",
+      "expected_status_code": "OK"
+    }
+  ]
+}

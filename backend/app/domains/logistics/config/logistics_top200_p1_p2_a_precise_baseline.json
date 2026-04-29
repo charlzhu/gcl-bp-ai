@@ -1,0 +1,2109 @@
+{
+  "generated_at": "2026-04-23T17:24:51",
+  "result_database": "logistics_ai",
+  "selection_rule": "P1/P2 中静态 A 类题 + Round1-Round5 已推进进 A 的题，统一建立精确快照基线。",
+  "items": [
+    {
+      "question_id": "RAW001",
+      "priority": "P1",
+      "question": "2026年1月份总发运量（MW）和总车次",
+      "query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月合计发运量为864.728MW，合计车次为564。",
+      "expected_columns": [
+        "shipment_mw",
+        "shipment_trip_count",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "864.728",
+          "shipment_trip_count": 564,
+          "power_missing_count": 98,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 368,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 736,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "question_id": "RAW064",
+      "priority": "P1",
+      "question": "25年合肥发广东省，17.5车，每月平均运费是多少",
+      "query_key": "hist_avg_fee_by_month",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年合肥基地发往广东的17.5车，整体样本平均运费约为13,089元，月均值再平均约为13,851元。",
+      "expected_columns": [
+        "biz_month",
+        "avg_fee"
+      ],
+      "expected_rows": [
+        {
+          "biz_month": "2025-01",
+          "avg_fee": "19182"
+        },
+        {
+          "biz_month": "2025-03",
+          "avg_fee": "13597"
+        },
+        {
+          "biz_month": "2025-04",
+          "avg_fee": "21011"
+        },
+        {
+          "biz_month": "2025-05",
+          "avg_fee": "12403"
+        },
+        {
+          "biz_month": "2025-06",
+          "avg_fee": "9788"
+        },
+        {
+          "biz_month": "2025-07",
+          "avg_fee": "10062"
+        },
+        {
+          "biz_month": "2025-08",
+          "avg_fee": "22788"
+        },
+        {
+          "biz_month": "2025-09",
+          "avg_fee": "14741"
+        },
+        {
+          "biz_month": "2025-10",
+          "avg_fee": "9136"
+        },
+        {
+          "biz_month": "2025-11",
+          "avg_fee": "9847"
+        },
+        {
+          "biz_month": "2025-12",
+          "avg_fee": "9800"
+        }
+      ]
+    },
+    {
+      "question_id": "RAW046",
+      "priority": "P1",
+      "question": "26年 经营计划 刘娟 用车总费用是多少",
+      "query_key": "sys_special_total_fee",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年经营计划用车按锁定口径统计的总运费为132,731.00元。",
+      "expected_columns": [
+        "total_fee",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "132731.00",
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "question_id": "RAW033",
+      "priority": "P1",
+      "question": "帮我查一下23年阜宁基地晶茂物流运输总运费多少钱?",
+      "query_key": "hist_total_fee_by_origin_and_carrier",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年阜宁基地、承运商晶茂的总运费为7,252,245元。",
+      "expected_columns": [
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "7252245"
+        }
+      ]
+    },
+    {
+      "question_id": "RAW034",
+      "priority": "P1",
+      "question": "问题1：华润新能源（皮山）有限公司 项目 24年发运量是多少 无回答",
+      "query_key": "hist_customer_mw",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华润新能源（皮山）有限公司总发运量为480.413MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 480.413,
+          "matched_customer_names": [
+            "华润新能源（皮山）有限公司",
+            "华润新能源（皮山）有限公司客诉组件"
+          ],
+          "scope_label": "2024年"
+        }
+      ]
+    },
+    {
+      "question_id": "Q241",
+      "priority": "P1",
+      "question": "2024年江苏省各城市总费用排名前五的是哪些？",
+      "query_key": "hist_total_fee_city_rank",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年江苏总运费为3462229元。",
+      "expected_columns": [
+        "city",
+        "total_fee"
+      ],
+      "expected_rows": [
+        {
+          "city": "徐州",
+          "total_fee": "1526425"
+        },
+        {
+          "city": "太仓",
+          "total_fee": "236305"
+        },
+        {
+          "city": "扬州",
+          "total_fee": "229064"
+        },
+        {
+          "city": "淮安",
+          "total_fee": "201100"
+        },
+        {
+          "city": "无锡",
+          "total_fee": "191499"
+        }
+      ]
+    },
+    {
+      "question_id": "Q242",
+      "priority": "P1",
+      "question": "2025年各月额外费用占总费用比重最高的是哪一个月？",
+      "query_key": "hist_extra_fee_ratio_peak_month",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年额外费用占比最高的是2025-08月，额外费用434,700元，占总费用1.2%。",
+      "expected_columns": [
+        "biz_month",
+        "extra_fee_amount",
+        "total_fee_amount",
+        "extra_fee_ratio"
+      ],
+      "expected_rows": [
+        {
+          "biz_month": "2025-08",
+          "extra_fee_amount": "434700",
+          "total_fee_amount": "34853601",
+          "extra_fee_ratio": "1.2"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ530",
+      "priority": "P1",
+      "question": "2026年2月份总发运量是多少MW？总车次是多少？",
+      "query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月合计发运量为259.844MW，合计车次为220。",
+      "expected_columns": [
+        "shipment_mw",
+        "shipment_trip_count",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "259.844",
+          "shipment_trip_count": 220,
+          "power_missing_count": 58,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 135,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 270,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "question_id": "SQ526",
+      "priority": "P1",
+      "question": "2026年1月份总发运量是多少MW？总车次是多少？",
+      "query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月合计发运量为864.728MW，合计车次为564。",
+      "expected_columns": [
+        "shipment_mw",
+        "shipment_trip_count",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "864.728",
+          "shipment_trip_count": 564,
+          "power_missing_count": 98,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 368,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 736,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "question_id": "Q263",
+      "priority": "P1",
+      "question": "2026年各承运商的SIGNEDFOR签收率分别是多少？排名前十和后十是谁？",
+      "query_key": "sys_signedfor_rate_by_carrier",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年承运商 SIGNEDFOR 签收率已返回前十和后十结果。",
+      "expected_columns": [
+        "bucket",
+        "company_name",
+        "signedfor_rate",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "bucket": "top10",
+          "company_name": "苏州威洋供应链有限公司",
+          "signedfor_rate": "100.0",
+          "task_count": 47
+        },
+        {
+          "bucket": "top10",
+          "company_name": "无锡奥创供应链管理有限公司",
+          "signedfor_rate": "100.0",
+          "task_count": 39
+        },
+        {
+          "bucket": "top10",
+          "company_name": "广州交通集团物流有限公司",
+          "signedfor_rate": "100.0",
+          "task_count": 20
+        },
+        {
+          "bucket": "top10",
+          "company_name": "浙江海舜供应链管理有限公司",
+          "signedfor_rate": "100.0",
+          "task_count": 5
+        },
+        {
+          "bucket": "top10",
+          "company_name": "四川安仕吉供应链管理有限公司",
+          "signedfor_rate": "98.4",
+          "task_count": 61
+        },
+        {
+          "bucket": "top10",
+          "company_name": "江苏远邦物流有限公司",
+          "signedfor_rate": "96.4",
+          "task_count": 28
+        },
+        {
+          "bucket": "top10",
+          "company_name": "西安京东讯成物流有限公司",
+          "signedfor_rate": "93.3",
+          "task_count": 15
+        },
+        {
+          "bucket": "top10",
+          "company_name": "远孚物流集团有限公司",
+          "signedfor_rate": "87.3",
+          "task_count": 102
+        },
+        {
+          "bucket": "top10",
+          "company_name": "浙江交投物流集团有限公司",
+          "signedfor_rate": "84.8",
+          "task_count": 112
+        },
+        {
+          "bucket": "top10",
+          "company_name": "上海安点物流有限公司",
+          "signedfor_rate": "84.2",
+          "task_count": 19
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "中外运-日新国际货运有限公司内蒙古分公司",
+          "signedfor_rate": "0.0",
+          "task_count": 2
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "备用",
+          "signedfor_rate": "0.0",
+          "task_count": 2
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "常州安提物流有限公司",
+          "signedfor_rate": "60.0",
+          "task_count": 5
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "苏州晶茂物流有限公司",
+          "signedfor_rate": "76.8",
+          "task_count": 276
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "宿迁市昆仑物流有限公司",
+          "signedfor_rate": "79.8",
+          "task_count": 242
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "杭州菜鸟橙运供应链管理有限公司",
+          "signedfor_rate": "80.0",
+          "task_count": 5
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "浙江英赋嘉供应链科技股份有限公司",
+          "signedfor_rate": "83.3",
+          "task_count": 12
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "上海安点物流有限公司",
+          "signedfor_rate": "84.2",
+          "task_count": 19
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "浙江交投物流集团有限公司",
+          "signedfor_rate": "84.8",
+          "task_count": 112
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "远孚物流集团有限公司",
+          "signedfor_rate": "87.3",
+          "task_count": 102
+        }
+      ]
+    },
+    {
+      "question_id": "RAW068",
+      "priority": "P1",
+      "question": "问题2：25年全年17.5车发运多少车",
+      "query_key": "hist_vehicle_type_trip_count",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年17.5车合计发运13,861车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "13861"
+        }
+      ]
+    },
+    {
+      "question_id": "Q036",
+      "priority": "P1",
+      "question": "华北区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+      "query_key": "hist_avg_fee_per_watt_by_transport",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "华北区域各运输方式的平均元/瓦已按成本从低到高排序。",
+      "expected_columns": [
+        "transport_mode",
+        "avg_fee_per_watt"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "铁路",
+          "avg_fee_per_watt": "0.0163"
+        },
+        {
+          "transport_mode": "公路",
+          "avg_fee_per_watt": "0.0410"
+        }
+      ]
+    },
+    {
+      "question_id": "Q035",
+      "priority": "P1",
+      "question": "华南区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+      "query_key": "hist_avg_fee_per_watt_by_transport",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "华南区域各运输方式的平均元/瓦已按成本从低到高排序。",
+      "expected_columns": [
+        "transport_mode",
+        "avg_fee_per_watt"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "铁路",
+          "avg_fee_per_watt": "0.0183"
+        },
+        {
+          "transport_mode": "水路",
+          "avg_fee_per_watt": "0.0217"
+        },
+        {
+          "transport_mode": "铁运",
+          "avg_fee_per_watt": "0.0286"
+        },
+        {
+          "transport_mode": "公路",
+          "avg_fee_per_watt": "0.0681"
+        }
+      ]
+    },
+    {
+      "question_id": "Q034",
+      "priority": "P1",
+      "question": "华中区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+      "query_key": "hist_avg_fee_per_watt_by_transport",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "华中区域各运输方式的平均元/瓦已按成本从低到高排序。",
+      "expected_columns": [
+        "transport_mode",
+        "avg_fee_per_watt"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "公路",
+          "avg_fee_per_watt": "0.0251"
+        }
+      ]
+    },
+    {
+      "question_id": "Q033",
+      "priority": "P1",
+      "question": "西北区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+      "query_key": "hist_avg_fee_per_watt_by_transport",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "西北区域各运输方式的平均元/瓦已按成本从低到高排序。",
+      "expected_columns": [
+        "transport_mode",
+        "avg_fee_per_watt"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "铁路",
+          "avg_fee_per_watt": "0.0321"
+        },
+        {
+          "transport_mode": "铁运",
+          "avg_fee_per_watt": "0.0429"
+        },
+        {
+          "transport_mode": "公路",
+          "avg_fee_per_watt": "0.0454"
+        }
+      ]
+    },
+    {
+      "question_id": "Q032",
+      "priority": "P1",
+      "question": "西南区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+      "query_key": "hist_avg_fee_per_watt_by_transport",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "西南区域各运输方式的平均元/瓦已按成本从低到高排序。",
+      "expected_columns": [
+        "transport_mode",
+        "avg_fee_per_watt"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "铁路",
+          "avg_fee_per_watt": "0.0271"
+        },
+        {
+          "transport_mode": "公路",
+          "avg_fee_per_watt": "0.0577"
+        }
+      ]
+    },
+    {
+      "question_id": "Q031",
+      "priority": "P1",
+      "question": "华东区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+      "query_key": "hist_avg_fee_per_watt_by_transport",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "华东区域各运输方式的平均元/瓦已按成本从低到高排序。",
+      "expected_columns": [
+        "transport_mode",
+        "avg_fee_per_watt"
+      ],
+      "expected_rows": [
+        {
+          "transport_mode": "公路",
+          "avg_fee_per_watt": "0.0285"
+        }
+      ]
+    },
+    {
+      "question_id": "RAW010",
+      "priority": "P1",
+      "question": "华东区域在历史物流台账中的总发运件数是多少？",
+      "query_key": "hist_quantity_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "华东区域总发运件数为13,877,138件。",
+      "expected_columns": [
+        "shipment_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_count": "13877138"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ534",
+      "priority": "P1",
+      "question": "2026年1-2月累计总发运量是多少MW？总车次是多少？",
+      "query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW，合计车次为784。",
+      "expected_columns": [
+        "shipment_mw",
+        "shipment_trip_count",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "question_id": "RAW052",
+      "priority": "P1",
+      "question": "帮我看一下从合肥基地始发，26年1-2月客户：海南创维新能源投资有限公司 总运费多少",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合肥基地客户海南创维新能源投资有限公司按当前系统口径统计的总运费为38,294.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "38294.00",
+          "task_count": 4,
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "question_id": "Q286",
+      "priority": "P1",
+      "question": "承运商主数据表中是否存在“已建档但2026年没有任何任务”的物流公司？",
+      "query_key": "sys_companies_without_tasks",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "存在3家物流公司已建档但2026年无任务记录。",
+      "expected_columns": [
+        "company_name"
+      ],
+      "expected_rows": [
+        {
+          "company_name": "江苏久鼎供应链管理有限公司"
+        },
+        {
+          "company_name": "江苏通泽国际货运代理有限公司"
+        },
+        {
+          "company_name": "江苏鲲越国际物流有限公司"
+        }
+      ]
+    },
+    {
+      "question_id": "Q046",
+      "priority": "P1",
+      "question": "对比2024年华中区域计划发运件数与实际发运件数的偏差率。",
+      "query_key": "hist_plan_actual_deviation",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华中区域实际发运件数较计划提高0%。",
+      "expected_columns": [
+        "plan_qty_total",
+        "actual_qty_total",
+        "deviation_rate"
+      ],
+      "expected_rows": [
+        {
+          "plan_qty_total": "1628782",
+          "actual_qty_total": "1627990",
+          "deviation_rate": "0.0"
+        }
+      ]
+    },
+    {
+      "question_id": "Q045",
+      "priority": "P1",
+      "question": "对比2025年华南区域计划发运件数与实际发运件数的偏差率。",
+      "query_key": "hist_plan_actual_deviation",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华南区域实际发运件数较计划下降0.1%。",
+      "expected_columns": [
+        "plan_qty_total",
+        "actual_qty_total",
+        "deviation_rate"
+      ],
+      "expected_rows": [
+        {
+          "plan_qty_total": "1450939",
+          "actual_qty_total": "1450039",
+          "deviation_rate": "-0.1"
+        }
+      ]
+    },
+    {
+      "question_id": "Q044",
+      "priority": "P1",
+      "question": "对比2025年西南区域计划发运件数与实际发运件数的偏差率。",
+      "query_key": "hist_plan_actual_deviation",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年西南区域实际发运件数较计划提高0%。",
+      "expected_columns": [
+        "plan_qty_total",
+        "actual_qty_total",
+        "deviation_rate"
+      ],
+      "expected_rows": [
+        {
+          "plan_qty_total": "5955856",
+          "actual_qty_total": "5955856",
+          "deviation_rate": "0.0"
+        }
+      ]
+    },
+    {
+      "question_id": "Q043",
+      "priority": "P1",
+      "question": "对比2024年西北区域计划发运件数与实际发运件数的偏差率。",
+      "query_key": "hist_plan_actual_deviation",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年西北区域实际发运件数较计划提高0.2%。",
+      "expected_columns": [
+        "plan_qty_total",
+        "actual_qty_total",
+        "deviation_rate"
+      ],
+      "expected_rows": [
+        {
+          "plan_qty_total": "7926777",
+          "actual_qty_total": "7946037",
+          "deviation_rate": "0.2"
+        }
+      ]
+    },
+    {
+      "question_id": "Q042",
+      "priority": "P1",
+      "question": "对比2023年华东区域计划发运件数与实际发运件数的偏差率。",
+      "query_key": "hist_plan_actual_deviation",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年华东区域实际发运件数较计划提高0.1%。",
+      "expected_columns": [
+        "plan_qty_total",
+        "actual_qty_total",
+        "deviation_rate"
+      ],
+      "expected_rows": [
+        {
+          "plan_qty_total": "2927394",
+          "actual_qty_total": "2930747",
+          "deviation_rate": "0.1"
+        }
+      ]
+    },
+    {
+      "question_id": "RAW056",
+      "priority": "P1",
+      "question": "帮我查一下2026年阜宁基地1月份晶茂物流总计运费是多少钱",
+      "query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月阜宁基地承运商晶茂物流按当前系统口径统计的总运费为234,202.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "234202.00",
+          "task_count": 25,
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ578",
+      "priority": "P1",
+      "question": "2026年刘娟用车总费用是多少？",
+      "query_key": "sys_special_total_fee",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年刘娟用车按锁定口径统计的总运费为16,041.00元。",
+      "expected_columns": [
+        "total_fee",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "16041.00",
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ576",
+      "priority": "P1",
+      "question": "2026年经营计划总费用是多少？",
+      "query_key": "sys_special_total_fee",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年经营计划用车按锁定口径统计的总运费为132,731.00元。",
+      "expected_columns": [
+        "total_fee",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "132731.00",
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ574",
+      "priority": "P1",
+      "question": "2026年辅料送样总费用是多少？",
+      "query_key": "sys_special_total_fee",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年辅料送样按锁定口径统计的总运费为861,359.00元。",
+      "expected_columns": [
+        "total_fee",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "861359.00",
+          "parse_fail_count": "5",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ508",
+      "priority": "P1",
+      "question": "2026年1-2月辅料送样场景下的总运费是多少？",
+      "query_key": "sys_special_total_fee",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年辅料送样按锁定口径统计的总运费为861,359.00元。",
+      "expected_columns": [
+        "total_fee",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "861359.00",
+          "parse_fail_count": "5",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ505",
+      "priority": "P1",
+      "question": "2026年1-2月经营计划场景下的总运费是多少？",
+      "query_key": "sys_special_total_fee",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年经营计划用车按锁定口径统计的总运费为132,731.00元。",
+      "expected_columns": [
+        "total_fee",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "132731.00",
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ072",
+      "priority": "P1",
+      "question": "2025年西北区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年西北区域合计发运10,521车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "10521"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ068",
+      "priority": "P1",
+      "question": "2025年西南区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年西南区域合计发运7,588车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "7588"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ064",
+      "priority": "P1",
+      "question": "2025年华北区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华北区域合计发运5,038车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "5038"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ060",
+      "priority": "P1",
+      "question": "2025年华中区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华中区域合计发运2,359车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "2359"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ056",
+      "priority": "P2",
+      "question": "2025年华南区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华南区域合计发运1,985车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "1985"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ052",
+      "priority": "P2",
+      "question": "2025年华东区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华东区域合计发运7,647车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "7647"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ048",
+      "priority": "P2",
+      "question": "2024年西北区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年西北区域合计发运9,795车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "9795"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ044",
+      "priority": "P2",
+      "question": "2024年西南区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年西南区域合计发运4,349车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "4349"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ040",
+      "priority": "P2",
+      "question": "2024年华北区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华北区域合计发运2,813车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "2813"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ036",
+      "priority": "P2",
+      "question": "2024年华中区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华中区域合计发运2,092车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "2092"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ032",
+      "priority": "P2",
+      "question": "2024年华南区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华南区域合计发运2,335车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "2335"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ028",
+      "priority": "P2",
+      "question": "2024年华东区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华东区域合计发运7,039车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "7039"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ024",
+      "priority": "P2",
+      "question": "2023年西北区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年西北区域合计发运7,348车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "7348"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ020",
+      "priority": "P2",
+      "question": "2023年西南区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年西南区域合计发运3,276车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "3276"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ016",
+      "priority": "P2",
+      "question": "2023年华北区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年华北区域合计发运1,707车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "1707"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ012",
+      "priority": "P2",
+      "question": "2023年华中区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年华中区域合计发运1,464车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "1464"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ008",
+      "priority": "P2",
+      "question": "2023年华南区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年华南区域合计发运1,267车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "1267"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ004",
+      "priority": "P2",
+      "question": "2023年华东区域总车次是多少？",
+      "query_key": "hist_trip_count_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023年华东区域合计发运3,655车次。",
+      "expected_columns": [
+        "shipment_trip_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_trip_count": "3655"
+        }
+      ]
+    },
+    {
+      "question_id": "Q245",
+      "priority": "P2",
+      "question": "2024年同一客户由多个始发地发货的客户有多少个？分别是哪些客户？",
+      "query_key": "hist_multi_origin_customers",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年同一客户由多个始发地发货的客户共有119个。",
+      "expected_columns": [
+        "customer_name",
+        "origin_place_count"
+      ],
+      "expected_rows": [
+        {
+          "customer_name": "南京协鑫新能源动力技术研究院有限公司",
+          "origin_place_count": 3
+        },
+        {
+          "customer_name": "新疆长庚电气有限公司",
+          "origin_place_count": 3
+        },
+        {
+          "customer_name": "福建协鑫鑫科建设工程有限公司",
+          "origin_place_count": 3
+        },
+        {
+          "customer_name": "一道新能源科技股份有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "上海临港弘博新能源发展有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "上海凡欧电力科技有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "上海电力建设有限责任公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "上海电投电能成套设备有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "中国大唐集团有限公司物资分公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "中国电建集团昆明勘测设计研究院有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "中国电建集团河北工程有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "中建八局总承包​建设有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "中建八局西南建设工程有限公司​",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "中核二十五建设有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "中核二十五建设有限公司​",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "中能建（上海）成套工程有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "云华芒市新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "亳州市谯城区交投商贸有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "六枝乌江水电新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "兰溪鑫晟新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "内蒙古协鑫智慧技术服务有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "农银金融租赁有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "北京迪信通商贸股份有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华光环保能源（西安）设计研究院有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华润新能源（皮山）有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华润财金新能源（东营）有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华润（肇庆）太阳能发电有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电云阳县新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电六安新能源有限公司​",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电大冶新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电巫溪县新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电新能江西宜春新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电新能（温岭）光伏发电有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电江苏句容新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电灌阳新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电芜湖三山新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电（桐城）新能源科技有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华电（蚌埠）新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "华阳集团（阳泉）新能源销售有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "南京创维光伏科技有限公司​",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "南方电网综合能源股份有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "南方电网综合能源（佛山）有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "合肥鑫地新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "四川中鑫环洋电力工程有限公司宁波分公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "四川协鑫电力工程设计有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "四川广元华电新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "四川科锐锐意电力工程有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "国家电力投资集团有限公司物资装备分公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "大方乌江水电新能源有限公司",
+          "origin_place_count": 2
+        },
+        {
+          "customer_name": "大理鹤庆云华新能源有限公司",
+          "origin_place_count": 2
+        }
+      ]
+    },
+    {
+      "question_id": "Q007",
+      "priority": "P2",
+      "question": "东北区域在历史物流台账中的总发运件数是多少？",
+      "query_key": "hist_quantity_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "东北区域总发运件数为465,546件。",
+      "expected_columns": [
+        "shipment_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_count": "465546"
+        }
+      ]
+    },
+    {
+      "question_id": "Q006",
+      "priority": "P2",
+      "question": "西北区域在历史物流台账中的总发运件数是多少？",
+      "query_key": "hist_quantity_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "西北区域总发运件数为22,024,760件。",
+      "expected_columns": [
+        "shipment_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_count": "22024760"
+        }
+      ]
+    },
+    {
+      "question_id": "Q005",
+      "priority": "P2",
+      "question": "西南区域在历史物流台账中的总发运件数是多少？",
+      "query_key": "hist_quantity_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "西南区域总发运件数为11,825,870件。",
+      "expected_columns": [
+        "shipment_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_count": "11825870"
+        }
+      ]
+    },
+    {
+      "question_id": "Q004",
+      "priority": "P2",
+      "question": "华北区域在历史物流台账中的总发运件数是多少？",
+      "query_key": "hist_quantity_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "华北区域总发运件数为6,867,961件。",
+      "expected_columns": [
+        "shipment_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_count": "6867961"
+        }
+      ]
+    },
+    {
+      "question_id": "Q003",
+      "priority": "P2",
+      "question": "华南区域在历史物流台账中的总发运件数是多少？",
+      "query_key": "hist_quantity_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "华南区域总发运件数为4,143,332件。",
+      "expected_columns": [
+        "shipment_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_count": "4143332"
+        }
+      ]
+    },
+    {
+      "question_id": "Q002",
+      "priority": "P2",
+      "question": "华中区域在历史物流台账中的总发运件数是多少？",
+      "query_key": "hist_quantity_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "华中区域总发运件数为4,550,642件。",
+      "expected_columns": [
+        "shipment_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_count": "4550642"
+        }
+      ]
+    },
+    {
+      "question_id": "Q001",
+      "priority": "P2",
+      "question": "华东区域在历史物流台账中的总发运件数是多少？",
+      "query_key": "hist_quantity_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "华东区域总发运件数为13,877,138件。",
+      "expected_columns": [
+        "shipment_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_count": "13877138"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ582",
+      "priority": "P2",
+      "question": "2026年各承运商的SIGNEDFOR签收率分别是多少？",
+      "query_key": "sys_signedfor_rate_by_carrier",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年承运商 SIGNEDFOR 签收率已返回前十和后十结果。",
+      "expected_columns": [
+        "bucket",
+        "company_name",
+        "signedfor_rate",
+        "task_count"
+      ],
+      "expected_rows": [
+        {
+          "bucket": "top10",
+          "company_name": "苏州威洋供应链有限公司",
+          "signedfor_rate": "100.0",
+          "task_count": 47
+        },
+        {
+          "bucket": "top10",
+          "company_name": "无锡奥创供应链管理有限公司",
+          "signedfor_rate": "100.0",
+          "task_count": 39
+        },
+        {
+          "bucket": "top10",
+          "company_name": "广州交通集团物流有限公司",
+          "signedfor_rate": "100.0",
+          "task_count": 20
+        },
+        {
+          "bucket": "top10",
+          "company_name": "浙江海舜供应链管理有限公司",
+          "signedfor_rate": "100.0",
+          "task_count": 5
+        },
+        {
+          "bucket": "top10",
+          "company_name": "四川安仕吉供应链管理有限公司",
+          "signedfor_rate": "98.4",
+          "task_count": 61
+        },
+        {
+          "bucket": "top10",
+          "company_name": "江苏远邦物流有限公司",
+          "signedfor_rate": "96.4",
+          "task_count": 28
+        },
+        {
+          "bucket": "top10",
+          "company_name": "西安京东讯成物流有限公司",
+          "signedfor_rate": "93.3",
+          "task_count": 15
+        },
+        {
+          "bucket": "top10",
+          "company_name": "远孚物流集团有限公司",
+          "signedfor_rate": "87.3",
+          "task_count": 102
+        },
+        {
+          "bucket": "top10",
+          "company_name": "浙江交投物流集团有限公司",
+          "signedfor_rate": "84.8",
+          "task_count": 112
+        },
+        {
+          "bucket": "top10",
+          "company_name": "上海安点物流有限公司",
+          "signedfor_rate": "84.2",
+          "task_count": 19
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "中外运-日新国际货运有限公司内蒙古分公司",
+          "signedfor_rate": "0.0",
+          "task_count": 2
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "备用",
+          "signedfor_rate": "0.0",
+          "task_count": 2
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "常州安提物流有限公司",
+          "signedfor_rate": "60.0",
+          "task_count": 5
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "苏州晶茂物流有限公司",
+          "signedfor_rate": "76.8",
+          "task_count": 276
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "宿迁市昆仑物流有限公司",
+          "signedfor_rate": "79.8",
+          "task_count": 242
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "杭州菜鸟橙运供应链管理有限公司",
+          "signedfor_rate": "80.0",
+          "task_count": 5
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "浙江英赋嘉供应链科技股份有限公司",
+          "signedfor_rate": "83.3",
+          "task_count": 12
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "上海安点物流有限公司",
+          "signedfor_rate": "84.2",
+          "task_count": 19
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "浙江交投物流集团有限公司",
+          "signedfor_rate": "84.8",
+          "task_count": 112
+        },
+        {
+          "bucket": "bottom10",
+          "company_name": "远孚物流集团有限公司",
+          "signedfor_rate": "87.3",
+          "task_count": 102
+        }
+      ]
+    },
+    {
+      "question_id": "RAW050",
+      "priority": "P2",
+      "question": "2.江苏苏美达电力运营有限公司 项目 总发运量是多少",
+      "query_key": "hist_customer_mw",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2023-2025历史累计江苏苏美达电力运营有限公司总发运量为1.335MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": 1.335,
+          "matched_customer_names": [
+            "江苏苏美达电力运营有限公司"
+          ],
+          "scope_label": "2023-2025历史累计"
+        }
+      ]
+    },
+    {
+      "question_id": "SQ070",
+      "priority": "P2",
+      "question": "2025年西北区域总发运件数是多少？",
+      "query_key": "hist_quantity_by_region",
+      "standard_answer_source": "logistics_ai snapshot via scripts/logistics_top200_p1_p2_regression.py --refresh-baseline",
+      "assertion_scope": "answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "西北区域总发运件数为22,024,760件。",
+      "expected_columns": [
+        "shipment_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_count": "22024760"
+        }
+      ]
+    }
+  ]
+}

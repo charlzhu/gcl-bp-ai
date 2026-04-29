@@ -1,0 +1,2855 @@
+{
+  "generated_at": "2026-04-26T12:24:45",
+  "batch_id": "BCR4",
+  "review_policy": "规则层锁定澄清边界；默认关闭 live LLM 以稳定复检模板覆盖，如需抽样评估 LLM 追问候选可使用 --with-live-llm。",
+  "with_live_llm": false,
+  "summary": {
+    "total_questions": 70,
+    "boundary_passed_questions": 70,
+    "boundary_failed_questions": 0,
+    "template_update_recommended_questions": 0,
+    "category_breakdown": {
+      "generic_metric_scope": 70
+    },
+    "status_code_breakdown": {
+      "CLARIFICATION_REQUIRED": 70
+    },
+    "failure_classification_breakdown": {},
+    "template_update_recommended_breakdown": {}
+  },
+  "items": [
+    {
+      "review_id": "BCR-221",
+      "question_id": "SQ493",
+      "question": "2025年经营计划场景下的总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-222",
+      "question_id": "SQ495",
+      "question": "2025年辅料送样场景下的总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-223",
+      "question_id": "SQ496",
+      "question": "2025年辅料送样场景下的总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-224",
+      "question_id": "SQ510",
+      "question": "2024年“经营计划”口径下的用车总费用是多少？需要说明具体筛选字段。",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-225",
+      "question_id": "SQ512",
+      "question": "2025年“经营计划”口径下的用车总费用是多少？需要说明具体筛选字段。",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-226",
+      "question_id": "SQ575",
+      "question": "2026年辅料送样总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "请补充 2026 系统侧的统计时间范围，例如 1 月、1-2 月，或明确说明按当前累计统计。",
+        "如需看总运量，请确认是只看 MW，还是同时需要车次或采购方式拆分。",
+        "请确认输出形态：只输出汇总总数，还是需要表格并按采购方式、基地或承运商继续拆分。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-227",
+      "question_id": "SQ577",
+      "question": "2026年经营计划总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "请补充 2026 系统侧的统计时间范围，例如 1 月、1-2 月，或明确说明按当前累计统计。",
+        "如需看总运量，请确认是只看 MW，还是同时需要车次或采购方式拆分。",
+        "请确认输出形态：只输出汇总总数，还是需要表格并按采购方式、基地或承运商继续拆分。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-228",
+      "question_id": "SQ579",
+      "question": "2026年刘娟用车总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "请补充 2026 系统侧的统计时间范围，例如 1 月、1-2 月，或明确说明按当前累计统计。",
+        "如需看总运量，请确认是只看 MW，还是同时需要车次或采购方式拆分。",
+        "请确认输出形态：只输出汇总总数，还是需要表格并按采购方式、基地或承运商继续拆分。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-229",
+      "question_id": "SQ074",
+      "question": "2024年1月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-230",
+      "question_id": "SQ077",
+      "question": "2024年2月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-231",
+      "question_id": "SQ080",
+      "question": "2024年3月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-232",
+      "question_id": "SQ083",
+      "question": "2024年4月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-233",
+      "question_id": "SQ086",
+      "question": "2024年5月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-234",
+      "question_id": "SQ089",
+      "question": "2024年6月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-235",
+      "question_id": "SQ092",
+      "question": "2024年7月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-236",
+      "question_id": "SQ095",
+      "question": "2024年8月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-237",
+      "question_id": "SQ098",
+      "question": "2024年9月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-238",
+      "question_id": "SQ101",
+      "question": "2024年10月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-239",
+      "question_id": "SQ104",
+      "question": "2024年11月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-240",
+      "question_id": "SQ107",
+      "question": "2024年12月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-241",
+      "question_id": "SQ110",
+      "question": "2025年1月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-242",
+      "question_id": "SQ113",
+      "question": "2025年2月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-243",
+      "question_id": "SQ116",
+      "question": "2025年3月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-244",
+      "question_id": "SQ119",
+      "question": "2025年4月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-245",
+      "question_id": "SQ122",
+      "question": "2025年5月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-246",
+      "question_id": "SQ125",
+      "question": "2025年6月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-247",
+      "question_id": "SQ128",
+      "question": "2025年7月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-248",
+      "question_id": "SQ131",
+      "question": "2025年8月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-249",
+      "question_id": "SQ134",
+      "question": "2025年9月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-250",
+      "question_id": "SQ137",
+      "question": "2025年10月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-251",
+      "question_id": "SQ140",
+      "question": "2025年11月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-252",
+      "question_id": "SQ143",
+      "question": "2025年12月份总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-253",
+      "question_id": "SQ376",
+      "question": "2023年晶茂物流全年总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-254",
+      "question_id": "SQ377",
+      "question": "2023年晶茂物流全年总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-255",
+      "question_id": "SQ380",
+      "question": "2023年苏州晶茂物流全年总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-256",
+      "question_id": "SQ381",
+      "question": "2023年苏州晶茂物流全年总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-257",
+      "question_id": "SQ384",
+      "question": "2023年英赋嘉全年总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-258",
+      "question_id": "SQ385",
+      "question": "2023年英赋嘉全年总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-259",
+      "question_id": "SQ388",
+      "question": "2024年晶茂物流全年总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-260",
+      "question_id": "SQ389",
+      "question": "2024年晶茂物流全年总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-261",
+      "question_id": "SQ392",
+      "question": "2024年苏州晶茂物流全年总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-262",
+      "question_id": "SQ393",
+      "question": "2024年苏州晶茂物流全年总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-263",
+      "question_id": "SQ396",
+      "question": "2024年英赋嘉全年总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-264",
+      "question_id": "SQ397",
+      "question": "2024年英赋嘉全年总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-265",
+      "question_id": "SQ400",
+      "question": "2025年晶茂物流全年总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-266",
+      "question_id": "SQ401",
+      "question": "2025年晶茂物流全年总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-267",
+      "question_id": "SQ404",
+      "question": "2025年苏州晶茂物流全年总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-268",
+      "question_id": "SQ405",
+      "question": "2025年苏州晶茂物流全年总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-269",
+      "question_id": "SQ408",
+      "question": "2025年英赋嘉全年总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-270",
+      "question_id": "SQ409",
+      "question": "2025年英赋嘉全年总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-271",
+      "question_id": "SQ412",
+      "question": "2024年晶茂物流承运量占全年总承运量的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-272",
+      "question_id": "SQ413",
+      "question": "2024年晶茂物流运费占全年总运费的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-273",
+      "question_id": "SQ414",
+      "question": "2024年苏州晶茂物流承运量占全年总承运量的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-274",
+      "question_id": "SQ415",
+      "question": "2024年苏州晶茂物流运费占全年总运费的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-275",
+      "question_id": "SQ416",
+      "question": "2024年英赋嘉承运量占全年总承运量的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-276",
+      "question_id": "SQ417",
+      "question": "2024年英赋嘉运费占全年总运费的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-277",
+      "question_id": "SQ418",
+      "question": "2025年晶茂物流承运量占全年总承运量的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-278",
+      "question_id": "SQ419",
+      "question": "2025年晶茂物流运费占全年总运费的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-279",
+      "question_id": "SQ420",
+      "question": "2025年苏州晶茂物流承运量占全年总承运量的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-280",
+      "question_id": "SQ421",
+      "question": "2025年苏州晶茂物流运费占全年总运费的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-281",
+      "question_id": "SQ422",
+      "question": "2025年英赋嘉承运量占全年总承运量的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-282",
+      "question_id": "SQ423",
+      "question": "2025年英赋嘉运费占全年总运费的比例是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-283",
+      "question_id": "SQ486",
+      "question": "2025年招标场景下的总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-284",
+      "question_id": "SQ487",
+      "question": "2025年招标场景下的总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-285",
+      "question_id": "SQ489",
+      "question": "2025年询比价场景下的总发运量是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-286",
+      "question_id": "SQ490",
+      "question": "2025年询比价场景下的总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": null,
+      "rule_missing_slots": [],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
+        "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-287",
+      "question_id": "SQ295",
+      "question": "2024年多式联运运输的总发运量是多少MW？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "transport_mode_metric_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "time_range",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "请明确运输方式口径，例如公路/汽运、铁路/铁运、水路和多式联运是否需要合并同义口径。",
+        "请说明要统计的指标和单位，是发运量 MW、总运费、车次、件数、单瓦成本，还是降本金额。",
+        "请补充统计时间范围，以及是否需要按区域、省份、承运商或线路继续拆分。",
+        "请确认输出形态：只输出汇总总数/总额，还是需要表格、排名或按月/区域/承运商展开。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-288",
+      "question_id": "SQ296",
+      "question": "2024年多式联运运输的总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "transport_mode_metric_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "time_range",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "请明确运输方式口径，例如公路/汽运、铁路/铁运、水路和多式联运是否需要合并同义口径。",
+        "请说明要统计的指标和单位，是发运量 MW、总运费、车次、件数、单瓦成本，还是降本金额。",
+        "请补充统计时间范围，以及是否需要按区域、省份、承运商或线路继续拆分。",
+        "请确认输出形态：只输出汇总总数/总额，还是需要表格、排名或按月/区域/承运商展开。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-289",
+      "question_id": "SQ304",
+      "question": "2025年多式联运运输的总发运量是多少MW？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "transport_mode_metric_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "time_range",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "请明确运输方式口径，例如公路/汽运、铁路/铁运、水路和多式联运是否需要合并同义口径。",
+        "请说明要统计的指标和单位，是发运量 MW、总运费、车次、件数、单瓦成本，还是降本金额。",
+        "请补充统计时间范围，以及是否需要按区域、省份、承运商或线路继续拆分。",
+        "请确认输出形态：只输出汇总总数/总额，还是需要表格、排名或按月/区域/承运商展开。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-290",
+      "question_id": "SQ305",
+      "question": "2025年多式联运运输的总运费是多少？",
+      "review_category": "generic_metric_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "transport_mode_metric_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "time_range",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "指标口径",
+        "分组维度",
+        "输出形态"
+      ],
+      "actual_questions": [
+        "请明确运输方式口径，例如公路/汽运、铁路/铁运、水路和多式联运是否需要合并同义口径。",
+        "请说明要统计的指标和单位，是发运量 MW、总运费、车次、件数、单瓦成本，还是降本金额。",
+        "请补充统计时间范围，以及是否需要按区域、省份、承运商或线路继续拆分。",
+        "请确认输出形态：只输出汇总总数/总额，还是需要表格、排名或按月/区域/承运商展开。"
+      ],
+      "planned_questions": [
+        "请补充统计时间范围，例如年份、月份、季度或起止日期。",
+        "请明确要统计的指标，是发运量、运费、车次、件数、单瓦成本还是占比？",
+        "请说明是否需要按区域、省份、承运商、客户、线路或运输方式拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    }
+  ],
+  "failed_items": [],
+  "template_update_items": []
+}

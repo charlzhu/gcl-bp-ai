@@ -1,0 +1,1044 @@
+{
+  "generated_at": "2026-04-24T15:47:04",
+  "batch_id": "C2A-P4",
+  "result_database": "logistics_ai",
+  "selection_rule": "C Round2 新迁入 A 中 C2A-P4 批次 37 条。",
+  "items": [
+    {
+      "plan_id": "C2A-PREC-091",
+      "question_id": "SQ025",
+      "question": "2024年华东区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华东区域总发运量为3222.938MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "3222.938"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-092",
+      "question_id": "SQ029",
+      "question": "2024年华南区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华南区域总发运量为1074.887MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1074.887"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-093",
+      "question_id": "SQ033",
+      "question": "2024年华中区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华中区域总发运量为1001.485MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1001.485"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-094",
+      "question_id": "SQ037",
+      "question": "2024年华北区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年华北区域总发运量为1276.539MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1276.539"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-095",
+      "question_id": "SQ041",
+      "question": "2024年西南区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年西南区域总发运量为1929.015MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1929.015"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-096",
+      "question_id": "SQ045",
+      "question": "2024年西北区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年西北区域总发运量为4942.238MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "4942.238"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-097",
+      "question_id": "SQ049",
+      "question": "2025年华东区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华东区域总发运量为3583.648MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "3583.648"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-098",
+      "question_id": "SQ053",
+      "question": "2025年华南区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华南区域总发运量为924.737MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "924.737"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-099",
+      "question_id": "SQ057",
+      "question": "2025年华中区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华中区域总发运量为1096.650MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1096.650"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-100",
+      "question_id": "SQ061",
+      "question": "2025年华北区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华北区域总发运量为2299.555MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "2299.555"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-101",
+      "question_id": "SQ065",
+      "question": "2025年西南区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年西南区域总发运量为3778.016MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "3778.016"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-102",
+      "question_id": "SQ069",
+      "question": "2025年西北区域总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年西北区域总发运量为5429.193MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "5429.193"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-103",
+      "question_id": "SQ073",
+      "question": "2024年1月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年1月总发运量为364.123MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "364.123"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-104",
+      "question_id": "SQ076",
+      "question": "2024年2月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年2月总发运量为189.169MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "189.169"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-105",
+      "question_id": "SQ079",
+      "question": "2024年3月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年3月总发运量为663.462MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "663.462"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-106",
+      "question_id": "SQ082",
+      "question": "2024年4月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年4月总发运量为2172.943MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "2172.943"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-107",
+      "question_id": "SQ085",
+      "question": "2024年5月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年5月总发运量为1650.519MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1650.519"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-108",
+      "question_id": "SQ088",
+      "question": "2024年6月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年6月总发运量为1261.571MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1261.571"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-109",
+      "question_id": "SQ091",
+      "question": "2024年7月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年7月总发运量为1115.281MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1115.281"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-110",
+      "question_id": "SQ094",
+      "question": "2024年8月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年8月总发运量为1167.529MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1167.529"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-111",
+      "question_id": "SQ097",
+      "question": "2024年9月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年9月总发运量为1246.836MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1246.836"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-112",
+      "question_id": "SQ100",
+      "question": "2024年10月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年10月总发运量为1156.722MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1156.722"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-113",
+      "question_id": "SQ103",
+      "question": "2024年11月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年11月总发运量为1369.630MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1369.630"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-114",
+      "question_id": "SQ106",
+      "question": "2024年12月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2024年12月总发运量为1100.011MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1100.011"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-115",
+      "question_id": "SQ109",
+      "question": "2025年1月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年1月总发运量为583.317MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "583.317"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-116",
+      "question_id": "SQ112",
+      "question": "2025年2月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年2月总发运量为634.421MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "634.421"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-117",
+      "question_id": "SQ115",
+      "question": "2025年3月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年3月总发运量为1913.043MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1913.043"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-118",
+      "question_id": "SQ118",
+      "question": "2025年4月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年4月总发运量为1762.093MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1762.093"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-119",
+      "question_id": "SQ121",
+      "question": "2025年5月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年5月总发运量为1733.503MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1733.503"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-120",
+      "question_id": "SQ124",
+      "question": "2025年6月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年6月总发运量为1539.353MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1539.353"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-121",
+      "question_id": "SQ127",
+      "question": "2025年7月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年7月总发运量为1695.544MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1695.544"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-122",
+      "question_id": "SQ130",
+      "question": "2025年8月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年8月总发运量为1492.149MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1492.149"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-123",
+      "question_id": "SQ133",
+      "question": "2025年9月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年9月总发运量为1501.934MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1501.934"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-124",
+      "question_id": "SQ136",
+      "question": "2025年10月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年10月总发运量为1415.208MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1415.208"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-125",
+      "question_id": "SQ139",
+      "question": "2025年11月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年11月总发运量为1799.384MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1799.384"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-126",
+      "question_id": "SQ142",
+      "question": "2025年12月份总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年12月总发运量为1304.963MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1304.963"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-127",
+      "question_id": "RAW006",
+      "question": "2025年华东区域（上海、江苏、浙江、安徽、福建、江西、山东）全年总发运量（吨）",
+      "source_group": "73",
+      "priority": "P3",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "hist_mw_summary",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2025年华东区域总发运量为3583.648MW。",
+      "expected_columns": [
+        "shipment_mw"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "3583.648"
+        }
+      ]
+    }
+  ]
+}

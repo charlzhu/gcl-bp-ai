@@ -1,0 +1,224 @@
+{
+  "a_cases": [
+    {
+      "case_id": "A01",
+      "acceptance_id": "Q06",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "base_question": "2026年1月份总发运量（MW）和总车次",
+      "variants": [
+        "26年1月发了多少MW，多少车？",
+        "帮我看下26年1月运量和车次",
+        "1月份物流总出货规模和总车数是多少（2026）",
+        "查下2026年1月物流总MW和总车次",
+        "2026年1月物流一共出了多少MW、多少趟车"
+      ]
+    },
+    {
+      "case_id": "A02",
+      "acceptance_id": "Q02",
+      "expected_query_key": "hist_avg_fee_by_month",
+      "base_question": "25年合肥发广东省，17.5车，每月平均运费是多少？",
+      "variants": [
+        "25年合肥发广东，17.5车每月平均运费是多少？",
+        "看下2025年合肥到广东17.5车按月均费",
+        "帮我看25年合肥去广东17.5车型的月均运费",
+        "2025年合肥发广东的17米五车辆每月平均运费表给我看下",
+        "查下25年合肥到广东17.5车每个月均费"
+      ]
+    },
+    {
+      "case_id": "A03",
+      "acceptance_id": "Q03",
+      "expected_query_key": "hist_avg_fee_per_watt_by_transport",
+      "base_question": "华东区域各运输方式的平均元/瓦分别是多少，并按成本从低到高排序？",
+      "variants": [
+        "华东各运输方式元瓦从低到高排一下",
+        "看下华东区域公路铁路这些方式的平均元瓦并排序",
+        "华东运输方式成本（元/瓦）分别多少，按低到高",
+        "帮我把华东各运输方式单瓦运输成本从低到高排一下",
+        "华东地区不同运输方式的平均元瓦各是多少，按低到高"
+      ]
+    },
+    {
+      "case_id": "A04",
+      "acceptance_id": "Q05",
+      "expected_query_key": "hist_total_fee_by_origin_and_carrier",
+      "base_question": "帮我查一下23年阜宁基地晶茂物流运输总运费多少钱？",
+      "variants": [
+        "23年阜宁基地晶茂的总运费多少",
+        "帮我查2023阜宁始发、晶茂承运的总费用",
+        "2023年阜宁基地晶茂物流运输费用合计多少",
+        "查一下23年阜宁发货、晶茂承运的总运费",
+        "阜宁基地2023年由晶茂运输的费用总额是多少"
+      ]
+    },
+    {
+      "case_id": "A05",
+      "acceptance_id": "Q07",
+      "expected_query_key": "hist_trip_count_by_region",
+      "base_question": "2023年华东区域总车次是多少？",
+      "variants": [
+        "2023华东一共发了多少车",
+        "23年华东区域总车次",
+        "帮我看下2023年华东车次总数",
+        "查下23年华东物流总共跑了多少车次",
+        "2023年华东区域总共发了多少趟车"
+      ]
+    },
+    {
+      "case_id": "A06",
+      "acceptance_id": "Q10",
+      "expected_query_key": "hist_customer_mw",
+      "base_question": "华润新能源（皮山）有限公司 项目 24年发运量是多少？",
+      "variants": [
+        "华润新能源（皮山）这个项目 2024 发了多少MW",
+        "帮我查华润新能源（皮山）有限公司项目24年运量MW",
+        "24年华润新能源皮山项目发运量是多少MW",
+        "查下华润新能源皮山项目2024年的发运MW",
+        "2024年华润新能源（皮山）有限公司项目一共发了多少MW"
+      ]
+    },
+    {
+      "case_id": "A07",
+      "acceptance_id": "Q16",
+      "expected_query_key": "sys_signedfor_rate_by_carrier",
+      "base_question": "2026年各承运商的SIGNEDFOR签收率分别是多少？排名前十和后十是谁？",
+      "variants": [
+        "2026各承运商SIGNEDFOR签收率前十后十分别是谁",
+        "看下26年承运商签收率排名，前十和后十",
+        "2026物流公司 signedfor 比例排行榜前后十",
+        "帮我列出2026年承运商SIGNEDFOR签收率前十和后十",
+        "2026年物流供应商签收率最高十家和最低十家分别是谁"
+      ]
+    },
+    {
+      "case_id": "A08",
+      "acceptance_id": "Q17",
+      "expected_query_key": "hist_multi_origin_customers",
+      "base_question": "2024年同一客户由多个始发地发货的客户有多少个？分别是哪些客户？",
+      "variants": [
+        "2024年哪些客户是多个始发地发货的，一共多少个",
+        "帮我找出2024同一客户多始发地发货的客户名单和数量",
+        "24年多始发地发货客户有多少，分别是谁",
+        "查下2024年同一客户由多个始发地发货的客户数量和名单",
+        "2024年多始发地发货的最终客户都有谁，一共有多少个"
+      ]
+    },
+    {
+      "case_id": "A09",
+      "acceptance_id": "Q18",
+      "expected_query_key": "sys_companies_without_tasks",
+      "base_question": "承运商主数据表中是否存在\"已建档但2026年没有任何任务\"的物流公司？",
+      "variants": [
+        "2026已建档但没出过任务的承运商有哪些",
+        "帮我查2026没有任何任务的已建档物流公司",
+        "承运商主数据里哪些公司2026没任务",
+        "查一下2026年已建档但一直没有任务的物流公司",
+        "2026年有没有已建档却没有任何任务的承运商"
+      ]
+    },
+    {
+      "case_id": "A10",
+      "acceptance_id": "Q19",
+      "expected_query_key": "hist_plan_actual_deviation",
+      "base_question": "对比2023年华东区域计划发运件数与实际发运件数的偏差率。",
+      "variants": [
+        "对比2023华东计划件数和实际件数偏差率",
+        "2023年华东区域计划发运件数与实际件数偏差率是多少",
+        "华东23年计划件数和实际件数偏差多少",
+        "帮我算下2023年华东计划件数和实际件数的偏差率",
+        "2023华东区域计划发运件数相对实际件数偏差几个点"
+      ]
+    },
+    {
+      "case_id": "A11",
+      "acceptance_id": "Q016",
+      "expected_query_key": "hist_transport_mode_record_summary",
+      "base_question": "按运输方式统计，公路对应的发运记录数是多少？",
+      "variants": [
+        "历史台账里公路发运记录一共有多少条？"
+      ]
+    },
+    {
+      "case_id": "A12",
+      "acceptance_id": "Q021",
+      "expected_query_key": "hist_product_spec_mw_summary",
+      "base_question": "规格为GCL-NT10/78GDF-640W的历史发运总瓦数是多少？",
+      "variants": [
+        "GCL-NT10/78GDF-640W 这个规格历史上一共发了多少MW？"
+      ]
+    },
+    {
+      "case_id": "A13",
+      "acceptance_id": "SQ466",
+      "expected_query_key": "hist_high_fee_addresses_by_customer",
+      "base_question": "2024年客户华阳发货的项目地中，哪些收货地址的运费超过20万元？",
+      "variants": [
+        "2024年华阳客户收货地址里，累计运费超过20万的有哪些？"
+      ]
+    },
+    {
+      "case_id": "A14",
+      "acceptance_id": "Q262",
+      "expected_query_key": "sys_task_status_distribution",
+      "base_question": "2026物流任务表中，各任务状态（PREASSIGN、ASSIGNED、PRESIGNFOR、SIGNEDFOR）的数量分别是多少？",
+      "variants": [
+        "2026年物流主任务不同状态分别有多少单？"
+      ]
+    }
+  ],
+  "b_cases": [
+    {
+      "case_id": "B01",
+      "question": "最近物流成本是不是变高了？",
+      "expected_keywords": ["时间", "指标", "成本"]
+    },
+    {
+      "case_id": "B02",
+      "question": "哪个承运商最差？",
+      "expected_keywords": ["时间", "标准", "签收率"]
+    },
+    {
+      "case_id": "B03",
+      "question": "华东发运有没有异常？",
+      "expected_keywords": ["时间", "异常", "指标"]
+    },
+    {
+      "case_id": "B04",
+      "question": "江苏省物流费用最近变化大吗？",
+      "expected_keywords": ["时间", "指标", "费用"]
+    }
+  ],
+  "c_cases": [
+    {
+      "case_id": "C01",
+      "question": "预测下个月物流费用会是多少？",
+      "expected_reason_keywords": ["预测"]
+    },
+    {
+      "case_id": "C02",
+      "question": "当前在途任务预计什么时候到？",
+      "expected_reason_keywords": ["ETA", "到达时间"]
+    },
+    {
+      "case_id": "C03",
+      "question": "设计一个在途风险评分模型",
+      "expected_reason_keywords": ["方案设计", "开放讨论"]
+    },
+    {
+      "case_id": "C04",
+      "question": "哪些额外费用项目最多？分别是什么原因？",
+      "expected_reason_keywords": ["额外费用", "项目", "原因"]
+    },
+    {
+      "case_id": "C05",
+      "question": "未来三个月华东物流总费用波动区间是多少？",
+      "expected_reason_keywords": ["未来", "波动区间"]
+    },
+    {
+      "case_id": "C06",
+      "question": "若某个ship_task被拆成100次以上派车任务，系统在做均值分析时应如何处理这种极端值？",
+      "expected_reason_keywords": ["治理原则", "开放讨论"]
+    }
+  ]
+}

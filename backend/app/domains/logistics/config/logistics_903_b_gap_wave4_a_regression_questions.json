@@ -1,0 +1,42 @@
+{
+  "generated_at": "2026-04-26T20:35:26",
+  "source_migration_config": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/config/logistics_903_b_gap_wave4_migration_candidates.json",
+  "summary": {
+    "total_questions": 4,
+    "expected_status_code": "OK"
+  },
+  "items": [
+    {
+      "question_id": "SQ431",
+      "question": "2024年客户广东粤电阳西新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ437",
+      "question": "2024年客户江苏苏美达电力运营有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ445",
+      "question": "2025年客户广东粤电阳西新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "expected_status_code": "OK"
+    },
+    {
+      "question_id": "SQ451",
+      "question": "2025年客户江苏苏美达电力运营有限公司总运费是多少？",
+      "source_group": "600",
+      "family": "客户/项目分析类",
+      "expected_query_key": "hist_total_fee_summary",
+      "expected_status_code": "OK"
+    }
+  ]
+}

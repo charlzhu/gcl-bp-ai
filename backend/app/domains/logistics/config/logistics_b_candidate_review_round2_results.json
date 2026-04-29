@@ -1,0 +1,3709 @@
+{
+  "generated_at": "2026-04-26T12:24:45",
+  "batch_id": "BCR2",
+  "review_policy": "规则层锁定澄清边界；默认关闭 live LLM 以稳定复检模板覆盖，如需抽样评估 LLM 追问候选可使用 --with-live-llm。",
+  "with_live_llm": false,
+  "summary": {
+    "total_questions": 80,
+    "boundary_passed_questions": 80,
+    "boundary_failed_questions": 0,
+    "template_update_recommended_questions": 0,
+    "category_breakdown": {
+      "route_or_address_scope": 70,
+      "system_state_scope": 1,
+      "data_consistency_scope": 2,
+      "vehicle_or_trip_scope": 7
+    },
+    "status_code_breakdown": {
+      "CLARIFICATION_REQUIRED": 80
+    },
+    "failure_classification_breakdown": {},
+    "template_update_recommended_breakdown": {}
+  },
+  "items": [
+    {
+      "review_id": "BCR-061",
+      "question_id": "SQ213",
+      "question": "2024年合肥基地发往广东省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-062",
+      "question_id": "SQ214",
+      "question": "2024年合肥基地发往广东省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-063",
+      "question_id": "SQ215",
+      "question": "2024年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-064",
+      "question_id": "SQ216",
+      "question": "2024年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-065",
+      "question_id": "SQ217",
+      "question": "2024年阜宁基地发往江苏省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-066",
+      "question_id": "SQ218",
+      "question": "2024年阜宁基地发往江苏省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-067",
+      "question_id": "SQ219",
+      "question": "2024年阜宁基地发往浙江省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-068",
+      "question_id": "SQ220",
+      "question": "2024年阜宁基地发往浙江省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-069",
+      "question_id": "SQ221",
+      "question": "2024年阜宁基地发往上海市的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-070",
+      "question_id": "SQ222",
+      "question": "2024年阜宁基地发往上海市的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-071",
+      "question_id": "SQ223",
+      "question": "2024年阜宁基地发往安徽省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-072",
+      "question_id": "SQ224",
+      "question": "2024年阜宁基地发往安徽省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-073",
+      "question_id": "SQ225",
+      "question": "2024年阜宁基地发往广东省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-074",
+      "question_id": "SQ226",
+      "question": "2024年阜宁基地发往广东省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-075",
+      "question_id": "SQ227",
+      "question": "2024年阜宁基地发往广西壮族自治区的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-076",
+      "question_id": "SQ228",
+      "question": "2024年阜宁基地发往广西壮族自治区的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-077",
+      "question_id": "SQ229",
+      "question": "2025年合肥基地发往江苏省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-078",
+      "question_id": "SQ230",
+      "question": "2025年合肥基地发往江苏省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-079",
+      "question_id": "SQ231",
+      "question": "2025年合肥基地发往浙江省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-080",
+      "question_id": "SQ232",
+      "question": "2025年合肥基地发往浙江省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-081",
+      "question_id": "SQ233",
+      "question": "2025年合肥基地发往上海市的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-082",
+      "question_id": "SQ234",
+      "question": "2025年合肥基地发往上海市的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-083",
+      "question_id": "SQ235",
+      "question": "2025年合肥基地发往安徽省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-084",
+      "question_id": "SQ236",
+      "question": "2025年合肥基地发往安徽省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-085",
+      "question_id": "SQ237",
+      "question": "2025年合肥基地发往广东省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-086",
+      "question_id": "SQ238",
+      "question": "2025年合肥基地发往广东省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-087",
+      "question_id": "SQ239",
+      "question": "2025年合肥基地发往广西壮族自治区的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-088",
+      "question_id": "SQ240",
+      "question": "2025年合肥基地发往广西壮族自治区的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-089",
+      "question_id": "SQ241",
+      "question": "2025年阜宁基地发往江苏省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-090",
+      "question_id": "SQ242",
+      "question": "2025年阜宁基地发往江苏省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-091",
+      "question_id": "SQ243",
+      "question": "2025年阜宁基地发往浙江省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-092",
+      "question_id": "SQ244",
+      "question": "2025年阜宁基地发往浙江省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-093",
+      "question_id": "SQ245",
+      "question": "2025年阜宁基地发往上海市的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-094",
+      "question_id": "SQ246",
+      "question": "2025年阜宁基地发往上海市的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-095",
+      "question_id": "SQ247",
+      "question": "2025年阜宁基地发往安徽省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-096",
+      "question_id": "SQ248",
+      "question": "2025年阜宁基地发往安徽省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-097",
+      "question_id": "SQ249",
+      "question": "2025年阜宁基地发往广东省的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-098",
+      "question_id": "SQ250",
+      "question": "2025年阜宁基地发往广东省的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-099",
+      "question_id": "SQ251",
+      "question": "2025年阜宁基地发往广西壮族自治区的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-100",
+      "question_id": "SQ252",
+      "question": "2025年阜宁基地发往广西壮族自治区的总发运量是多少MW？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-101",
+      "question_id": "SQ316",
+      "question": "2023年合肥基地发往广州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-102",
+      "question_id": "SQ318",
+      "question": "2023年合肥基地发往乌鲁木齐的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-103",
+      "question_id": "SQ320",
+      "question": "2023年合肥基地发往苏州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-104",
+      "question_id": "SQ322",
+      "question": "2023年合肥基地发往宁波的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-105",
+      "question_id": "SQ324",
+      "question": "2023年合肥基地发往南昌的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-106",
+      "question_id": "SQ326",
+      "question": "2023年合肥基地发往福州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-107",
+      "question_id": "SQ328",
+      "question": "2023年合肥基地发往海口的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-108",
+      "question_id": "SQ330",
+      "question": "2023年合肥基地发往南宁的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-109",
+      "question_id": "SQ332",
+      "question": "2023年合肥基地发往徐州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-110",
+      "question_id": "SQ334",
+      "question": "2023年合肥基地发往温州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-111",
+      "question_id": "SQ336",
+      "question": "2024年合肥基地发往广州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-112",
+      "question_id": "SQ338",
+      "question": "2024年合肥基地发往乌鲁木齐的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-113",
+      "question_id": "SQ340",
+      "question": "2024年合肥基地发往苏州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-114",
+      "question_id": "SQ342",
+      "question": "2024年合肥基地发往宁波的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-115",
+      "question_id": "SQ344",
+      "question": "2024年合肥基地发往南昌的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-116",
+      "question_id": "SQ346",
+      "question": "2024年合肥基地发往福州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-117",
+      "question_id": "SQ348",
+      "question": "2024年合肥基地发往海口的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-118",
+      "question_id": "SQ350",
+      "question": "2024年合肥基地发往南宁的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-119",
+      "question_id": "SQ352",
+      "question": "2024年合肥基地发往徐州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-120",
+      "question_id": "SQ354",
+      "question": "2024年合肥基地发往温州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-121",
+      "question_id": "SQ356",
+      "question": "2025年合肥基地发往广州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-122",
+      "question_id": "SQ358",
+      "question": "2025年合肥基地发往乌鲁木齐的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-123",
+      "question_id": "SQ360",
+      "question": "2025年合肥基地发往苏州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-124",
+      "question_id": "SQ362",
+      "question": "2025年合肥基地发往宁波的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-125",
+      "question_id": "SQ364",
+      "question": "2025年合肥基地发往南昌的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-126",
+      "question_id": "SQ366",
+      "question": "2025年合肥基地发往福州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-127",
+      "question_id": "SQ368",
+      "question": "2025年合肥基地发往海口的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-128",
+      "question_id": "SQ370",
+      "question": "2025年合肥基地发往南宁的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-129",
+      "question_id": "SQ372",
+      "question": "2025年合肥基地发往徐州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-130",
+      "question_id": "SQ374",
+      "question": "2025年合肥基地发往温州的平均运费是多少？",
+      "review_category": "route_or_address_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "route_or_address_scope",
+      "rule_missing_slots": [
+        "source_scope",
+        "metric_definition",
+        "dimension_split",
+        "record_scope"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "始发/目的地范围",
+        "指标口径",
+        "车型/运输方式限制"
+      ],
+      "actual_questions": [
+        "请确认始发地和目的地范围，例如合肥基地发往江苏省、单条线路、某省还是某区域。",
+        "请说明要看的指标和单位，例如发运量 MW、总运费、平均运费、平均元/瓦、车次或单车均价。",
+        "请确认是否限定车型或运输方式，例如 17.5 车、13 米车、公路或铁路。"
+      ],
+      "planned_questions": [
+        "请明确始发地和目的地范围，是单条线路、某省还是某区域？",
+        "请说明要看的指标，是发运量、运费、车次、单车均价还是单瓦成本？",
+        "请补充时间范围，以及是否限定车型或运输方式。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-131",
+      "question_id": "Q320",
+      "question": "2026主任务表缺少显式成本字段时，如何利用历史台账估算任务级物流成本区间？",
+      "review_category": "system_state_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "system_state_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "status_scope",
+        "metric_definition",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "状态枚举口径",
+        "指标口径",
+        "分组维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "状态枚举口径",
+        "指标口径",
+        "分组维度"
+      ],
+      "actual_questions": [
+        "请明确要看的状态枚举口径，例如 SIGNEDFOR、PREASSIGN、全部状态分布，还是只看已签收任务。",
+        "请说明统计指标口径，是任务数、占比、签收率、异常任务数量，还是需要成本区间测算。",
+        "请补充统计时间范围，以及是否需要按承运商、省份、客户或采购方式等分组维度拆分。"
+      ],
+      "planned_questions": [
+        "请明确要看的系统状态口径，例如 SIGNEDFOR、PREASSIGN 或全部状态分布？",
+        "请说明统计指标，是任务数、占比、签收率还是异常任务数量？",
+        "请补充时间范围和是否需要按承运商/省份/客户拆分。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-132",
+      "question_id": "Q331",
+      "question": "若contract_number、bidding_number、inquiry_number长期缺失，会对经营计划部的对账与归因造成哪些影响？",
+      "review_category": "data_consistency_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "data_consistency_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "mapping_field",
+        "threshold_scope",
+        "dimension_split",
+        "result_metric"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "对账对象",
+        "差异阈值",
+        "比较维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "对账对象",
+        "差异阈值",
+        "比较维度"
+      ],
+      "actual_questions": [
+        "请明确对账对象或一致性对象，例如客户名称、承运商映射、车牌、状态字段、费用字段，或合同/招标/询比价编号。",
+        "请补充差异阈值或异常判定标准，例如完全不一致、字段缺失、金额差异超过多少，或一对多/多对一。",
+        "请确认统计时间范围、比较维度和输出形态，是问题记录数量、问题率还是异常明细清单。"
+      ],
+      "planned_questions": [
+        "请说明要对比哪两个对象的一致性，例如客户名称、承运商映射、状态字段或费用字段？",
+        "请补充差异判断标准，例如完全不一致、缺失值、金额差异超过阈值等。",
+        "请明确统计时间范围和需要输出明细还是汇总。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-133",
+      "question_id": "Q324",
+      "question": "解析车牌与登记车牌不一致，会如何影响签收校验与后续对账？应如何排序处理优先级？",
+      "review_category": "data_consistency_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "data_consistency_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "mapping_field",
+        "threshold_scope",
+        "dimension_split",
+        "result_metric"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "对账对象",
+        "差异阈值",
+        "比较维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "对账对象",
+        "差异阈值",
+        "比较维度"
+      ],
+      "actual_questions": [
+        "请明确对账对象或一致性对象，例如客户名称、承运商映射、车牌、状态字段、费用字段，或合同/招标/询比价编号。",
+        "请补充差异阈值或异常判定标准，例如完全不一致、字段缺失、金额差异超过多少，或一对多/多对一。",
+        "请确认统计时间范围、比较维度和输出形态，是问题记录数量、问题率还是异常明细清单。"
+      ],
+      "planned_questions": [
+        "请说明要对比哪两个对象的一致性，例如客户名称、承运商映射、状态字段或费用字段？",
+        "请补充差异判断标准，例如完全不一致、缺失值、金额差异超过阈值等。",
+        "请明确统计时间范围和需要输出明细还是汇总。"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-134",
+      "question_id": "SQ075",
+      "question": "2024年1月份总车次是多少？",
+      "review_category": "vehicle_or_trip_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "vehicle_or_trip_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "metric_definition",
+        "record_scope",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "actual_questions": [
+        "请明确车次/车辆数口径，是按发运车次、唯一车辆数、车型数量，还是系统任务车辆字段统计。",
+        "请补充车型口径：是否限定 17.5 米车、13 米车等，还是统计全部车型。",
+        "请确认统计时间范围是否就是题目月份，以及是否需要按区域、线路、承运商等分组维度拆分。"
+      ],
+      "planned_questions": [
+        "请明确车次口径，是发运车次、车辆数、车型数量还是系统任务车辆字段？",
+        "请补充统计时间范围，以及是否限定区域、线路或承运商。",
+        "是否需要按车型，例如 17.5 米车、13 米车等继续拆分？"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-135",
+      "question_id": "SQ078",
+      "question": "2024年2月份总车次是多少？",
+      "review_category": "vehicle_or_trip_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "vehicle_or_trip_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "metric_definition",
+        "record_scope",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "actual_questions": [
+        "请明确车次/车辆数口径，是按发运车次、唯一车辆数、车型数量，还是系统任务车辆字段统计。",
+        "请补充车型口径：是否限定 17.5 米车、13 米车等，还是统计全部车型。",
+        "请确认统计时间范围是否就是题目月份，以及是否需要按区域、线路、承运商等分组维度拆分。"
+      ],
+      "planned_questions": [
+        "请明确车次口径，是发运车次、车辆数、车型数量还是系统任务车辆字段？",
+        "请补充统计时间范围，以及是否限定区域、线路或承运商。",
+        "是否需要按车型，例如 17.5 米车、13 米车等继续拆分？"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-136",
+      "question_id": "SQ081",
+      "question": "2024年3月份总车次是多少？",
+      "review_category": "vehicle_or_trip_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "vehicle_or_trip_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "metric_definition",
+        "record_scope",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "actual_questions": [
+        "请明确车次/车辆数口径，是按发运车次、唯一车辆数、车型数量，还是系统任务车辆字段统计。",
+        "请补充车型口径：是否限定 17.5 米车、13 米车等，还是统计全部车型。",
+        "请确认统计时间范围是否就是题目月份，以及是否需要按区域、线路、承运商等分组维度拆分。"
+      ],
+      "planned_questions": [
+        "请明确车次口径，是发运车次、车辆数、车型数量还是系统任务车辆字段？",
+        "请补充统计时间范围，以及是否限定区域、线路或承运商。",
+        "是否需要按车型，例如 17.5 米车、13 米车等继续拆分？"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-137",
+      "question_id": "SQ084",
+      "question": "2024年4月份总车次是多少？",
+      "review_category": "vehicle_or_trip_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "vehicle_or_trip_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "metric_definition",
+        "record_scope",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "actual_questions": [
+        "请明确车次/车辆数口径，是按发运车次、唯一车辆数、车型数量，还是系统任务车辆字段统计。",
+        "请补充车型口径：是否限定 17.5 米车、13 米车等，还是统计全部车型。",
+        "请确认统计时间范围是否就是题目月份，以及是否需要按区域、线路、承运商等分组维度拆分。"
+      ],
+      "planned_questions": [
+        "请明确车次口径，是发运车次、车辆数、车型数量还是系统任务车辆字段？",
+        "请补充统计时间范围，以及是否限定区域、线路或承运商。",
+        "是否需要按车型，例如 17.5 米车、13 米车等继续拆分？"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-138",
+      "question_id": "SQ087",
+      "question": "2024年5月份总车次是多少？",
+      "review_category": "vehicle_or_trip_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "vehicle_or_trip_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "metric_definition",
+        "record_scope",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "actual_questions": [
+        "请明确车次/车辆数口径，是按发运车次、唯一车辆数、车型数量，还是系统任务车辆字段统计。",
+        "请补充车型口径：是否限定 17.5 米车、13 米车等，还是统计全部车型。",
+        "请确认统计时间范围是否就是题目月份，以及是否需要按区域、线路、承运商等分组维度拆分。"
+      ],
+      "planned_questions": [
+        "请明确车次口径，是发运车次、车辆数、车型数量还是系统任务车辆字段？",
+        "请补充统计时间范围，以及是否限定区域、线路或承运商。",
+        "是否需要按车型，例如 17.5 米车、13 米车等继续拆分？"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-139",
+      "question_id": "SQ090",
+      "question": "2024年6月份总车次是多少？",
+      "review_category": "vehicle_or_trip_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "vehicle_or_trip_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "metric_definition",
+        "record_scope",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "actual_questions": [
+        "请明确车次/车辆数口径，是按发运车次、唯一车辆数、车型数量，还是系统任务车辆字段统计。",
+        "请补充车型口径：是否限定 17.5 米车、13 米车等，还是统计全部车型。",
+        "请确认统计时间范围是否就是题目月份，以及是否需要按区域、线路、承运商等分组维度拆分。"
+      ],
+      "planned_questions": [
+        "请明确车次口径，是发运车次、车辆数、车型数量还是系统任务车辆字段？",
+        "请补充统计时间范围，以及是否限定区域、线路或承运商。",
+        "是否需要按车型，例如 17.5 米车、13 米车等继续拆分？"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    },
+    {
+      "review_id": "BCR-140",
+      "question_id": "SQ093",
+      "question": "2024年7月份总车次是多少？",
+      "review_category": "vehicle_or_trip_scope",
+      "expected_response_status": "needs_clarification=true",
+      "actual_status_code": "CLARIFICATION_REQUIRED",
+      "actual_intent": "clarification",
+      "actual_needs_clarification": true,
+      "actual_supported": false,
+      "actual_query_key": null,
+      "rule_clarification_category": "vehicle_or_trip_scope",
+      "rule_missing_slots": [
+        "time_range",
+        "metric_definition",
+        "record_scope",
+        "dimension_split"
+      ],
+      "planned_missing_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "covered_planned_slots": [
+        "统计时间范围",
+        "车次/车辆数口径",
+        "车型口径",
+        "分组维度"
+      ],
+      "actual_questions": [
+        "请明确车次/车辆数口径，是按发运车次、唯一车辆数、车型数量，还是系统任务车辆字段统计。",
+        "请补充车型口径：是否限定 17.5 米车、13 米车等，还是统计全部车型。",
+        "请确认统计时间范围是否就是题目月份，以及是否需要按区域、线路、承运商等分组维度拆分。"
+      ],
+      "planned_questions": [
+        "请明确车次口径，是发运车次、车辆数、车型数量还是系统任务车辆字段？",
+        "请补充统计时间范围，以及是否限定区域、线路或承运商。",
+        "是否需要按车型，例如 17.5 米车、13 米车等继续拆分？"
+      ],
+      "passed_boundary": true,
+      "template_update_recommended": false,
+      "failure_classification": null,
+      "failure_reason": null,
+      "review_conclusion": "边界稳定，当前追问方向可接受。"
+    }
+  ],
+  "failed_items": [],
+  "template_update_items": []
+}

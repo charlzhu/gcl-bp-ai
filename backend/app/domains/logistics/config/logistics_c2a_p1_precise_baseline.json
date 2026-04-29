@@ -1,0 +1,1350 @@
+{
+  "generated_at": "2026-04-24T14:47:22",
+  "batch_id": "C2A-P1",
+  "result_database": "logistics_ai",
+  "selection_rule": "C Round2 新迁入 A 中 C2A-P1 批次 30 条。",
+  "items": [
+    {
+      "plan_id": "C2A-PREC-001",
+      "question_id": "SQ307",
+      "question": "2026年1-2月公路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月公路方式合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 148,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 499,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 998,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-002",
+      "question_id": "SQ310",
+      "question": "2026年1-2月铁路运输的总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月铁路方式合计发运量为0MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": null,
+          "shipment_trip_count": 0,
+          "power_missing_count": 8,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 4,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 8,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-003",
+      "question_id": "SQ313",
+      "question": "2026年1-2月多式联运运输的总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-004",
+      "question_id": "SQ452",
+      "question": "2026年1-2月客户华阳总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-005",
+      "question_id": "SQ454",
+      "question": "2026年1-2月客户创维客户总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-006",
+      "question_id": "SQ456",
+      "question": "2026年1-2月客户海南创维新能源投资有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-007",
+      "question_id": "SQ458",
+      "question": "2026年1-2月客户广东粤电阳西新能源有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-008",
+      "question_id": "SQ460",
+      "question": "2026年1-2月客户华润新能源（皮山）有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-009",
+      "question_id": "SQ462",
+      "question": "2026年1-2月客户国科新能源有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-010",
+      "question_id": "SQ464",
+      "question": "2026年1-2月客户江苏苏美达电力运营有限公司总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-011",
+      "question_id": "SQ504",
+      "question": "2026年1-2月经营计划场景下的总发运量是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "特殊业务口径类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-012",
+      "question_id": "SQ507",
+      "question": "2026年1-2月辅料送样场景下的总发运量是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "特殊业务口径类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-013",
+      "question_id": "SQ520",
+      "question": "2026年1-2月各承运商按发运量排名前十分别是谁？",
+      "source_group": "600",
+      "priority": "P3",
+      "family": "承运商经营与排名类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月合计发运量为1124.573MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "1124.573",
+          "shipment_trip_count": 784,
+          "power_missing_count": 156,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 503,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 1006,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-014",
+      "question_id": "SQ538",
+      "question": "2026年1月份合肥基地总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年合肥基地1月合计发运量为292.614MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "292.614",
+          "shipment_trip_count": 564,
+          "power_missing_count": 56,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 143,
+          "year_task_count": 503,
+          "pickup_date_available_count": 503,
+          "region_coverage": {
+            "direct_area_count": 286,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 503,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-015",
+      "question_id": "SQ541",
+      "question": "2026年2月份合肥基地总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P3",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年合肥基地2月合计发运量为112.209MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "112.209",
+          "shipment_trip_count": 220,
+          "power_missing_count": 36,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 71,
+          "year_task_count": 503,
+          "pickup_date_available_count": 503,
+          "region_coverage": {
+            "direct_area_count": 142,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 503,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-016",
+      "question_id": "SQ544",
+      "question": "2026年1月份阜宁基地总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P3",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年阜宁基地1月合计发运量为430.981MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "430.981",
+          "shipment_trip_count": 0,
+          "power_missing_count": 26,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 153,
+          "year_task_count": 349,
+          "pickup_date_available_count": 349,
+          "region_coverage": {
+            "direct_area_count": 306,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 349,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-017",
+      "question_id": "SQ547",
+      "question": "2026年2月份阜宁基地总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P3",
+      "family": "区域/省份/基地汇总类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年阜宁基地2月合计发运量为134.057MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "134.057",
+          "shipment_trip_count": 0,
+          "power_missing_count": 16,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 52,
+          "year_task_count": 349,
+          "pickup_date_available_count": 349,
+          "region_coverage": {
+            "direct_area_count": 104,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 349,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-018",
+      "question_id": "SQ563",
+      "question": "2026年1月份晶茂物流总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月合计发运量为864.728MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "864.728",
+          "shipment_trip_count": 564,
+          "power_missing_count": 98,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 368,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 736,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-019",
+      "question_id": "SQ565",
+      "question": "2026年2月份晶茂物流总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月合计发运量为259.844MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "259.844",
+          "shipment_trip_count": 220,
+          "power_missing_count": 58,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 135,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 270,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-020",
+      "question_id": "SQ567",
+      "question": "2026年1月份苏州晶茂物流总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月合计发运量为864.728MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "864.728",
+          "shipment_trip_count": 564,
+          "power_missing_count": 98,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 368,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 736,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-021",
+      "question_id": "SQ569",
+      "question": "2026年2月份苏州晶茂物流总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月合计发运量为259.844MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "259.844",
+          "shipment_trip_count": 220,
+          "power_missing_count": 58,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 135,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 270,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-022",
+      "question_id": "SQ571",
+      "question": "2026年1月份英赋嘉总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月合计发运量为864.728MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "864.728",
+          "shipment_trip_count": 564,
+          "power_missing_count": 98,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 368,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 736,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-023",
+      "question_id": "SQ573",
+      "question": "2026年2月份英赋嘉总发运量是多少MW？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "综合统计类",
+      "expected_query_key": "sys_mw_and_trip_count",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年2月合计发运量为259.844MW。",
+      "expected_columns": [
+        "shipment_mw",
+        "power_missing_count",
+        "pickup_date_missing_count",
+        "strict_scope_task_count",
+        "pickup_date_available_count"
+      ],
+      "expected_rows": [
+        {
+          "shipment_mw": "259.844",
+          "shipment_trip_count": 220,
+          "power_missing_count": 58,
+          "pickup_date_missing_count": 0,
+          "strict_scope_task_count": 135,
+          "year_task_count": 992,
+          "pickup_date_available_count": 992,
+          "region_coverage": {
+            "direct_area_count": 270,
+            "province_fallback_count": 0,
+            "other_count": 0
+          },
+          "year_region_coverage": {
+            "direct_area_count": 992,
+            "province_fallback_count": 0,
+            "other_count": 0
+          }
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-024",
+      "question_id": "SQ308",
+      "question": "2026年1-2月公路运输的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月承运商1-公路运输的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-025",
+      "question_id": "SQ311",
+      "question": "2026年1-2月铁路运输的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月承运商1-铁路运输的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-026",
+      "question_id": "SQ314",
+      "question": "2026年1-2月多式联运运输的总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "运输方式分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月承运商1-多式联运运输的按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-027",
+      "question_id": "SQ453",
+      "question": "2026年1-2月客户华阳总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月客户华阳按当前系统口径统计的总运费为231,692.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "231692.00",
+          "task_count": 19,
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-028",
+      "question_id": "SQ455",
+      "question": "2026年1-2月客户创维客户总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月客户创维客户按当前系统口径统计的总运费为0.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": null,
+          "task_count": 0,
+          "parse_fail_count": null,
+          "price_missing_count": null
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-029",
+      "question_id": "SQ457",
+      "question": "2026年1-2月客户海南创维新能源投资有限公司总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月客户海南创维新能源投资有限公司按当前系统口径统计的总运费为1,108,023.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "1108023.00",
+          "task_count": 83,
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    },
+    {
+      "plan_id": "C2A-PREC-030",
+      "question_id": "SQ459",
+      "question": "2026年1-2月客户广东粤电阳西新能源有限公司总运费是多少？",
+      "source_group": "600",
+      "priority": "P2",
+      "family": "客户/项目分析类",
+      "expected_query_key": "sys_total_fee_by_filters",
+      "standard_answer_source": "当前 logistics_ai 数据快照；由 data-qa 主链路执行并固化 answer_summary、result_table.columns、result_table.rows。",
+      "assertion_scope": "status.code + query_plan.query_key + answer_summary + result_table.columns + result_table.rows 精确快照断言",
+      "assertion_fields": [
+        "status.code",
+        "query_plan.query_key",
+        "answer_summary",
+        "result_table.columns",
+        "result_table.rows"
+      ],
+      "expected_status_code": "OK",
+      "expected_answer_summary": "2026年1月、2月客户广东粤电阳西新能源有限公司按当前系统口径统计的总运费为140,600.00元。",
+      "expected_columns": [
+        "total_fee",
+        "task_count",
+        "parse_fail_count",
+        "price_missing_count"
+      ],
+      "expected_rows": [
+        {
+          "total_fee": "140600.00",
+          "task_count": 4,
+          "parse_fail_count": "0",
+          "price_missing_count": "0"
+        }
+      ]
+    }
+  ]
+}
