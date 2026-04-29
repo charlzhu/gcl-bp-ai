@@ -26,44 +26,28 @@ backend/.env
 *.pyd
 *.so
 
-# Test / coverage
 .mypy_cache/
 .ruff_cache/
 .coverage
 htmlcov/
-
-# Virtualenv
 .venv/
 venv/
-
-# Logs / runtime data
 *.log
 data/logs/
 data/files/history_uploads/
-
-# Local DB
 *.sqlite3
 *.db
-
-# Playwright / browser debug artifacts
 .playwright-cli/
-
-# IDE / agent generated cache
 .qoder/
-
-# Runtime temp outputs
 tmp/
-
-# Backend runtime logs
 backend/data/logs/
-
-# Frontend build / dependencies
 frontend/dist/
 frontend/node_modules/
-
-# Packages / archives
 *.zip
-
-# Local env
 .env.*
 !.env.example
+output/
+output/playwright/
+frontend/tsconfig.tsbuildinfo
+
+

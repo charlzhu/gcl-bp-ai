@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     source_mysql_port: int = 19531
     source_mysql_db: str = "jyjh_db"
     source_mysql_user: str = "jyjhuser_zcc"
-    source_mysql_password: str = "jyjh123!"
+    source_mysql_password: str = ""
     llm_base_url: str = ""
     llm_api_key: str = ""
     llm_model: str = ""
