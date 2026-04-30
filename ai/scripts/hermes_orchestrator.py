@@ -26,7 +26,20 @@ import argparse
 import datetime as dt
 import subprocess
 import sys
+import time
 from pathlib import Path
+from typing import Callable, TypeVar
+
+
+T = TypeVar("T")
+STAGE_ORDER = [
+    "safety_check",
+    "codex_fullstack",
+    "run_tests",
+    "collect_diff",
+    "codex_reviewer",
+    "final_report",
+]
 
 
 def run_cmd(cmd: list[str], cwd: Path, log_file: Path | None = None, check: bool = False) -> int:
@@ -77,6 +90,111 @@ def append_text(path: Path, content: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(content)
+
+
+def timed_stage(name: str, timings: dict[str, float], run_log: Path, action: Callable[[], T]) -> T:
+    """记录单个流水线阶段耗时。
+
+    参数：
+        name：阶段名称，写入 hermes-run.log 并用于 final-acceptance.md 汇总。
+        timings：阶段耗时字典，键为阶段名称，值为秒数。
+        run_log：Hermes 本轮运行日志文件。
+        action：实际要执行的阶段函数。
+
+    返回值：
+        返回 action 的原始返回值，便于调用方继续沿用原有退出码逻辑。
+    """
+    started_at = dt.datetime.now().isoformat(timespec="seconds")
+    append_text(run_log, f"\n[stage:{name}] start={started_at}\n")
+    start = time.perf_counter()
+    try:
+        return action()
+    finally:
+        elapsed = time.perf_counter() - start
+        timings[name] = elapsed
+        append_text(run_log, f"[stage:{name}] elapsed={elapsed:.3f}s\n")
+
+
+def has_code_diff(root: Path) -> bool:
+    """判断本轮是否存在代码或项目事实源 diff。
+
+    参数：
+        root：项目 Git 根目录。
+
+    返回值：
+        存在已跟踪文件 diff 或未跟踪源码文件时返回 True；否则返回 False。
+
+    说明：
+        这里同时检查 git diff 和未跟踪源码文件，避免新增代码文件被漏判。
+        ai/reports、IDE 缓存和 macOS 本地文件不计入判断，防止报告产物影响加速逻辑。
+    """
+    result = subprocess.run(["git", "diff", "--quiet", "--exit-code"], cwd=str(root))
+    if result.returncode != 0:
+        return True
+
+    status = subprocess.run(
+        ["git", "status", "--short", "--untracked-files=all"],
+        cwd=str(root),
+        capture_output=True,
+        text=True,
+    )
+    if status.returncode != 0:
+        return False
+
+    ignored_untracked = (
+        "ai/reports/",
+        ".idea/",
+        ".pytest_cache/",
+        ".playwright-cli/",
+        "__pycache__/",
+    )
+    source_prefixes = (
+        "backend/",
+        "frontend/",
+        "scripts/",
+        "ai/scripts/",
+        "ai/company/",
+        "ai/context/",
+        "ai/roles/",
+        "docs/",
+    )
+    source_files = {"AGENTS.md", "README_WORKSPACE.md"}
+
+    for line in status.stdout.splitlines():
+        if not line.startswith("?? "):
+            continue
+        path = line[3:].strip()
+        if path in {"~", ".DS_Store"} or path.endswith(".pyc"):
+            continue
+        if path.startswith(ignored_untracked) or "__pycache__/" in path:
+            continue
+        if path.startswith(source_prefixes) or path in source_files:
+            return True
+    return False
+
+
+def write_skipped_test_log(report_dir: Path, test_mode: str, reason: str) -> None:
+    """写入跳过测试时的占位测试日志。
+
+    参数：
+        report_dir：本轮报告目录。
+        test_mode：本轮选择的测试模式。
+        reason：跳过 run_tests.sh 的原因。
+
+    返回值：
+        无返回值，直接写入 test.log，保证 final-acceptance.md 仍有可追溯测试材料。
+    """
+    write_text(
+        report_dir / "test.log",
+        "\n".join(
+            [
+                "== Test Runner ==",
+                f"Mode: {test_mode}",
+                f"Skipped: {reason}",
+                "",
+            ]
+        ),
+    )
 
 
 def get_root() -> Path:
@@ -323,6 +441,9 @@ def build_final_acceptance(
     test_exit: int,
     tester_exit: int | None,
     reviewer_exit: int,
+    run_options: dict[str, str],
+    stage_timings: dict[str, float],
+    stage_notes: list[str],
 ) -> str:
     fullstack = read_text(report_dir / "codex-fullstack-result.md", "未找到开发报告。")
     tester = read_text(report_dir / "codex-tester-result.md", "未启用测试验收龙虾。")
@@ -332,6 +453,11 @@ def build_final_acceptance(
 
     acceptance = reviewer_allows_acceptance(reviewer, test_exit)
     tester_cell = "未启用" if tester_exit is None else str(tester_exit)
+    options_rows = "\n".join(f"| {key} | {value} |" for key, value in run_options.items())
+    timing_rows = "\n".join(
+        f"| {stage} | {stage_timings.get(stage, 0.0):.2f}s |" for stage in STAGE_ORDER
+    )
+    notes_text = "\n".join(f"- {note}" for note in stage_notes) if stage_notes else "- 无"
 
     return f"""# {task_id} 最终验收报告
 
@@ -339,7 +465,23 @@ def build_final_acceptance(
 
 {requirement.strip()}
 
-## 二、自动化执行结果
+## 二、本轮使用参数
+
+| 参数 | 值 |
+|---|---|
+{options_rows}
+
+## 三、阶段耗时
+
+| 阶段 | 耗时 |
+|---|---|
+{timing_rows}
+
+## 四、阶段说明
+
+{notes_text}
+
+## 五、自动化执行结果
 
 | 项目 | 结果 |
 |---|---|
@@ -349,43 +491,43 @@ def build_final_acceptance(
 | Codex Reviewer 退出码 | {reviewer_exit} |
 | 是否建议进入人工验收 | {acceptance} |
 
-## 三、Git 状态
+## 六、Git 状态
 
 ```text
 {status}
 ```
 
-## 四、Diff 摘要
+## 七、Diff 摘要
 
 ```text
 {diffstat}
 ```
 
-## 五、开发报告摘要
+## 八、开发报告摘要
 
 ```text
 {fullstack[-6000:]}
 ```
 
-## 六、测试龙虾报告摘要
+## 九、测试龙虾报告摘要
 
 ```text
 {tester[-3000:]}
 ```
 
-## 七、Reviewer 审查结果
+## 十、Reviewer 审查结果
 
 ```text
 {reviewer[-6000:]}
 ```
 
-## 八、Hermes 结论
+## 十一、Hermes 结论
 
 - 本流程不会自动 commit、merge、push 或部署。
 - 如果测试退出码为 0，且 Reviewer 没有“不通过”结论，可以进入人工验收。
 - 如果测试失败或 Reviewer 不通过，请先阅读 `codex-reviewer-result.md` 和 `test.log`。
 
-## 九、建议下一步
+## 十二、建议下一步
 
 1. 查看 `diff.patch`。
 2. 本地运行关键功能。
@@ -393,9 +535,19 @@ def build_final_acceptance(
 """
 
 
-def run_pipeline(mode: str, task_file: str | None, with_tester: bool, skip_codex: bool) -> int:
+def run_pipeline(
+    mode: str,
+    task_file: str | None,
+    with_tester: bool,
+    skip_codex: bool,
+    skip_tests: bool,
+    skip_review: bool,
+    test_mode: str,
+) -> int:
     root = get_root()
     ensure_layout(root)
+    stage_timings: dict[str, float] = {}
+    stage_notes: list[str] = []
 
     missing = check_required_files(root)
     if missing:
@@ -420,16 +572,36 @@ def run_pipeline(mode: str, task_file: str | None, with_tester: bool, skip_codex
     write_text(root / "ai/reports/latest.txt", str(report_dir.relative_to(root)))
 
     run_log = report_dir / "hermes-run.log"
-    append_text(run_log, f"# Hermes run {task_id}\nmode={mode}\nwith_tester={with_tester}\nskip_codex={skip_codex}\n\n")
+    run_options = {
+        "mode": mode,
+        "task": task_file or "ai/inbox/requirement.md",
+        "with_tester": str(with_tester),
+        "skip_codex": str(skip_codex),
+        "skip_tests": str(skip_tests),
+        "skip_review": str(skip_review),
+        "test_mode": test_mode,
+    }
+    append_text(
+        run_log,
+        "# Hermes run {task_id}\n{options}\n\n".format(
+            task_id=task_id,
+            options="\n".join(f"{key}={value}" for key, value in run_options.items()),
+        ),
+    )
 
     print(f"Task ID: {task_id}")
     print(f"Report Dir: {report_dir}")
 
-    safety_code = run_cmd(
-        ["bash", "ai/scripts/safety_check.sh", str(report_dir.relative_to(root))],
-        cwd=root,
-        log_file=run_log,
-        check=False,
+    safety_code = timed_stage(
+        "safety_check",
+        stage_timings,
+        run_log,
+        lambda: run_cmd(
+            ["bash", "ai/scripts/safety_check.sh", str(report_dir.relative_to(root))],
+            cwd=root,
+            log_file=run_log,
+            check=False,
+        ),
     )
     if safety_code != 0 and mode == "safe":
         print("安全检查未通过，safe 模式停止。")
@@ -438,11 +610,13 @@ def run_pipeline(mode: str, task_file: str | None, with_tester: bool, skip_codex
     fullstack_task_path = root / "ai/tasks/running" / f"{task_id}-fullstack.md"
     write_text(fullstack_task_path, build_fullstack_task(root, task_id, requirement, report_dir))
 
-    if skip_codex:
-        fullstack_exit = 0
-        write_text(report_dir / "codex-fullstack-result.md", "skip_codex=true，本轮未调用 Codex 全栈开发。")
-    else:
-        fullstack_exit = run_cmd(
+    def run_fullstack_stage() -> int:
+        """执行或跳过全栈开发阶段。"""
+        if skip_codex:
+            stage_notes.append("codex_fullstack：已按 --skip-codex 跳过。")
+            write_text(report_dir / "codex-fullstack-result.md", "skip_codex=true，本轮未调用 Codex 全栈开发。")
+            return 0
+        return run_cmd(
             [
                 "bash",
                 "ai/scripts/run_codex_worker.sh",
@@ -455,22 +629,45 @@ def run_pipeline(mode: str, task_file: str | None, with_tester: bool, skip_codex
             check=False,
         )
 
-    test_exit = run_cmd(
-        ["bash", "ai/scripts/run_tests.sh", str(report_dir.relative_to(root))],
-        cwd=root,
-        log_file=run_log,
-        check=False,
-    )
+    fullstack_exit = timed_stage("codex_fullstack", stage_timings, run_log, run_fullstack_stage)
+    code_diff_detected = has_code_diff(root)
+    append_text(run_log, f"\ncode_diff_after_codex_fullstack={code_diff_detected}\n")
 
-    run_cmd(
-        ["bash", "ai/scripts/collect_diff.sh", str(report_dir.relative_to(root))],
-        cwd=root,
-        log_file=run_log,
-        check=False,
+    def run_tests_stage() -> int:
+        """根据参数和 diff 状态执行或跳过统一测试脚本。"""
+        if skip_tests:
+            reason = "已按 --skip-tests 跳过 run_tests.sh。"
+            stage_notes.append(f"run_tests：{reason}")
+            write_skipped_test_log(report_dir, test_mode, reason)
+            return 0
+        if not code_diff_detected:
+            reason = "未检测到代码 diff，自动跳过 run_tests.sh。"
+            stage_notes.append(f"run_tests：{reason}")
+            write_skipped_test_log(report_dir, test_mode, reason)
+            return 0
+        return run_cmd(
+            ["bash", "ai/scripts/run_tests.sh", str(report_dir.relative_to(root)), test_mode],
+            cwd=root,
+            log_file=run_log,
+            check=False,
+        )
+
+    test_exit = timed_stage("run_tests", stage_timings, run_log, run_tests_stage)
+
+    timed_stage(
+        "collect_diff",
+        stage_timings,
+        run_log,
+        lambda: run_cmd(
+            ["bash", "ai/scripts/collect_diff.sh", str(report_dir.relative_to(root))],
+            cwd=root,
+            log_file=run_log,
+            check=False,
+        ),
     )
 
     tester_exit: int | None = None
-    if with_tester and not skip_codex:
+    if with_tester and not skip_codex and code_diff_detected and not skip_tests:
         tester_task_path = root / "ai/tasks/running" / f"{task_id}-tester.md"
         write_text(tester_task_path, build_tester_task(root, task_id, requirement, report_dir))
         tester_exit = run_cmd(
@@ -486,14 +683,30 @@ def run_pipeline(mode: str, task_file: str | None, with_tester: bool, skip_codex
             check=False,
         )
 
-    review_task_path = root / "ai/tasks/running" / f"{task_id}-review.md"
-    write_text(review_task_path, build_review_task(root, task_id, requirement, report_dir, with_tester and not skip_codex))
+    def run_reviewer_stage() -> int:
+        """根据参数和 diff 状态执行或跳过 Reviewer。"""
+        if skip_codex:
+            reason = "skip_codex=true，本轮未调用 Codex Reviewer。"
+            stage_notes.append("codex_reviewer：已按 --skip-codex 跳过。")
+            write_text(report_dir / "codex-reviewer-result.md", reason)
+            return 0
+        if skip_review:
+            reason = "skip_review=true，本轮按 --skip-review 跳过 Codex Reviewer。"
+            stage_notes.append("codex_reviewer：已按 --skip-review 跳过。")
+            write_text(report_dir / "codex-reviewer-result.md", reason)
+            return 0
+        if not code_diff_detected:
+            reason = "未检测到代码 diff，本轮自动跳过 Codex Reviewer。"
+            stage_notes.append(f"codex_reviewer：{reason}")
+            write_text(report_dir / "codex-reviewer-result.md", reason)
+            return 0
 
-    if skip_codex:
-        reviewer_exit = 0
-        write_text(report_dir / "codex-reviewer-result.md", "skip_codex=true，本轮未调用 Codex Reviewer。")
-    else:
-        reviewer_exit = run_cmd(
+        review_task_path = root / "ai/tasks/running" / f"{task_id}-review.md"
+        write_text(
+            review_task_path,
+            build_review_task(root, task_id, requirement, report_dir, with_tester and tester_exit is not None),
+        )
+        return run_cmd(
             [
                 "bash",
                 "ai/scripts/run_codex_worker.sh",
@@ -506,6 +719,12 @@ def run_pipeline(mode: str, task_file: str | None, with_tester: bool, skip_codex
             check=False,
         )
 
+    reviewer_exit = timed_stage("codex_reviewer", stage_timings, run_log, run_reviewer_stage)
+
+    # final_report 阶段需要把自身耗时写入报告，因此先写一次再带最终耗时覆盖。
+    append_text(run_log, f"\n[stage:final_report] start={dt.datetime.now().isoformat(timespec='seconds')}\n")
+    final_start = time.perf_counter()
+    stage_timings["final_report"] = 0.0
     final_report = build_final_acceptance(
         task_id=task_id,
         requirement=requirement,
@@ -514,8 +733,26 @@ def run_pipeline(mode: str, task_file: str | None, with_tester: bool, skip_codex
         test_exit=test_exit,
         tester_exit=tester_exit,
         reviewer_exit=reviewer_exit,
+        run_options=run_options,
+        stage_timings=stage_timings,
+        stage_notes=stage_notes,
     )
     write_text(report_dir / "final-acceptance.md", final_report)
+    stage_timings["final_report"] = time.perf_counter() - final_start
+    final_report = build_final_acceptance(
+        task_id=task_id,
+        requirement=requirement,
+        report_dir=report_dir,
+        fullstack_exit=fullstack_exit,
+        test_exit=test_exit,
+        tester_exit=tester_exit,
+        reviewer_exit=reviewer_exit,
+        run_options=run_options,
+        stage_timings=stage_timings,
+        stage_notes=stage_notes,
+    )
+    write_text(report_dir / "final-acceptance.md", final_report)
+    append_text(run_log, f"[stage:final_report] elapsed={stage_timings['final_report']:.3f}s\n")
 
     done_task_path = root / "ai/tasks/done" / f"{task_id}.md"
     write_text(done_task_path, read_text(fullstack_task_path))
@@ -533,6 +770,9 @@ def main() -> int:
     parser.add_argument("--task", default=None, help="可选：指定任务文件，例如 ai/tasks/pending/TASK-001.md")
     parser.add_argument("--with-tester", action="store_true", help="调用 Codex Tester 龙虾做额外测试验收")
     parser.add_argument("--skip-codex", action="store_true", help="只跑脚本链路，不调用 Codex，用于自检")
+    parser.add_argument("--skip-tests", action="store_true", help="跳过 run_tests.sh，加速只收集 diff 和报告的流程")
+    parser.add_argument("--skip-review", action="store_true", help="跳过 Codex Reviewer 审查阶段")
+    parser.add_argument("--test-mode", default="smoke", choices=["smoke", "full"], help="测试模式，默认 smoke，full 才运行全量测试")
     args = parser.parse_args()
 
     if args.command == "run":
@@ -541,6 +781,9 @@ def main() -> int:
             task_file=args.task,
             with_tester=args.with_tester,
             skip_codex=args.skip_codex,
+            skip_tests=args.skip_tests,
+            skip_review=args.skip_review,
+            test_mode=args.test_mode,
         )
     return 0
 

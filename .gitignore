@@ -59,3 +59,8 @@ ai/tasks/running/*.md
 ai/tasks/done/*.md
 ai/tasks/rejected/*.md
 
+*
+!.gitignore
+!README.md
+
+~
