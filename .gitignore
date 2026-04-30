@@ -50,4 +50,12 @@ output/
 output/playwright/
 frontend/tsconfig.tsbuildinfo
 
+# AI runtime artifacts
+ai/reports/*
+!ai/reports/.gitignore
+!ai/reports/README.md
+
+ai/tasks/running/*.md
+ai/tasks/done/*.md
+ai/tasks/rejected/*.md
 
