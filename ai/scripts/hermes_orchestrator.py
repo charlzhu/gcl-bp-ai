@@ -1078,8 +1078,8 @@ def main() -> int:
     parser.add_argument("--until-pass", action="store_true", help="未达标时持续返工，直到 PASS 或触发停止条件")
     parser.add_argument("--repair-on-fail", action="store_true", help="测试失败或 Reviewer 不通过时自动生成返工任务并再次调用 Codex")
     parser.add_argument("--max-repair-rounds", type=int, default=3, help="最大返工轮数，默认 3")
-    # business-import 是显式验收档位；auto 仍只由 select_test_profile.py 自动收敛到 smoke/full。
-    parser.add_argument("--test-mode", default="smoke", choices=["auto", "smoke", "full", "business-import"], help="测试模式，auto 会自动选择 smoke/full，business-import 运行业务导入验收")
+    # business-import / business-oracle 是显式验收档位；auto 仍只由 select_test_profile.py 自动收敛到 smoke/full。
+    parser.add_argument("--test-mode", default="smoke", choices=["auto", "smoke", "full", "business-import", "business-oracle"], help="测试模式，auto 会自动选择 smoke/full，business-import 运行业务导入验收，business-oracle 运行物流 Oracle Engine 验收")
     args = parser.parse_args()
 
     if args.command == "run":

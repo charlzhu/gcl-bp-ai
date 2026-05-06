@@ -41,6 +41,7 @@ const BUSINESS_CHAT_ACTIVE_SESSION_KEY = 'business-chat:active-session'
 const BUSINESS_CHAT_SESSION_EVENT = 'business-chat-sessions-updated'
 const MAX_SESSION_COUNT = 20
 const MAX_MESSAGE_COUNT_PER_SESSION = 80
+let businessChatMessageFallbackSeq = 0
 
 /**
  * 读取智能问答窗口摘要列表。
@@ -254,6 +255,24 @@ export function getBusinessChatSessionEventName() {
  */
 export function buildBusinessChatSessionId() {
   return `business-chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * 生成智能问答消息 ID。
+ *
+ * 说明：
+ *   局域网 HTTP 地址不一定具备安全上下文，不能假设 crypto.randomUUID 始终可用。
+ *
+ * 返回：
+ *   当前浏览器环境可用的消息 ID。
+ */
+export function buildBusinessChatMessageId() {
+  const randomUuid = globalThis.crypto?.randomUUID
+  if (typeof randomUuid === 'function') {
+    return randomUuid.call(globalThis.crypto)
+  }
+  businessChatMessageFallbackSeq = (businessChatMessageFallbackSeq + 1) % 1000000
+  return `business-chat-message-${Date.now()}-${businessChatMessageFallbackSeq}-${Math.random().toString(36).slice(2, 10)}`
 }
 
 /**

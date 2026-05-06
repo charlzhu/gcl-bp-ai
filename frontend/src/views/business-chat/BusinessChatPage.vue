@@ -201,6 +201,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { fetchLogisticsDataQaQuery, type LogisticsDataQaResult } from '@/api/logistics'
 import { askPlanBomQuestion, type PlanBomQaResponse } from '@/api/planBom'
 import {
+  buildBusinessChatMessageId,
   buildBusinessChatSessionTitle,
   ensureBusinessChatSession,
   getActiveBusinessChatSessionId,
@@ -307,7 +308,27 @@ function loadActiveSession() {
 /** 根据关键词选择真实业务接口，只决定路由，不生成业务答案。 */
 function inferDomain(text: string): Exclude<BusinessChatDomain, 'auto'> | null {
   const normalized = text.toLowerCase()
-  const bomKeywords = ['bom', '订单', '物料', '玻璃', '焊带', '汇流条', '接线盒', '线盒', '间隙贴膜', '版本', '电池片']
+  const bomKeywords = [
+    'bom',
+    'bill of materials',
+    'billofmaterials',
+    '订单',
+    '物料',
+    '物料描述',
+    '材料规格',
+    '核心材料',
+    '玻璃',
+    '焊带',
+    '汇流条',
+    '接线盒',
+    '线盒',
+    '间隙贴膜',
+    '版本',
+    '电池片',
+    'nt10',
+    'nt12',
+    'gdf',
+  ]
   const logisticsKeywords = [
     '物流',
     '运费',
@@ -368,6 +389,23 @@ function inferDomain(text: string): Exclude<BusinessChatDomain, 'auto'> | null {
   return null
 }
 
+/**
+ * 合并用户手动选择和问题文本识别结果。
+ *
+ * 参数：
+ *   selectedDomain: 当前会话选择的业务域；
+ *   text: 用户输入的问题文本。
+ *
+ * 返回：
+ *   实际调用的业务域；当手动选择和明显业务关键词冲突时按文本纠偏。
+ */
+function resolveQuestionDomain(selectedDomain: BusinessChatDomain, text: string): Exclude<BusinessChatDomain, 'auto'> | null {
+  const inferredDomain = inferDomain(text)
+  if (selectedDomain === 'auto') return inferredDomain
+  if (inferredDomain && inferredDomain !== selectedDomain) return inferredDomain
+  return selectedDomain
+}
+
 /** 推荐问题只填入输入框，不写死业务结果。 */
 function useExample(item: (typeof examples)[number]) {
   domainMode.value = item.mode
@@ -386,7 +424,7 @@ async function submitQuestion(input?: string) {
 
   const sessionId = activeSession.value.id
   const selectedDomain = activeSession.value.domain
-  const resolvedDomain = selectedDomain === 'auto' ? inferDomain(text) : selectedDomain
+  const resolvedDomain = resolveQuestionDomain(selectedDomain, text)
   const userMessage = buildMessage({
     role: 'user',
     content: text,
@@ -451,7 +489,15 @@ async function submitQuestion(input?: string) {
   }
 }
 
-/** 构造标准消息。 */
+/**
+ * 构造标准消息。
+ *
+ * 参数：
+ *   input: 消息角色、内容、业务域、状态、展示数据和错误信息。
+ *
+ * 返回：
+ *   可写入当前会话窗口的标准消息对象。
+ */
 function buildMessage(input: {
   role: BusinessChatMessage['role']
   content: string
@@ -463,7 +509,7 @@ function buildMessage(input: {
   error?: string
 }): BusinessChatMessage {
   return {
-    id: crypto.randomUUID(),
+    id: buildBusinessChatMessageId(),
     role: input.role,
     content: input.content,
     domain: input.domain,

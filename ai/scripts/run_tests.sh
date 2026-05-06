@@ -113,6 +113,19 @@ elif [ "$TEST_MODE" = "business-import" ]; then
   # 自测模式动态生成最小 docx，并产出 raw_questions / normalized_cases / 分类报告。
   run_step "Business acceptance import self test" "python scripts/business_acceptance_import_questions.py --self-test --output-dir '$REPORT_DIR/business_acceptance'"
 
+elif [ "$TEST_MODE" = "business-oracle" ]; then
+  echo "" | tee -a "$LOG_FILE"
+  echo "== Running business acceptance oracle checks ==" | tee -a "$LOG_FILE"
+
+  # P2.1 只检查 business_acceptance Oracle 工具层，不触碰后端 service、数据库或真实 Web E2E。
+  run_step "Business acceptance oracle Python compile check" "python -m compileall -q scripts/business_acceptance_importer.py scripts/business_acceptance_import_questions.py scripts/business_acceptance_oracle_engine.py tests/business_acceptance"
+
+  # 使用 unittest 覆盖物流年份到 Excel/MySQL 的数据源路由，以及 oracle_status 候选转换。
+  run_step "Business acceptance oracle unit tests" "PYTHONPATH=. python -m unittest discover -s tests/business_acceptance/oracle -p 'test_*.py'"
+
+  # 自测模式生成 oracle_cases.json 和 oracle_engine_report.md，验证 normalized_cases 后处理链路可运行。
+  run_step "Business acceptance oracle self test" "python scripts/business_acceptance_oracle_engine.py --self-test --output-dir '$REPORT_DIR/business_oracle'"
+
 elif [ "$TEST_MODE" = "full" ]; then
   echo "" | tee -a "$LOG_FILE"
   echo "== Running full checks ==" | tee -a "$LOG_FILE"
@@ -145,7 +158,7 @@ elif [ "$TEST_MODE" = "full" ]; then
 
 else
   echo "ERROR: Unknown TEST_MODE: $TEST_MODE" | tee -a "$LOG_FILE"
-  echo "Allowed modes: smoke, full, auto, business-import" | tee -a "$LOG_FILE"
+  echo "Allowed modes: smoke, full, auto, business-import, business-oracle" | tee -a "$LOG_FILE"
   exit 9
 fi
 
