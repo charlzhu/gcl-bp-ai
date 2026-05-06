@@ -169,6 +169,13 @@ class LogisticsSlotExtractor:
 
         compact = self.compact(question)
         years: list[int] = []
+        for match in re.finditer(r"(?P<start>20(?:23|24|25|26))年?(?:到|至|-|—|~)(?P<end>20(?:23|24|25|26))年?", compact):
+            start_year = int(match.group("start"))
+            end_year = int(match.group("end"))
+            if start_year <= end_year:
+                for year in range(start_year, end_year + 1):
+                    if year not in years:
+                        years.append(year)
         for match in re.finditer(r"(?P<year>\d{2,4})年", compact):
             year = self._resolve_year_token(match.group("year"))
             if year and year not in years:

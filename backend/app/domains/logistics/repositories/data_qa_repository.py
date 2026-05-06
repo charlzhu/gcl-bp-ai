@@ -486,8 +486,8 @@ class LogisticsDataQaRepository:
         params: dict[str, Any] = {"year": year}
         if months:
             month_placeholders = ", ".join(str(int(month)) for month in months)
-            filters.append(f"biz_month IN ({month_placeholders})")
-            denominator_filters.append(f"biz_month IN ({month_placeholders})")
+            filters.append(f"MONTH(biz_date) IN ({month_placeholders})")
+            denominator_filters.append(f"MONTH(biz_date) IN ({month_placeholders})")
         if region_name:
             filters.append("region_name = :region_name")
             denominator_filters.append("region_name = :region_name")
@@ -755,13 +755,15 @@ class LogisticsDataQaRepository:
         month_rows = self.db.execute(
             text(
                 f"""
-                SELECT biz_year, biz_month, COUNT(*) AS record_count
-                FROM dwd_logistics_hist_shipment_detail
-                WHERE biz_year IN ({year_sql})
-                  AND {mode_filter}
-                GROUP BY biz_year, biz_month
-                ORDER BY record_count DESC, biz_year ASC, biz_month ASC
-                LIMIT 10
+                    SELECT
+                        MONTH(biz_date) AS biz_month,
+                        COUNT(*) AS record_count
+                    FROM dwd_logistics_hist_shipment_detail
+                    WHERE biz_year IN ({year_sql})
+                      AND {mode_filter}
+                    GROUP BY MONTH(biz_date)
+                    ORDER BY record_count DESC, biz_month ASC
+                    LIMIT 10
                 """
             ),
             params,
@@ -868,7 +870,7 @@ class LogisticsDataQaRepository:
         参数：
             year: 历史年份。
             quarter: Q1-Q4。
-            metric: total_fee 或 unit_fee_per_watt。
+            metric: shipment_mw、total_fee 或 unit_fee_per_watt。
 
         返回：
             按区域排序的季度指标表。
@@ -881,11 +883,12 @@ class LogisticsDataQaRepository:
             "Q4": (10, 11, 12),
         }[quarter]
         month_sql = ", ".join(str(month) for month in quarter_months)
-        metric_sql = (
-            "ROUND(SUM(total_fee), 0) AS total_fee"
-            if metric == "total_fee"
-            else "ROUND(SUM(total_fee) / NULLIF(SUM(actual_watt), 0), 8) AS unit_fee_per_watt"
-        )
+        if metric == "shipment_mw":
+            metric_sql = "ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw"
+        elif metric == "total_fee":
+            metric_sql = "ROUND(SUM(total_fee), 0) AS total_fee"
+        else:
+            metric_sql = "ROUND(SUM(total_fee) / NULLIF(SUM(actual_watt), 0), 8) AS unit_fee_per_watt"
         rows = self.db.execute(
             text(
                 f"""
@@ -896,7 +899,7 @@ class LogisticsDataQaRepository:
                     COUNT(*) AS row_count
                 FROM dwd_logistics_hist_shipment_detail
                 WHERE biz_year = :year
-                  AND CAST(SUBSTR(biz_month, 6, 2) AS UNSIGNED) IN ({month_sql})
+                  AND MONTH(biz_date) IN ({month_sql})
                   AND region_name IS NOT NULL
                   AND TRIM(region_name) <> ''
                 GROUP BY region_name
@@ -989,15 +992,63 @@ class LogisticsDataQaRepository:
             text(
                 """
                 SELECT
-                    biz_month,
+                    DATE_FORMAT(biz_date, '%Y-%m') AS biz_month,
                     ROUND(SUM(total_fee), 0) AS total_fee
                 FROM dwd_logistics_hist_shipment_detail
                 WHERE biz_year = :year
-                GROUP BY biz_month
+                  AND biz_date IS NOT NULL
+                GROUP BY DATE_FORMAT(biz_date, '%Y-%m')
                 ORDER BY biz_month ASC
                 """
             ),
             {"year": year},
+        ).mappings().all()
+        return [dict(row) for row in rows]
+
+    def hist_monthly_metric_by_filters(
+        self,
+        *,
+        years: list[int],
+        region_name: str | None = None,
+        province: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """按月份汇总历史发运量和总运费。
+
+        参数：
+            years: 需要纳入统计的历史年份列表。
+            region_name: 可选区域过滤条件。
+            province: 可选目的省份过滤条件。
+        返回值：
+            按月份排序的汇总表，包含发运量 MW、总运费和记录数。
+        """
+
+        safe_years = sorted({int(year) for year in years if int(year) in {2023, 2024, 2025}})
+        if not safe_years:
+            return []
+        filters = [f"biz_year IN ({', '.join(str(year) for year in safe_years)})", "biz_date IS NOT NULL"]
+        params: dict[str, Any] = {}
+        if region_name:
+            filters.append("region_name LIKE :region_name")
+            params["region_name"] = f"%{region_name}%"
+        if province:
+            filters.append("province LIKE :province")
+            params["province"] = f"%{province.rstrip('省市区')}%"
+        where_sql = " AND ".join(filters)
+        rows = self.db.execute(
+            text(
+                f"""
+                SELECT
+                    MONTH(biz_date) AS biz_month,
+                    ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw,
+                    ROUND(SUM(total_fee), 0) AS total_fee,
+                    COUNT(*) AS row_count
+                FROM dwd_logistics_hist_shipment_detail
+                WHERE {where_sql}
+                GROUP BY MONTH(biz_date)
+                ORDER BY biz_month ASC
+                """
+            ),
+            params,
         ).mappings().all()
         return [dict(row) for row in rows]
 
@@ -1109,12 +1160,13 @@ class LogisticsDataQaRepository:
                 text(
                     f"""
                     SELECT
-                        biz_month,
+                        DATE_FORMAT(biz_date, '%Y-%m') AS biz_month,
                         ROUND(AVG(total_fee), 0) AS avg_fee,
                         COUNT(*) AS row_count
                     FROM dwd_logistics_hist_shipment_detail
                     WHERE {where_sql}
-                    GROUP BY biz_month
+                      AND biz_date IS NOT NULL
+                    GROUP BY DATE_FORMAT(biz_date, '%Y-%m')
                     ORDER BY biz_month ASC
                     """
                 ),
@@ -1352,7 +1404,7 @@ class LogisticsDataQaRepository:
                     COUNT(*) AS row_count
                 FROM dwd_logistics_hist_shipment_detail
                 WHERE biz_year = :year
-                  AND biz_month IN ({month_placeholders})
+                  AND MONTH(biz_date) IN ({month_placeholders})
                 """
             ),
             {"year": year},
@@ -1560,15 +1612,16 @@ class LogisticsDataQaRepository:
 
         说明：
             1. 单价/车口径固定为 SUM(total_fee) / SUM(shipment_trip_count)；
-            2. 只统计有承运商名称且 shipment_trip_count 大于 0 的记录；
-            3. 未给年份时，默认按 2023–2025 历史累计统计。
+            2. 城市按包含匹配，兼容“合肥/合肥市/合肥庐江”等历史台账写法；
+            3. 只统计有承运商名称且 shipment_trip_count 大于 0 的记录；
+            4. 未给年份时，默认按 2023–2025 历史累计统计。
         """
         filters = [
-            "city = :city",
+            "city LIKE :city",
             "logistics_company_name IS NOT NULL",
             "TRIM(logistics_company_name) <> ''",
         ]
-        params: dict[str, Any] = {"city": city}
+        params: dict[str, Any] = {"city": f"%{city}%"}
         if year is None:
             filters.insert(0, "biz_year IN (2023, 2024, 2025)")
             scope_label = "2023-2025历史累计"

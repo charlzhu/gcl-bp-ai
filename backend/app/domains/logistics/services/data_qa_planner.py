@@ -935,6 +935,7 @@ class LogisticsDataQaPlanner:
         transport_mode = self.slot_extractor.extract_transport_mode(compact)
         carrier_name = self._extract_historical_carrier_name(compact)
         procurement_type = self._extract_procurement_type(compact)
+        monthly_breakdown = self._is_monthly_breakdown_request(compact)
         if (
             company_name
             and (
@@ -964,6 +965,24 @@ class LogisticsDataQaPlanner:
                 ],
                 clarification_missing_slots=["历史业务场景字段口径", "历史数据映射规则"],
                 clarification_reason="历史台账缺少稳定场景字段，不能把场景词当承运商过滤到 0。",
+            )
+
+        if (
+            years
+            and all(item in {2023, 2024, 2025} for item in years)
+            and monthly_breakdown
+            and (region or province)
+            and (self._is_total_fee_question(compact) or self._is_mw_question(compact))
+            and not any(keyword in compact for keyword in ("平均", "均价", "单价"))
+        ):
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="hist_monthly_metric_by_filters",
+                metrics=["shipment_mw", "total_fee"],
+                dimensions=["biz_month"],
+                filters={"years": years, "region_name": region, "province": province},
+                group_by=["biz_month"],
+                sort=[{"field": "biz_month", "direction": "asc"}],
             )
 
         # 历史承运商简称题族：如“2023年晶茂物流全年总发运量/总运输费用/单瓦运输成本/承运车次”。
@@ -1033,6 +1052,17 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "quarter": quarter, "metric": metric},
                 group_by=["region_name"],
                 sort=[{"field": metric, "direction": "desc"}],
+            )
+
+        if year in {2023, 2024, 2025} and quarter and "各区域" in compact and self._is_mw_question(compact):
+            return LogisticsDataQaPlan(
+                intent="ranking",
+                query_key="hist_quarter_region_metric",
+                metrics=["shipment_mw"],
+                dimensions=["region_name"],
+                filters={"year": year, "quarter": quarter, "metric": "shipment_mw"},
+                group_by=["region_name"],
+                sort=[{"field": "shipment_mw", "direction": "desc"}],
             )
 
         product_spec = self._extract_product_spec(compact)

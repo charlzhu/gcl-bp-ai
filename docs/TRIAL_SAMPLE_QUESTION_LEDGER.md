@@ -1,6 +1,6 @@
 # TRIAL_SAMPLE_QUESTION_LEDGER
 
-- 正式样例题文件：`物流和 bom样例题.docx`
+- 正式样例题文件：`/Users/zhuchangchao/Downloads/物流和 bom样例题.docx`
 - 文件类型：`.docx`
 - 有效编号问题总数：1391
 - 重点题数量：499

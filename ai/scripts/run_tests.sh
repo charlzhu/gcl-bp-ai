@@ -126,6 +126,19 @@ elif [ "$TEST_MODE" = "business-oracle" ]; then
   # 自测模式生成 oracle_cases.json 和 oracle_engine_report.md，验证 normalized_cases 后处理链路可运行。
   run_step "Business acceptance oracle self test" "python scripts/business_acceptance_oracle_engine.py --self-test --output-dir '$REPORT_DIR/business_oracle'"
 
+elif [ "$TEST_MODE" = "business-oracle-excel" ]; then
+  echo "" | tee -a "$LOG_FILE"
+  echo "== Running business acceptance oracle excel checks ==" | tee -a "$LOG_FILE"
+
+  # P2.2 只检查 business_acceptance Oracle Excel 工具层，不触碰后端 service、数据库或真实 Web E2E。
+  run_step "Business acceptance oracle excel Python compile check" "python -m compileall -q scripts/business_acceptance_importer.py scripts/business_acceptance_import_questions.py scripts/business_acceptance_oracle_engine.py tests/business_acceptance"
+
+  # 使用 unittest 覆盖 Excel loader、字段映射、月度运量、月度运费和未支持指标状态。
+  run_step "Business acceptance oracle excel unit tests" "PYTHONPATH=. python -m unittest discover -s tests/business_acceptance/oracle -p 'test_*.py'"
+
+  # 自测模式生成脱敏 Excel fixture，并产出带 expected_result 的 oracle_cases.json。
+  run_step "Business acceptance oracle excel self test" "python scripts/business_acceptance_oracle_engine.py --self-test --with-excel-fixture --output-dir '$REPORT_DIR/business_oracle_excel'"
+
 elif [ "$TEST_MODE" = "full" ]; then
   echo "" | tee -a "$LOG_FILE"
   echo "== Running full checks ==" | tee -a "$LOG_FILE"
@@ -158,7 +171,7 @@ elif [ "$TEST_MODE" = "full" ]; then
 
 else
   echo "ERROR: Unknown TEST_MODE: $TEST_MODE" | tee -a "$LOG_FILE"
-  echo "Allowed modes: smoke, full, auto, business-import, business-oracle" | tee -a "$LOG_FILE"
+  echo "Allowed modes: smoke, full, auto, business-import, business-oracle, business-oracle-excel" | tee -a "$LOG_FILE"
   exit 9
 fi
 

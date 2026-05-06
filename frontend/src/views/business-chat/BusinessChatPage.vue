@@ -358,6 +358,9 @@ function inferDomain(text: string): Exclude<BusinessChatDomain, 'auto'> | null {
     '车型',
     '单价/车',
     '平均单价',
+    '均价',
+    '单瓦价',
+    '目的地',
     '采购方式',
     '经营计划',
     '辅料送样',
@@ -769,11 +772,16 @@ function extractChartValues(chart: UnifiedChart): ChartValue[] {
 }
 
 const columnNameMap: Record<string, string> = {
+  dimension_value: '维度',
+  metric: '指标',
   city: '城市',
   province: '省份',
+  address: '地址',
   year: '年份',
+  biz_year: '年份',
   month: '月份',
   biz_month: '月份',
+  scope_label: '统计范围',
   customer: '客户',
   customer_name: '客户',
   total_fee: '总运费',
@@ -783,9 +791,13 @@ const columnNameMap: Record<string, string> = {
   record_count: '记录数',
   total_record_count: '全部记录数',
   record_share_pct: '占比',
+  category: '类别',
+  item: '项目',
+  shipment_count: '发运件数',
   shipment_watt: '发运量',
   shipment_mw: '发运量',
   shipment_share_pct: '占比',
+  region_name: '区域',
   transport_mode: '运输方式',
   procurement_type: '采购方式',
   task_share_pct: '任务占比',
@@ -797,6 +809,9 @@ const columnNameMap: Record<string, string> = {
   carrier_name: '承运商',
   company_name: '承运商',
   avg_fee_per_trip: '平均单价/车',
+  avg_fee: '平均运费',
+  max_fee: '最高运费',
+  min_fee: '最低运费',
   shipment_trip_count: '车次',
   unit_price_per_vehicle: '单价/车',
   fee_per_watt: '元/瓦',
@@ -807,7 +822,19 @@ const columnNameMap: Record<string, string> = {
   extra_fee_ratio: '额外费用占比',
   extra_fee_share_pct: '额外费用占比',
   total_fee_amount: '总费用',
+  total_fee_share_pct: '运费占比',
+  denominator_total_fee: '口径总运费',
   origin_place_count: '始发地数量',
+  matched_spec_count: '命中规格数',
+  plan_qty_total: '计划发运件数',
+  actual_qty_total: '实际发运件数',
+  deviation_rate: '偏差率',
+  detail_count: '明细条数',
+  pickup_date_available_count: '有提货日期记录数',
+  pickup_date_missing_count: '缺少提货日期记录数',
+  power_missing_count: '缺少功率记录数',
+  strict_scope_task_count: '严格口径任务数',
+  year_task_count: '年度任务数',
   order_no: '订单号',
   order_name: '订单名称',
   material_category: '材料类别',
@@ -832,9 +859,30 @@ const columnNameMap: Record<string, string> = {
 }
 
 function localizeColumnName(column: string, index = 0) {
+  const normalizedColumn = normalizeColumnKey(column)
+  if (columnNameMap[normalizedColumn]) return columnNameMap[normalizedColumn]
   if (columnNameMap[column]) return columnNameMap[column]
+  const syntheticCountLabel = localizeSyntheticCountLabel(normalizedColumn)
+  if (syntheticCountLabel) return syntheticCountLabel
   if (/^[\u4e00-\u9fa5A-Za-z0-9/（）() -]+$/.test(column) && !/[a-zA-Z_]/.test(column)) return column
-  return `列${index + 1}`
+  return `指标${index + 1}`
+}
+
+/** 统一技术字段写法，兼容后端 card label 中的空格形式。 */
+function normalizeColumnKey(column: string) {
+  return String(column || '')
+    .trim()
+    .replace(/[\s-]+/g, '_')
+    .replace(/_+/g, '_')
+    .toLowerCase()
+}
+
+/** 处理后端表达层自动生成的“维度字段 + 数”指标卡标签。 */
+function localizeSyntheticCountLabel(column: string) {
+  const matched = column.match(/^(.+)数$/)
+  if (!matched) return ''
+  const baseLabel = columnNameMap[matched[1]]
+  return baseLabel ? `${baseLabel}数量` : ''
 }
 
 function localizeCards(cards: UnifiedResult['cards']) {

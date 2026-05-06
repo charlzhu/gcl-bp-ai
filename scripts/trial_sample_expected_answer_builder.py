@@ -323,7 +323,7 @@ def _customer_filter(question: str) -> str | None:
         customer = re.sub(r"\d{2,4}年", "", customer)
         customer = customer.replace("全年", "").replace("已发出", "").replace("总计", "")
         customer = customer.replace("发货的", "").replace("发货", "").replace("项目", "")
-        customer = re.sub(r"客户$", "", customer).strip(" ：:，,。？！?")
+        customer = re.sub(r"客户$", "", customer).strip(" ：:，,。？！?").rstrip("的")
         if customer:
             return customer
     if "华润新能源" in question and "皮山" in question:
@@ -363,7 +363,8 @@ def _city_filter(question: str) -> str | None:
     matched = re.search(r"(?:发往|发)([\u4e00-\u9fa5]{2,10})(?:的)?(?:平均|总|累计|全年|每车|运费|运输费用|发运量)", compact)
     if matched:
         city = re.sub(r"(的)?(平均|总|累计|全年|每车).*$", "", matched.group(1)).replace("市", "").replace("省", "").strip()
-        if city and city not in PROVINCES and city not in REGIONS:
+        # “发运的总费用/发运量”不是目的城市表达；避免把“运的”识别成城市过滤条件。
+        if city and not city.startswith("运") and city not in PROVINCES and city not in REGIONS:
             return city
     return None
 
@@ -493,6 +494,8 @@ def _is_complex_report_question(question: str) -> bool:
         "季度经营",
         "月报表",
         "同一张明细汇总表",
+        "明细加汇总",
+        "发运明细",
         "热力表",
         "交叉表",
         "矩阵表",
@@ -1055,7 +1058,9 @@ def _build_hist_expected(db, item: dict[str, Any], years: list[int], months: lis
         filters.append("required_vehicle_type LIKE :vehicle_type")
         params["vehicle_type"] = f"%{vehicle_type}%"
         dims = [dimension for dimension in dims if dimension[0] != "required_vehicle_type"]
-    city = _city_filter(question)
+    # 已有省份或区域过滤时，不再叠加宽泛城市抽取，避免“江苏省历史发运的总费用”
+    # 被误识别出“运的”等非城市片段。
+    city = None if (province or region) else _city_filter(question)
     if city:
         filters.append("city LIKE :city")
         params["city"] = f"%{city}%"

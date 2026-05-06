@@ -821,16 +821,36 @@ class LogisticsDataQaService:
             )
             rows = [
                 {
-                    "transport_mode": data["transport_mode"],
+                    "category": "总体",
+                    "item": f"{data['transport_mode']}记录",
                     "record_count": data["record_count"],
-                    "total_record_count": data["total_record_count"],
                     "record_share_pct": data["record_share_pct"],
                 }
             ]
+            rows.extend(
+                {
+                    "category": "省份",
+                    "item": row.get("province"),
+                    "record_count": row.get("record_count"),
+                    "record_share_pct": None,
+                }
+                for row in data.get("top_provinces", [])
+                if row.get("province")
+            )
+            rows.extend(
+                {
+                    "category": "月份",
+                    "item": row.get("biz_month"),
+                    "record_count": row.get("record_count"),
+                    "record_share_pct": None,
+                }
+                for row in data.get("top_months", [])
+                if row.get("biz_month") is not None
+            )
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
-                table_columns=["transport_mode", "record_count", "total_record_count", "record_share_pct"],
+                table_columns=["category", "item", "record_count", "record_share_pct"],
                 table_rows=rows,
                 calculation_logic=[
                     "发运记录数按历史台账行数 COUNT(*) 统计。",
@@ -900,16 +920,24 @@ class LogisticsDataQaService:
                 quarter=filters["quarter"],
                 metric=filters["metric"],
             )
-            metric_label = "单瓦运输成本" if filters["metric"] == "unit_fee_per_watt" else "运费"
+            metric_label = {
+                "shipment_mw": "发运量",
+                "unit_fee_per_watt": "单瓦运输成本",
+                "total_fee": "运费",
+            }.get(filters["metric"], "指标")
             summary = f"{filters['year']}年{filters['quarter']}各区域{metric_label}已按区域排序返回。"
-            table_columns = ["region_name", filters["metric"], "shipment_mw", "row_count"]
+            table_columns = (
+                ["region_name", "shipment_mw", "row_count"]
+                if filters["metric"] == "shipment_mw"
+                else ["region_name", filters["metric"], "shipment_mw", "row_count"]
+            )
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
                 table_columns=table_columns,
                 table_rows=data,
                 calculation_logic=[
-                    "季度口径按 biz_month 映射 Q1-Q4。",
+                    "季度口径按发货日期月份映射 Q1-Q4。",
                     "运费按 total_fee 汇总；单瓦运输成本按 SUM(total_fee) / SUM(actual_watt) 计算。",
                     "结果按指标从高到低排序。",
                 ],
@@ -1037,6 +1065,31 @@ class LogisticsDataQaService:
                 table_columns=["biz_month", "total_fee"],
                 table_rows=data,
                 calculation_logic=["月度运费按历史台账 total_fee 汇总，并按 biz_month 升序返回。"],
+                data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+                warnings=warnings,
+            )
+
+        if plan.query_key == "hist_monthly_metric_by_filters":
+            data = self.repository.hist_monthly_metric_by_filters(
+                years=filters["years"],
+                region_name=filters.get("region_name"),
+                province=filters.get("province"),
+            )
+            scope_parts = [f"{min(filters['years'])}-{max(filters['years'])}年"]
+            if filters.get("region_name"):
+                scope_parts.append(f"{filters['region_name']}区域")
+            if filters.get("province"):
+                scope_parts.append(f"{filters['province']}省")
+            summary = f"{''.join(scope_parts)}按月份汇总的发运量和总费用已返回。"
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=["biz_month", "shipment_mw", "total_fee", "row_count"],
+                table_rows=data,
+                calculation_logic=[
+                    "月份按发货日期月份 MONTH(biz_date) 统计，跨年题按同月份合并汇总。",
+                    "发运量按 SUM(actual_watt) / 1,000,000 计算；总费用按 SUM(total_fee) 计算。",
+                ],
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
                 warnings=warnings,
             )

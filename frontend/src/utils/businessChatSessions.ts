@@ -41,6 +41,7 @@ const BUSINESS_CHAT_ACTIVE_SESSION_KEY = 'business-chat:active-session'
 const BUSINESS_CHAT_SESSION_EVENT = 'business-chat-sessions-updated'
 const MAX_SESSION_COUNT = 20
 const MAX_MESSAGE_COUNT_PER_SESSION = 80
+const FALLBACK_SESSION_COUNT_ON_QUOTA = 6
 let businessChatMessageFallbackSeq = 0
 
 /**
@@ -92,9 +93,10 @@ export function getBusinessChatSession(sessionId: string): BusinessChatSession |
 export function saveBusinessChatSession(session: BusinessChatSession): BusinessChatSession | null {
   const normalized = normalizeSession(session)
   if (!normalized) return null
-  localStorage.setItem(`${BUSINESS_CHAT_SESSION_DATA_PREFIX}${normalized.id}`, JSON.stringify(normalized))
   upsertSessionSummary(normalized)
   trimBusinessChatSessions()
+  const saved = persistBusinessChatSessionData(normalized)
+  if (!saved) return null
   emitBusinessChatSessionUpdated()
   return normalized
 }
@@ -338,11 +340,14 @@ function upsertSessionSummary(session: BusinessChatSession) {
 /**
  * 控制本地窗口数量，避免 localStorage 无限增长。
  */
-function trimBusinessChatSessions() {
+function trimBusinessChatSessions(maxCount = MAX_SESSION_COUNT, preserveSessionId = '') {
   const summaries = listBusinessChatSessions()
-  if (summaries.length <= MAX_SESSION_COUNT) return
-  const kept = summaries.slice(0, MAX_SESSION_COUNT)
-  const removed = summaries.slice(MAX_SESSION_COUNT)
+  if (summaries.length <= maxCount) return
+  const preserved = preserveSessionId ? summaries.filter((item) => item.id === preserveSessionId) : []
+  const candidates = summaries.filter((item) => item.id !== preserveSessionId)
+  const kept = [...preserved, ...candidates].slice(0, maxCount)
+  const keptIds = new Set(kept.map((item) => item.id))
+  const removed = summaries.filter((item) => !keptIds.has(item.id))
   removed.forEach((item) => localStorage.removeItem(`${BUSINESS_CHAT_SESSION_DATA_PREFIX}${item.id}`))
   localStorage.setItem(BUSINESS_CHAT_SESSION_LIST_KEY, JSON.stringify(kept))
 }
@@ -355,7 +360,7 @@ function normalizeSession(value: unknown): BusinessChatSession | null {
   const raw = value as Record<string, any>
   if (typeof raw.id !== 'string' || typeof raw.title !== 'string') return null
   const messages = Array.isArray(raw.messages)
-    ? raw.messages.filter(isMessage).slice(-MAX_MESSAGE_COUNT_PER_SESSION)
+    ? raw.messages.map(normalizeMessage).filter((item): item is BusinessChatMessage => Boolean(item)).slice(-MAX_MESSAGE_COUNT_PER_SESSION)
     : []
   return {
     id: raw.id,
@@ -367,6 +372,46 @@ function normalizeSession(value: unknown): BusinessChatSession | null {
     isNew: Boolean(raw.isNew) && messages.length === 0,
     isPinned: Boolean(raw.isPinned),
     lastQuestion: typeof raw.lastQuestion === 'string' ? raw.lastQuestion : '',
+  }
+}
+
+/**
+ * 保存会话详情，遇到浏览器配额上限时先清理旧窗口再重试。
+ */
+function persistBusinessChatSessionData(session: BusinessChatSession) {
+  const key = `${BUSINESS_CHAT_SESSION_DATA_PREFIX}${session.id}`
+  const payload = JSON.stringify(session)
+  try {
+    localStorage.setItem(key, payload)
+    return true
+  } catch (_error) {
+    trimBusinessChatSessions(FALLBACK_SESSION_COUNT_ON_QUOTA, session.id)
+    try {
+      localStorage.setItem(key, payload)
+      return true
+    } catch (_retryError) {
+      return false
+    }
+  }
+}
+
+/**
+ * 规范化消息并移除不参与展示的原始接口大对象。
+ */
+function normalizeMessage(value: unknown): BusinessChatMessage | null {
+  if (!isMessage(value)) return null
+  const raw = value as Record<string, any>
+  return {
+    id: raw.id,
+    role: raw.role,
+    content: raw.content,
+    domain: raw.domain,
+    status: typeof raw.status === 'string' ? raw.status : undefined,
+    presentation: raw.presentation && typeof raw.presentation === 'object' && !Array.isArray(raw.presentation) ? raw.presentation : null,
+    createdAt: raw.createdAt,
+    rawResponse: null,
+    loading: Boolean(raw.loading),
+    error: typeof raw.error === 'string' ? raw.error : undefined,
   }
 }
 

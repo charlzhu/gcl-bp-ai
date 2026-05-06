@@ -293,6 +293,11 @@ def build_distribution(items: list[dict[str, Any]], field: str) -> dict[str, int
 def extract_years(question: str) -> list[int]:
     """从中文问题中提取年份。"""
     years = [int(year) for year in re.findall(r"(20\d{2})\s*年?", question)]
+    for start, end in re.findall(r"(20\d{2})\s*年?\s*(?:到|至|-|—|~)\s*(20\d{2})\s*年?", question):
+        start_year = int(start)
+        end_year = int(end)
+        if 2023 <= start_year <= end_year <= 2026:
+            years.extend(range(start_year, end_year + 1))
     # 兼容业务手工输入的“025年”这类多打 0 的年份写法，按 2025 年理解。
     typo_short_years = [2000 + int(year) for year in re.findall(r"(?<!\d)0(2[3-6])\s*年", question)]
     short_years = [2000 + int(year) for year in re.findall(r"(?<!\d)(2[3-6])\s*年", question)]
