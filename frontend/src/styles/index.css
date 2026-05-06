@@ -3,19 +3,99 @@
   background: #ffffff;
   font-family: "Avenir Next", "SF Pro Display", "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", sans-serif;
+
+  /* -------- 品牌色板（绿色系，与协鑫品牌一致）-------- */
+  --brand-green: #2f6e42;
+  --brand-green-strong: #1f4d2d;
+  --brand-green-light: #3f7b50;
+  --brand-green-soft: rgba(47, 110, 66, 0.08);
+  --brand-green-bg: #f0f7f4;
+  --brand-green-border: rgba(47, 110, 66, 0.18);
+
+  /* -------- 语义色 -------- */
+  --success: #2f6e42;
+  --success-bg: #ecfdf3;
+  --success-border: #b7ebc8;
+  --warning: #b45309;
+  --warning-bg: #fffbeb;
+  --warning-border: #fde68a;
+  --danger: #b42318;
+  --danger-bg: #fef3f2;
+  --danger-border: #fecaca;
+  --info: #4b5563;
+  --info-bg: #f9fafb;
+  --info-border: #e5e7eb;
+
+  /* -------- 表面 / 面板 -------- */
   --app-bg: #ffffff;
-  --app-bg-glow: rgba(225, 242, 235, 0.5);
+  --surface-muted: #f7f8fa;
+  --surface-hover: #f3f4f6;
   --panel-bg: rgba(255, 255, 255, 0.9);
-  --panel-border: rgba(128, 144, 255, 0.18);
-  --panel-shadow: 0 22px 50px rgba(50, 68, 149, 0.12);
-  --panel-shadow-soft: 0 10px 30px rgba(58, 76, 154, 0.08);
-  --text-main: #16181d;
-  --text-subtle: #697188;
-  --text-faint: #9198ad;
-  --accent: #7d8cff;
-  --accent-strong: #3b4ef6;
-  --accent-soft: rgba(125, 140, 255, 0.14);
-  --surface-muted: rgba(245, 247, 255, 0.88);
+  --panel-border: #e5e7eb;
+  --panel-shadow: 0 8px 32px rgba(15, 23, 42, 0.08);
+  --panel-shadow-soft: 0 2px 12px rgba(15, 23, 42, 0.04);
+
+  /* -------- 文字 -------- */
+  --text-main: #111827;
+  --text-secondary: #374151;
+  --text-subtle: #6b7280;
+  --text-faint: #9ca3af;
+
+  /* -------- 圆角 -------- */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-pill: 999px;
+}
+
+/* ======== 全局关键帧动画 ======== */
+
+/* 消息入场：从下方微微上移并淡入 */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 通用淡入 */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 加载态三点跳动 */
+@keyframes typingDots {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.35;
+  }
+  30% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+/* 轻微呼吸态（按钮悬停） */
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+/* 侧边滑入（状态标签） */
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 * {
@@ -83,9 +163,105 @@ body,
   align-items: center;
   gap: 8px;
   padding: 8px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(122, 136, 255, 0.14);
+  border: 1px solid var(--brand-green-border);
   color: var(--text-subtle);
   font-size: 12px;
+}
+
+/* ======== 语义状态工具类 ======== */
+
+/* 状态标签通用样式 */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  animation: slideIn 0.3s ease-out;
+  white-space: nowrap;
+}
+
+.status-badge--success {
+  background: var(--success-bg);
+  color: var(--success);
+  border: 1px solid var(--success-border);
+}
+
+.status-badge--warning {
+  background: var(--warning-bg);
+  color: var(--warning);
+  border: 1px solid var(--warning-border);
+}
+
+.status-badge--info {
+  background: var(--info-bg);
+  color: var(--info);
+  border: 1px solid var(--info-border);
+}
+
+.status-badge--danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+}
+
+/* ======== 加载动画容器 ======== */
+.typing-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+}
+
+.typing-indicator span {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand-green-light);
+  animation: typingDots 1.2s ease-in-out infinite;
+}
+
+.typing-indicator span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* ======== 过渡动画工具类 ======== */
+.fade-in {
+  animation: fadeIn 0.4s ease-out;
+}
+
+.fade-in-up {
+  animation: fadeInUp 0.4s ease-out;
+}
+
+/* ======== 滚动条美化（全局） ======== */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border-radius: var(--radius-pill);
+  background: #d1d5db;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
 }

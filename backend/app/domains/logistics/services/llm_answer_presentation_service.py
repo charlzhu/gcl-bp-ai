@@ -242,14 +242,19 @@ class LogisticsLlmAnswerPresentationService:
             display_type=display_type,
             title=title,
             answer=answer or title,
-            highlights=self._build_highlights(result=result, status_code=status_code),
+            highlights=self._build_highlights(
+                result=result,
+                status_code=status_code,
+                answer=answer or title,
+                display_type=display_type,
+            ),
             table_spec=LogisticsDataQaTableSpec(
                 columns=list(result.result_table.columns),
                 rows=list(result.result_table.rows),
             )
             if result.result_table.rows
             else None,
-            cards=self._build_cards(result),
+            cards=self._build_cards(question=question, result=result),
             caveats=self._build_caveats(result),
             debug={
                 "status_code": status_code,
@@ -270,6 +275,7 @@ class LogisticsLlmAnswerPresentationService:
                 reason=result.query_plan.unsupported_reason or result.answer_summary,
                 suggestions=list(result.query_plan.unsupported_suggestions),
             )
+        self._sanitize_presentation(presentation)
         return presentation
 
     def _request_llm_presentation(
@@ -498,6 +504,14 @@ class LogisticsLlmAnswerPresentationService:
                 )
             else:
                 presentation.unsupported_explanation = fallback.unsupported_explanation
+        hygiene_error = self._find_presentation_hygiene_issue(
+            question=question,
+            result=result,
+            presentation=presentation,
+        )
+        if hygiene_error:
+            return fallback, f"llm_{hygiene_error}"
+        self._sanitize_presentation(presentation)
         return presentation, None
 
     def _resolve_display_type(self, *, question: str, result: LogisticsDataQaResult, status_code: str) -> str:
@@ -518,7 +532,7 @@ class LogisticsLlmAnswerPresentationService:
             return "table"
         if requested == "summary_cards":
             return "summary_cards"
-        if len(result.result_table.rows) == 1 and self._build_cards(result):
+        if len(result.result_table.rows) == 1 and self._build_cards(question=question, result=result):
             return "summary_cards"
         if len(result.result_table.rows) > 1:
             return "mixed"
@@ -550,17 +564,37 @@ class LogisticsLlmAnswerPresentationService:
             return "当前查询失败"
         return "查询结果"
 
-    def _build_highlights(self, *, result: LogisticsDataQaResult, status_code: str) -> list[str]:
-        """构建关键结论列表。"""
+    def _build_highlights(
+        self,
+        *,
+        result: LogisticsDataQaResult,
+        status_code: str,
+        answer: str,
+        display_type: str,
+    ) -> list[str]:
+        """构建关键结论列表。
+
+        参数：
+            result: 后端确定性查询结果。
+            status_code: 当前统一状态码。
+            answer: 主回答文本，用于避免标签重复主回答。
+            display_type: 当前展示类型，图表和表格态不再追加泛化行数标签。
+
+        返回：
+            去重后的业务提示列表。成功图表/表格的核心答案保留在 answer、图表和表格中，
+            highlights 只承载额外提醒，避免同一总费用在多个标签里重复展示。
+        """
 
         highlights: list[str] = []
-        if result.answer_summary:
-            highlights.append(result.answer_summary)
-        if status_code == "OK" and result.result_table.rows:
+        if (
+            status_code == "OK"
+            and result.result_table.rows
+            and display_type not in {"line_chart", "bar_chart", "table", "mixed"}
+        ):
             highlights.append(f"本次返回 {len(result.result_table.rows)} 行结果。")
         if result.warnings:
             highlights.extend(result.warnings[:2])
-        return highlights[:4]
+        return self._dedupe_text_items(highlights, base_texts=[answer])[:4]
 
     def _build_caveats(self, result: LogisticsDataQaResult) -> list[str]:
         """构建口径和数据范围提醒。"""
@@ -574,11 +608,27 @@ class LogisticsLlmAnswerPresentationService:
                 caveats.append(scope)
         return caveats[:5]
 
-    def _build_cards(self, result: LogisticsDataQaResult) -> list[LogisticsDataQaPresentationCard]:
-        """从单行或首行结果中生成指标卡。"""
+    def _build_cards(
+        self,
+        *,
+        question: str,
+        result: LogisticsDataQaResult,
+    ) -> list[LogisticsDataQaPresentationCard]:
+        """构建主结论指标卡。
+
+        参数：
+            question: 用户原始问题，用于识别显式图表诉求。
+            result: 后端确定性查询结果。
+
+        返回：
+            指标卡列表。单行结果沿用行内数值；多行月度或维度拆分结果只展示合计、
+            统计颗粒度和明细行数等主结论，不再把第一行明细冒充成总体结论。
+        """
 
         if not result.result_table.rows:
             return []
+        if len(result.result_table.rows) > 1:
+            return self._build_multi_row_cards(question=question, result=result)
         row = result.result_table.rows[0]
         cards: list[LogisticsDataQaPresentationCard] = []
         for column in result.result_table.columns:
@@ -597,6 +647,61 @@ class LogisticsLlmAnswerPresentationService:
                 break
         return cards
 
+    def _build_multi_row_cards(
+        self,
+        *,
+        question: str,
+        result: LogisticsDataQaResult,
+    ) -> list[LogisticsDataQaPresentationCard]:
+        """为多行拆分结果生成总体指标卡。
+
+        参数：
+            question: 用户原始问题。
+            result: 多行结构化查询结果。
+
+        返回：
+            主结论指标卡，不包含任意单月或单维度首行明细。
+        """
+
+        cards: list[LogisticsDataQaPresentationCard] = []
+        x_axis = self._choose_x_axis(result.result_table.columns)
+        y_axis = self._choose_y_axis(result=result, x_axis=x_axis)
+        if y_axis:
+            metric_column = y_axis[0]
+            summary_value = self._extract_summary_metric_value(
+                result.answer_summary,
+                metric_column=metric_column,
+            )
+            if summary_value is not None:
+                cards.append(
+                    LogisticsDataQaPresentationCard(
+                        label=self._aggregate_label(metric_column),
+                        value=summary_value,
+                        unit=self._infer_unit(metric_column),
+                    )
+                )
+        dimension_count = self._count_distinct_dimension_values(
+            rows=result.result_table.rows,
+            x_axis=x_axis,
+        )
+        if dimension_count is not None:
+            cards.append(
+                LogisticsDataQaPresentationCard(
+                    label=self._dimension_count_label(x_axis),
+                    value=dimension_count,
+                    unit=self._dimension_count_unit(x_axis),
+                )
+            )
+        if self._detect_requested_display(question) not in {"line_chart", "bar_chart"}:
+            cards.append(
+                LogisticsDataQaPresentationCard(
+                    label="明细行数",
+                    value=len(result.result_table.rows),
+                    unit="行",
+                )
+            )
+        return cards[:4]
+
     def _build_chart_spec(
         self,
         *,
@@ -611,7 +716,7 @@ class LogisticsLlmAnswerPresentationService:
         if not self._can_build_chart(result):
             return None
         x_axis = self._choose_x_axis(result.result_table.columns)
-        y_axis = self._choose_y_axis(result.result_table.columns, result.result_table.rows, x_axis=x_axis)
+        y_axis = self._choose_y_axis(result=result, x_axis=x_axis)
         if not x_axis or not y_axis:
             return None
         requested = self._detect_requested_display(question)
@@ -632,7 +737,7 @@ class LogisticsLlmAnswerPresentationService:
         ]
         return LogisticsDataQaChartSpec(
             chart_type=chart_type,
-            title="趋势图" if chart_type == "line" else "对比图",
+            title=f"{self._label(y_axis[0])}{'趋势图' if chart_type == 'line' else '对比图'}",
             x_axis=x_axis,
             y_axis=y_axis,
             series=series,
@@ -865,7 +970,7 @@ class LogisticsLlmAnswerPresentationService:
             return False
         if requested == "table" and result.result_table.rows:
             return display_type not in {"table", "mixed"} and fallback.table_spec is not None
-        if requested == "summary_cards" and self._build_cards(result):
+        if requested == "summary_cards" and self._build_cards(question=question, result=result):
             return display_type not in {"summary_cards", "mixed"}
         return False
 
@@ -899,7 +1004,7 @@ class LogisticsLlmAnswerPresentationService:
         if len(result.result_table.rows) < 2:
             return False
         x_axis = self._choose_x_axis(result.result_table.columns)
-        y_axis = self._choose_y_axis(result.result_table.columns, result.result_table.rows, x_axis=x_axis)
+        y_axis = self._choose_y_axis(result=result, x_axis=x_axis)
         return bool(x_axis and y_axis)
 
     def _choose_x_axis(self, columns: list[str]) -> str:
@@ -911,18 +1016,255 @@ class LogisticsLlmAnswerPresentationService:
                 return column
         return columns[0] if columns else ""
 
-    def _choose_y_axis(self, columns: list[str], rows: list[dict[str, Any]], *, x_axis: str) -> list[str]:
-        """选择图表 Y 轴字段。"""
+    def _choose_y_axis(self, *, result: LogisticsDataQaResult, x_axis: str) -> list[str]:
+        """选择图表 Y 轴字段。
 
+        参数：
+            result: 后端确定性查询结果。
+            x_axis: 已选定的 X 轴字段。
+
+        返回：
+            图表主指标字段列表。优先使用 query_plan.metrics 中的业务指标，
+            避免把 task_count、parse_fail_count 等质量辅助字段混进总运费条形图。
+        """
+
+        columns = list(result.result_table.columns)
+        rows = list(result.result_table.rows)
+        numeric_columns = [
+            column
+            for column in columns
+            if column != x_axis and any(self._is_number(row.get(column)) for row in rows)
+        ]
         y_axis: list[str] = []
-        for column in columns:
-            if column == x_axis:
-                continue
-            if any(self._is_number(row.get(column)) for row in rows):
+        for metric in result.query_plan.metrics:
+            if metric in numeric_columns and metric not in y_axis:
+                y_axis.append(metric)
+        if y_axis:
+            return y_axis[:2]
+        business_priority = [
+            "total_fee",
+            "shipment_mw",
+            "shipment_watt",
+            "avg_fee",
+            "avg_fee_per_watt",
+            "unit_fee_per_watt",
+            "fee_per_watt",
+            "signedfor_rate",
+            "extra_fee_amount",
+            "extra_fee",
+            "shipment_trip_count",
+            "trip_count",
+        ]
+        for column in business_priority:
+            if column in numeric_columns and column not in y_axis:
                 y_axis.append(column)
+        if y_axis:
+            return y_axis[:2]
+        for column in numeric_columns:
+            if self._is_quality_or_diagnostic_column(column):
+                continue
+            y_axis.append(column)
             if len(y_axis) >= 2:
                 break
-        return y_axis
+        if y_axis:
+            return y_axis
+        return numeric_columns[:1]
+
+    def _extract_summary_metric_value(self, text: str, *, metric_column: str) -> str | None:
+        """从确定性摘要中提取主指标合计值。
+
+        参数：
+            text: 后端 answer_summary。
+            metric_column: 需要提取的主指标字段。
+
+        返回：
+            字符串数值；未命中时返回 None。该方法只读取已有摘要，不重新计算业务结果。
+        """
+
+        if not text:
+            return None
+        label_patterns = self._metric_summary_patterns(metric_column)
+        for label_pattern in label_patterns:
+            match = re.search(
+                rf"(?:合计|总计)?{label_pattern}(?:为|是|约为)?\s*([0-9][0-9,]*(?:\.\d+)?)",
+                text,
+            )
+            if match:
+                return match.group(1).replace(",", "")
+        return None
+
+    def _metric_summary_patterns(self, metric_column: str) -> list[str]:
+        """返回摘要中可能表达主指标的中文模式。"""
+
+        mapping: dict[str, list[str]] = {
+            "total_fee": ["总运费", "总费用", "运费"],
+            "shipment_mw": ["发运量", "总发运量", "运量"],
+            "shipment_watt": ["发运瓦数", "总瓦数", "运量"],
+            "shipment_trip_count": ["车次", "总车次"],
+            "trip_count": ["车次", "总车次"],
+            "task_count": ["任务数"],
+            "avg_fee": ["平均运费"],
+            "avg_fee_per_watt": ["平均元/瓦", "单瓦成本"],
+            "unit_fee_per_watt": ["平均元/瓦", "单瓦成本"],
+            "signedfor_rate": ["签收率"],
+            "extra_fee_amount": ["额外费用"],
+            "extra_fee": ["额外费用"],
+        }
+        return mapping.get(metric_column, [re.escape(self._label(metric_column))])
+
+    def _aggregate_label(self, metric_column: str) -> str:
+        """生成多行拆分结果的总体指标卡名称。"""
+
+        if metric_column in {"total_fee", "shipment_mw", "shipment_watt", "shipment_trip_count", "trip_count"}:
+            return f"合计{self._label(metric_column)}"
+        return self._label(metric_column)
+
+    def _count_distinct_dimension_values(self, *, rows: list[dict[str, Any]], x_axis: str) -> int | None:
+        """统计 X 轴维度去重数量。"""
+
+        if not rows or not x_axis:
+            return None
+        values = {row.get(x_axis) for row in rows if row.get(x_axis) is not None}
+        return len(values) if values else None
+
+    def _dimension_count_label(self, x_axis: str) -> str:
+        """生成维度数量卡片名称。"""
+
+        if x_axis in {"biz_month", "month", "year_month"}:
+            return "统计月份"
+        return f"{self._label(x_axis)}数"
+
+    def _dimension_count_unit(self, x_axis: str) -> str:
+        """生成维度数量卡片单位。"""
+
+        if x_axis in {"biz_month", "month", "year_month"}:
+            return "个月"
+        return "项"
+
+    def _is_quality_or_diagnostic_column(self, column: str) -> bool:
+        """判断字段是否为质量提示或诊断辅助字段。"""
+
+        normalized = column.lower()
+        return any(
+            marker in normalized
+            for marker in (
+                "missing",
+                "fail",
+                "parse",
+                "error",
+                "warning",
+                "row_count",
+                "record_count",
+                "strict_scope",
+                "available_count",
+            )
+        )
+
+    def _sanitize_presentation(self, presentation: LogisticsDataQaPresentation) -> None:
+        """对最终 presentation 做展示卫生清理。
+
+        参数：
+            presentation: 待输出给前端的展示编排。
+
+        返回：
+            无返回值，直接原地去掉重复文案。
+        """
+
+        presentation.highlights = self._dedupe_text_items(
+            presentation.highlights,
+            base_texts=[presentation.answer, presentation.title],
+        )
+        presentation.caveats = self._dedupe_text_items(presentation.caveats)
+
+    def _find_presentation_hygiene_issue(
+        self,
+        *,
+        question: str,
+        result: LogisticsDataQaResult,
+        presentation: LogisticsDataQaPresentation,
+    ) -> str | None:
+        """识别 LLM 展示候选中的鲁棒性问题。
+
+        参数：
+            question: 用户原始问题。
+            result: 后端确定性查询结果。
+            presentation: LLM 归一化后的展示候选。
+
+        返回：
+            问题编码；没有问题返回 None。调用方据此回落到确定性安全展示。
+        """
+
+        requested = self._detect_requested_display(question)
+        if requested in {"line_chart", "bar_chart"} and self._can_build_chart(result):
+            if not presentation.chart_spec:
+                return "chart_missing"
+            expected_chart_type = "line" if requested == "line_chart" else "bar"
+            if presentation.chart_spec.chart_type != expected_chart_type:
+                return "chart_type_mismatch"
+        if any(self._is_similar_text(item, presentation.answer) for item in presentation.highlights):
+            return "repeated_text"
+        if self._cards_look_like_first_row(cards=presentation.cards, result=result):
+            return "cards_from_first_row"
+        return None
+
+    def _cards_look_like_first_row(
+        self,
+        *,
+        cards: list[LogisticsDataQaPresentationCard],
+        result: LogisticsDataQaResult,
+    ) -> bool:
+        """判断多行结果的指标卡是否直接来自第一行明细。"""
+
+        if len(result.result_table.rows) <= 1 or not cards:
+            return False
+        first_row = result.result_table.rows[0]
+        first_row_tokens = {
+            self._number_token(value)
+            for value in first_row.values()
+            if self._is_number(value)
+        }
+        if not first_row_tokens:
+            return False
+        card_tokens = {
+            self._number_token(card.value)
+            for card in cards
+            if self._is_number(card.value)
+        }
+        if not card_tokens:
+            return False
+        return bool(card_tokens) and card_tokens.issubset(first_row_tokens)
+
+    def _dedupe_text_items(self, items: list[str], *, base_texts: list[str] | None = None) -> list[str]:
+        """按业务展示语义去重文案列表。"""
+
+        result: list[str] = []
+        anchors = [item for item in (base_texts or []) if item]
+        for item in items:
+            if not item:
+                continue
+            if any(self._is_similar_text(item, anchor) for anchor in anchors):
+                continue
+            if any(self._is_similar_text(item, existing) for existing in result):
+                continue
+            result.append(item)
+        return result
+
+    def _is_similar_text(self, left: str, right: str) -> bool:
+        """判断两段展示文案是否重复或高度相似。"""
+
+        left_norm = self._normalize_text_for_dedupe(left)
+        right_norm = self._normalize_text_for_dedupe(right)
+        if not left_norm or not right_norm:
+            return False
+        if left_norm == right_norm:
+            return True
+        shorter, longer = sorted((left_norm, right_norm), key=len)
+        return len(shorter) >= 12 and shorter in longer
+
+    def _normalize_text_for_dedupe(self, text: str) -> str:
+        """归一化展示文案，供去重比较使用。"""
+
+        return re.sub(r"[\s，。,.；;：:、（）()]+", "", text or "").lower()
 
     def _normalize_string_list(self, value: Any) -> list[str]:
         """清洗字符串列表。"""

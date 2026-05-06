@@ -25,6 +25,7 @@
 10. 不在测试失败时宣称完成。
 11. 所有任务结果必须沉淀到 `ai/reports/` 下。
 12. 所有任务必须可回溯、可审查、可回滚。
+13. 启用 `--until-pass` 或 `--repair-on-fail` 时，Hermes 可在未达标后自动生成返工任务，但仍不得自动提交、合并、推送或部署。
 
 ## Git 规则
 
@@ -44,3 +45,10 @@
 - `test.log`
 - `codex-fullstack-result.md`
 - `codex-reviewer-result.md`
+
+启用自动返工后，每一轮结果必须额外沉淀到：
+
+- `ai/reports/<TASK_ID>/rounds/round-1/`
+- `ai/reports/<TASK_ID>/rounds/round-2/`
+
+最终 `final-acceptance.md` 必须展示总轮数、每轮 verdict、最终 verdict、是否达标，以及未达标时的停止原因。

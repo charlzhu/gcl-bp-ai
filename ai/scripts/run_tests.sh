@@ -19,6 +19,25 @@ echo "" | tee -a "$LOG_FILE"
 
 EXIT_CODE=0
 
+if [ "$TEST_MODE" = "auto" ]; then
+  echo "== Auto Test Profile ==" | tee -a "$LOG_FILE"
+  # 自动模式只选择 smoke/full 档位，不直接执行额外测试，避免测试策略和执行混在一起。
+  PROFILE_OUTPUT="$(python ai/scripts/select_test_profile.py 2>>"$LOG_FILE" || true)"
+  RESOLVED_MODE="$(printf "%s\n" "$PROFILE_OUTPUT" | sed -n '1p')"
+  PROFILE_REASON="$(printf "%s\n" "$PROFILE_OUTPUT" | sed -n '2,$p')"
+
+  if [ "$RESOLVED_MODE" != "smoke" ] && [ "$RESOLVED_MODE" != "full" ]; then
+    echo "ERROR: auto 模式未能解析出合法测试档位。" | tee -a "$LOG_FILE"
+    echo "$PROFILE_OUTPUT" | tee -a "$LOG_FILE"
+    exit 9
+  fi
+
+  TEST_MODE="$RESOLVED_MODE"
+  echo "Resolved Mode: $TEST_MODE" | tee -a "$LOG_FILE"
+  echo "Reason: ${PROFILE_REASON:-无}" | tee -a "$LOG_FILE"
+  echo "" | tee -a "$LOG_FILE"
+fi
+
 run_step() {
   local title="$1"
   local cmd="$2"
@@ -78,6 +97,22 @@ if [ "$TEST_MODE" = "smoke" ]; then
     echo "No backend/tests/smoke directory found. Skipped backend smoke pytest." | tee -a "$LOG_FILE"
   fi
 
+elif [ "$TEST_MODE" = "business-import" ]; then
+  echo "" | tee -a "$LOG_FILE"
+  echo "== Running business acceptance import checks ==" | tee -a "$LOG_FILE"
+
+  # 业务问题集导入框架只检查独立脚本和 tests/business_acceptance，不触碰业务 service。
+  run_step "Business acceptance Python compile check" "python -m compileall -q scripts/business_acceptance_importer.py scripts/business_acceptance_import_questions.py tests/business_acceptance"
+
+  # 保留既有样例题验收脚本的轻量语法检查，证明 business_acceptance 不替换 3281 真实网页 E2E 口径。
+  run_step "Existing trial_sample scripts compile check" "python -m compileall -q scripts/trial_sample_question_ledger.py scripts/trial_sample_expected_answer_builder.py scripts/trial_sample_frontend_e2e_eval.py scripts/trial_sample_e2e_batch_runner.py scripts/trial_sample_answer_comparator.py" "optional"
+
+  # 使用标准库 unittest，避免为问题导入框架引入新的测试依赖。
+  run_step "Business acceptance importer unit tests" "PYTHONPATH=. python -m unittest discover -s tests/business_acceptance -p 'test_*.py'"
+
+  # 自测模式动态生成最小 docx，并产出 raw_questions / normalized_cases / 分类报告。
+  run_step "Business acceptance import self test" "python scripts/business_acceptance_import_questions.py --self-test --output-dir '$REPORT_DIR/business_acceptance'"
+
 elif [ "$TEST_MODE" = "full" ]; then
   echo "" | tee -a "$LOG_FILE"
   echo "== Running full checks ==" | tee -a "$LOG_FILE"
@@ -110,7 +145,7 @@ elif [ "$TEST_MODE" = "full" ]; then
 
 else
   echo "ERROR: Unknown TEST_MODE: $TEST_MODE" | tee -a "$LOG_FILE"
-  echo "Allowed modes: smoke, full" | tee -a "$LOG_FILE"
+  echo "Allowed modes: smoke, full, auto, business-import" | tee -a "$LOG_FILE"
   exit 9
 fi
 

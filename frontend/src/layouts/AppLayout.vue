@@ -264,7 +264,9 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 8px 18px;
+  padding: 0 8px 14px;
+  border-bottom: 1px solid #e5e7eb;
+  margin-bottom: 4px;
 }
 
 .brand-logo {
@@ -293,8 +295,10 @@ onBeforeUnmount(() => {
 .menu {
   border-right: none;
   background: transparent;
-  padding-top: 4px;
+  padding-top: 2px;
   flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 :deep(.menu .el-menu-item) {
@@ -333,8 +337,23 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
-:deep(.chat-submenu .el-menu-item) {
-  padding-left: 32px !important;
+:deep(.chat-submenu .el-menu-item.is-active) {
+  background: #e8f0ec;
+  color: var(--brand-green-strong);
+  position: relative;
+}
+
+/* 活跃会话项左侧绿色竖条指示 */
+:deep(.chat-submenu .el-menu-item.is-active::before) {
+  content: '';
+  position: absolute;
+  left: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  border-radius: 2px;
+  background: var(--brand-green);
 }
 
 .chat-new-item {
@@ -377,20 +396,22 @@ onBeforeUnmount(() => {
   min-width: 112px;
   padding: 6px;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   background: #ffffff;
   box-shadow: 0 14px 36px rgba(15, 23, 42, 0.12);
+  animation: fadeInUp 0.15s ease-out both;
 }
 
 .session-context-menu button {
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
-  padding: 8px 10px;
+  padding: 8px 12px;
   color: #374151;
   font-size: 13px;
   text-align: left;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 
 .session-context-menu button:hover {
@@ -407,8 +428,12 @@ onBeforeUnmount(() => {
   gap: 8px;
   width: fit-content;
   margin: 8px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background: var(--success-bg);
   font-size: 12px;
-  color: #6b7280;
+  color: var(--brand-green);
+  font-weight: 500;
 }
 
 .content-shell {
@@ -425,6 +450,8 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   border-bottom: 1px solid #f0f1f3;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
 }
 
 .topbar-title {

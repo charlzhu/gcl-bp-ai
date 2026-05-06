@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Sequence
 
 from sqlalchemy import text
@@ -55,6 +56,105 @@ class LogisticsSyncRepository:
         for table_name, column_name, column_sql in column_specs:
             self._ensure_column(table_name=table_name, column_name=column_name, column_sql=column_sql)
         self.db.commit()
+
+    def ensure_sync_dedup_constraints(self) -> None:
+        """补齐同步去重约束，并清理历史同步批次造成的源主键重复。
+
+        说明：
+            1. 旧版 ODS 唯一键是 `(sync_batch_no, source_id)`，多次同步会留下同一源 ID 的多批快照；
+            2. 当前数据问答链路需要“每个源系统主键只保留最新状态”，否则反连 ODS 时会放大统计结果；
+            3. 这里先按 `source_id` 保留最新技术主键行，再加唯一索引，后续同步会走 upsert 覆盖更新。
+        """
+        unique_index_specs = [
+            ("ods_logistic_company", "uk_ods_company_source_id"),
+            ("ods_logistic_warehouse", "uk_ods_warehouse_source_id"),
+            ("ods_logistic_ship_task", "uk_ods_ship_task_source_id"),
+            ("ods_logistic_ship_product", "uk_ods_ship_product_source_id"),
+            ("ods_logistic_assign_task", "uk_ods_assign_task_source_id"),
+            ("ods_logistic_assign_detail", "uk_ods_assign_detail_source_id"),
+            ("dwd_logistics_ship_task", "uk_dwd_ship_task_source_id"),
+            ("dwd_logistics_ship_product", "uk_dwd_ship_product_source_id"),
+            ("dwd_logistics_assign_task", "uk_dwd_assign_task_source_id"),
+            ("dwd_logistics_assign_detail", "uk_dwd_assign_detail_source_id"),
+        ]
+        for table_name, index_name in unique_index_specs:
+            self._dedupe_by_source_id(table_name)
+            self._ensure_unique_index(table_name=table_name, index_name=index_name, columns=("source_id",))
+        self.db.commit()
+
+    def _dedupe_by_source_id(self, table_name: str) -> None:
+        """按源系统主键清理重复行，保留自增 ID 最大的一条作为最新状态。"""
+        if not self._table_has_columns(table_name, ("id", "source_id")):
+            return
+        self.db.execute(
+            text(
+                f"""
+                DELETE t1 FROM {table_name} t1
+                INNER JOIN {table_name} t2
+                    ON t1.source_id = t2.source_id
+                   AND t1.id < t2.id
+                WHERE t1.source_id IS NOT NULL
+                """
+            )
+        )
+
+    def _ensure_unique_index(self, *, table_name: str, index_name: str, columns: Sequence[str]) -> None:
+        """按信息架构检查并补齐唯一索引，避免重复执行时报错。"""
+        exists = self.db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = :table_name
+                  AND INDEX_NAME = :index_name
+                """
+            ),
+            {"table_name": table_name, "index_name": index_name},
+        ).scalar()
+        if exists:
+            return
+        column_sql = ", ".join(columns)
+        self.db.execute(text(f"ALTER TABLE {table_name} ADD UNIQUE KEY {index_name} ({column_sql})"))
+
+    def _table_has_columns(self, table_name: str, columns: Sequence[str]) -> bool:
+        """判断目标表是否同时存在指定列，兼容不同环境的表结构差异。"""
+        count = self.db.execute(
+            text(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.COLUMNS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = :table_name
+                  AND COLUMN_NAME IN :columns
+                """
+            ),
+            {"table_name": table_name, "columns": tuple(columns)},
+        ).scalar()
+        return int(count or 0) == len(columns)
+
+    def get_latest_local_source_updated_at(self) -> datetime | None:
+        """读取本地 ODS 主链路已同步到的最大源系统更新时间。
+
+        返回：
+            最大 `source_updated_at`。如果本地还没有任何系统同步数据，则返回 None。
+        """
+        return self.db.execute(
+            text(
+                """
+                SELECT MAX(max_updated_at)
+                FROM (
+                    SELECT MAX(source_updated_at) AS max_updated_at FROM ods_logistic_ship_task
+                    UNION ALL
+                    SELECT MAX(source_updated_at) AS max_updated_at FROM ods_logistic_ship_product
+                    UNION ALL
+                    SELECT MAX(source_updated_at) AS max_updated_at FROM ods_logistic_assign_task
+                    UNION ALL
+                    SELECT MAX(source_updated_at) AS max_updated_at FROM ods_logistic_assign_detail
+                ) t
+                """
+            )
+        ).scalar()
 
     def _ensure_column(self, *, table_name: str, column_name: str, column_sql: str) -> None:
         """按当前 MySQL 版本可兼容的方式补齐字段。
@@ -222,7 +322,29 @@ class LogisticsSyncRepository:
             "offset": offset,
         }
         if updated_since:
-            filters.append("update_time >= :updated_since")
+            filters.append(
+                """
+                (
+                    update_time >= :updated_since
+                    OR task_id IN (
+                        SELECT DISTINCT task_id
+                        FROM logistic_ship_product
+                        WHERE update_time >= :updated_since
+                    )
+                    OR task_id IN (
+                        SELECT DISTINCT ship_task_id
+                        FROM logistic_assign_task
+                        WHERE update_time >= :updated_since
+                    )
+                    OR task_id IN (
+                        SELECT DISTINCT at.ship_task_id
+                        FROM logistic_assign_detail d
+                        INNER JOIN logistic_assign_task at ON at.task_id = d.assign_task_id
+                        WHERE d.update_time >= :updated_since
+                    )
+                )
+                """
+            )
             params["updated_since"] = updated_since
         sql = text(
             f"""
@@ -356,6 +478,7 @@ class LogisticsSyncRepository:
                 :sync_batch_no, :source_id, :company_code, :company_name, :base_code, :del_flag, CAST(:raw_json AS JSON), NOW()
             )
             ON DUPLICATE KEY UPDATE
+                sync_batch_no = VALUES(sync_batch_no),
                 company_code = VALUES(company_code),
                 company_name = VALUES(company_name),
                 base_code = VALUES(base_code),
@@ -379,6 +502,7 @@ class LogisticsSyncRepository:
                 :sync_batch_no, :source_id, :warehouse_code, :warehouse_name, :base_code, :del_flag, CAST(:raw_json AS JSON), NOW()
             )
             ON DUPLICATE KEY UPDATE
+                sync_batch_no = VALUES(sync_batch_no),
                 warehouse_code = VALUES(warehouse_code),
                 warehouse_name = VALUES(warehouse_name),
                 base_code = VALUES(base_code),
@@ -412,6 +536,7 @@ class LogisticsSyncRepository:
                 :biz_date, :created_at, :updated_at, CAST(:raw_json AS JSON), NOW()
             )
             ON DUPLICATE KEY UPDATE
+                sync_batch_no = VALUES(sync_batch_no),
                 task_id = VALUES(task_id), company_id = VALUES(company_id), project_name = VALUES(project_name),
                 pickup_date = VALUES(pickup_date), warehouse_id = VALUES(warehouse_id),
                 status = VALUES(status), ship_type = VALUES(ship_type), expand_dept = VALUES(expand_dept),
@@ -446,6 +571,7 @@ class LogisticsSyncRepository:
                 :extra_cost, :base_code, :del_flag, :created_at, :updated_at, CAST(:raw_json AS JSON), NOW()
             )
             ON DUPLICATE KEY UPDATE
+                sync_batch_no = VALUES(sync_batch_no),
                 task_id = VALUES(task_id), product_code = VALUES(product_code), product_spec = VALUES(product_spec),
                 power = VALUES(power), quantity = VALUES(quantity), price = VALUES(price),
                 unit = VALUES(unit), extra_cost = VALUES(extra_cost),
@@ -473,6 +599,7 @@ class LogisticsSyncRepository:
                 :base_code, :del_flag, :created_at, :updated_at, CAST(:raw_json AS JSON), NOW()
             )
             ON DUPLICATE KEY UPDATE
+                sync_batch_no = VALUES(sync_batch_no),
                 task_id = VALUES(task_id), ship_task_id = VALUES(ship_task_id), company_id = VALUES(company_id),
                 warehouse_id = VALUES(warehouse_id), status = VALUES(status), plate_number = VALUES(plate_number),
                 driver_name = VALUES(driver_name), driver_phone = VALUES(driver_phone),
@@ -500,6 +627,7 @@ class LogisticsSyncRepository:
                 :extra_cost, :cost_proof_url, :base_code, :del_flag, :created_at, :updated_at, CAST(:raw_json AS JSON), NOW()
             )
             ON DUPLICATE KEY UPDATE
+                sync_batch_no = VALUES(sync_batch_no),
                 assign_task_id = VALUES(assign_task_id), ship_task_id = VALUES(ship_task_id),
                 product_id = VALUES(product_id), quantity = VALUES(quantity),
                 supplier_price = VALUES(supplier_price), extra_cost = VALUES(extra_cost),
@@ -736,12 +864,87 @@ class LogisticsSyncRepository:
                 WHERE d.sync_batch_no = :sync_batch_no
                   AND COALESCE(d.del_flag, '0') = '0'
                   AND d.assign_task_id IN (SELECT task_id FROM dwd_logistics_assign_task)
+                ON DUPLICATE KEY UPDATE
+                    assign_task_id = VALUES(assign_task_id),
+                    ship_task_id = VALUES(ship_task_id),
+                    product_source_id = VALUES(product_source_id),
+                    quantity = VALUES(quantity),
+                    supplier_price = VALUES(supplier_price),
+                    extra_cost = VALUES(extra_cost),
+                    cost_proof_url = VALUES(cost_proof_url)
                 """
             ),
             {"sync_batch_no": sync_batch_no},
         )
         self.db.commit()
         return self.scalar("SELECT COUNT(*) FROM dwd_logistics_assign_detail")
+
+    def cleanup_dwd_inactive_rows(self, sync_batch_no: str) -> None:
+        """清理本批次源系统已标记删除的数据。
+
+        参数：
+            sync_batch_no: 当前同步批次号。
+
+        业务逻辑：
+            DWD upsert 只写入 `del_flag=0` 的有效数据。若源系统把已有记录改成删除状态，
+            仅靠 upsert 过滤会让旧 DWD 行残留，因此这里按当前批次 ODS 删除标记回收旧行。
+        """
+        params = {"sync_batch_no": sync_batch_no}
+        delete_sqls = [
+            # 发货任务删除时，先删依赖它的派车明细、派车任务和产品，再删主任务。
+            """
+            DELETE ad FROM dwd_logistics_assign_detail ad
+            INNER JOIN ods_logistic_ship_task ost ON ost.task_id = ad.ship_task_id
+            WHERE ost.sync_batch_no = :sync_batch_no
+              AND COALESCE(ost.del_flag, '0') <> '0'
+            """,
+            """
+            DELETE at FROM dwd_logistics_assign_task at
+            INNER JOIN ods_logistic_ship_task ost ON ost.task_id = at.ship_task_id
+            WHERE ost.sync_batch_no = :sync_batch_no
+              AND COALESCE(ost.del_flag, '0') <> '0'
+            """,
+            """
+            DELETE sp FROM dwd_logistics_ship_product sp
+            INNER JOIN ods_logistic_ship_task ost ON ost.task_id = sp.task_id
+            WHERE ost.sync_batch_no = :sync_batch_no
+              AND COALESCE(ost.del_flag, '0') <> '0'
+            """,
+            """
+            DELETE st FROM dwd_logistics_ship_task st
+            INNER JOIN ods_logistic_ship_task ost ON ost.task_id = st.task_id
+            WHERE ost.sync_batch_no = :sync_batch_no
+              AND COALESCE(ost.del_flag, '0') <> '0'
+            """,
+            # 产品、派车任务、派车明细自身删除时，按各自源主键回收。
+            """
+            DELETE sp FROM dwd_logistics_ship_product sp
+            INNER JOIN ods_logistic_ship_product osp ON osp.source_id = sp.source_id
+            WHERE osp.sync_batch_no = :sync_batch_no
+              AND COALESCE(osp.del_flag, '0') <> '0'
+            """,
+            """
+            DELETE ad FROM dwd_logistics_assign_detail ad
+            INNER JOIN ods_logistic_assign_task oat ON oat.task_id = ad.assign_task_id
+            WHERE oat.sync_batch_no = :sync_batch_no
+              AND COALESCE(oat.del_flag, '0') <> '0'
+            """,
+            """
+            DELETE at FROM dwd_logistics_assign_task at
+            INNER JOIN ods_logistic_assign_task oat ON oat.task_id = at.task_id
+            WHERE oat.sync_batch_no = :sync_batch_no
+              AND COALESCE(oat.del_flag, '0') <> '0'
+            """,
+            """
+            DELETE ad FROM dwd_logistics_assign_detail ad
+            INNER JOIN ods_logistic_assign_detail oad ON oad.source_id = ad.source_id
+            WHERE oad.sync_batch_no = :sync_batch_no
+              AND COALESCE(oad.del_flag, '0') <> '0'
+            """,
+        ]
+        for sql in delete_sqls:
+            self.db.execute(text(sql), params)
+        self.db.commit()
 
     def cleanup_dwd_assign_detail_duplicates(self) -> None:
         # 风险：这里依赖目标表存在自增主键 `id`，如果线上表结构不同，需要先调整去重 SQL。

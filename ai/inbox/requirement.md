@@ -1,39 +1,57 @@
-# 需求：优化 Hermes 自动化流水线执行速度
+# 需求：修复 hermes_orchestrator 不支持 business-import test-mode
 
-当前问题：
-执行 `python ai/scripts/hermes_orchestrator.py run --mode safe` 时间较长。
+## 背景
 
-优化目标：
+当前 `bash ai/scripts/run_tests.sh ai/reports/manual business-import` 已经通过，说明 run_tests.sh 已支持 business-import。
 
-1. 给 `hermes_orchestrator.py` 增加参数：
-    - `--skip-tests`
-    - `--skip-review`
-    - `--test-mode smoke`
-    - `--test-mode full`
-2. 默认测试模式改为 smoke。
-3. `run_tests.sh` 默认 smoke 模式，不再默认跑全量 `backend/tests`。
-4. 如果本轮没有代码 diff，则自动跳过测试和 Reviewer。
-5. 在 `hermes-run.log` 中记录每个阶段耗时：
-    - safety_check
-    - codex_fullstack
-    - run_tests
-    - collect_diff
-    - codex_reviewer
-    - final_report
-6. 保持安全规则不变：
-    - 不自动 commit
-    - 不自动 merge
-    - 不自动 push
-    - 不自动部署
-7. 修改后请运行：
-    - `python ai/scripts/hermes_orchestrator.py run --skip-codex`
-    - `bash ai/scripts/run_tests.sh ai/reports/manual smoke`
+但执行：
 
-验收标准：
+python ai/scripts/hermes_orchestrator.py run --mode safe --test-mode business-import --until-pass --repair-on-fail
+--max-repair-rounds 2
 
-1. `--skip-tests` 时不运行 `run_tests.sh`。
-2. `--skip-review` 时不调用 Codex Reviewer。
-3. `--test-mode smoke` 时只跑 smoke 检查。
-4. `--test-mode full` 时才跑全量测试。
-5. 无代码 diff 时自动跳过测试与 Reviewer。
-6. final-acceptance.md 中要显示本轮使用的参数和各阶段耗时。
+会报错：
+
+argument --test-mode: invalid choice: 'business-import' (choose from 'auto', 'smoke', 'full')
+
+说明 hermes_orchestrator.py 的 argparse choices 仍未包含 business-import。
+
+## 目标
+
+只修复 orchestrator 的 test-mode 参数支持，让 `--test-mode business-import` 能被正常解析，并能传递给 run_tests.sh。
+
+## 修改范围
+
+允许修改：
+
+- ai/scripts/hermes_orchestrator.py
+- ai/scripts/select_test_profile.py，如 orchestrator 依赖它限制 test mode
+- ai/scripts/acceptance_judge.py，如有必要
+
+禁止修改：
+
+- 后端业务代码
+- 前端业务代码
+- trial_sample 脚本
+- tests/business_acceptance 业务导入逻辑
+- .env、token、auth.json
+- 自动 commit / push / deploy
+
+## 功能要求
+
+1. `python ai/scripts/hermes_orchestrator.py run --help` 中能看到 business-import。
+2. `--test-mode business-import` 不再被 argparse 拦截。
+3. orchestrator 调用 run_tests.sh 时，实际传入的 mode 必须是 business-import，而不是 smoke。
+4. 不影响 auto / smoke / full 既有模式。
+5. 本轮不要求新增业务功能。
+
+## 验收命令
+
+python -m compileall -q ai/scripts
+python ai/scripts/hermes_orchestrator.py run --help | grep business-import
+bash ai/scripts/run_tests.sh ai/reports/manual business-import
+python ai/scripts/hermes_orchestrator.py run --mode safe --test-mode business-import --skip-codex --skip-review
+--max-repair-rounds 1
+
+## 交付要求
+
+输出修改文件清单、测试结果、是否满足验收标准。

@@ -24,6 +24,7 @@ from backend.app.domains.logistics.services.data_qa_service import LogisticsData
 REPORT_PATH = PROJECT_ROOT / "tmp/logistics_question_bank/logistics_data_qa_real_e2e_acceptance_report.json"
 DOC_PATH = PROJECT_ROOT / "docs/LOGISTICS_DATA_QA_REAL_E2E_ACCEPTANCE.md"
 FRONTEND_PAGE = PROJECT_ROOT / "frontend/src/views/logistics-data-qa/LogisticsDataQaPage.vue"
+FRONTEND_SMART_CHAT_PAGE = PROJECT_ROOT / "frontend/src/views/business-chat/BusinessChatPage.vue"
 FRONTEND_API = PROJECT_ROOT / "frontend/src/api/logistics.ts"
 MANDATORY_QUESTION = "请将 2026 年 1 月到三月，这三个月的运量综合用折线图统计出来"
 
@@ -388,14 +389,20 @@ def _frontend_static_check() -> dict[str, Any]:
     failures: list[str] = []
     if not FRONTEND_PAGE.exists():
         return {"passed": False, "failed_checks": ["frontend_page_missing"], "source": "frontend_static"}
+    if not FRONTEND_SMART_CHAT_PAGE.exists():
+        return {"passed": False, "failed_checks": ["frontend_smart_chat_page_missing"], "source": "frontend_static"}
     if not FRONTEND_API.exists():
         return {"passed": False, "failed_checks": ["frontend_api_missing"], "source": "frontend_static"}
     page = FRONTEND_PAGE.read_text(encoding="utf-8")
+    smart_chat_page = FRONTEND_SMART_CHAT_PAGE.read_text(encoding="utf-8")
     api = FRONTEND_API.read_text(encoding="utf-8")
     markers = {
         "uses_real_response_presentation": "turn.result?.presentation" in page,
         "line_chart_render": "buildTurnLineChartPoints" in page and "presentation-chart__line" in page,
         "bar_chart_render": "buildTurnBarChartRects" in page and "presentation-chart__bar" in page,
+        "smart_chat_uses_chart_spec": "presentation?.chart_spec" in smart_chat_page and "normalizeChart" in smart_chat_page,
+        "smart_chat_bar_chart_render": "buildBarChartRects" in smart_chat_page and "presentation-chart__bar" in smart_chat_page,
+        "smart_chat_highlight_dedupe": "dedupeBusinessTexts" in smart_chat_page and "isSimilarBusinessText" in smart_chat_page,
         "table_render": "getDisplayTableRows" in page and "chat-result-table" in page,
         "summary_cards_render": "presentation-cards" in page,
         "clarification_render": "getPresentationFollowUpQuestions" in page,
@@ -416,8 +423,13 @@ def _frontend_static_check() -> dict[str, Any]:
         "passed": not failures,
         "failed_checks": failures,
         "markers": markers,
-        "checked_files": [str(FRONTEND_PAGE), str(FRONTEND_API)],
-        "uses_mock_presentation": "mockPresentation" in page or "mock_presentation" in page,
+        "checked_files": [str(FRONTEND_PAGE), str(FRONTEND_SMART_CHAT_PAGE), str(FRONTEND_API)],
+        "uses_mock_presentation": (
+            "mockPresentation" in page
+            or "mock_presentation" in page
+            or "mockPresentation" in smart_chat_page
+            or "mock_presentation" in smart_chat_page
+        ),
         "created_demo_page": False,
     }
 

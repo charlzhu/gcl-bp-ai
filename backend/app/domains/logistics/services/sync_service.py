@@ -4,7 +4,7 @@ import json
 import logging
 import uuid
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Iterable, Sequence
@@ -67,76 +67,100 @@ class LogisticsSystemSyncService:
         try:
             # 先补齐物流数据问答 MVP 需要的扩展字段，避免后续 upsert 因列缺失失败。
             repo.ensure_extended_columns()
+            if not req.dry_run:
+                # 正式同步前先把历史重复清掉并补齐源主键唯一约束，避免后续批次继续堆重复行。
+                repo.ensure_sync_dedup_constraints()
             repo.create_task_log(
                 task_id=task_id,
                 task_type="SYS_SYNC",
                 task_name="2026+ formal logistics system sync",
                 source_code="logistics_system_mysql",
             )
+            effective_updated_since = self._resolve_updated_since(repo, req)
+            effective_req = req.model_copy(update={"updated_since": effective_updated_since})
 
-            if req.sync_companies:
+            if effective_req.sync_companies:
                 self._ensure_source_db_alive(repo)
                 companies = [self._normalize_company_row(row) for row in repo.fetch_companies()]
                 stats.company_count = len(companies)
-                if not req.dry_run:
+                if not effective_req.dry_run:
                     repo.upsert_ods_companies(sync_batch_no, companies)
 
-            if req.sync_warehouses:
+            if effective_req.sync_warehouses:
                 self._ensure_source_db_alive(repo)
                 warehouses = [self._normalize_warehouse_row(row) for row in repo.fetch_warehouses()]
                 stats.warehouse_count = len(warehouses)
-                if not req.dry_run:
+                if not effective_req.dry_run:
                     repo.upsert_ods_warehouses(sync_batch_no, warehouses)
 
-            ship_task_rows = self._fetch_all_ship_tasks(repo, req)
+            ship_task_rows = self._fetch_all_ship_tasks(repo, effective_req)
             normalized_ship_tasks = [self._normalize_ship_task_row(row) for row in ship_task_rows]
             stats.ship_task_count = len(normalized_ship_tasks)
 
-            if req.sync_ship_tasks and not req.dry_run:
+            if effective_req.sync_ship_tasks and not effective_req.dry_run:
                 repo.upsert_ods_ship_tasks(sync_batch_no, normalized_ship_tasks)
 
             ship_task_ids = [str(row.get("task_id")) for row in normalized_ship_tasks if row.get("task_id")]
 
             normalized_ship_products: list[dict] = []
-            if req.sync_ship_products:
+            if effective_req.sync_ship_products:
                 ship_products: list[dict] = []
-                for chunk in self._chunked(ship_task_ids, req.batch_size):
+                for chunk in self._chunked(ship_task_ids, effective_req.batch_size):
                     self._ensure_source_db_alive(repo)
                     ship_products.extend(repo.fetch_ship_products_by_task_ids(chunk))
                 normalized_ship_products = [self._normalize_ship_product_row(row) for row in ship_products]
                 stats.ship_product_count = len(normalized_ship_products)
-                if not req.dry_run:
+                if not effective_req.dry_run:
                     repo.upsert_ods_ship_products(sync_batch_no, normalized_ship_products)
 
             normalized_assign_tasks: list[dict] = []
-            if req.sync_assign_tasks:
+            if effective_req.sync_assign_tasks:
                 assign_tasks: list[dict] = []
-                for chunk in self._chunked(ship_task_ids, req.batch_size):
+                for chunk in self._chunked(ship_task_ids, effective_req.batch_size):
                     self._ensure_source_db_alive(repo)
                     assign_tasks.extend(repo.fetch_assign_tasks_by_ship_task_ids(chunk))
                 normalized_assign_tasks = [self._normalize_assign_task_row(row) for row in assign_tasks]
                 stats.assign_task_count = len(normalized_assign_tasks)
-                if not req.dry_run:
+                if not effective_req.dry_run:
                     repo.upsert_ods_assign_tasks(sync_batch_no, normalized_assign_tasks)
 
             assign_task_ids = [str(row.get("task_id")) for row in normalized_assign_tasks if row.get("task_id")]
-            if req.sync_assign_details:
+            if effective_req.sync_assign_details:
                 assign_details: list[dict] = []
-                for chunk in self._chunked(assign_task_ids, req.batch_size):
+                for chunk in self._chunked(assign_task_ids, effective_req.batch_size):
                     self._ensure_source_db_alive(repo)
                     assign_details.extend(repo.fetch_assign_details_by_assign_task_ids(chunk))
                 normalized_assign_details = [self._normalize_assign_detail_row(row) for row in assign_details]
                 stats.assign_detail_count = len(normalized_assign_details)
-                if not req.dry_run:
+                if not effective_req.dry_run:
                     repo.upsert_ods_assign_details(sync_batch_no, normalized_assign_details)
 
-            if not req.dry_run:
-                stats.dwd_company_count = repo.rebuild_dwd_company(sync_batch_no)
-                stats.dwd_warehouse_count = repo.rebuild_dwd_warehouse(sync_batch_no)
-                stats.dwd_ship_task_count = repo.upsert_dwd_ship_task(sync_batch_no)
-                stats.dwd_ship_product_count = repo.upsert_dwd_ship_product(sync_batch_no)
-                stats.dwd_assign_task_count = repo.upsert_dwd_assign_task(sync_batch_no)
-                stats.dwd_assign_detail_count = repo.upsert_dwd_assign_detail(sync_batch_no)
+            if not effective_req.dry_run:
+                if effective_req.sync_companies:
+                    stats.dwd_company_count = repo.rebuild_dwd_company(sync_batch_no)
+                else:
+                    stats.dwd_company_count = repo.scalar("SELECT COUNT(*) FROM dwd_logistics_company")
+                if effective_req.sync_warehouses:
+                    stats.dwd_warehouse_count = repo.rebuild_dwd_warehouse(sync_batch_no)
+                else:
+                    stats.dwd_warehouse_count = repo.scalar("SELECT COUNT(*) FROM dwd_logistics_warehouse")
+                if effective_req.sync_ship_tasks:
+                    stats.dwd_ship_task_count = repo.upsert_dwd_ship_task(sync_batch_no)
+                else:
+                    stats.dwd_ship_task_count = repo.scalar("SELECT COUNT(*) FROM dwd_logistics_ship_task")
+                if effective_req.sync_ship_products:
+                    stats.dwd_ship_product_count = repo.upsert_dwd_ship_product(sync_batch_no)
+                else:
+                    stats.dwd_ship_product_count = repo.scalar("SELECT COUNT(*) FROM dwd_logistics_ship_product")
+                if effective_req.sync_assign_tasks:
+                    stats.dwd_assign_task_count = repo.upsert_dwd_assign_task(sync_batch_no)
+                else:
+                    stats.dwd_assign_task_count = repo.scalar("SELECT COUNT(*) FROM dwd_logistics_assign_task")
+                if effective_req.sync_assign_details:
+                    stats.dwd_assign_detail_count = repo.upsert_dwd_assign_detail(sync_batch_no)
+                else:
+                    stats.dwd_assign_detail_count = repo.scalar("SELECT COUNT(*) FROM dwd_logistics_assign_detail")
+                repo.cleanup_dwd_inactive_rows(sync_batch_no)
                 repo.cleanup_dwd_assign_detail_duplicates()
 
             total_count = (
@@ -153,7 +177,10 @@ class LogisticsSystemSyncService:
                 total_count=total_count,
                 success_count=total_count,
                 fail_count=0,
-                message=f"sync_batch_no={sync_batch_no}; dry_run={req.dry_run}",
+                message=(
+                    f"sync_batch_no={sync_batch_no}; dry_run={effective_req.dry_run}; "
+                    f"updated_since={effective_req.updated_since or ''}"
+                ),
             )
 
             return LogisticsSystemSyncResult(
@@ -161,7 +188,7 @@ class LogisticsSystemSyncService:
                 sync_batch_no=sync_batch_no,
                 dry_run=req.dry_run,
                 start_date=req.start_date,
-                updated_since=req.updated_since,
+                updated_since=effective_updated_since,
                 message="system sync success",
                 **asdict(stats),
             )
@@ -180,6 +207,36 @@ class LogisticsSystemSyncService:
             except Exception:
                 pass
             db.close()
+
+    def _resolve_updated_since(
+        self,
+        repo: LogisticsSyncRepository,
+        req: LogisticsSystemSyncRequest,
+    ) -> str | None:
+        """解析本次同步实际使用的增量起点。
+
+        参数：
+            repo: 同步仓储，用于读取本地中间层已同步的最大源更新时间。
+            req: 外部同步请求。
+
+        返回：
+            显式或自动计算出的 `YYYY-MM-DD HH:MM:SS`，没有历史同步时返回 None 表示走基线范围同步。
+
+        业务逻辑：
+            1. 用户显式传 `updated_since` 时完全尊重用户输入；
+            2. 自动增量开启时，按 ODS 中各主链路表的最大 `source_updated_at` 回看一段时间；
+            3. 回看窗口用于覆盖源库子表晚到、跨表更新时间略有偏差的问题。
+        """
+        if req.updated_since:
+            return req.updated_since
+        if not req.auto_incremental:
+            return None
+        latest_updated_at = repo.get_latest_local_source_updated_at()
+        if latest_updated_at is None:
+            return None
+        if isinstance(latest_updated_at, str):
+            latest_updated_at = datetime.strptime(latest_updated_at, "%Y-%m-%d %H:%M:%S")
+        return (latest_updated_at - timedelta(minutes=req.incremental_overlap_minutes)).strftime("%Y-%m-%d %H:%M:%S")
 
     def _ensure_source_db_alive(self, repo: LogisticsSyncRepository) -> None:
         """检查源库连接是否存活，若已断开则重建 session。

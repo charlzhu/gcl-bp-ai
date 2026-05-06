@@ -27,6 +27,16 @@ class LogisticsSystemSyncRequest(BaseModel):
         default=None,
         description="增量同步起点，格式 YYYY-MM-DD HH:MM:SS",
     )
+    auto_incremental: bool = Field(
+        default=False,
+        description="未显式传 updated_since 时，是否根据本地中间层最大源更新时间自动计算增量起点",
+    )
+    incremental_overlap_minutes: int = Field(
+        default=30,
+        ge=0,
+        le=1440,
+        description="自动增量时向前回看的分钟数，用于覆盖源库延迟写入或跨表更新时间不一致",
+    )
     batch_size: int = Field(default=1000, ge=100, le=10000)
     dry_run: bool = Field(default=False, description="仅预演，不写 ODS/DWD，也不改任务统计结果")
     sync_companies: bool = True

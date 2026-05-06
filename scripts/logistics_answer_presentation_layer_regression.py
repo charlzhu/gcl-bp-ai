@@ -166,6 +166,40 @@ def _success_result(*, rows: list[dict[str, Any]] | None = None) -> LogisticsDat
     )
 
 
+def _monthly_total_fee_result() -> LogisticsDataQaResult:
+    """构造 2026 月度总费用条形图反馈样例。
+
+    返回：
+        使用真实反馈形态的 data-qa 结果，只模拟后端 rows，不引入 mock 业务答案。
+    """
+
+    rows = [
+        {"biz_month": "2026-01", "total_fee": 5731112.00, "task_count": 368, "parse_fail_count": 7, "price_missing_count": 7},
+        {"biz_month": "2026-02", "total_fee": 1893970.00, "task_count": 135, "parse_fail_count": 1, "price_missing_count": 0},
+        {"biz_month": "2026-03", "total_fee": 3038117.00, "task_count": 257, "parse_fail_count": 2, "price_missing_count": 0},
+    ]
+    return LogisticsDataQaResult(
+        answer_summary="2026年1月、2月、3月总运费已按月返回，合计总运费为10,663,199.00元。",
+        result_table=LogisticsDataQaTable(columns=list(rows[0].keys()), rows=rows),
+        calculation_logic=["系统总运费口径沿用当前正式系统计算方式：ship_product.price × project_name 解析总车数。"],
+        data_scope={"year": 2026, "months": [1, 2, 3]},
+        query_plan=LogisticsDataQaPlan(
+            intent="aggregate",
+            query_key="sys_total_fee_by_filters",
+            metrics=["total_fee"],
+            dimensions=["biz_month"],
+            filters={"year": 2026, "months": [1, 2, 3], "monthly_breakdown": True},
+            group_by=["biz_month"],
+            sort=[{"field": "biz_month", "direction": "asc"}],
+        ),
+        warnings=[],
+        needs_clarification=False,
+        clarification_questions=[],
+        supported=True,
+        status=_status("OK", "查询成功"),
+    )
+
+
 def _clarification_result() -> LogisticsDataQaResult:
     """构造 B 类澄清结果。"""
 
@@ -359,6 +393,83 @@ def main() -> int:
             [
                 ("display_line_chart", line_result.presentation.display_type == "line_chart"),
                 ("chart_spec_generated", bool(line_result.presentation.chart_spec)),
+            ],
+        )
+    )
+
+    monthly_fee = _monthly_total_fee_result()
+    monthly_fee.presentation = deterministic_service.build_presentation(
+        question="2026 年 1-3 月每月总费用，帮我用条形图展示",
+        result=monthly_fee,
+    )
+    monthly_fee_first_row_numbers = {
+        str(monthly_fee.result_table.rows[0].get("total_fee")),
+        str(monthly_fee.result_table.rows[0].get("task_count")),
+        str(monthly_fee.result_table.rows[0].get("parse_fail_count")),
+        str(monthly_fee.result_table.rows[0].get("price_missing_count")),
+    }
+    monthly_fee_card_numbers = {
+        str(card.value)
+        for card in monthly_fee.presentation.cards
+        if str(card.value) in monthly_fee_first_row_numbers
+    }
+    monthly_fee_chart = monthly_fee.presentation.chart_spec
+    report_items.append(
+        _run_case(
+            "monthly_total_fee_bar_chart_hygiene",
+            "2026 年 1-3 月每月总费用，帮我用条形图展示",
+            monthly_fee,
+            [
+                ("display_bar_chart", monthly_fee.presentation.display_type == "bar_chart"),
+                ("chart_spec_generated", bool(monthly_fee_chart)),
+                ("chart_type_bar", monthly_fee_chart.chart_type == "bar" if monthly_fee_chart else False),
+                (
+                    "primary_series_total_fee",
+                    monthly_fee_chart.series[0].get("field") == "total_fee" if monthly_fee_chart and monthly_fee_chart.series else False,
+                ),
+                ("single_chart_metric", monthly_fee_chart.y_axis == ["total_fee"] if monthly_fee_chart else False),
+                ("answer_not_repeated_in_highlights", monthly_fee.presentation.answer not in monthly_fee.presentation.highlights),
+                ("cards_not_first_month_detail", not monthly_fee_card_numbers),
+            ],
+        )
+    )
+
+    llm_monthly_bad_payload = {
+        "status_code": "OK",
+        "display_type": "bar_chart",
+        "title": "2026年1-3月总运费",
+        "answer": monthly_fee.answer_summary,
+        "highlights": [monthly_fee.answer_summary],
+        "chart_spec": monthly_fee.presentation.chart_spec.model_dump(mode="json") if monthly_fee.presentation.chart_spec else {},
+        "cards": [
+            {"label": "总运费", "value": 5731112.00, "unit": "元"},
+            {"label": "任务数", "value": 368, "unit": "次"},
+        ],
+        "debug": {},
+    }
+    llm_monthly_bad = _monthly_total_fee_result()
+    llm_monthly_bad.presentation = _service(content=json.dumps(llm_monthly_bad_payload, ensure_ascii=False)).build_presentation(
+        question="2026 年 1-3 月每月总费用，帮我用条形图展示",
+        result=llm_monthly_bad,
+    )
+    report_items.append(
+        _run_case(
+            "llm_monthly_bar_hygiene_fallback",
+            "2026 年 1-3 月每月总费用，帮我用条形图展示",
+            llm_monthly_bad,
+            [
+                (
+                    "hygiene_fallback_used",
+                    llm_monthly_bad.presentation.debug.get("fallback_reason")
+                    in {"llm_repeated_text", "llm_cards_from_first_row"},
+                ),
+                ("fallback_still_bar", llm_monthly_bad.presentation.display_type == "bar_chart"),
+                (
+                    "fallback_primary_series_total_fee",
+                    llm_monthly_bad.presentation.chart_spec.series[0].get("field") == "total_fee"
+                    if llm_monthly_bad.presentation.chart_spec and llm_monthly_bad.presentation.chart_spec.series
+                    else False,
+                ),
             ],
         )
     )
