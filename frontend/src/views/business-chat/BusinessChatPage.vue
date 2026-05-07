@@ -1128,10 +1128,17 @@ function localizeSyntheticCountLabel(column: string) {
 }
 
 function localizeCards(cards: UnifiedResult['cards']) {
-  return cards.map((card) => ({
-    ...card,
-    label: localizeColumnName(card.label),
-  }))
+  return cards.map((card) => {
+    const normalizedLabel = normalizeColumnKey(card.label)
+    // 发运件数与车次是两个不同业务口径：shipment_count 用“件”，shipment_trip_count 才用“次”。
+    // 后端 presentation 历史兼容字段可能把 count 类指标统一带成“次”，这里在展示层做最小纠偏。
+    const correctedUnit = normalizedLabel === 'shipment_count' ? '件' : card.unit
+    return {
+      ...card,
+      unit: correctedUnit,
+      label: localizeColumnName(card.label),
+    }
+  })
 }
 
 /** 格式化指标卡数值，只做展示格式化，不改变业务计算结果。 */

@@ -308,6 +308,40 @@ class LogisticsDataQaPlanner:
             # “公路运输/铁路运输”是运输方式，不是承运商名称；避免系统侧总运费按 company_name 过滤到 0。
             company_name = None
         monthly_breakdown = self._is_monthly_breakdown_request(compact)
+        no_explicit_time = not year and not year_range and not months
+        if no_explicit_time and self._is_total_fee_question(compact):
+            # 用户没有给年月日时，不再追问时间条件；按产品口径默认查询 2023-2026 全时间。
+            # 这里只处理简单总费用汇总，复杂宽表/预测/明细类问题仍由前置保护逻辑拦截。
+            filters: dict[str, Any] = {"years": [2023, 2024, 2025, 2026], "months": None}
+            if region:
+                filters["region_name"] = region
+            if transport_mode:
+                filters["transport_mode"] = transport_mode
+            if company_name:
+                filters["carrier_name"] = company_name
+            if customer_name:
+                filters["customer_name"] = customer_name
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="mixed_total_fee_summary_2023_2026",
+                metrics=["total_fee"],
+                dimensions=[],
+                filters=filters,
+            )
+        if no_explicit_time and self._is_mw_question(compact):
+            # 用户未给时间但已明确“运量/MW”指标时，默认统计 2023-2026 全时间发运量。
+            filters = {"years": [2023, 2024, 2025, 2026], "months": None}
+            if region:
+                filters["region_name"] = region
+            if transport_mode:
+                filters["transport_mode"] = transport_mode
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="mixed_mw_summary_2023_2026",
+                metrics=["shipment_mw"],
+                dimensions=[],
+                filters=filters,
+            )
 
         if "各城市总费用排名前五" in compact:
             return LogisticsDataQaPlan(
@@ -440,13 +474,15 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "region_name": region},
             )
 
-        if "总发运件数" in compact and region:
+        if any(keyword in compact for keyword in ("总发运件数", "发运件数", "总件数", "多少件")) and region:
+            # 区域件数题支持可选年份和运输方式过滤，例如“2024年华东区域通过公路发运的总件数”。
+            # 运输方式同义归一在 repository 执行，planner 只传受控槽位，避免把“公路”类明确过滤题误降级为澄清。
             return LogisticsDataQaPlan(
                 intent="aggregate",
                 query_key="hist_quantity_by_region",
                 metrics=["shipment_count"],
                 dimensions=[],
-                filters={"year": year, "region_name": region},
+                filters={"year": year, "region_name": region, "transport_mode": transport_mode},
             )
 
         if year in {2023, 2024, 2025} and customer_name and self._is_mw_question(compact):
@@ -730,13 +766,15 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "months": months, "region_name": region, "origin_place": origin_place},
             )
 
-        if year in {2023, 2024, 2025} and self._is_mw_question(compact) and not region and not customer_name and months:
+        if year in {2023, 2024, 2025} and self._is_mw_question(compact) and not region and not customer_name:
+            # 历史年度总运量题只要给出年份和 MW/运量口径即可直接统计全年总发运量；
+            # 不应强制用户再补充月份或区域，否则“2023年一年总共的运量是多少MW”会被误判为澄清。
             return LogisticsDataQaPlan(
                 intent="aggregate",
                 query_key="hist_mw_summary",
                 metrics=["shipment_mw"],
                 dimensions=[],
-                filters={"year": year, "months": months},
+                filters={"year": year, "months": months or None},
             )
 
         return LogisticsDataQaPlan(
@@ -972,15 +1010,19 @@ class LogisticsDataQaPlanner:
         system_base_code = self._extract_system_base_code(compact)
         quarter = self.slot_extractor.extract_quarter(compact)
 
-        if region and any(keyword in compact for keyword in ("总发运件数", "发运件数", "多少件")):
+        if region and any(keyword in compact for keyword in ("总发运件数", "发运件数", "总件数", "多少件")):
             # “华东区域历史物流一共发运了多少件”这类问法没有显式写“总发运件数”，但业务口径仍是 actual_qty 件数汇总。
-            # 未给年份时沿用历史累计口径；给出 2023/2024/2025 时按单年过滤。
+            # 未给年份时沿用历史累计口径；给出 2023/2024/2025 时按单年过滤；运输方式明确时透传同义过滤。
             return LogisticsDataQaPlan(
                 intent="aggregate",
                 query_key="hist_quantity_by_region",
                 metrics=["shipment_count"],
                 dimensions=[],
-                filters={"year": year if year in {2023, 2024, 2025} else None, "region_name": region},
+                filters={
+                    "year": year if year in {2023, 2024, 2025} else None,
+                    "region_name": region,
+                    "transport_mode": transport_mode,
+                },
             )
 
         if year in {2023, 2024, 2025} and quarter and self._is_trip_question(compact) and not region:
@@ -2225,6 +2267,15 @@ class LogisticsDataQaPlanner:
             and any(keyword in question for keyword in ("发运量", "运量", "发运瓦数"))
             and any(keyword in question for keyword in ("总费用", "总运费", "运输费用"))
         ):
+            return True
+        if (
+            any(keyword in question for keyword in ("发运量", "运量", "发运瓦数"))
+            and any(keyword in question for keyword in ("总费用", "总运费", "运输费用"))
+            and any(keyword in question for keyword in ("按月份", "月份汇总", "月度汇总"))
+            and any(keyword in question for keyword in ("区分2023", "三个年度", "分别展示2023", "2023、2024、2025"))
+        ):
+            # 多年逐月 + 发运量 + 总费用需要 year-month 粒度和多指标表格模板；
+            # 当前单指标月度链路不能用 12 个月汇总冒充 36 行年度拆分表。
             return True
         if (
             any(keyword in question for keyword in ("发运量", "运量", "发运瓦数"))

@@ -1,19 +1,103 @@
 # CURRENT_STATUS.md
 
-## 当前阶段：全量样例题真实网页 E2E 已完成
+## 当前阶段：计划 BOM 功率预测智能问答 M1 审计准备 / 执行阶段
 
-当前不是继续物流后端收口，不是 BOM Wave3，不迁 A，不扩业务能力，不做 mock demo。全量样例题真实网页 E2E 已完成，当前不再有待续跑 E2E 队列。
+当前已完成上一阶段“全量样例题真实网页 E2E”验收，`3281/3281` 真实网页 E2E 已完成，当前不再有待续跑 E2E 队列。
 
-### 本轮样例题验收输入
+当前新的正式任务切换为：
 
-- 正式样例题：`物流和 bom样例题.docx`
-- 已解析有效编号问题：`1391`
-- 脚本分类：`plan_bom=13 / logistics=1374 / unknown=4`
-- 原题变体：`1890`
-- 网页 E2E 全量计划用例：`3281`（1391 原题 + 1890 变体）
-- 物流标准答案口径：以 `logistics_ai` 中间库表时间和数据为准。
-- 物流源数据：`23 年至 25 年物流台账数据.zip`、`物流 26 年源数据.zip`。
-- 源 zip 只做源文件核验和差异说明，不覆盖 `logistics_ai` 口径；运行环境本地路径已脱敏。
+```text
+计划 BOM 功率预测智能问答 / 功率测试基准能力
+```
+
+该能力属于现有 **计划 BOM 业务域** 的子能力，不新建独立业务域。
+
+---
+
+## 一、当前任务定位
+
+当前任务目标不是继续物流后端收口，不是 BOM Wave3，不迁 A，不扩 query_key，不做 mock demo。
+
+当前目标是围绕《GCL功率测试基准》xlsm 文件，完成功率预测模型的结构审计、公式审计、VBA / 宏依赖判断，以及后续与现有计划 BOM 问答链路结合的实施方案设计。
+
+最终能力目标：
+
+```text
+业务员在智能助手中自然语言提问
+↓
+系统识别订单 / 版型 / 配置 / 供应商 / 目标功率 / 目标比例
+↓
+如涉及订单，则查询现有 BOM 数据
+↓
+从 BOM 中抽取玻璃、间隙贴膜、焊带、汇流条、接线盒等配置
+↓
+映射到功率预测模型配置项
+↓
+调用后端确定性功率预测计算引擎
+↓
+返回供应商、效率段、功率档位分布、目标比例匹配度
+```
+
+---
+
+## 二、当前执行阶段：M1
+
+当前只执行 M1：
+
+```text
+功率预测 Excel 结构与公式审计 + 现有计划 BOM 链路梳理 + 后续实施方案设计
+```
+
+本阶段只允许输出文档：
+
+```text
+docs/PLAN_POWER_EXCEL_FORMULA_AUDIT.md
+docs/PLAN_POWER_IMPLEMENTATION_PLAN.md
+```
+
+本阶段暂时不允许：
+
+1. 不创建数据库迁移。
+2. 不新增正式 ORM 模型。
+3. 不新增正式接口。
+4. 不修改前端。
+5. 不接入 PlanBom QA。
+6. 不实现正式功率预测计算引擎。
+7. 不 hardcode 样例题。
+8. 不把样例题中的假订单号 / 假版型 / 假项目名作为真实测试数据。
+
+完成 M1 后必须停止并输出报告，等待确认后再进入 M2/M3/M4/M5。
+
+---
+
+## 三、当前任务输入
+
+正式任务资料位于：
+
+```text
+ai/inbox/requirement.md
+ai/inbox/attachments_manifest.md
+ai/inbox/attachments/
+```
+
+附件包括：
+
+```text
+GCL功率测试基准（V2.1）26.03.26 (1).xlsm——副本.xlsm
+BOM配置搭配问询：.docx
+```
+
+重要说明：
+
+1. `GCL功率测试基准` xlsm 是动态功率预测模型，不是普通静态数据表。
+2. `BOM配置搭配问询：.docx` 只作为题型和问法参考。
+3. `BOM配置搭配问询：.docx` 中的版型号、订单号、评审号、项目名均为假数据。
+4. 不允许 hardcode 样例题答案。
+5. 后续正式测试必须基于当前项目真实 BOM 数据自行生成可验证测试题。
+
+---
+
+## 四、上一阶段已完成基线
 
 ### 真实网页 E2E 最终结果
 
@@ -30,72 +114,59 @@
 - C 类正确拒答解释：`93/93`
 - `failed_cases.json`：空列表。
 
-### 历史执行过程
+### 当前能力基线
 
-- 历史过程曾从 679 条 checkpoint 继续执行，后续新增执行 2602 条，最终达到 `3281/3281`。该信息仅用于说明执行过程，不代表当前仍有未完成队列。
-
-### 本轮新增修复和复核
-
-1. 增加 `scripts/trial_sample_e2e_batch_runner.py` 循环批量执行能力，避免每轮只跑一个 50 条小批次。
-2. 修复 `scripts/trial_sample_frontend_e2e_eval.py` 的 `--only-failed` 空失败集保护，避免误覆盖全量 checkpoint。
-3. 修复/补齐 `scripts/trial_sample_answer_comparator.py` 对恢复型 checkpoint 的比对兼容。
-4. 补齐 `scripts/trial_sample_expected_answer_builder.py` 的复杂物流题 B/C 边界、额外费用、备注关键词、月度/季度/矩阵/宽表/报表类标准答案口径。
-5. 修复物流 slot 清洗，避免“累计、各按”等口语连接词误抽成客户/承运商过滤条件。
-6. 补齐物流 planner/repository/service 中历史始发地 + 车型费用汇总等同类题泛化处理。
-7. 补齐物流 NLU Center 诊断候选：历史场景总运费和 2026 特殊业务带月份过滤问题均可恢复既有 903 语义基线；正式查询执行边界未改变。
-
-### 当前报告
-
-- 台账：`tmp/trial_sample_eval/sample_question_ledger.json`
-- 标准答案：`tmp/trial_sample_eval/expected_answers.json`
-- 前端 E2E：`tmp/trial_sample_eval/frontend_e2e_results.json`
-- 比对报告：`tmp/trial_sample_eval/answer_compare_report.json`
-- 总报告：`tmp/trial_sample_eval/trial_sample_full_e2e_acceptance_report.json`
-- 失败题：`tmp/trial_sample_eval/failed_cases.json`
-- 修复记录：`tmp/trial_sample_eval/fixed_cases.json`
-- 批量执行报告：`tmp/trial_sample_eval/trial_sample_e2e_batch_runner_report.json`
-
-### 物流当前状态
-
-- 当前分布：`A=656 / B=178 / C=69 / D=0`
-- 真实业务链路保持不变。
-- 未修改物流 A/B/C 边界。
-- 物流 NLU Center dry-run：`122/122`。
+- 物流：`A=656 / B=178 / C=69 / D=0`
+- BOM：`A=86 / B=40 / C=3 / D=0`
+- 前端：`npm run build --prefix frontend` 通过。
+- 物流 NLU：`122/122`。
 - 物流 903 语义回归：`1559/1559`。
-- 物流 Guardrail bounded check：`10/10`，B/C 误判 success 为 `0`。
-
-### 计划 BOM 当前状态
-
-- 当前分布：`A=86 / B=40 / C=3 / D=0`
-- 正式问题来源：`BOM问题.xlsx`
-- 有效问题：`129`
-- BOM 源数据：`34` 个 Excel，`4034` 条材料行
-- 上传接口：`POST /api/v1/plan-bom/upload`
-- 问答接口：`POST /api/v1/plan-bom/qa/ask`
-- BOM QA API E2E：`30/30`
-- BOM 多问法语义回归：`129/129`
-- 未修改 BOM A/B/C 边界。
-
-### 已执行检查
-
-- Python 编译检查：通过。
-- 真实网页 E2E 长跑：`3281/3281` 完成。
-- 自动比对：`3281/3281` 通过。
-- B 类正确追问：`1429/1429`。
-- C 类正确拒答解释：`93/93`。
-- 前端 build：通过，仅 Vite chunk size warning。
-- BOM QA API E2E：`30/30` 通过。
-- BOM 多问法语义回归：`129/129` 通过。
-- 物流 NLU Center dry-run：`122/122` 通过。
-- 物流 903 语义回归：`1559/1559` 通过。
-- 物流 Guardrail bounded check：`10/10` 通过，B/C 误判 success 为 `0`。
+- BOM QA API E2E：`30/30`。
+- BOM 多问法语义回归：`129/129`。
+- 物流 Guardrail bounded check：`10/10`。
 - 发布前 readiness check：通过。
 
-### 当前边界
+---
 
-- 没有 mock 数据。
-- 没有 hardcode 样例题答案。
-- 没有绕过真实前端页面。
-- 没有绕过真实业务主链路。
-- 没有修改物流/BOM 业务边界。
-- 当前下一步已切换为领导演示、小范围业务试运行和真实反馈闭环，不继续硬迁 A，不扩 query_key，不再把 E2E 未完成当成当前状态。
+## 五、计划 BOM 当前基础状态
+
+现有计划 BOM 能力和表结构需要复用。
+
+重点表：
+
+```text
+plan_bom_header
+plan_bom_material_line
+plan_bom_revision
+plan_bom_import_batch
+plan_bom_export_task
+plan_bom_export_file
+```
+
+重点接口：
+
+```text
+POST /api/v1/plan-bom/upload
+POST /api/v1/plan-bom/qa/ask
+```
+
+当前功率预测后续必须与现有 BOM 链路结合：
+
+```text
+BOM 查询：订单 / 评审号 / 订单名称 → 核心材料配置
+功率预测：版型 + 配置 + 供应商效率分布 → 功率档位分布
+智能问答：自然语言问题 → BOM 查询 / 功率预测 / 推荐解释
+```
+
+---
+
+## 六、当前边界
+
+1. 没有 mock 数据。
+2. 没有 hardcode 样例题答案。
+3. 不绕过真实业务主链路。
+4. 当前 M1 不修改业务主链路。
+5. 当前 M1 不修改物流 / BOM A/B/C 边界。
+6. 当前 M1 不新增数据库结构。
+7. 当前 M1 不新增前端页面。
+8. 当前 M1 完成后必须等待确认，不自动进入 M2。

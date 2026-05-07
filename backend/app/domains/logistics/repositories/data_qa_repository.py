@@ -676,6 +676,156 @@ class LogisticsDataQaRepository:
         ).scalar()
         return {"shipment_mw": shipment_mw}
 
+    def mixed_mw_summary_2023_2026(
+        self,
+        *,
+        months: list[int] | None = None,
+        region_name: str | None = None,
+        transport_mode: str | None = None,
+    ) -> dict[str, Any]:
+        """2023-2026 全时间发运量汇总。
+
+        参数：
+            months: 可选月份过滤；为空时统计 2023-2026 全部月份。
+            region_name: 可选区域过滤。
+            transport_mode: 可选运输方式过滤。
+
+        返回：
+            包含历史 2023-2025、系统 2026 与合计 MW 的字典。
+
+        业务逻辑：用户没有给年月日时，按产品要求默认查询 2023-2026 全时间；
+        其中 2023-2025 使用历史台账 actual_watt，2026 使用正式系统 power × quantity。
+        """
+
+        filters = ["biz_year IN (2023, 2024, 2025)"]
+        params: dict[str, Any] = {}
+        if months:
+            month_placeholders = ", ".join(str(int(month)) for month in months)
+            filters.append(f"MONTH(biz_date) IN ({month_placeholders})")
+        if region_name:
+            filters.append("region_name = :region_name")
+            params["region_name"] = region_name
+        if transport_mode:
+            if transport_mode == "公路":
+                filters.append("transport_mode IN ('公路', '汽运')")
+            elif transport_mode == "铁路":
+                filters.append("transport_mode IN ('铁路', '铁运')")
+            else:
+                filters.append("transport_mode = :transport_mode")
+                params["transport_mode"] = transport_mode
+        where_sql = " AND ".join(filters)
+        hist_row = self.db.execute(
+            text(
+                f"""
+                SELECT
+                    ROUND(SUM(actual_watt) / 1000000, 3) AS hist_shipment_mw,
+                    COUNT(*) AS hist_row_count
+                FROM dwd_logistics_hist_shipment_detail
+                WHERE {where_sql}
+                """
+            ),
+            params,
+        ).mappings().first()
+        sys_row = self.sys_mw_and_trip_count(
+            year=2026,
+            months=months,
+            transport_mode=transport_mode,
+            region_name=region_name,
+        )
+        hist_mw = float((hist_row or {}).get("hist_shipment_mw") or 0)
+        sys_mw = float(sys_row.get("shipment_mw") or 0)
+        return {
+            "scope_label": "2023-2026年",
+            "shipment_mw": round(hist_mw + sys_mw, 3),
+            "hist_shipment_mw": hist_mw,
+            "sys_2026_shipment_mw": sys_mw,
+            "hist_row_count": int((hist_row or {}).get("hist_row_count") or 0),
+            "sys_2026_task_count": int(sys_row.get("strict_scope_task_count") or 0),
+            "sys_2026_power_missing_count": int(sys_row.get("power_missing_count") or 0),
+        }
+
+    def mixed_total_fee_summary_2023_2026(
+        self,
+        *,
+        months: list[int] | None = None,
+        region_name: str | None = None,
+        transport_mode: str | None = None,
+        carrier_name: str | None = None,
+        customer_name: str | None = None,
+    ) -> dict[str, Any]:
+        """2023-2026 全时间总运费汇总。
+
+        参数：
+            months: 可选月份过滤；为空时统计全部月份。
+            region_name: 可选区域过滤。
+            transport_mode: 可选运输方式过滤。
+            carrier_name: 可选承运商过滤。
+            customer_name: 可选客户过滤。
+
+        返回：
+            包含历史 2023-2025、系统 2026 与合计总运费的字典。
+
+        业务逻辑：无时间条件默认 2023-2026；历史侧使用 total_fee，2026 侧复用正式系统费用口径。
+        """
+
+        filters = ["biz_year IN (2023, 2024, 2025)"]
+        params: dict[str, Any] = {}
+        if months:
+            month_placeholders = ", ".join(str(int(month)) for month in months)
+            filters.append(f"MONTH(biz_date) IN ({month_placeholders})")
+        if region_name:
+            filters.append("region_name = :region_name")
+            params["region_name"] = region_name
+        if transport_mode:
+            if transport_mode == "公路":
+                filters.append("transport_mode IN ('公路', '汽运')")
+            elif transport_mode == "铁路":
+                filters.append("transport_mode IN ('铁路', '铁运')")
+            else:
+                filters.append("transport_mode = :transport_mode")
+                params["transport_mode"] = transport_mode
+        if carrier_name:
+            filters.append("logistics_company_name LIKE :carrier_name")
+            params["carrier_name"] = f"%{carrier_name}%"
+        if customer_name:
+            filters.append("customer_name LIKE :customer_name")
+            params["customer_name"] = f"%{customer_name}%"
+        where_sql = " AND ".join(filters)
+        hist_row = self.db.execute(
+            text(
+                f"""
+                SELECT
+                    ROUND(SUM(total_fee), 0) AS hist_total_fee,
+                    ROUND(SUM(actual_watt) / 1000000, 3) AS hist_shipment_mw,
+                    COUNT(*) AS hist_row_count
+                FROM dwd_logistics_hist_shipment_detail
+                WHERE {where_sql}
+                """
+            ),
+            params,
+        ).mappings().first()
+        sys_row = self.sys_total_fee_by_filters(
+            year=2026,
+            months=months,
+            company_name=carrier_name,
+            customer_name=customer_name,
+            transport_mode=transport_mode,
+            region_name=region_name,
+        )
+        hist_total_fee = float((hist_row or {}).get("hist_total_fee") or 0)
+        sys_total_fee = float(sys_row.get("total_fee") or 0)
+        return {
+            "scope_label": "2023-2026年",
+            "total_fee": round(hist_total_fee + sys_total_fee, 2),
+            "hist_total_fee": hist_total_fee,
+            "sys_2026_total_fee": sys_total_fee,
+            "shipment_mw": float((hist_row or {}).get("hist_shipment_mw") or 0),
+            "hist_row_count": int((hist_row or {}).get("hist_row_count") or 0),
+            "sys_2026_task_count": int(sys_row.get("task_count") or 0),
+            "sys_2026_parse_fail_count": int(sys_row.get("parse_fail_count") or 0),
+            "sys_2026_price_missing_count": int(sys_row.get("price_missing_count") or 0),
+        }
+
     def hist_product_spec_mw_summary(self, *, product_spec: str) -> dict[str, Any]:
         """历史规格总发运瓦数。
 
@@ -1511,14 +1661,26 @@ class LogisticsDataQaRepository:
         ).scalar()
         return {"shipment_trip_count": total}
 
-    def hist_quantity_by_region(self, *, region_name: str, year: int | None = None) -> dict[str, Any]:
-        """历史总发运件数。"""
+    def hist_quantity_by_region(self, *, region_name: str, year: int | None = None, transport_mode: str | None = None) -> dict[str, Any]:
+        """历史总发运件数。
+
+        参数：
+            region_name: 区域名称。
+            year: 可选年份过滤。
+            transport_mode: 可选运输方式过滤，公路/汽运、铁路/铁运按同义口径合并。
+
+        返回值：包含 `shipment_count` 的汇总字典。
+        """
         filters = ["region_name = :region_name"]
         params: dict[str, Any] = {"region_name": region_name}
         # 用户明确给出年份时，件数口径必须按该年份过滤；未给年份时保留历史累计兼容口径。
         if year:
             filters.append("biz_year = :year")
             params["year"] = year
+        if transport_mode:
+            mode_filter, mode_params = self._transport_mode_filter_sql(transport_mode)
+            filters.append(mode_filter)
+            params.update(mode_params)
         where_sql = " AND ".join(filters)
         total = self.db.execute(
             text(
@@ -1798,6 +1960,7 @@ class LogisticsDataQaRepository:
         months: list[int] | None,
         transport_mode: str | None = None,
         base_code: str | None = None,
+        region_name: str | None = None,
         monthly_breakdown: bool = False,
     ) -> dict[str, Any]:
         """2026 系统发运量 MW 与车次。
@@ -1814,6 +1977,8 @@ class LogisticsDataQaRepository:
         month_filter_sql = ""
         base_filter_sql = ""
         base_filter_plain_sql = ""
+        region_filter_sql = ""
+        region_filter_plain_sql = ""
         if months:
             month_placeholders = ", ".join(str(int(month)) for month in months)
             month_filter_sql = f" AND MONTH({self.PICKUP_DATE_SQL}) IN ({month_placeholders})"
@@ -1824,6 +1989,12 @@ class LogisticsDataQaRepository:
             base_filter_sql = " AND st.base_code = :base_code"
             base_filter_plain_sql = " AND base_code = :base_code"
             params["base_code"] = base_code
+        if region_name:
+            # 系统侧区域优先使用已同步的 normalized_region_name；为空时用 delivery_area / delivery_province 现场归一，
+            # 确保无时间条件默认 2023-2026 时，2026 正式系统数据也能按同一区域口径参与汇总。
+            region_filter_sql = f" AND COALESCE(st.normalized_region_name, {self.REGION_CASE_SQL}) = :region_name"
+            region_filter_plain_sql = " AND normalized_region_name = :region_name"
+            params["region_name"] = region_name
         power_missing_count = self.db.execute(
             text(
                 f"""
@@ -1835,6 +2006,7 @@ class LogisticsDataQaRepository:
                   {month_filter_sql}
                   {transport_filter_sql}
                   {base_filter_sql}
+                  {region_filter_sql}
                   AND sp.power IS NULL
                 """
             ),
@@ -1848,6 +2020,7 @@ class LogisticsDataQaRepository:
                 WHERE biz_year = :year
                   AND pickup_date IS NULL
                   {base_filter_plain_sql}
+                  {region_filter_plain_sql}
                 """
             ),
             params,
@@ -1863,6 +2036,7 @@ class LogisticsDataQaRepository:
                   {month_filter_sql}
                   {transport_filter_sql}
                   {base_filter_sql}
+                  {region_filter_sql}
                   AND sp.power IS NOT NULL
                 """
             ),
@@ -1879,6 +2053,7 @@ class LogisticsDataQaRepository:
                   {month_filter_sql}
                   {transport_filter_sql}
                   {base_filter_sql}
+                  {region_filter_sql}
                   AND at.status IN ('ENTER', 'LEAVE')
                 """
             ),
@@ -1897,6 +2072,7 @@ class LogisticsDataQaRepository:
                   {month_filter_sql}
                   {transport_filter_sql}
                   {base_filter_sql}
+                  {region_filter_sql}
                 """
             ),
             params,
@@ -1911,6 +2087,7 @@ class LogisticsDataQaRepository:
                   {month_filter_sql}
                   {transport_filter_sql}
                   {base_filter_sql}
+                  {region_filter_sql}
                 """
             ),
             params,
@@ -1922,6 +2099,7 @@ class LogisticsDataQaRepository:
                 FROM dwd_logistics_ship_task
                 WHERE biz_year = :year
                   {base_filter_plain_sql}
+                  {region_filter_plain_sql}
                 """
             ),
             params,
@@ -1934,6 +2112,7 @@ class LogisticsDataQaRepository:
                 WHERE biz_year = :year
                   AND pickup_date IS NOT NULL
                   {base_filter_plain_sql}
+                  {region_filter_plain_sql}
                 """
             ),
             params,
@@ -1948,6 +2127,7 @@ class LogisticsDataQaRepository:
                 FROM dwd_logistics_ship_task
                 WHERE biz_year = :year
                   {base_filter_plain_sql}
+                  {region_filter_plain_sql}
                 """
             ),
             params,
@@ -1967,6 +2147,7 @@ class LogisticsDataQaRepository:
                       {month_filter_sql}
                       {transport_filter_sql}
                       {base_filter_sql}
+                  {region_filter_sql}
                       AND sp.power IS NOT NULL
                     GROUP BY DATE_FORMAT({self.PICKUP_DATE_SQL}, '%Y-%m')
                     ORDER BY biz_month
@@ -1987,6 +2168,7 @@ class LogisticsDataQaRepository:
                       {month_filter_sql}
                       {transport_filter_sql}
                       {base_filter_sql}
+                  {region_filter_sql}
                       AND at.status IN ('ENTER', 'LEAVE')
                     GROUP BY DATE_FORMAT({self.PICKUP_DATE_SQL}, '%Y-%m')
                     ORDER BY biz_month
@@ -2043,6 +2225,7 @@ class LogisticsDataQaRepository:
         company_name: str | None = None,
         customer_name: str | None = None,
         transport_mode: str | None = None,
+        region_name: str | None = None,
         special_scope: str | None = None,
         base_code: str | None = None,
         procurement_type: str | None = None,
@@ -2075,6 +2258,11 @@ class LogisticsDataQaRepository:
         if transport_mode:
             filters.append("st.transport_mode = :transport_mode")
             params["transport_mode"] = transport_mode
+        if region_name:
+            # 2026 系统侧按 normalized_region_name / delivery_area / delivery_province 统一成物流区域，
+            # 让无时间条件默认 2023-2026 的区域费用口径与历史 region_name 对齐。
+            filters.append(f"COALESCE(st.normalized_region_name, {self.REGION_CASE_SQL}) = :region_name")
+            params["region_name"] = region_name
         if procurement_type:
             filters.append("st.procurement_type = :procurement_type")
             params["procurement_type"] = procurement_type

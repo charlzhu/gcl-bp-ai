@@ -740,6 +740,47 @@ class LogisticsDataQaService:
                 warnings=warnings,
             )
 
+        if plan.query_key == "mixed_total_fee_summary_2023_2026":
+            data = self.repository.mixed_total_fee_summary_2023_2026(
+                months=filters.get("months"),
+                region_name=filters.get("region_name"),
+                transport_mode=filters.get("transport_mode"),
+                carrier_name=filters.get("carrier_name"),
+                customer_name=filters.get("customer_name"),
+            )
+            scope_parts = [data["scope_label"]]
+            if filters.get("region_name"):
+                scope_parts.append(f"{filters['region_name']}区域")
+            if filters.get("transport_mode"):
+                scope_parts.append(f"{filters['transport_mode']}运输")
+            if filters.get("carrier_name"):
+                scope_parts.append(f"承运商{filters['carrier_name']}")
+            if filters.get("customer_name"):
+                scope_parts.append(f"客户{filters['customer_name']}")
+            scope_text = "".join(scope_parts)
+            summary = f"{scope_text}总运费为{int(data.get('total_fee') or 0):,}元。"
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=[
+                    "scope_label",
+                    "total_fee",
+                    "hist_total_fee",
+                    "sys_2026_total_fee",
+                    "shipment_mw",
+                    "hist_row_count",
+                    "sys_2026_task_count",
+                ],
+                table_rows=[data],
+                calculation_logic=[
+                    "未给年月日时，默认查询 2023-2026 全时间范围。",
+                    "2023-2025 使用历史物流台账 total_fee 汇总，2026 使用正式系统费用口径汇总。",
+                    "如限定区域、运输方式、承运商或客户，会在历史侧和 2026 系统侧分别应用可映射过滤条件。",
+                ],
+                data_scope={"table": "mixed:hist_2023_2025 + sys_2026", **filters},
+                warnings=warnings,
+            )
+
         if plan.query_key == "hist_total_fee_summary":
             data = self.repository.hist_total_fee_summary(
                 year=filters["year"],
@@ -966,6 +1007,40 @@ class LogisticsDataQaService:
                     "运费总额按历史 total_fee 汇总。",
                 ],
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+                warnings=warnings,
+            )
+
+        if plan.query_key == "mixed_mw_summary_2023_2026":
+            data = self.repository.mixed_mw_summary_2023_2026(
+                months=filters.get("months"),
+                region_name=filters.get("region_name"),
+                transport_mode=filters.get("transport_mode"),
+            )
+            scope_parts = [data["scope_label"]]
+            if filters.get("region_name"):
+                scope_parts.append(f"{filters['region_name']}区域")
+            if filters.get("transport_mode"):
+                scope_parts.append(f"{filters['transport_mode']}运输")
+            scope_text = "".join(scope_parts)
+            summary = f"{scope_text}总发运量为{data.get('shipment_mw') or 0}MW。"
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=[
+                    "scope_label",
+                    "shipment_mw",
+                    "hist_shipment_mw",
+                    "sys_2026_shipment_mw",
+                    "hist_row_count",
+                    "sys_2026_task_count",
+                ],
+                table_rows=[data],
+                calculation_logic=[
+                    "未给年月日时，默认查询 2023-2026 全时间范围。",
+                    "2023-2025 使用历史台账 actual_watt 汇总后折算 MW，2026 使用正式系统 power × quantity 折算 MW。",
+                    "如限定区域或运输方式，会在历史侧和 2026 系统侧分别应用可映射过滤条件。",
+                ],
+                data_scope={"table": "mixed:hist_2023_2025 + sys_2026", **filters},
                 warnings=warnings,
             )
 
@@ -1353,9 +1428,11 @@ class LogisticsDataQaService:
             data = self.repository.hist_quantity_by_region(
                 region_name=filters["region_name"],
                 year=filters.get("year"),
+                transport_mode=filters.get("transport_mode"),
             )
             year_text = f"{filters['year']}年" if filters.get("year") else ""
-            summary = f"{year_text}{filters['region_name']}区域总发运件数为{int(data['shipment_count'] or 0):,}件。"
+            transport_text = f"通过{filters['transport_mode']}" if filters.get("transport_mode") else ""
+            summary = f"{year_text}{filters['region_name']}区域{transport_text}总发运件数为{int(data['shipment_count'] or 0):,}件。"
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
