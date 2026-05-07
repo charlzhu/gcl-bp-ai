@@ -1,38 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$ROOT_DIR"
+TASK_DIR="${1:?Usage: collect_diff.sh <task_dir>}"
+mkdir -p "$TASK_DIR"
 
-REPORT_DIR="${1:-ai/reports/manual}"
-mkdir -p "$REPORT_DIR"
+if [ ! -d ".git" ]; then
+  echo "[Diff][WARN] 当前不是 Git 仓库，无法收集 git diff" | tee "$TASK_DIR/git_status.txt"
+  : > "$TASK_DIR/diff_stat.txt"
+  : > "$TASK_DIR/diff.patch"
+  exit 0
+fi
 
-git status --short > "$REPORT_DIR/git-status.txt" || true
-git diff --stat > "$REPORT_DIR/diffstat.txt" || true
-git diff > "$REPORT_DIR/diff.patch" || true
-git diff --name-only > "$REPORT_DIR/changed-files.txt" || true
-git log --oneline -5 > "$REPORT_DIR/recent-commits.txt" 2>/dev/null || true
+echo "[Diff] Collect git status"
+git status --short > "$TASK_DIR/git_status.txt"
 
-cat > "$REPORT_DIR/diff-summary.md" <<EOF2
-# Diff Summary
+echo "[Diff] Collect git diff stat"
+git diff --stat > "$TASK_DIR/diff_stat.txt"
 
-## Git Status
+echo "[Diff] Collect git diff patch"
+git diff > "$TASK_DIR/diff.patch"
 
-\`\`\`text
-$(cat "$REPORT_DIR/git-status.txt")
-\`\`\`
-
-## Diff Stat
-
-\`\`\`text
-$(cat "$REPORT_DIR/diffstat.txt")
-\`\`\`
-
-## Changed Files
-
-\`\`\`text
-$(cat "$REPORT_DIR/changed-files.txt")
-\`\`\`
-EOF2
-
-echo "Diff collected into $REPORT_DIR"
+echo "[Diff] Done"

@@ -78,10 +78,10 @@ class LogisticsDataQaChartSpec(BaseModel):
     说明：
         1. 图表只使用后端已经计算出的结构化 rows；
         2. 不允许 LLM 在 chart_spec 中新增数据点；
-        3. 前端可按 chart_type 选择轻量 SVG 折线图或柱状图渲染。
+        3. 前端可按 chart_type 选择轻量 SVG 折线图、柱状图或饼图渲染。
     """
 
-    chart_type: Literal["line", "bar"] | None = None
+    chart_type: Literal["line", "bar", "pie"] | None = None
     title: str = ""
     x_axis: str = ""
     y_axis: list[str] = Field(default_factory=list)
@@ -141,6 +141,7 @@ class LogisticsDataQaPresentation(BaseModel):
         "table",
         "line_chart",
         "bar_chart",
+        "pie_chart",
         "mixed",
         "clarification",
         "unsupported",

@@ -9,6 +9,7 @@
               text
               class="chat-toolbar__menu"
               title="收起或展开主菜单"
+              aria-label="收起或展开主菜单"
               @click="toggleMainSidebar"
             >
               <el-icon><Fold /></el-icon>
@@ -17,7 +18,7 @@
             <div class="chat-toolbar__title">物流数据问答</div>
           </div>
 
-          <el-button text class="chat-toolbar__history" @click="goHistoryPage">历史记录</el-button>
+          <el-button text class="chat-toolbar__history" title="查看物流问答历史记录" @click="goHistoryPage">历史记录</el-button>
         </header>
 
         <div ref="conversationRef" class="chat-thread">
@@ -37,7 +38,17 @@
             <div class="chat-message chat-message--assistant">
               <div class="chat-bubble chat-bubble--assistant" :class="resolveTurnToneClass(turn)">
                 <div class="chat-bubble__header">
-                  <div class="chat-bubble__role">助手</div>
+                  <div class="chat-bubble__role-row">
+                    <div class="chat-bubble__role">助手</div>
+                    <el-tag
+                      size="small"
+                      effect="plain"
+                      :type="resolveTurnTagType(turn)"
+                      :title="resolveTurnStatusLabel(turn)"
+                    >
+                      {{ resolveTurnStatusLabel(turn) }}
+                    </el-tag>
+                  </div>
                   <div class="chat-bubble__meta">{{ formatLogisticsDataQaDateTime(turn.answeredAt) }}</div>
                 </div>
 
@@ -51,7 +62,8 @@
                   {{ buildTurnPresentationAnswer(turn) }}
                 </div>
 
-                <div v-if="getPresentationHighlights(turn).length" class="presentation-highlights">
+                <div v-if="getPresentationHighlights(turn).length" class="presentation-highlights result-section result-section--insight">
+                  <div class="result-section__head">关键结论</div>
                   <div
                     v-for="(item, index) in getPresentationHighlights(turn)"
                     :key="`${turn.id}-highlight-${index}`"
@@ -61,7 +73,9 @@
                   </div>
                 </div>
 
-                <div v-if="getPresentationCards(turn).length" class="presentation-cards">
+                <div v-if="getPresentationCards(turn).length" class="result-section">
+                  <div class="result-section__head">指标摘要</div>
+                  <div class="presentation-cards">
                   <div
                     v-for="(card, index) in getPresentationCards(turn)"
                     :key="`${turn.id}-card-${index}`"
@@ -73,17 +87,20 @@
                     </div>
                     <div v-if="card.description" class="presentation-card__desc">{{ card.description }}</div>
                   </div>
+                  </div>
                 </div>
 
-                <div v-if="getPresentationChart(turn)" class="presentation-chart">
+                <div v-if="getPresentationChart(turn)" class="presentation-chart result-section">
                   <div class="presentation-chart__title">
-                    {{ getPresentationChart(turn)?.title || (getPresentationChart(turn)?.chart_type === 'line' ? '趋势图' : '对比图') }}
+                    {{ buildTurnChartTitle(turn) }}
                   </div>
+                  <div class="presentation-chart__meta">{{ buildTurnChartMeta(turn) }}</div>
                   <svg
                     v-if="getPresentationChart(turn)?.chart_type === 'line'"
                     class="presentation-chart__svg"
                     viewBox="0 0 640 220"
                     role="img"
+                    :aria-label="buildTurnChartAriaLabel(turn)"
                   >
                     <polyline
                       class="presentation-chart__line"
@@ -109,11 +126,49 @@
                       {{ label.text }}
                     </text>
                   </svg>
+                  <div
+                    v-else-if="getPresentationChart(turn)?.chart_type === 'pie'"
+                    class="presentation-chart__pie-layout"
+                  >
+                    <svg
+                      class="presentation-chart__pie"
+                      viewBox="0 0 260 220"
+                      role="img"
+                      :aria-label="buildTurnChartAriaLabel(turn)"
+                    >
+                      <path
+                        v-for="slice in buildTurnPieChartSlices(turn)"
+                        :key="`${turn.id}-pie-${slice.label}`"
+                        class="presentation-chart__pie-slice"
+                        :d="slice.path"
+                        :fill="slice.color"
+                      >
+                        <title>{{ slice.tooltip }}</title>
+                      </path>
+                      <circle class="presentation-chart__pie-hole" cx="110" cy="110" r="42" />
+                      <text class="presentation-chart__pie-center" x="110" y="106" text-anchor="middle">占比</text>
+                      <text class="presentation-chart__pie-center presentation-chart__pie-center--sub" x="110" y="126" text-anchor="middle">
+                        {{ buildTurnPieChartSlices(turn).length }} 项
+                      </text>
+                    </svg>
+                    <div class="presentation-chart__legend">
+                      <div
+                        v-for="item in buildTurnPieChartLegend(turn)"
+                        :key="`${turn.id}-pie-legend-${item.label}`"
+                        class="presentation-chart__legend-item"
+                      >
+                        <span class="presentation-chart__legend-color" :style="{ background: item.color }" />
+                        <span class="presentation-chart__legend-label">{{ item.label }}</span>
+                        <span class="presentation-chart__legend-value">{{ item.valueText }}</span>
+                      </div>
+                    </div>
+                  </div>
                   <svg
                     v-else
                     class="presentation-chart__svg"
                     viewBox="0 0 640 220"
                     role="img"
+                    :aria-label="buildTurnChartAriaLabel(turn)"
                   >
                     <rect
                       v-for="bar in buildTurnBarChartRects(turn)"
@@ -162,14 +217,16 @@
                   </div>
                   <div class="chat-suggestion-row">
                     <button
-                      v-for="item in getPresentationFollowUpExamples(turn)"
-                      :key="`${turn.id}-quick-${item}`"
-                      type="button"
-                      class="chat-suggestion-chip"
-                      @click="fillExample(item)"
-                    >
-                      {{ item }}
-                    </button>
+                    v-for="item in getPresentationFollowUpExamples(turn)"
+                    :key="`${turn.id}-quick-${item}`"
+                    type="button"
+                    class="chat-suggestion-chip"
+                    :title="`填入补充示例：${item}`"
+                    :aria-label="`填入补充示例：${item}`"
+                    @click="fillExample(item)"
+                  >
+                    {{ item }}
+                  </button>
                   </div>
                 </div>
 
@@ -178,8 +235,19 @@
                   <div class="chat-empty-tips__item">建议缩小范围，或把年份、区域、承运商、客户等条件写得更直接。</div>
                 </div>
 
-                <div v-if="shouldShowDisplayTable(turn)" class="chat-table-card">
-                  <el-table :data="getDisplayTableRows(turn)" stripe size="small" class="chat-result-table">
+                <div v-if="shouldShowDisplayTable(turn)" class="chat-table-card result-section">
+                  <div class="chat-table-card__head">
+                    <span>明细数据</span>
+                    <em>{{ getDisplayTableRows(turn).length }} 行</em>
+                  </div>
+                  <el-table
+                    :data="getDisplayTableRows(turn)"
+                    stripe
+                    size="small"
+                    class="chat-result-table"
+                    max-height="420"
+                    empty-text="暂无明细数据"
+                  >
                     <el-table-column
                       v-for="column in getDisplayTableColumns(turn)"
                       :key="column"
@@ -196,7 +264,8 @@
                   </el-table>
                 </div>
 
-                <div v-if="getPresentationCaveats(turn).length" class="presentation-caveats">
+                <div v-if="getPresentationCaveats(turn).length" class="presentation-caveats result-section">
+                  <div class="result-section__head">口径与风险提示</div>
                   <div
                     v-for="(item, index) in getPresentationCaveats(turn)"
                     :key="`${turn.id}-caveat-${index}`"
@@ -225,6 +294,8 @@
                       type="primary"
                       plain
                       :loading="exportLoadingKey === `${turn.id}-xlsx`"
+                      title="导出当前轮次 Excel"
+                      aria-label="导出当前轮次 Excel"
                       @click="exportTurnResult(turn, 'xlsx')"
                     >
                       {{ turn.source === 'history' ? '导出回看结果 Excel' : '导出 Excel' }}
@@ -234,6 +305,8 @@
                       size="small"
                       plain
                       :loading="exportLoadingKey === `${turn.id}-csv`"
+                      title="导出当前轮次 CSV"
+                      aria-label="导出当前轮次 CSV"
                       @click="exportTurnResult(turn, 'csv')"
                     >
                       {{ turn.source === 'history' ? '导出回看结果 CSV' : '导出 CSV' }}
@@ -242,6 +315,8 @@
                       v-if="hasTurnAdvancedInfo(turn)"
                       size="small"
                       text
+                      :title="turn.showAdvancedInfo ? '收起高级信息' : '查看高级信息'"
+                      :aria-label="turn.showAdvancedInfo ? '收起高级信息' : '查看高级信息'"
                       @click="toggleAdvancedInfo(turn.id)"
                     >
                     {{ turn.showAdvancedInfo ? '收起' : '详情' }}
@@ -316,6 +391,7 @@
             show-word-limit
             :autosize="{ minRows: 1, maxRows: 5 }"
             placeholder="例如：2026年1月份总发运量是多少MW？总共发了多少车次？"
+            :disabled="loading || replayRestoring"
             @keydown="handleComposerKeydown"
           />
 
@@ -327,11 +403,13 @@
               <el-button round @click="resetQuestion">清空问题</el-button>
               <el-button
                 type="primary"
-                round
-                :loading="loading || replayRestoring"
-                :disabled="loading || replayRestoring"
-                @click="submitQuery"
-              >
+              round
+              :loading="loading || replayRestoring"
+              :disabled="loading || replayRestoring"
+              title="发送物流业务问题"
+              aria-label="发送物流业务问题"
+              @click="submitQuery"
+            >
                 {{ loading || replayRestoring ? '处理中' : '发送问题' }}
               </el-button>
             </el-space>
@@ -397,6 +475,21 @@ interface ChartRenderBar {
   height: number
 }
 
+interface ChartRenderSlice {
+  path: string
+  color: string
+  label: string
+  value: number
+  percent: number
+  tooltip: string
+}
+
+interface ChartLegendItem {
+  color: string
+  label: string
+  valueText: string
+}
+
 type PresentationChartSpec = NonNullable<LogisticsDataQaPresentation['chart_spec']>
 
 interface ChartValue {
@@ -406,6 +499,7 @@ interface ChartValue {
 
 const DEFAULT_SESSION_TITLE = '新建对话'
 const APP_SHELL_SIDEBAR_TOGGLE_EVENT = 'app-shell:toggle-sidebar'
+const pieChartColors = ['#2563eb', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b']
 
 const exampleQuestions = [
   {
@@ -689,6 +783,7 @@ function buildTurn(payload: {
  * 3. 成功后若当前来自历史回放入口，会清掉 historyLogId，避免重复恢复。
  */
 async function submitQuery() {
+  if (loading.value || replayRestoring.value) return
   const questionText = question.value.trim()
   if (!questionText) {
     ElMessage.warning('请输入业务问题。')
@@ -873,7 +968,7 @@ async function exportTurnResult(turn: LogisticsDataQaSessionTurn, format: 'csv' 
  */
 function handleComposerKeydown(event: KeyboardEvent) {
   if (event.key !== 'Enter') return
-  if (event.shiftKey) return
+  if (event.shiftKey || event.isComposing) return
   event.preventDefault()
   submitQuery()
 }
@@ -1059,6 +1154,10 @@ function getPresentationCards(turn: LogisticsDataQaSessionTurn) {
 function getPresentationChart(turn: LogisticsDataQaSessionTurn) {
   const chart = getPresentation(turn)?.chart_spec
   if (!chart || !chart.chart_type) return null
+  if (!['line', 'bar', 'pie'].includes(chart.chart_type)) return null
+  const values = extractChartValues(chart)
+  if (!values.length) return null
+  if (chart.chart_type === 'pie' && (values.some((item) => item.value < 0) || !values.some((item) => item.value > 0))) return null
   return chart
 }
 
@@ -1112,7 +1211,7 @@ function shouldShowDisplayTable(turn: LogisticsDataQaSessionTurn) {
   const rows = getDisplayTableRows(turn)
   if (!rows.length) return false
   const displayType = getPresentation(turn)?.display_type
-  if (displayType === 'line_chart' || displayType === 'bar_chart') {
+  if (displayType === 'line_chart' || displayType === 'bar_chart' || displayType === 'pie_chart') {
     return !getPresentationChart(turn)
   }
   return isTurnSuccess(turn)
@@ -1168,6 +1267,53 @@ function buildTurnBarChartRects(turn: LogisticsDataQaSessionTurn) {
 }
 
 /**
+ * 当前轮次图表标题。
+ */
+function buildTurnChartTitle(turn: LogisticsDataQaSessionTurn) {
+  const chart = getPresentationChart(turn)
+  if (!chart) return ''
+  if (chart.title) return chart.title
+  if (chart.chart_type === 'pie') return '占比图'
+  return chart.chart_type === 'line' ? '趋势图' : '对比图'
+}
+
+/**
+ * 当前轮次图表辅助说明。
+ *
+ * 返回：
+ *   仅基于 chart_spec 的数据点数量与单位说明，不推导额外业务结论。
+ */
+function buildTurnChartMeta(turn: LogisticsDataQaSessionTurn) {
+  const chart = getPresentationChart(turn)
+  return chart ? buildChartMeta(chart) : ''
+}
+
+/**
+ * 当前轮次图表无障碍说明。
+ */
+function buildTurnChartAriaLabel(turn: LogisticsDataQaSessionTurn) {
+  const title = buildTurnChartTitle(turn)
+  const meta = buildTurnChartMeta(turn)
+  return [title, meta].filter(Boolean).join('，')
+}
+
+/**
+ * 当前轮次饼图扇区。
+ */
+function buildTurnPieChartSlices(turn: LogisticsDataQaSessionTurn) {
+  const chart = getPresentationChart(turn)
+  return chart ? buildPieChartSlices(chart) : []
+}
+
+/**
+ * 当前轮次饼图图例。
+ */
+function buildTurnPieChartLegend(turn: LogisticsDataQaSessionTurn) {
+  const chart = getPresentationChart(turn)
+  return chart ? buildPieChartLegend(chart) : []
+}
+
+/**
  * 当前轮次图表标签。
  */
 function buildTurnChartLabels(turn: LogisticsDataQaSessionTurn) {
@@ -1215,19 +1361,124 @@ function buildBarChartRects(chart: PresentationChartSpec) {
 }
 
 /**
+ * 生成饼图扇区路径。
+ */
+function buildPieChartSlices(chart: PresentationChartSpec): ChartRenderSlice[] {
+  const values = extractPieChartValues(chart)
+  const total = values.reduce((sum, item) => sum + item.value, 0)
+  if (total <= 0) return []
+  let cursor = 0
+  return values
+    .filter((item) => item.value > 0)
+    .map((item, index) => {
+      const start = cursor
+      const percent = item.value / total
+      cursor += percent
+      const color = pieChartColors[index % pieChartColors.length]
+      const label = String(item.label ?? `项目${index + 1}`)
+      const valueText = formatPieValue(item.value, chart.unit)
+      return {
+        path: buildPieSlicePath(110, 110, 84, start, cursor),
+        color,
+        label,
+        value: item.value,
+        percent,
+        tooltip: `${label}：${valueText}，占比 ${(percent * 100).toFixed(1)}%`,
+      }
+    })
+}
+
+/**
+ * 生成饼图图例。
+ */
+function buildPieChartLegend(chart: PresentationChartSpec): ChartLegendItem[] {
+  return buildPieChartSlices(chart).map((slice) => ({
+    color: slice.color,
+    label: slice.label,
+    valueText: `${formatPieValue(slice.value, chart.unit)} · ${(slice.percent * 100).toFixed(1)}%`,
+  }))
+}
+
+/**
+ * 构造单个饼图扇区 SVG 路径。
+ */
+function buildPieSlicePath(cx: number, cy: number, radius: number, startRatio: number, endRatio: number) {
+  // 单一切片会出现起止点重合，必须拆成两段圆弧，否则 SVG 可能渲染为空。
+  if (endRatio - startRatio >= 0.999999) {
+    return [
+      `M ${formatSvgNumber(cx)} ${formatSvgNumber(cy - radius)}`,
+      `A ${radius} ${radius} 0 1 1 ${formatSvgNumber(cx)} ${formatSvgNumber(cy + radius)}`,
+      `A ${radius} ${radius} 0 1 1 ${formatSvgNumber(cx)} ${formatSvgNumber(cy - radius)}`,
+      'Z',
+    ].join(' ')
+  }
+  const startAngle = -Math.PI / 2 + startRatio * Math.PI * 2
+  const endAngle = -Math.PI / 2 + endRatio * Math.PI * 2
+  const start = {
+    x: cx + radius * Math.cos(startAngle),
+    y: cy + radius * Math.sin(startAngle),
+  }
+  const end = {
+    x: cx + radius * Math.cos(endAngle),
+    y: cy + radius * Math.sin(endAngle),
+  }
+  const largeArc = endRatio - startRatio > 0.5 ? 1 : 0
+  return [
+    `M ${formatSvgNumber(cx)} ${formatSvgNumber(cy)}`,
+    `L ${formatSvgNumber(start.x)} ${formatSvgNumber(start.y)}`,
+    `A ${radius} ${radius} 0 ${largeArc} 1 ${formatSvgNumber(end.x)} ${formatSvgNumber(end.y)}`,
+    'Z',
+  ].join(' ')
+}
+
+/**
+ * 格式化 SVG 坐标，减少 DOM 中无意义长小数。
+ */
+function formatSvgNumber(value: number) {
+  return Number(value.toFixed(3))
+}
+
+/**
+ * 格式化饼图图例数值，保留业务单位。
+ */
+function formatPieValue(value: number, unit?: string | null) {
+  const formatted = formatPresentationValue(value)
+  return unit ? `${formatted}${unit}` : formatted
+}
+
+/**
  * 生成图表 X 轴标签。
  */
 function buildChartLabels(chart: PresentationChartSpec) {
   const values = extractChartValues(chart)
-  const slotWidth = values.length > 1 ? 584 / (values.length - 1) : 0
+  const lineSlotWidth = values.length > 1 ? 584 / (values.length - 1) : 0
+  const barSlotWidth = values.length ? 584 / values.length : 584
   const maxLabels = 8
   const step = Math.max(1, Math.ceil(values.length / maxLabels))
   return values
     .map((item, index): ChartRenderLabel => ({
-      x: values.length > 1 ? 28 + slotWidth * index : 320,
+      x: chart.chart_type === 'bar'
+        ? 28 + barSlotWidth * index + barSlotWidth / 2
+        : values.length > 1 ? 28 + lineSlotWidth * index : 320,
       text: String(item.label ?? '').slice(0, 8),
     }))
     .filter((_, index) => index % step === 0)
+}
+
+/**
+ * 生成图表辅助说明。
+ *
+ * 参数：
+ *   chart: 后端表达层图表配置。
+ *
+ * 返回：
+ *   适合展示在图表标题下方的结构说明。
+ */
+function buildChartMeta(chart: PresentationChartSpec) {
+  const values = extractChartValues(chart)
+  const typeLabel = chart.chart_type === 'line' ? '趋势' : chart.chart_type === 'pie' ? '占比' : '对比'
+  const unitText = chart.unit ? `，单位：${chart.unit}` : ''
+  return `${typeLabel}展示，共 ${values.length} 个数据点${unitText}`
 }
 
 /**
@@ -1258,7 +1509,7 @@ function extractChartValues(chart: PresentationChartSpec): ChartValue[] {
     return firstSeries.data
       .map((item: Record<string, unknown>) => ({
         label: item.x,
-        value: Number(item.y),
+        value: parseChartNumber(item.y),
       }))
       .filter((item: ChartValue) => Number.isFinite(item.value))
   }
@@ -1267,9 +1518,28 @@ function extractChartValues(chart: PresentationChartSpec): ChartValue[] {
   return (chart.data || [])
     .map((row: Record<string, unknown>) => ({
       label: row[xAxis],
-      value: Number(row[yAxis]),
+      value: parseChartNumber(row[yAxis]),
     }))
     .filter((item: ChartValue) => Number.isFinite(item.value))
+}
+
+/**
+ * 解析图表数值。
+ *
+ * 说明：
+ * 历史快照或表达层可能把数字序列化成带千分位的字符串，前端只做类型兼容。
+ */
+function parseChartNumber(value: unknown) {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') return Number(value.replace(/,/g, '').trim())
+  return Number(value)
+}
+
+/**
+ * 饼图只展示非负切片，全零时不渲染扇区。
+ */
+function extractPieChartValues(chart: PresentationChartSpec): ChartValue[] {
+  return extractChartValues(chart).filter((item) => item.value >= 0)
 }
 
 /**
@@ -2535,6 +2805,19 @@ onBeforeUnmount(() => {
     flex-direction: column;
   }
 
+  .result-section {
+    padding: 12px;
+  }
+
+  .chat-table-card.result-section {
+    padding: 0;
+  }
+
+  .chat-bubble__role-row {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .chat-composer {
     padding: 10px 12px 14px;
   }
@@ -2822,8 +3105,59 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
-.presentation-highlights {
+.chat-bubble__role-row {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-bubble--ok .chat-bubble__title-row,
+.chat-bubble--clarify .chat-bubble__title-row,
+.chat-bubble--unsupported .chat-bubble__title-row,
+.chat-bubble--empty .chat-bubble__title-row,
+.chat-bubble--error .chat-bubble__title-row {
+  padding-left: 12px;
+  border-left: 4px solid #d1d5db;
+}
+
+.chat-bubble--ok .chat-bubble__title-row {
+  border-left-color: #16a34a;
+}
+
+.chat-bubble--clarify .chat-bubble__title-row,
+.chat-bubble--empty .chat-bubble__title-row {
+  border-left-color: #d97706;
+}
+
+.chat-bubble--unsupported .chat-bubble__title-row {
+  border-left-color: #64748b;
+}
+
+.chat-bubble--error .chat-bubble__title-row {
+  border-left-color: #dc2626;
+}
+
+.result-section {
   margin-top: 14px;
+  padding: 14px;
+  border: 1px solid var(--logistics-line);
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.result-section--insight {
+  background: linear-gradient(180deg, #ffffff 0%, #fafafa 100%);
+}
+
+.result-section__head {
+  margin-bottom: 10px;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.presentation-highlights {
   display: grid;
   gap: 8px;
 }
@@ -2838,7 +3172,6 @@ onBeforeUnmount(() => {
 }
 
 .presentation-cards {
-  margin-top: 14px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
   gap: 10px;
@@ -2886,6 +3219,10 @@ onBeforeUnmount(() => {
   background: #ffffff;
 }
 
+.presentation-chart.result-section {
+  margin-top: 16px;
+}
+
 .presentation-chart__title {
   margin-bottom: 8px;
   color: #374151;
@@ -2893,11 +3230,83 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.presentation-chart__meta {
+  margin: -2px 0 8px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .presentation-chart__svg {
   width: 100%;
   height: 220px;
   display: block;
   overflow: visible;
+}
+
+.presentation-chart__pie-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(180px, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.presentation-chart__pie {
+  width: 100%;
+  height: 220px;
+  display: block;
+}
+
+.presentation-chart__pie-slice {
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.presentation-chart__pie-hole {
+  fill: #ffffff;
+}
+
+.presentation-chart__pie-center {
+  fill: #1f2937;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.presentation-chart__pie-center--sub {
+  fill: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.presentation-chart__legend {
+  display: grid;
+  gap: 8px;
+}
+
+.presentation-chart__legend-item {
+  display: grid;
+  grid-template-columns: 10px minmax(72px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  color: #374151;
+  font-size: 12px;
+}
+
+.presentation-chart__legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.presentation-chart__legend-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presentation-chart__legend-value {
+  color: #111827;
+  font-weight: 600;
 }
 
 .presentation-chart__line {
@@ -2921,10 +3330,17 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
+@media (max-width: 720px) {
+  .presentation-chart__pie-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .presentation-caveats {
-  margin-top: 12px;
   display: grid;
   gap: 6px;
+  background: #fffaf0;
+  border-color: #f2dfb8;
 }
 
 .presentation-caveats__item {
@@ -2987,6 +3403,31 @@ onBeforeUnmount(() => {
   border-radius: 999px;
 }
 
+.chat-table-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--logistics-line);
+  color: #374151;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.chat-table-card__head em {
+  flex: none;
+  color: #6b7280;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 500;
+}
+
+.chat-table-card.result-section {
+  padding: 0;
+  overflow: hidden;
+}
+
 .trial-panel,
 .chat-welcome__badge,
 .chat-welcome__desc,
@@ -3023,6 +3464,19 @@ onBeforeUnmount(() => {
   .chat-message--user .chat-bubble,
   .chat-message--assistant .chat-bubble {
     max-width: 100%;
+  }
+
+  .result-section {
+    padding: 12px;
+  }
+
+  .chat-table-card.result-section {
+    padding: 0;
+  }
+
+  .chat-bubble__role-row {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .chat-composer {

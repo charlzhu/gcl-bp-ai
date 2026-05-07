@@ -82,7 +82,7 @@ class LogisticsDataQaPlanner:
         "发运瓦数",
         "总发运瓦数",
     )
-    TRIP_KEYWORDS = ("总车次", "承运车次", "发运车次", "多少车次", "多少车", "总共发了多少车次", "总车数", "车数")
+    TRIP_KEYWORDS = ("总车次", "承运车次", "发运车次", "多少车次", "多少车", "总共发了多少车次", "总车数", "车数", "车辆数")
     TOTAL_FEE_KEYWORDS = (
         "总费用",
         "总运费",
@@ -282,6 +282,8 @@ class LogisticsDataQaPlanner:
             )
 
         year = self._extract_year(compact)
+        years = self._extract_years(compact)
+        year_range = [item for item in years if item in {2023, 2024, 2025}]
         months = self._extract_months(compact)
         region = self._extract_region(compact)
         province = self._extract_province(compact)
@@ -330,7 +332,11 @@ class LogisticsDataQaPlanner:
                 sort=[{"field": "biz_month", "direction": "asc"}],
             )
 
-        if "平均元/瓦" in compact and "运输方式" in compact and region:
+        if (
+            ("平均元/瓦" in compact or "平均元每瓦" in compact or self._is_unit_fee_question(compact))
+            and "运输方式" in compact
+            and region
+        ):
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="hist_avg_fee_per_watt_by_transport",
@@ -512,6 +518,19 @@ class LogisticsDataQaPlanner:
                 dimensions=["company_name"],
                 filters={"year": 2026},
                 group_by=["company_name"],
+            )
+
+        if len(year_range) > 1 and all(item in {2023, 2024, 2025} for item in year_range) and self._is_monthly_fee_compare_question(compact):
+            # “2023–2025 年各月物流总费用”属于跨年度逐月对比题，必须保留 year-month 粒度，
+            # 不能退化成单一年份或把 3 年同月份合并。
+            return LogisticsDataQaPlan(
+                intent="compare",
+                query_key="hist_monthly_total_fee_by_year",
+                metrics=["total_fee"],
+                dimensions=["biz_month"],
+                filters={"years": year_range},
+                group_by=["biz_month"],
+                sort=[{"field": "biz_month", "direction": "asc"}],
             )
 
         if year in {2023, 2024, 2025} and self._is_monthly_fee_compare_question(compact):
@@ -953,6 +972,28 @@ class LogisticsDataQaPlanner:
         system_base_code = self._extract_system_base_code(compact)
         quarter = self.slot_extractor.extract_quarter(compact)
 
+        if region and any(keyword in compact for keyword in ("总发运件数", "发运件数", "多少件")):
+            # “华东区域历史物流一共发运了多少件”这类问法没有显式写“总发运件数”，但业务口径仍是 actual_qty 件数汇总。
+            # 未给年份时沿用历史累计口径；给出 2023/2024/2025 时按单年过滤。
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="hist_quantity_by_region",
+                metrics=["shipment_count"],
+                dimensions=[],
+                filters={"year": year if year in {2023, 2024, 2025} else None, "region_name": region},
+            )
+
+        if year in {2023, 2024, 2025} and quarter and self._is_trip_question(compact) and not region:
+            # 支持“24年一季度物流发运车辆数/车次数”这类全局季度车次问题：季度转换成月份列表，复用历史汇总查询。
+            quarter_months = {"Q1": [1, 2, 3], "Q2": [4, 5, 6], "Q3": [7, 8, 9], "Q4": [10, 11, 12]}[quarter]
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="hist_total_fee_summary",
+                metrics=["shipment_trip_count"],
+                dimensions=[],
+                filters={"year": year, "months": quarter_months, "quarter": quarter},
+            )
+
         if year in {2023, 2024, 2025} and any(
             keyword in compact for keyword in ("招标场景", "询比价场景", "经营计划场景", "辅料送样场景")
         ):
@@ -981,6 +1022,26 @@ class LogisticsDataQaPlanner:
                 metrics=["shipment_mw", "total_fee"],
                 dimensions=["biz_month"],
                 filters={"years": years, "region_name": region, "province": province},
+                group_by=["biz_month"],
+                sort=[{"field": "biz_month", "direction": "asc"}],
+            )
+
+        if (
+            len(years) > 1
+            and all(item in {2023, 2024, 2025} for item in years)
+            and monthly_breakdown
+            and self._is_monthly_fee_compare_question(compact)
+            and not region
+            and not province
+        ):
+            # 跨年度全局月度总费用必须优先于“历史承运商简称题族”判断，
+            # 避免“2023–2025年各月运费”中的年份范围前缀被误抽成承运商。
+            return LogisticsDataQaPlan(
+                intent="compare",
+                query_key="hist_monthly_total_fee_by_year",
+                metrics=["total_fee"],
+                dimensions=["biz_month"],
+                filters={"years": years},
                 group_by=["biz_month"],
                 sort=[{"field": "biz_month", "direction": "asc"}],
             )
@@ -1636,7 +1697,7 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "top_n": 10},
             )
 
-        if province and "前5名客户" in compact and "总费用" in compact and self._is_mw_question(compact):
+        if province and any(keyword in compact for keyword in ("前5名客户", "前五名客户", "客户按总费用排前五", "客户按总费用排前5")) and "总费用" in compact and self._is_mw_question(compact):
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="hist_top_customers_fee_and_mw_by_province",
@@ -1678,7 +1739,11 @@ class LogisticsDataQaPlanner:
                 query_key="hist_total_fee_by_province",
                 metrics=["total_fee"],
                 dimensions=[],
-                filters={"year": year if year in {2023, 2024, 2025} else None, "province": province},
+                filters={
+                    "years": years if len(years) > 1 and all(item in {2023, 2024, 2025} for item in years) else None,
+                    "year": year if year in {2023, 2024, 2025} and not len(years) > 1 else None,
+                    "province": province,
+                },
             )
 
         # 903 全量补槽闭环：历史总运费高频题族统一走通用汇总 query_key。
@@ -2228,7 +2293,7 @@ class LogisticsDataQaPlanner:
 
     def _is_unit_fee_question(self, question: str) -> bool:
         """判断当前问句是否在问单瓦价/元瓦。"""
-        return any(keyword in question for keyword in ("单瓦价", "单W运输成本", "元瓦", "单瓦运输成本", "单瓦成本"))
+        return any(keyword in question for keyword in ("单瓦价", "单W运输成本", "元瓦", "元/瓦", "元每瓦", "单瓦运输成本", "单瓦成本"))
 
     def _is_ytd_scope_question(self, question: str) -> bool:
         """判断问句是否明确表达“当前累计 / 截至目前”。

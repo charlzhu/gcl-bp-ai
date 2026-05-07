@@ -8,10 +8,10 @@
 - 模型来源：LLM_MODEL
 - 使用模型：qwen-plus
 - API Key：只来自环境变量，报告不输出密钥。
-- 样例总数：13
-- 通过：13
+- 样例总数：14
+- 通过：14
 - 失败：0
-- fallback 数：4
+- fallback 数：12
 - 前端真实页面展示检查：通过
 - 当前是否可进入真实业务试运行：是
 
@@ -32,7 +32,7 @@
 - 展示类型：line_chart
 - 图表类型：line
 - presentation 来源：deterministic
-- fallback 原因：llm_text_number_hallucination
+- fallback 原因：llm_error:provider_error
 - 是否通过：True
 - 失败项：[]
 
@@ -40,27 +40,26 @@
 ```json
 {
   "line_chart": 2,
-  "summary_cards": 2,
+  "summary_cards": 3,
   "table": 1,
   "bar_chart": 1,
+  "pie_chart": 1,
   "mixed": 1,
   "clarification": 2,
-  "unsupported": 1,
-  "narrative": 1
+  "unsupported": 1
 }
 ```
 
 ## fallback 原因分布
 ```json
 {
-  "llm_text_number_hallucination": 4,
-  "none": 7
+  "llm_error:provider_error": 12
 }
 ```
 
 ## 安全校验
 - 状态越权拦截数：0
-- 数值幻觉拦截数：4
+- 数值幻觉拦截数：0
 - 图表数据非法拦截数：0
 
 ## 业务链路边界

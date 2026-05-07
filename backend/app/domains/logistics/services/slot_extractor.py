@@ -169,7 +169,12 @@ class LogisticsSlotExtractor:
 
         compact = self.compact(question)
         years: list[int] = []
-        for match in re.finditer(r"(?P<start>20(?:23|24|25|26))年?(?:到|至|-|—|~)(?P<end>20(?:23|24|25|26))年?", compact):
+        for match in re.finditer(
+            r"(?P<start>20(?:23|24|25|26))年?(?:到|至|-|–|—|~)(?P<end>20(?:23|24|25|26))年?",
+            compact,
+        ):
+            # 年份范围必须先整体展开，再补充单年命中；否则“2023–2025年”会被单年规则
+            # 误识别成 2025 年，导致跨年问题只返回末年数据。
             start_year = int(match.group("start"))
             end_year = int(match.group("end"))
             if start_year <= end_year:

@@ -71,6 +71,7 @@ export interface LogisticsDataQaPresentation {
     | 'table'
     | 'line_chart'
     | 'bar_chart'
+    | 'pie_chart'
     | 'mixed'
     | 'clarification'
     | 'unsupported'
@@ -80,7 +81,7 @@ export interface LogisticsDataQaPresentation {
   answer?: string
   highlights?: string[]
   chart_spec?: {
-    chart_type?: 'line' | 'bar' | null
+    chart_type?: 'line' | 'bar' | 'pie' | null
     title?: string
     x_axis?: string
     y_axis?: string[]

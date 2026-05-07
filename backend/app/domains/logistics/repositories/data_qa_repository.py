@@ -306,17 +306,22 @@ class LogisticsDataQaRepository:
         """历史元/瓦按运输方式排序。
 
         口径说明：
-            把“汽运”归一到“公路”，按 fee_per_watt 做平均。
+            1. 把“汽运”归一到“公路”；
+            2. 平均元/瓦使用 SUM(total_fee) / SUM(actual_watt) 的加权口径，避免直接平均单行 fee_per_watt 造成小票据权重过高。
         """
         rows = self.db.execute(
             text(
                 """
                 SELECT
                     CASE WHEN transport_mode IN ('汽运', '公路') THEN '公路' ELSE transport_mode END AS transport_mode,
-                    ROUND(AVG(fee_per_watt), 4) AS avg_fee_per_watt
+                    ROUND(SUM(total_fee) / NULLIF(SUM(actual_watt), 0), 6) AS avg_fee_per_watt,
+                    ROUND(SUM(total_fee), 0) AS total_fee,
+                    ROUND(SUM(actual_watt), 0) AS shipment_watt,
+                    COUNT(*) AS row_count
                 FROM dwd_logistics_hist_shipment_detail
                 WHERE region_name = :region_name
-                  AND fee_per_watt IS NOT NULL
+                  AND actual_watt IS NOT NULL
+                  AND actual_watt > 0
                 GROUP BY CASE WHEN transport_mode IN ('汽运', '公路') THEN '公路' ELSE transport_mode END
                 ORDER BY avg_fee_per_watt ASC
                 """
@@ -410,12 +415,14 @@ class LogisticsDataQaRepository:
         *,
         province: str,
         year: int | None = None,
+        years: list[int] | None = None,
     ) -> dict[str, Any]:
         """历史按省份汇总总费用。
 
         参数：
             province: 目的省份。
             year: 可选年份；为空时按 2023–2025 历史累计统计。
+            years: 可选年份列表；用于“2023到2025年江苏总运费”这类明确跨年范围。
 
         返回：
             包含总费用、总发运量和命中行数的结构化字典。
@@ -427,7 +434,16 @@ class LogisticsDataQaRepository:
         """
         filters = ["province = :province"]
         params: dict[str, Any] = {"province": province}
-        if year is None:
+        if years:
+            safe_years = [int(item) for item in years if int(item) in {2023, 2024, 2025}]
+            if safe_years:
+                year_placeholders = ", ".join(str(item) for item in safe_years)
+                filters.append(f"biz_year IN ({year_placeholders})")
+                scope_label = f"{min(safe_years)}-{max(safe_years)}年" if len(safe_years) > 1 else f"{safe_years[0]}年"
+            else:
+                filters.append("biz_year IN (2023, 2024, 2025)")
+                scope_label = "2023-2025历史累计"
+        elif year is None:
             filters.append("biz_year IN (2023, 2024, 2025)")
             scope_label = "2023-2025历史累计"
         else:
@@ -514,6 +530,7 @@ class LogisticsDataQaRepository:
                 SELECT
                     ROUND(SUM(total_fee), 0) AS total_fee,
                     ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw,
+                    ROUND(SUM(COALESCE(shipment_trip_count, 0)), 0) AS shipment_trip_count,
                     COUNT(*) AS row_count
                 FROM dwd_logistics_hist_shipment_detail
                 WHERE {where_sql}
@@ -986,22 +1003,33 @@ class LogisticsDataQaRepository:
         ).mappings().all()
         return [dict(row) for row in rows]
 
-    def hist_monthly_total_fee_by_year(self, *, year: int) -> list[dict[str, Any]]:
-        """历史按月份对比总运费。"""
+    def hist_monthly_total_fee_by_year(self, *, year: int | None = None, years: list[int] | None = None) -> list[dict[str, Any]]:
+        """历史按 year-month 月份粒度对比总运费。
+
+        参数：
+            year: 单一年份过滤条件，兼容原有“2025 年各月”问法。
+            years: 多年份过滤条件，用于“2023–2025 年各月”跨年逐月对比。
+        返回：
+            按 `YYYY-MM` 升序排列的月度总费用列表。
+        """
+
+        safe_years = sorted({int(item) for item in (years or ([year] if year else [])) if int(item) in {2023, 2024, 2025}})
+        if not safe_years:
+            return []
+        year_filter_sql = ", ".join(str(item) for item in safe_years)
         rows = self.db.execute(
             text(
-                """
+                f"""
                 SELECT
                     DATE_FORMAT(biz_date, '%Y-%m') AS biz_month,
                     ROUND(SUM(total_fee), 0) AS total_fee
                 FROM dwd_logistics_hist_shipment_detail
-                WHERE biz_year = :year
+                WHERE biz_year IN ({year_filter_sql})
                   AND biz_date IS NOT NULL
                 GROUP BY DATE_FORMAT(biz_date, '%Y-%m')
                 ORDER BY biz_month ASC
                 """
-            ),
-            {"year": year},
+            )
         ).mappings().all()
         return [dict(row) for row in rows]
 

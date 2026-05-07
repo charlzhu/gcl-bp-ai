@@ -23,10 +23,11 @@
 
 - `/logistics/data-qa`
 
-相关接口仍复用现有：
+相关接口仍复用现有 TypeScript 源文件：
 
 - `frontend/src/api/logistics.ts`
-- `frontend/src/api/logistics.js`
+
+说明：历史同名 `frontend/src/api/logistics.js` 编译产物已在项目清理中移除，避免与 `.ts` 源文件并存造成维护歧义。
 
 ## 三、新布局说明
 

@@ -626,7 +626,7 @@ class LogisticsDataQaService:
                 table_columns=["transport_mode", "avg_fee_per_watt"],
                 table_rows=data,
                 calculation_logic=[
-                    "元/瓦使用历史明细 fee_per_watt 做平均。",
+                    "平均元/瓦按 SUM(total_fee) / SUM(actual_watt) 加权计算，仅纳入 actual_watt 大于 0 的历史明细。",
                     "运输方式口径中，汽运与公路统一归并到公路。"
                 ],
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", "region_name": filters["region_name"]},
@@ -723,6 +723,7 @@ class LogisticsDataQaService:
             data = self.repository.hist_total_fee_by_province(
                 province=filters["province"],
                 year=filters.get("year"),
+                years=filters.get("years"),
             )
             summary = f"{data['scope_label']}{filters['province']}省总费用为{int(data.get('total_fee') or 0):,}元。"
             return self._build_result(
@@ -1057,14 +1058,30 @@ class LogisticsDataQaService:
             )
 
         if plan.query_key == "hist_monthly_total_fee_by_year":
-            data = self.repository.hist_monthly_total_fee_by_year(year=filters["year"])
-            summary = f"{filters['year']}年各月运费对比已按月份返回。"
+            years = filters.get("years") or ([filters["year"]] if filters.get("year") else [])
+            if not years:
+                warnings.append("缺少年份过滤条件，无法执行历史月度总费用查询。")
+                return self._build_result(
+                    answer_summary="请补充需要查询的历史年份，例如 2025 年或 2023–2025 年。",
+                    plan=plan,
+                    table_columns=["biz_month", "total_fee"],
+                    table_rows=[],
+                    calculation_logic=["历史月度总费用查询必须先明确 2023–2025 范围内的年份。"],
+                    data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+                    warnings=warnings,
+                )
+            data = self.repository.hist_monthly_total_fee_by_year(years=years)
+            scope_label = f"{min(years)}–{max(years)}年" if len(years) > 1 else f"{years[0]}年"
+            calculation_logic = ["月度运费按历史台账 total_fee 汇总，并按 YYYY-MM 升序返回。"]
+            if len(years) > 1:
+                calculation_logic.append("跨年度问题保留 year-month 粒度，不把不同年份的同月份合并。")
+            summary = f"{scope_label}各月物流总费用已按 year-month 月份粒度返回。"
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
                 table_columns=["biz_month", "total_fee"],
                 table_rows=data,
-                calculation_logic=["月度运费按历史台账 total_fee 汇总，并按 biz_month 升序返回。"],
+                calculation_logic=calculation_logic,
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
                 warnings=warnings,
             )

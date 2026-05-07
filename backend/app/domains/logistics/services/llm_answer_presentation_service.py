@@ -38,6 +38,7 @@ class LogisticsLlmAnswerPresentationService:
         "table",
         "line_chart",
         "bar_chart",
+        "pie_chart",
         "mixed",
         "clarification",
         "unsupported",
@@ -45,7 +46,7 @@ class LogisticsLlmAnswerPresentationService:
         "error",
     }
     STATUS_TO_DISPLAY_TYPE = {
-        "OK": {"narrative", "summary_cards", "table", "line_chart", "bar_chart", "mixed"},
+        "OK": {"narrative", "summary_cards", "table", "line_chart", "bar_chart", "pie_chart", "mixed"},
         "CLARIFICATION_REQUIRED": {"clarification"},
         "UNSUPPORTED_QUESTION": {"unsupported"},
         "EMPTY_RESULT": {"empty_result"},
@@ -351,8 +352,8 @@ class LogisticsLlmAnswerPresentationService:
             "1.4 图表类回答的 answer 只做展示说明，例如“已按月份整理为折线图，具体数值见图表和表格”，不要在 answer/highlights 中复述或推导多组数字。\n"
             "2. status_code 必须原样返回，不得把 clarification/unsupported/empty/error 改成 success。\n"
             "3. 不得把 B/C 问题包装成可回答结论。\n"
-            "4. 用户要求折线图/柱状图/表格时，如果结构化数据支持，必须优先输出对应 chart_spec/table_spec；数据不支持时选择 narrative 或 table。\n"
-            "5. chart_spec 必须使用字段 chart_type，不要使用 type；chart_type 只能是 line 或 bar。\n"
+            "4. 用户要求饼图/折线图/柱状图/表格时，如果结构化数据支持，必须优先输出对应 chart_spec/table_spec；数据不支持时选择 narrative 或 table。\n"
+            "5. chart_spec 必须使用字段 chart_type，不要使用 type；chart_type 只能是 line、bar 或 pie。\n"
             "5.1 chart_spec 的 x_axis、y_axis、series.field 必须使用 result_table.columns 里的后端原始字段名，不要改成中文字段名。\n"
             "5.2 chart_spec.data 必须原样使用 result_table.rows；series 里的每个点必须是 {\"x\": row[x_axis], \"y\": row[field]}，不要省略 data。\n"
             "6. 技术词如 query_key、slot、planner、guardrail 不要出现在主展示，只能放 debug。\n"
@@ -361,7 +362,7 @@ class LogisticsLlmAnswerPresentationService:
             "9. 输出必须是单个 JSON 对象，不要 markdown。\n"
             "JSON 字段：status_code,display_type,title,answer,highlights,chart_spec,table_spec,cards,follow_up,unsupported_explanation,caveats,debug。\n"
             "chart_spec 示例：{\"chart_type\":\"line\",\"title\":\"...\",\"x_axis\":\"biz_month\",\"y_axis\":[\"shipment_mw\"],\"series\":[{\"name\":\"发运量\",\"field\":\"shipment_mw\",\"data\":[{\"x\":\"2026-01\",\"y\":864.728}]}],\"unit\":\"MW\",\"data\":[...]}\n"
-            "display_type 只能是 narrative,summary_cards,table,line_chart,bar_chart,mixed,clarification,unsupported,empty_result,error。\n"
+            "display_type 只能是 narrative,summary_cards,table,line_chart,bar_chart,pie_chart,mixed,clarification,unsupported,empty_result,error。\n"
             "文风：简洁、专业、自然，像业务助手，不要固定套模板。"
         )
 
@@ -526,6 +527,8 @@ class LogisticsLlmAnswerPresentationService:
         if status_code == "EXECUTION_ERROR":
             return "error"
         requested = self._detect_requested_display(question)
+        if requested == "pie_chart" and self._can_build_pie_chart(result):
+            return requested
         if requested in {"line_chart", "bar_chart"} and self._can_build_chart(result):
             return requested
         if requested == "table":
@@ -541,6 +544,8 @@ class LogisticsLlmAnswerPresentationService:
     def _detect_requested_display(self, question: str) -> str | None:
         """识别用户显式要求的展示方式。"""
 
+        if re.search(r"饼图|圆饼图|环形图|占比图|占比展示", question):
+            return "pie_chart"
         if re.search(r"折线图|趋势图|看趋势|趋势", question):
             return "line_chart"
         if re.search(r"柱状图|柱形图|条形图", question):
@@ -589,7 +594,7 @@ class LogisticsLlmAnswerPresentationService:
         if (
             status_code == "OK"
             and result.result_table.rows
-            and display_type not in {"line_chart", "bar_chart", "table", "mixed"}
+            and display_type not in {"line_chart", "bar_chart", "pie_chart", "table", "mixed"}
         ):
             highlights.append(f"本次返回 {len(result.result_table.rows)} 行结果。")
         if result.warnings:
@@ -692,7 +697,7 @@ class LogisticsLlmAnswerPresentationService:
                     unit=self._dimension_count_unit(x_axis),
                 )
             )
-        if self._detect_requested_display(question) not in {"line_chart", "bar_chart"}:
+        if self._detect_requested_display(question) not in {"line_chart", "bar_chart", "pie_chart"}:
             cards.append(
                 LogisticsDataQaPresentationCard(
                     label="明细行数",
@@ -711,7 +716,7 @@ class LogisticsLlmAnswerPresentationService:
     ) -> LogisticsDataQaChartSpec | None:
         """按后端 rows 构造轻量图表配置。"""
 
-        if display_type not in {"line_chart", "bar_chart", "mixed"}:
+        if display_type not in {"line_chart", "bar_chart", "pie_chart", "mixed"}:
             return None
         if not self._can_build_chart(result):
             return None
@@ -720,8 +725,10 @@ class LogisticsLlmAnswerPresentationService:
         if not x_axis or not y_axis:
             return None
         requested = self._detect_requested_display(question)
-        chart_type = "line" if requested == "line_chart" else "bar"
-        if display_type == "mixed" and requested != "line_chart":
+        chart_type = "line" if requested == "line_chart" else "pie" if requested == "pie_chart" else "bar"
+        if chart_type == "pie" and not self._pie_values_have_positive_total(result=result, x_axis=x_axis, y_axis=y_axis[0]):
+            return None
+        if display_type == "mixed" and requested not in {"line_chart", "pie_chart"}:
             chart_type = "bar"
         series = [
             {
@@ -737,7 +744,7 @@ class LogisticsLlmAnswerPresentationService:
         ]
         return LogisticsDataQaChartSpec(
             chart_type=chart_type,
-            title=f"{self._label(y_axis[0])}{'趋势图' if chart_type == 'line' else '对比图'}",
+            title=f"{self._label(y_axis[0])}{'趋势图' if chart_type == 'line' else '占比图' if chart_type == 'pie' else '对比图'}",
             x_axis=x_axis,
             y_axis=y_axis,
             series=series,
@@ -787,7 +794,7 @@ class LogisticsLlmAnswerPresentationService:
         """清洗 LLM chart_spec。"""
 
         chart_type = payload.get("chart_type")
-        if chart_type not in {"line", "bar"}:
+        if chart_type not in {"line", "bar", "pie"}:
             return None
         return LogisticsDataQaChartSpec(
             chart_type=chart_type,
@@ -964,8 +971,9 @@ class LogisticsLlmAnswerPresentationService:
         requested = self._detect_requested_display(question)
         if requested is None:
             return False
-        if requested in {"line_chart", "bar_chart"}:
-            if self._can_build_chart(result):
+        if requested in {"line_chart", "bar_chart", "pie_chart"}:
+            can_build = self._can_build_pie_chart(result) if requested == "pie_chart" else self._can_build_chart(result)
+            if can_build:
                 return display_type not in {requested, "mixed"}
             return False
         if requested == "table" and result.result_table.rows:
@@ -1006,6 +1014,44 @@ class LogisticsLlmAnswerPresentationService:
         x_axis = self._choose_x_axis(result.result_table.columns)
         y_axis = self._choose_y_axis(result=result, x_axis=x_axis)
         return bool(x_axis and y_axis)
+
+    def _can_build_pie_chart(self, result: LogisticsDataQaResult) -> bool:
+        """判断当前结果是否适合饼图展示。
+
+        返回：
+            True 表示存在维度字段、主指标字段，且主指标至少有一个正值。
+            全零或无正值时不画饼图，避免业务用户误读空占比。
+        """
+
+        if not self._can_build_chart(result):
+            return False
+        x_axis = self._choose_x_axis(result.result_table.columns)
+        y_axis = self._choose_y_axis(result=result, x_axis=x_axis)
+        return bool(y_axis and self._pie_values_have_positive_total(result=result, x_axis=x_axis, y_axis=y_axis[0]))
+
+    def _pie_values_have_positive_total(self, *, result: LogisticsDataQaResult, x_axis: str, y_axis: str) -> bool:
+        """校验饼图切片数值是否有正向总量。
+
+        参数：
+            result: 后端确定性查询结果。
+            x_axis: 饼图切片维度字段。
+            y_axis: 饼图数值字段。
+
+        返回：
+            至少一个切片为正数时返回 True。
+        """
+
+        if not x_axis or not y_axis:
+            return False
+        total = Decimal("0")
+        for row in result.result_table.rows:
+            if row.get(x_axis) is None or not self._is_number(row.get(y_axis)):
+                continue
+            number = Decimal(str(row.get(y_axis)).replace(",", ""))
+            if number < 0:
+                return False
+            total += number
+        return total > 0
 
     def _choose_x_axis(self, columns: list[str]) -> str:
         """选择图表 X 轴字段。"""
@@ -1195,10 +1241,14 @@ class LogisticsLlmAnswerPresentationService:
         """
 
         requested = self._detect_requested_display(question)
-        if requested in {"line_chart", "bar_chart"} and self._can_build_chart(result):
+        if requested in {"line_chart", "bar_chart", "pie_chart"}:
+            can_build = self._can_build_pie_chart(result) if requested == "pie_chart" else self._can_build_chart(result)
+        else:
+            can_build = False
+        if requested in {"line_chart", "bar_chart", "pie_chart"} and can_build:
             if not presentation.chart_spec:
                 return "chart_missing"
-            expected_chart_type = "line" if requested == "line_chart" else "bar"
+            expected_chart_type = "line" if requested == "line_chart" else "pie" if requested == "pie_chart" else "bar"
             if presentation.chart_spec.chart_type != expected_chart_type:
                 return "chart_type_mismatch"
         if any(self._is_similar_text(item, presentation.answer) for item in presentation.highlights):

@@ -15,7 +15,15 @@
         <h1>协鑫集成 经营计划智能助手</h1>
         <p class="empty-subtitle">支持物流运量、费用、发运车次等结构化数据查询，以及计划 BOM 材料明细与差异对比。请直接输入业务问题。</p>
         <div class="quick-chips">
-          <button v-for="item in examples" :key="item.text" type="button" class="quick-chip" @click="useExample(item)">
+          <button
+            v-for="item in examples"
+            :key="item.text"
+            type="button"
+            class="quick-chip"
+            :title="`使用示例问题：${item.text}`"
+            :aria-label="`使用示例问题：${item.text}`"
+            @click="useExample(item)"
+          >
             <span class="chip-icon">{{ item.domain === '物流' ? '物流' : 'BOM' }}</span>
             <span class="chip-text">{{ item.text }}</span>
           </button>
@@ -39,7 +47,7 @@
           </div>
 
           <!-- 助手消息状态标签 -->
-          <div v-if="message.role === 'assistant' && !message.loading && resolveStatusBadge(message.status)" class="message-status-row">
+          <div v-if="message.role === 'assistant' && !message.loading && !message.presentation && resolveStatusBadge(message.status)" class="message-status-row">
             <span :class="['status-badge', `status-badge--${resolveStatusBadge(message.status)?.type}`]">
               {{ resolveStatusBadge(message.status)?.label }}
             </span>
@@ -49,7 +57,7 @@
             <p v-if="message.content" data-testid="message-content">{{ message.content }}</p>
 
             <!-- 加载动画：三点跳动 -->
-            <div v-if="message.loading" class="loading-row" data-testid="message-loading">
+            <div v-if="message.loading" class="loading-row" data-testid="message-loading" aria-live="polite">
               <span class="typing-indicator">
                 <span /><span /><span />
               </span>
@@ -58,11 +66,38 @@
 
             <div v-if="message.error" class="error" data-testid="message-error">{{ message.error }}</div>
 
-            <div v-if="message.presentation" class="result" data-testid="assistant-result">
-              <div v-if="message.presentation.title" class="result-title" data-testid="result-title">{{ message.presentation.title }}</div>
-              <p v-if="message.presentation.answer" class="result-answer" data-testid="result-answer">{{ message.presentation.answer }}</p>
+            <div
+              v-if="message.presentation"
+              :class="['result', `result--${resolveResultTone(message.status)}`]"
+              data-testid="assistant-result"
+            >
+              <div class="result-hero">
+                <div class="result-hero__meta">
+                  <span
+                    v-if="resolveStatusBadge(message.status)"
+                    :class="['status-badge', `status-badge--${resolveStatusBadge(message.status)?.type}`]"
+                  >
+                    {{ resolveStatusBadge(message.status)?.label }}
+                  </span>
+                  <span v-if="message.presentation.displayType" class="display-badge">
+                    {{ formatDisplayTypeLabel(message.presentation.displayType) }}
+                  </span>
+                </div>
+                <div v-if="message.presentation.title" class="result-title" data-testid="result-title">{{ message.presentation.title }}</div>
+                <p v-if="message.presentation.answer" class="result-answer" data-testid="result-answer">{{ message.presentation.answer }}</p>
+                <div v-if="buildResultSummaryItems(message).length" class="result-summary-strip">
+                  <span
+                    v-for="item in buildResultSummaryItems(message)"
+                    :key="`${message.id}-${item.label}`"
+                    class="result-summary-strip__item"
+                  >
+                    <strong>{{ item.value }}</strong>{{ item.label }}
+                  </span>
+                </div>
+              </div>
 
               <div v-if="message.presentation.highlights.length" class="highlight-list" data-testid="result-highlights">
+                <div class="section-label">关键结论</div>
                 <span v-for="text in message.presentation.highlights" :key="text">{{ text }}</span>
               </div>
 
@@ -70,11 +105,13 @@
                 <div class="presentation-chart__title">
                   {{ buildChartTitle(message.presentation.chart) }}
                 </div>
+                <div class="presentation-chart__meta">{{ buildChartMeta(message.presentation.chart) }}</div>
                 <svg
                   v-if="message.presentation.chart.chart_type === 'line'"
                   class="presentation-chart__svg"
                   viewBox="0 0 640 220"
                   role="img"
+                  :aria-label="buildChartAriaLabel(message.presentation.chart)"
                 >
                   <polyline
                     class="presentation-chart__line"
@@ -100,11 +137,49 @@
                     {{ label.text }}
                   </text>
                 </svg>
+                <div
+                  v-else-if="message.presentation.chart.chart_type === 'pie'"
+                  class="presentation-chart__pie-layout"
+                >
+                  <svg
+                    class="presentation-chart__pie"
+                    viewBox="0 0 260 220"
+                    role="img"
+                    :aria-label="buildChartAriaLabel(message.presentation.chart)"
+                  >
+                    <path
+                      v-for="slice in buildPieChartSlices(message.presentation.chart)"
+                      :key="`${message.id}-pie-${slice.label}`"
+                      class="presentation-chart__pie-slice"
+                      :d="slice.path"
+                      :fill="slice.color"
+                    >
+                      <title>{{ slice.tooltip }}</title>
+                    </path>
+                    <circle class="presentation-chart__pie-hole" cx="110" cy="110" r="42" />
+                    <text class="presentation-chart__pie-center" x="110" y="106" text-anchor="middle">占比</text>
+                    <text class="presentation-chart__pie-center presentation-chart__pie-center--sub" x="110" y="126" text-anchor="middle">
+                      {{ buildPieChartSlices(message.presentation.chart).length }} 项
+                    </text>
+                  </svg>
+                  <div class="presentation-chart__legend">
+                    <div
+                      v-for="item in buildPieChartLegend(message.presentation.chart)"
+                      :key="`${message.id}-pie-legend-${item.label}`"
+                      class="presentation-chart__legend-item"
+                    >
+                      <span class="presentation-chart__legend-color" :style="{ background: item.color }" />
+                      <span class="presentation-chart__legend-label">{{ item.label }}</span>
+                      <span class="presentation-chart__legend-value">{{ item.valueText }}</span>
+                    </div>
+                  </div>
+                </div>
                 <svg
                   v-else
                   class="presentation-chart__svg"
                   viewBox="0 0 640 220"
                   role="img"
+                  :aria-label="buildChartAriaLabel(message.presentation.chart)"
                 >
                   <rect
                     v-for="bar in buildBarChartRects(message.presentation.chart)"
@@ -140,23 +215,30 @@
                 </div>
               </div>
 
-              <el-table
-                v-if="message.presentation.table"
-                :data="message.presentation.table.rows"
-                size="small"
-                border
-                class="result-table"
-                data-testid="result-table"
-              >
-                <el-table-column
-                  v-for="column in message.presentation.table.columns"
-                  :key="column"
-                  :prop="column"
-                  :label="column"
-                  min-width="130"
-                  show-overflow-tooltip
-                />
-              </el-table>
+              <div v-if="message.presentation.table" class="result-table-card">
+                <div class="result-table-card__head">
+                  <span>明细数据</span>
+                  <em>{{ message.presentation.table.rows.length }} 行</em>
+                </div>
+                <el-table
+                  :data="message.presentation.table.rows"
+                  size="small"
+                  border
+                  class="result-table"
+                  data-testid="result-table"
+                  max-height="360"
+                  empty-text="暂无明细数据"
+                >
+                  <el-table-column
+                    v-for="column in message.presentation.table.columns"
+                    :key="column"
+                    :prop="column"
+                    :label="column"
+                    min-width="130"
+                    show-overflow-tooltip
+                  />
+                </el-table>
+              </div>
 
               <div v-if="message.presentation.followUps.length" class="follow-up" data-testid="result-follow-ups">
                 <div class="section-label">需要补充的信息</div>
@@ -165,6 +247,8 @@
                   :key="followUp"
                   type="button"
                   class="follow-up-chip"
+                  :title="`使用补充问题：${followUp}`"
+                  :aria-label="`使用补充问题：${followUp}`"
                   @click="appendFollowUp(followUp)"
                 >
                   {{ followUp }}
@@ -174,6 +258,13 @@
               <div v-if="message.presentation.suggestions.length" class="suggestions" data-testid="result-suggestions">
                 <div class="section-label">可改问方向</div>
                 <span v-for="item in message.presentation.suggestions" :key="item">{{ item }}</span>
+              </div>
+
+              <div v-if="message.presentation.caveats.length" class="result-caveats">
+                <div class="section-label">口径与风险提示</div>
+                <div v-for="item in message.presentation.caveats" :key="item" class="result-caveats__item">
+                  {{ item }}
+                </div>
               </div>
             </div>
           </div>
@@ -189,9 +280,20 @@
         resize="none"
         placeholder="输入业务问题，例如：2024年江苏省各城市总费用排名"
         data-testid="question-input"
-        @keydown.enter.exact.prevent="submitQuestion()"
+        :disabled="currentSessionLoading"
+        @keydown="handleComposerKeydown"
       />
-      <el-button type="primary" native-type="submit" :loading="currentSessionLoading" data-testid="send-button">发送</el-button>
+      <el-button
+        type="primary"
+        native-type="submit"
+        :loading="currentSessionLoading"
+        :disabled="currentSessionLoading || !question.trim()"
+        data-testid="send-button"
+        title="发送业务问题"
+        aria-label="发送业务问题"
+      >
+        发送
+      </el-button>
     </form>
   </section>
 </template>
@@ -219,6 +321,7 @@ interface UnifiedTable {
 }
 
 interface UnifiedResult {
+  displayType: string
   title: string
   answer: string
   highlights: string[]
@@ -227,10 +330,11 @@ interface UnifiedResult {
   table: UnifiedTable | null
   followUps: string[]
   suggestions: string[]
+  caveats: string[]
 }
 
 interface UnifiedChart {
-  chart_type: 'line' | 'bar'
+  chart_type: 'line' | 'bar' | 'pie'
   title?: string | null
   x_axis?: string | null
   y_axis?: string[]
@@ -256,10 +360,32 @@ interface ChartRenderBar {
   height: number
 }
 
+interface ChartRenderSlice {
+  path: string
+  color: string
+  label: string
+  value: number
+  percent: number
+  tooltip: string
+}
+
+interface ChartLegendItem {
+  color: string
+  label: string
+  valueText: string
+}
+
 interface ChartValue {
   label: unknown
   value: number
 }
+
+interface ResultSummaryItem {
+  label: string
+  value: string
+}
+
+const pieChartColors = ['#2f7a4a', '#60a5fa', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b']
 
 const question = ref('')
 const activeSession = ref<BusinessChatSession | null>(null)
@@ -492,6 +618,13 @@ async function submitQuestion(input?: string) {
   }
 }
 
+/** 输入区键盘发送，兼容中文输入法组合态，避免按 Enter 选字时误提交。 */
+function handleComposerKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
+  event.preventDefault()
+  submitQuestion()
+}
+
 /**
  * 构造标准消息。
  *
@@ -602,6 +735,7 @@ function adaptLogisticsResult(data: LogisticsDataQaResult): UnifiedResult {
   const unsupported = presentation?.unsupported_explanation
   const answer = presentation?.answer || data.answer_summary || data.status?.message || ''
   return normalizeResult({
+    displayType: presentation?.display_type || '',
     title: presentation?.title || '物流数据问答结果',
     answer,
     highlights: filterBusinessTexts(dedupeBusinessTexts(presentation?.highlights || [], [answer])),
@@ -610,6 +744,7 @@ function adaptLogisticsResult(data: LogisticsDataQaResult): UnifiedResult {
     table: presentation?.table_spec || data.result_table || null,
     followUps: localizeFollowUps(presentation?.follow_up?.questions || data.clarification_questions || []),
     suggestions: filterBusinessTexts(unsupported?.suggestions || data.query_plan?.unsupported_suggestions || []),
+    caveats: filterBusinessTexts(presentation?.caveats || []),
   })
 }
 
@@ -620,6 +755,7 @@ function adaptPlanBomResult(data: PlanBomQaResponse): UnifiedResult {
   const unsupported = presentation?.unsupported_explanation as { reason?: string; suggestions?: string[] } | null | undefined
   const answer = presentation?.answer || data.answer_summary || data.status?.message || ''
   return normalizeResult({
+    displayType: (presentation as Record<string, any> | null | undefined)?.display_type || '',
     title: presentation?.title || `计划 BOM 问答结果（${data.classification || '未知'}）`,
     answer,
     highlights: filterBusinessTexts(dedupeBusinessTexts(presentation?.highlights || [], [answer])),
@@ -628,12 +764,14 @@ function adaptPlanBomResult(data: PlanBomQaResponse): UnifiedResult {
     table: presentation?.table_spec || data.result_table || null,
     followUps: localizeFollowUps(followUp?.questions || []),
     suggestions: filterBusinessTexts(unsupported?.suggestions || []),
+    caveats: filterBusinessTexts((presentation as Record<string, any> | null | undefined)?.caveats || []),
   })
 }
 
 /** 补齐展示默认值，避免字段缺失导致页面异常。 */
 function normalizeResult(value: Partial<UnifiedResult>): UnifiedResult {
   return {
+    displayType: value.displayType || '',
     title: value.title || '',
     answer: value.answer || '',
     highlights: value.highlights || [],
@@ -642,15 +780,17 @@ function normalizeResult(value: Partial<UnifiedResult>): UnifiedResult {
     table: normalizeTable(value.table || null),
     followUps: value.followUps || [],
     suggestions: value.suggestions || [],
+    caveats: value.caveats || [],
   }
 }
 
 /** 归一化后端图表配置，缺少必要字段时不渲染图表。 */
 function normalizeChart(chart: NonNullable<LogisticsDataQaResult['presentation']>['chart_spec'] | null | undefined): UnifiedChart | null {
   if (!chart || typeof chart !== 'object') return null
-  if (chart.chart_type !== 'line' && chart.chart_type !== 'bar') return null
+  if (chart.chart_type !== 'line' && chart.chart_type !== 'bar' && chart.chart_type !== 'pie') return null
   const values = extractChartValues(chart as UnifiedChart)
   if (!values.length) return null
+  if (chart.chart_type === 'pie' && (values.some((item) => item.value < 0) || !values.some((item) => item.value > 0))) return null
   return {
     chart_type: chart.chart_type,
     title: typeof chart.title === 'string' ? chart.title : '',
@@ -680,7 +820,21 @@ function normalizeTable(table: UnifiedTable | null): UnifiedTable | null {
 /** 构造图表标题。 */
 function buildChartTitle(chart: UnifiedChart) {
   if (chart.title) return chart.title
+  if (chart.chart_type === 'pie') return '占比图'
   return chart.chart_type === 'line' ? '趋势图' : '对比图'
+}
+
+/** 构造图表辅助说明，帮助业务用户快速理解当前图表口径。 */
+function buildChartMeta(chart: UnifiedChart) {
+  const values = extractChartValues(chart)
+  const typeLabel = chart.chart_type === 'line' ? '趋势' : chart.chart_type === 'pie' ? '占比' : '对比'
+  const unitText = chart.unit ? `，单位：${chart.unit}` : ''
+  return `${typeLabel}展示，共 ${values.length} 个数据点${unitText}`
+}
+
+/** 构造图表无障碍说明，只描述后端已返回的数据结构，不补算业务结论。 */
+function buildChartAriaLabel(chart: UnifiedChart) {
+  return `${buildChartTitle(chart)}，${buildChartMeta(chart)}`
 }
 
 /** 生成折线图 polyline points。 */
@@ -714,6 +868,82 @@ function buildBarChartRects(chart: UnifiedChart) {
       height,
     }
   })
+}
+
+/** 生成饼图扇区路径。 */
+function buildPieChartSlices(chart: UnifiedChart): ChartRenderSlice[] {
+  const values = extractPieChartValues(chart)
+  const total = values.reduce((sum, item) => sum + item.value, 0)
+  if (total <= 0) return []
+  let cursor = 0
+  return values
+    .filter((item) => item.value > 0)
+    .map((item, index) => {
+      const start = cursor
+      const percent = item.value / total
+      cursor += percent
+      const color = pieChartColors[index % pieChartColors.length]
+      const label = String(item.label ?? `项目${index + 1}`)
+      const valueText = formatPieValue(item.value, chart.unit)
+      return {
+        path: buildPieSlicePath(110, 110, 84, start, cursor),
+        color,
+        label,
+        value: item.value,
+        percent,
+        tooltip: `${label}：${valueText}，占比 ${(percent * 100).toFixed(1)}%`,
+      }
+    })
+}
+
+/** 生成饼图图例。 */
+function buildPieChartLegend(chart: UnifiedChart): ChartLegendItem[] {
+  return buildPieChartSlices(chart).map((slice) => ({
+    color: slice.color,
+    label: slice.label,
+    valueText: `${formatPieValue(slice.value, chart.unit)} · ${(slice.percent * 100).toFixed(1)}%`,
+  }))
+}
+
+/** 构造单个饼图扇区 SVG 路径。 */
+function buildPieSlicePath(cx: number, cy: number, radius: number, startRatio: number, endRatio: number) {
+  // 单一切片会出现起止点重合，必须拆成两段圆弧，否则 SVG 可能渲染为空。
+  if (endRatio - startRatio >= 0.999999) {
+    return [
+      `M ${formatSvgNumber(cx)} ${formatSvgNumber(cy - radius)}`,
+      `A ${radius} ${radius} 0 1 1 ${formatSvgNumber(cx)} ${formatSvgNumber(cy + radius)}`,
+      `A ${radius} ${radius} 0 1 1 ${formatSvgNumber(cx)} ${formatSvgNumber(cy - radius)}`,
+      'Z',
+    ].join(' ')
+  }
+  const startAngle = -Math.PI / 2 + startRatio * Math.PI * 2
+  const endAngle = -Math.PI / 2 + endRatio * Math.PI * 2
+  const start = {
+    x: cx + radius * Math.cos(startAngle),
+    y: cy + radius * Math.sin(startAngle),
+  }
+  const end = {
+    x: cx + radius * Math.cos(endAngle),
+    y: cy + radius * Math.sin(endAngle),
+  }
+  const largeArc = endRatio - startRatio > 0.5 ? 1 : 0
+  return [
+    `M ${formatSvgNumber(cx)} ${formatSvgNumber(cy)}`,
+    `L ${formatSvgNumber(start.x)} ${formatSvgNumber(start.y)}`,
+    `A ${radius} ${radius} 0 ${largeArc} 1 ${formatSvgNumber(end.x)} ${formatSvgNumber(end.y)}`,
+    'Z',
+  ].join(' ')
+}
+
+/** 格式化 SVG 坐标，减少 DOM 中无意义长小数。 */
+function formatSvgNumber(value: number) {
+  return Number(value.toFixed(3))
+}
+
+/** 格式化饼图图例数值，保留业务单位。 */
+function formatPieValue(value: number, unit?: string | null) {
+  const formatted = formatDisplayValue(value)
+  return unit ? `${formatted}${unit}` : formatted
 }
 
 /** 生成图表 X 轴标签。 */
@@ -757,7 +987,7 @@ function extractChartValues(chart: UnifiedChart): ChartValue[] {
     return firstSeries.data
       .map((item: Record<string, unknown>) => ({
         label: item.x,
-        value: Number(item.y),
+        value: parseChartNumber(item.y),
       }))
       .filter((item: ChartValue) => Number.isFinite(item.value))
   }
@@ -766,9 +996,21 @@ function extractChartValues(chart: UnifiedChart): ChartValue[] {
   return (chart.data || [])
     .map((row: Record<string, unknown>) => ({
       label: row[xAxis],
-      value: Number(row[yAxis]),
+      value: parseChartNumber(row[yAxis]),
     }))
     .filter((item: ChartValue) => Number.isFinite(item.value))
+}
+
+/** 解析图表数值，兼容后端或历史快照中可能出现的千分位字符串。 */
+function parseChartNumber(value: unknown) {
+  if (typeof value === 'number') return value
+  if (typeof value === 'string') return Number(value.replace(/,/g, '').trim())
+  return Number(value)
+}
+
+/** 饼图只展示非负切片，全零时由 normalizeChart 阻止渲染。 */
+function extractPieChartValues(chart: UnifiedChart): ChartValue[] {
+  return extractChartValues(chart).filter((item) => item.value >= 0)
 }
 
 const columnNameMap: Record<string, string> = {
@@ -1000,23 +1242,86 @@ function resolveStatusBadge(status?: string): { type: string; label: string } | 
     return { type: 'success', label: '已解答' }
   }
   // B类 / 需澄清
-  if (lower === 'clarification' || lower === 'needs_clarification' || lower === 'b' || lower === 'missing_slots') {
+  if (
+    lower === 'clarification' ||
+    lower === 'clarification_required' ||
+    lower === 'needs_clarification' ||
+    lower === 'b' ||
+    lower === 'missing_slots'
+  ) {
     return { type: 'warning', label: '需补充信息' }
   }
   // C类 / 暂不支持
   if (
     lower === 'unsupported' ||
     lower === 'not_supported' ||
+    lower === 'unsupported_question' ||
     lower === 'c' ||
     lower === 'needs_domain'
   ) {
     return { type: 'info', label: '暂不支持' }
   }
+  if (lower === 'empty_result') {
+    return { type: 'empty', label: '未查到结果' }
+  }
   // 错误
-  if (lower === 'error' || lower === 'fail') {
+  if (lower === 'error' || lower === 'fail' || lower === 'execution_error') {
     return { type: 'danger', label: '请求出错' }
   }
   return null
+}
+
+/** 根据后端状态生成结果面板语气，只影响视觉层级，不改变业务裁决。 */
+function resolveResultTone(status?: string) {
+  const badge = resolveStatusBadge(status)
+  if (!badge) return 'neutral'
+  if (badge.type === 'success') return 'success'
+  if (badge.type === 'warning') return 'clarify'
+  if (badge.type === 'empty') return 'empty'
+  if (badge.type === 'danger') return 'error'
+  return 'unsupported'
+}
+
+/** 生成结果摘要条，优先展示行数、图表类型和指标卡数量等展示事实。 */
+function buildResultSummaryItems(message: BusinessChatMessage): ResultSummaryItem[] {
+  const presentation = message.presentation as UnifiedResult | null | undefined
+  if (!presentation) return []
+  const items: ResultSummaryItem[] = []
+  if (presentation.table?.rows.length) {
+    items.push({ label: '行明细', value: String(presentation.table.rows.length) })
+  }
+  if (presentation.cards.length) {
+    items.push({ label: '项指标', value: String(presentation.cards.length) })
+  }
+  if (presentation.chart) {
+    items.push({ label: '图表', value: formatChartTypeLabel(presentation.chart.chart_type) })
+  }
+  return items
+}
+
+/** 展示类型中文化，便于把后端 display_type 作为轻量徽标呈现。 */
+function formatDisplayTypeLabel(displayType?: string) {
+  const mapping: Record<string, string> = {
+    narrative: '摘要',
+    summary_cards: '指标卡',
+    table: '表格',
+    line_chart: '折线图',
+    bar_chart: '柱状图',
+    pie_chart: '饼图',
+    mixed: '组合展示',
+    clarification: '澄清',
+    unsupported: '拒答',
+    empty_result: '空结果',
+    error: '错误',
+  }
+  return displayType ? mapping[displayType] || displayType : ''
+}
+
+/** 图表类型中文化，只用于 UI 标识。 */
+function formatChartTypeLabel(chartType: UnifiedChart['chart_type']) {
+  if (chartType === 'line') return '折线'
+  if (chartType === 'pie') return '饼图'
+  return '柱状'
 }
 
 onMounted(() => {
@@ -1074,7 +1379,8 @@ onBeforeUnmount(() => {
   min-height: 0;
   width: min(920px, calc(100vw - 360px));
   margin: 0 auto;
-  padding: 34px 0 24px;
+  /* 底部留出输入区缓冲，避免滚动到底时最后一段表格被输入框视觉遮挡。 */
+  padding: 34px 0 120px;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -1305,16 +1611,96 @@ onBeforeUnmount(() => {
   animation: fadeIn 0.3s ease-out;
 }
 
+.result-hero {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  border: 1px solid #e7edf2;
+  border-radius: var(--radius-md);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfd 100%);
+}
+
+.result--success .result-hero {
+  border-color: #d9eadf;
+  background: linear-gradient(180deg, #ffffff 0%, #f4fbf6 100%);
+}
+
+.result--clarify .result-hero,
+.result--empty .result-hero {
+  border-color: #f0dfbb;
+  background: linear-gradient(180deg, #ffffff 0%, #fffaf0 100%);
+}
+
+.result--unsupported .result-hero {
+  border-color: #dfe5eb;
+  background: linear-gradient(180deg, #ffffff 0%, #f7f9fb 100%);
+}
+
+.result--error .result-hero {
+  border-color: #f2c8c8;
+  background: linear-gradient(180deg, #ffffff 0%, #fff5f5 100%);
+}
+
+.result-hero__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.display-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  border-radius: var(--radius-pill);
+  background: #f3f4f6;
+  color: #4b5563;
+  padding: 2px 9px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.status-badge--empty {
+  background: #fff7ed;
+  color: #9a5b10;
+  border: 1px solid #fed7aa;
+}
+
 .result-title {
   color: #111827;
   font-weight: 600;
   font-size: 15px;
+  line-height: 1.55;
 }
 
 .result-answer {
   color: #374151;
   font-size: 14px;
   line-height: 1.8;
+  word-break: break-word;
+}
+
+.result-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.result-summary-strip__item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  border-radius: var(--radius-pill);
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  color: #6b7280;
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.result-summary-strip__item strong {
+  color: #111827;
+  font-weight: 800;
 }
 
 .highlight-list,
@@ -1332,6 +1718,11 @@ onBeforeUnmount(() => {
   padding: 5px 10px;
   font-size: 12px;
   font-weight: 500;
+}
+
+.highlight-list .section-label,
+.suggestions .section-label {
+  flex: 0 0 100%;
 }
 
 /* ======== 指标卡片（优化版） ======== */
@@ -1412,10 +1803,82 @@ onBeforeUnmount(() => {
   font-weight: 600;
 }
 
+.presentation-chart__meta {
+  margin: -2px 0 8px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .presentation-chart__svg {
   display: block;
   width: 100%;
   height: 220px;
+}
+
+.presentation-chart__pie-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(180px, 1fr);
+  gap: 18px;
+  align-items: center;
+}
+
+.presentation-chart__pie {
+  display: block;
+  width: 100%;
+  height: 220px;
+}
+
+.presentation-chart__pie-slice {
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.presentation-chart__pie-hole {
+  fill: #fbfcfd;
+}
+
+.presentation-chart__pie-center {
+  fill: #1f2937;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.presentation-chart__pie-center--sub {
+  fill: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.presentation-chart__legend {
+  display: grid;
+  gap: 8px;
+}
+
+.presentation-chart__legend-item {
+  display: grid;
+  grid-template-columns: 10px minmax(72px, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  color: #374151;
+  font-size: 12px;
+}
+
+.presentation-chart__legend-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+}
+
+.presentation-chart__legend-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.presentation-chart__legend-value {
+  color: #111827;
+  font-weight: 600;
 }
 
 .presentation-chart__line {
@@ -1435,11 +1898,44 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
+@media (max-width: 720px) {
+  .presentation-chart__pie-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* ======== 表格（优化版） ======== */
 .result-table {
   font-size: 13px;
   border-radius: var(--radius-md);
   overflow: hidden;
+}
+
+.result-table-card {
+  border: 1px solid #eef0f3;
+  border-radius: var(--radius-md);
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.result-table-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eef0f3;
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.result-table-card__head em {
+  flex: none;
+  font-style: normal;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 :deep(.result-table .el-table__header-wrapper th) {
@@ -1490,6 +1986,22 @@ onBeforeUnmount(() => {
   background: var(--brand-green-bg);
   border-color: var(--brand-green);
   transform: translateY(-1px);
+}
+
+.result-caveats {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #f2e4c7;
+  border-radius: var(--radius-md);
+  background: #fffaf0;
+  padding: 12px 14px;
+}
+
+.result-caveats__item {
+  color: #785a20;
+  font-size: 12px;
+  line-height: 1.65;
+  word-break: break-word;
 }
 
 /* ======== 输入区 ======== */
@@ -1568,6 +2080,17 @@ onBeforeUnmount(() => {
 
   .bubble {
     max-width: 100%;
+  }
+
+  .metric-value {
+    font-size: 20px;
+    overflow-wrap: anywhere;
+  }
+
+  .result-hero,
+  .presentation-chart,
+  .result-caveats {
+    padding: 12px;
   }
 }
 </style>
