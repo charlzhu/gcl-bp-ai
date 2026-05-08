@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     log_root: Path = Path("data/logs")
     demo_mode: bool = True
     max_upload_size_mb: int = 20
+    plan_power_admin_token: str = ""
     allowed_origins: list[str] = Field(default_factory=lambda: ["*"])
     mysql_host: str = "127.0.0.1"
     mysql_port: int = 3306

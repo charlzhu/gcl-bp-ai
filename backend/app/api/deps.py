@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from fastapi import Depends
+from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
@@ -13,10 +13,12 @@ from backend.app.domains.logistics.services.rag_service import LogisticsRagServi
 from backend.app.domains.logistics.services.serving_refresh_service import LogisticsServingRefreshService
 from backend.app.domains.logistics.services.sync_service import LogisticsSystemSyncService
 from backend.app.domains.plan_bom.repositories.import_repository import PlanBomImportRepository
+from backend.app.domains.plan_bom.repositories.power_model_repository import PowerModelRepository
 from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
 from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
 from backend.app.domains.plan_bom.services.excel_import_service import PlanBomExcelImportService
 from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
+from backend.app.domains.plan_bom.services.power_model_service import PowerModelService
 from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
 from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
 from backend.app.repositories.logistics_query_repo import InMemoryLogisticsQueryRepository
@@ -166,6 +168,47 @@ def get_plan_bom_query_service(
     不提供 compare 差异算法、导出或 SAP 接入能力。
     """
     return PlanBomQueryService(repository=PlanBomQueryRepository(db))
+
+
+def require_plan_power_admin(
+    x_plan_power_admin_token: str | None = Header(default=None, alias="X-Plan-Power-Admin-Token"),
+    settings: Settings = Depends(get_settings),
+) -> None:
+    """校验功率模型管理写接口的管理员令牌。
+
+    参数：
+        x_plan_power_admin_token: 请求头里的管理令牌；
+        settings: 应用配置，读取 `plan_power_admin_token`。
+
+    返回：
+        校验通过时返回 None。
+
+    关键业务逻辑：
+        M2 的模型导入和激活会改变后续功率模型版本状态，属于管理写操作。
+        本地 / 测试环境若未配置令牌则允许联调；dev/prod 环境必须配置并匹配令牌。
+    """
+    expected_token = settings.plan_power_admin_token.strip()
+    if not expected_token:
+        if settings.app_env in {"local", "test"}:
+            return None
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="未配置功率模型管理令牌，拒绝执行管理写操作。",
+        )
+    if x_plan_power_admin_token != expected_token:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="功率模型管理令牌无效。")
+    return None
+
+
+def get_plan_power_model_service(
+    db: Session = Depends(get_db),
+) -> PowerModelService:
+    """计划 BOM 功率模型版本服务依赖。
+
+    当前只用于 M2 xlsm 模型导入、版本查询和激活；
+    不接入 PlanBom QA，不承担正式功率预测计算。
+    """
+    return PowerModelService(repository=PowerModelRepository(db))
 
 
 def get_plan_bom_qa_service(

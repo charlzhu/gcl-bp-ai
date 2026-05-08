@@ -259,6 +259,44 @@ def test_clarification_audit_origin_vehicle_loading_summary_is_supported() -> No
 
 
 
+def test_clarification_audit_unknown_origin_vehicle_loading_summary_requires_clarification() -> None:
+    """验证未知始发地不能被误放行为全始发地分组。
+
+    参数：无。
+    返回值：无；通过断言验证当前无法稳定识别的始发地必须继续澄清。
+    业务逻辑：当问题指定了“广德始发”等当前别名表无法识别的始发地时，不能返回全部真实始发地汇总冒充结果。
+    """
+
+    plan = LogisticsDataQaPlanner().build_plan(
+        "请统计广德始发各车型的车次、发运件数、总费用、平均每车装载托数，并用车型汇总表展示？"
+    )
+
+    assert plan.needs_clarification
+    assert plan.query_key is None
+    assert "始发地" in "".join(plan.clarification_missing_slots)
+
+
+
+def test_clarification_audit_driver_consistency_summary_not_limited_by_top_n() -> None:
+    """验证司机一致性摘要总量不受明细 top_n 截断影响。
+
+    参数：无。
+    返回值：无；通过断言验证 repository 返回全量异常组/任务数，同时明细行数可按 top_n 截断。
+    业务逻辑：用户问“是否存在”时摘要必须是全量异常数量，表格只展示前 N 条明细。
+    """
+
+    with SessionLocal() as db:
+        repo = LogisticsDataQaService(db=db).repository
+        all_data = repo.sys_driver_phone_name_consistency(year=2026, top_n=50)
+        limited_data = repo.sys_driver_phone_name_consistency(year=2026, top_n=1)
+
+    assert all_data["abnormal_group_count"] >= len(all_data["items"])
+    assert limited_data["abnormal_group_count"] == all_data["abnormal_group_count"]
+    assert limited_data["abnormal_task_count"] == all_data["abnormal_task_count"]
+    assert len(limited_data["items"]) == 1
+
+
+
 def test_clarification_audit_driver_phone_name_consistency_is_supported() -> None:
     """验证 2026 同一手机号关联多个司机姓名可直接检查。
 

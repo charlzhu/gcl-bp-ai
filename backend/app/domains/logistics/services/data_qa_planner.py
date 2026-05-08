@@ -194,10 +194,20 @@ class LogisticsDataQaPlanner:
             if pre_origin_place:
                 filters["origin_place"] = pre_origin_place
             else:
-                # 对“广德始发”这类当前始发地别名无法校验的问题，不硬造不存在始发地；
-                # 保留始发地分组，让业务能看到真实源数据中可核验的始发地 + 车型汇总。
-                filters["include_origin_dimension"] = True
-                dimensions = ["origin_place", "required_vehicle_type"]
+                # 题目写了“X始发”但当前始发地别名表无法稳定识别时，不能返回全部始发地分组冒充结果；
+                # 保守转为澄清，让用户确认真实始发地名称或先维护始发地映射。
+                return LogisticsDataQaPlan(
+                    intent="clarification",
+                    needs_clarification=True,
+                    clarification_questions=[
+                        "请确认始发地名称是否与历史台账一致，例如“合肥”“阜宁”等。",
+                        "如需查询多个始发地，请明确是否按全部始发地分组展示。",
+                    ],
+                    clarification_missing_slots=["始发地标准名称"],
+                    clarification_reason="当前问题包含始发地条件，但系统未能稳定识别该始发地，不能用全部始发地汇总替代。",
+                    clarification_category="unknown_origin_place",
+                    clarification_template="unknown_origin_place",
+                )
             metrics = ["shipment_trip_count", "total_fee", "avg_fee_per_trip"]
             if any(keyword in compact for keyword in ("发运件数", "总件数", "件数")):
                 metrics.insert(1, "shipment_count")

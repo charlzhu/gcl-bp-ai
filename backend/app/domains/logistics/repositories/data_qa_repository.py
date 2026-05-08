@@ -2825,13 +2825,37 @@ class LogisticsDataQaRepository:
             空手机号或空司机姓名不参与一致性判断，避免把缺失值误判为异常。
         """
 
+        summary_row = self.db.execute(
+            text(
+                """
+                SELECT
+                    COUNT(*) AS abnormal_group_count,
+                    COALESCE(SUM(assign_task_count), 0) AS abnormal_task_count
+                FROM (
+                    SELECT
+                        TRIM(driver_phone) AS normalized_driver_phone,
+                        COUNT(DISTINCT TRIM(driver_name)) AS driver_name_count,
+                        COUNT(*) AS assign_task_count
+                    FROM dwd_logistics_assign_task
+                    WHERE YEAR(created_at) = :year
+                      AND driver_phone IS NOT NULL
+                      AND TRIM(driver_phone) <> ''
+                      AND driver_name IS NOT NULL
+                      AND TRIM(driver_name) <> ''
+                    GROUP BY TRIM(driver_phone)
+                    HAVING COUNT(DISTINCT TRIM(driver_name)) > 1
+                ) abnormal_groups
+                """
+            ),
+            {"year": year},
+        ).mappings().first()
         rows = self.db.execute(
             text(
                 """
                 SELECT
-                    driver_phone,
-                    GROUP_CONCAT(DISTINCT driver_name ORDER BY driver_name SEPARATOR '、') AS driver_names,
-                    COUNT(DISTINCT driver_name) AS driver_name_count,
+                    TRIM(driver_phone) AS driver_phone,
+                    GROUP_CONCAT(DISTINCT TRIM(driver_name) ORDER BY TRIM(driver_name) SEPARATOR '、') AS driver_names,
+                    COUNT(DISTINCT TRIM(driver_name)) AS driver_name_count,
                     COUNT(*) AS assign_task_count,
                     COUNT(DISTINCT task_id) AS distinct_task_count
                 FROM dwd_logistics_assign_task
@@ -2840,8 +2864,8 @@ class LogisticsDataQaRepository:
                   AND TRIM(driver_phone) <> ''
                   AND driver_name IS NOT NULL
                   AND TRIM(driver_name) <> ''
-                GROUP BY driver_phone
-                HAVING COUNT(DISTINCT driver_name) > 1
+                GROUP BY TRIM(driver_phone)
+                HAVING COUNT(DISTINCT TRIM(driver_name)) > 1
                 ORDER BY assign_task_count DESC, driver_phone ASC
                 LIMIT :limit_value
                 """
@@ -2850,8 +2874,8 @@ class LogisticsDataQaRepository:
         ).mappings().all()
         items = [dict(row) for row in rows]
         return {
-            "abnormal_group_count": len(items),
-            "abnormal_task_count": sum(int(item.get("assign_task_count") or 0) for item in items),
+            "abnormal_group_count": int((summary_row or {}).get("abnormal_group_count") or 0),
+            "abnormal_task_count": int((summary_row or {}).get("abnormal_task_count") or 0),
             "items": items,
         }
 
@@ -2868,13 +2892,37 @@ class LogisticsDataQaRepository:
             空身份证号或空手机号不参与一致性判断，避免缺失值污染异常结果。
         """
 
+        summary_row = self.db.execute(
+            text(
+                """
+                SELECT
+                    COUNT(*) AS abnormal_group_count,
+                    COALESCE(SUM(assign_task_count), 0) AS abnormal_task_count
+                FROM (
+                    SELECT
+                        TRIM(driver_id_number) AS normalized_driver_id_number,
+                        COUNT(DISTINCT TRIM(driver_phone)) AS driver_phone_count,
+                        COUNT(*) AS assign_task_count
+                    FROM dwd_logistics_assign_task
+                    WHERE YEAR(created_at) = :year
+                      AND driver_id_number IS NOT NULL
+                      AND TRIM(driver_id_number) <> ''
+                      AND driver_phone IS NOT NULL
+                      AND TRIM(driver_phone) <> ''
+                    GROUP BY TRIM(driver_id_number)
+                    HAVING COUNT(DISTINCT TRIM(driver_phone)) > 1
+                ) abnormal_groups
+                """
+            ),
+            {"year": year},
+        ).mappings().first()
         rows = self.db.execute(
             text(
                 """
                 SELECT
-                    driver_id_number,
-                    GROUP_CONCAT(DISTINCT driver_phone ORDER BY driver_phone SEPARATOR '、') AS driver_phones,
-                    COUNT(DISTINCT driver_phone) AS driver_phone_count,
+                    TRIM(driver_id_number) AS driver_id_number,
+                    GROUP_CONCAT(DISTINCT TRIM(driver_phone) ORDER BY TRIM(driver_phone) SEPARATOR '、') AS driver_phones,
+                    COUNT(DISTINCT TRIM(driver_phone)) AS driver_phone_count,
                     COUNT(*) AS assign_task_count,
                     COUNT(DISTINCT task_id) AS distinct_task_count
                 FROM dwd_logistics_assign_task
@@ -2883,8 +2931,8 @@ class LogisticsDataQaRepository:
                   AND TRIM(driver_id_number) <> ''
                   AND driver_phone IS NOT NULL
                   AND TRIM(driver_phone) <> ''
-                GROUP BY driver_id_number
-                HAVING COUNT(DISTINCT driver_phone) > 1
+                GROUP BY TRIM(driver_id_number)
+                HAVING COUNT(DISTINCT TRIM(driver_phone)) > 1
                 ORDER BY assign_task_count DESC, driver_id_number ASC
                 LIMIT :limit_value
                 """
@@ -2893,8 +2941,8 @@ class LogisticsDataQaRepository:
         ).mappings().all()
         items = [dict(row) for row in rows]
         return {
-            "abnormal_group_count": len(items),
-            "abnormal_task_count": sum(int(item.get("assign_task_count") or 0) for item in items),
+            "abnormal_group_count": int((summary_row or {}).get("abnormal_group_count") or 0),
+            "abnormal_task_count": int((summary_row or {}).get("abnormal_task_count") or 0),
             "items": items,
         }
 

@@ -1,0 +1,3196 @@
+diff --git a/backend/app/api/deps.py b/backend/app/api/deps.py
+index 5da4a76..0361ae9 100644
+--- a/backend/app/api/deps.py
++++ b/backend/app/api/deps.py
+@@ -1,6 +1,6 @@
+ from functools import lru_cache
+ 
+-from fastapi import Depends
++from fastapi import Depends, Header, HTTPException, status
+ from sqlalchemy.orm import Session
+ 
+ from backend.app.core.config import Settings, get_settings
+@@ -13,10 +13,12 @@ from backend.app.domains.logistics.services.rag_service import LogisticsRagServi
+ from backend.app.domains.logistics.services.serving_refresh_service import LogisticsServingRefreshService
+ from backend.app.domains.logistics.services.sync_service import LogisticsSystemSyncService
+ from backend.app.domains.plan_bom.repositories.import_repository import PlanBomImportRepository
++from backend.app.domains.plan_bom.repositories.power_model_repository import PowerModelRepository
+ from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
+ from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
+ from backend.app.domains.plan_bom.services.excel_import_service import PlanBomExcelImportService
+ from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
++from backend.app.domains.plan_bom.services.power_model_service import PowerModelService
+ from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
+ from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
+ from backend.app.repositories.logistics_query_repo import InMemoryLogisticsQueryRepository
+@@ -168,6 +170,47 @@ def get_plan_bom_query_service(
+     return PlanBomQueryService(repository=PlanBomQueryRepository(db))
+ 
+ 
++def require_plan_power_admin(
++    x_plan_power_admin_token: str | None = Header(default=None, alias="X-Plan-Power-Admin-Token"),
++    settings: Settings = Depends(get_settings),
++) -> None:
++    """校验功率模型管理写接口的管理员令牌。
++
++    参数：
++        x_plan_power_admin_token: 请求头里的管理令牌；
++        settings: 应用配置，读取 `plan_power_admin_token`。
++
++    返回：
++        校验通过时返回 None。
++
++    关键业务逻辑：
++        M2 的模型导入和激活会改变后续功率模型版本状态，属于管理写操作。
++        本地 / 测试环境若未配置令牌则允许联调；dev/prod 环境必须配置并匹配令牌。
++    """
++    expected_token = settings.plan_power_admin_token.strip()
++    if not expected_token:
++        if settings.app_env in {"local", "test"}:
++            return None
++        raise HTTPException(
++            status_code=status.HTTP_403_FORBIDDEN,
++            detail="未配置功率模型管理令牌，拒绝执行管理写操作。",
++        )
++    if x_plan_power_admin_token != expected_token:
++        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="功率模型管理令牌无效。")
++    return None
++
++
++def get_plan_power_model_service(
++    db: Session = Depends(get_db),
++) -> PowerModelService:
++    """计划 BOM 功率模型版本服务依赖。
++
++    当前只用于 M2 xlsm 模型导入、版本查询和激活；
++    不接入 PlanBom QA，不承担正式功率预测计算。
++    """
++    return PowerModelService(repository=PowerModelRepository(db))
++
++
+ def get_plan_bom_qa_service(
+     db: Session = Depends(get_db),
+ ) -> PlanBomQaService:
+diff --git a/backend/app/core/config.py b/backend/app/core/config.py
+index 20459f0..730e4ca 100644
+--- a/backend/app/core/config.py
++++ b/backend/app/core/config.py
+@@ -23,6 +23,7 @@ class Settings(BaseSettings):
+     log_root: Path = Path("data/logs")
+     demo_mode: bool = True
+     max_upload_size_mb: int = 20
++    plan_power_admin_token: str = ""
+     allowed_origins: list[str] = Field(default_factory=lambda: ["*"])
+     mysql_host: str = "127.0.0.1"
+     mysql_port: int = 3306
+diff --git a/backend/app/domains/plan_bom/api/endpoints/__init__.py b/backend/app/domains/plan_bom/api/endpoints/__init__.py
+index 1861420..d93d466 100644
+--- a/backend/app/domains/plan_bom/api/endpoints/__init__.py
++++ b/backend/app/domains/plan_bom/api/endpoints/__init__.py
+@@ -1,4 +1,4 @@
+ """计划 BOM API 端点包。
+ 
+-当前只暴露 Excel 入库端点，不包含查询、导出或 SAP 接入端点。
++当前暴露 Excel 入库、BOM 查询、QA 以及 M2 功率模型版本化管理端点。
+ """
+diff --git a/backend/app/domains/plan_bom/api/router.py b/backend/app/domains/plan_bom/api/router.py
+index 5b08766..14b608b 100644
+--- a/backend/app/domains/plan_bom/api/router.py
++++ b/backend/app/domains/plan_bom/api/router.py
+@@ -1,11 +1,12 @@
+ from fastapi import APIRouter
+ 
+-from backend.app.domains.plan_bom.api.endpoints import import_excel, qa, query
++from backend.app.domains.plan_bom.api.endpoints import import_excel, power_model, qa, query
+ 
+ router = APIRouter()
+ 
+ # 当前注册 Excel 入库、自然语言问答、基础查询和 compare 端点；仍复用既有 BOM 查询服务。
+ router.include_router(import_excel.router)
+ router.include_router(import_excel.router, prefix="/import")
++router.include_router(power_model.router, prefix="/power-model")
+ router.include_router(qa.router, prefix="/qa")
+ router.include_router(query.router, prefix="/query")
+diff --git a/backend/app/domains/plan_bom/models.py b/backend/app/domains/plan_bom/models.py
+index 3c98c2a..0152334 100644
+--- a/backend/app/domains/plan_bom/models.py
++++ b/backend/app/domains/plan_bom/models.py
+@@ -3,7 +3,7 @@ from __future__ import annotations
+ from datetime import date, datetime
+ from decimal import Decimal
+ 
+-from sqlalchemy import BigInteger, Date, DateTime, Index, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, func
++from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Index, Integer, Numeric, SmallInteger, String, Text, UniqueConstraint, func
+ from sqlalchemy.orm import Mapped, mapped_column
+ 
+ from backend.app.db.base import Base
+@@ -285,6 +285,230 @@ class PlanBomExportFile(Base):
+     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
+ 
+ 
++class PlanPowerModelVersion(Base):
++    """计划 BOM 功率模型版本表。
++
++    设计说明：
++    1. 每次导入 xlsm 后生成一个可追溯模型版本；
++    2. 使用 file_hash 做幂等防重复，避免同一源文件重复入库；
++    3. M2 只保存解析结构和问题清单，不承载正式功率计算结果。
++    """
++
++    __tablename__ = "plan_power_model_version"
++    __table_args__ = (
++        UniqueConstraint("file_hash", name="uk_plan_power_model_version_file_hash"),
++        Index("idx_plan_power_model_version_active", "is_active"),
++        Index("idx_plan_power_model_version_status", "parse_status"),
++    )
++
++    id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, primary_key=True, autoincrement=True, comment="技术主键")
++    file_name: Mapped[str] = mapped_column(String(512), nullable=False, comment="原始 xlsm 文件名")
++    file_hash: Mapped[str] = mapped_column(String(128), nullable=False, comment="文件 SHA256，用于防重复导入")
++    source_type: Mapped[str] = mapped_column(String(32), nullable=False, default="xlsm", comment="来源类型，M2 固定为 xlsm")
++    business_version_label: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="业务版本标签，例如 TOPCon 26.04.13")
++    formula_policy: Mapped[str] = mapped_column(String(64), nullable=False, default="semantic_fixed_mode", comment="公式策略，M2 固定为 semantic_fixed_mode")
++    vba_project_sha256: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="VBA 工程 SHA256，用于宏来源追溯")
++    is_active: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0, comment="是否当前激活版本，1 表示激活")
++    parse_status: Mapped[str] = mapped_column(String(32), nullable=False, default="success", comment="解析状态：success / warning / failed")
++    sheet_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="Workbook sheet 总数")
++    model_sheet_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="有效模型页数量")
++    warning_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="解析 warning 数量")
++    error_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, comment="解析 error 数量")
++    parse_summary_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="解析摘要 JSON")
++    warning_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="解析 warning JSON")
++    change_history_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="更改履历 JSON，用于模型版本追溯")
++    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
++    activated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, comment="激活时间")
++
++
++class PlanPowerModelSheet(Base):
++    """计划 BOM 功率模型 Sheet 表。
++
++    设计说明：
++    1. 保存每个版型模型页的稳定元数据；
++    2. 原始 sheet_name 保留尾随空格等 Excel 事实；
++    3. normalized_model_code 用于后续 M3/M4 按版型查询模型。
++    """
++
++    __tablename__ = "plan_power_model_sheet"
++    __table_args__ = (
++        UniqueConstraint("version_id", "sheet_name", name="uk_plan_power_model_sheet_version_sheet"),
++        Index("idx_plan_power_model_sheet_version", "version_id"),
++        Index("idx_plan_power_model_sheet_model_code", "normalized_model_code"),
++    )
++
++    id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, primary_key=True, autoincrement=True, comment="技术主键")
++    version_id: Mapped[int] = mapped_column(
++        PLAN_BOM_ID_TYPE,
++        ForeignKey("plan_power_model_version.id", ondelete="CASCADE"),
++        nullable=False,
++        comment="模型版本 ID",
++    )
++    sheet_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="Excel 原始 Sheet 名")
++    normalized_model_code: Mapped[str] = mapped_column(String(128), nullable=False, comment="归一化版型编码")
++    cell_count: Mapped[int | None] = mapped_column(Integer, nullable=True, comment="组件电池片数量，例如 66 / 78")
++    base_power: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True, comment="基础功率，来源 J1 缓存值")
++    center_power_cell: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="中心功率单元格，当前为 I36")
++    area_default: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True, comment="默认面积，来源 B14")
++    std_dev_default: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True, comment="默认标准差，来源 B15")
++    source_range: Mapped[str | None] = mapped_column(String(64), nullable=True, comment="原始 sheet 数据范围")
++    raw_meta_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Sheet 原始元数据 JSON")
++    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
++
++
++class PlanPowerFactorOption(Base):
++    """计划 BOM 功率模型配置选项表。
++
++    设计说明：
++    1. 保存配置项、选项名、影响值与原始单元格；
++    2. 占位选项和缺失影响值会保留为无效项，便于后续排查 Excel 模板质量；
++    3. M2 不做正式配置匹配，只提供可查询结构化模型。
++    """
++
++    __tablename__ = "plan_power_factor_option"
++    __table_args__ = (
++        Index("idx_plan_power_factor_option_version", "version_id"),
++        Index("idx_plan_power_factor_option_sheet", "sheet_id"),
++        Index("idx_plan_power_factor_option_key", "factor_key"),
++        Index("idx_plan_power_factor_option_valid", "is_valid"),
++    )
++
++    id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, primary_key=True, autoincrement=True, comment="技术主键")
++    version_id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_version.id", ondelete="CASCADE"), nullable=False, comment="模型版本 ID")
++    sheet_id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_sheet.id", ondelete="CASCADE"), nullable=False, comment="模型 Sheet ID")
++    factor_key: Mapped[str] = mapped_column(String(64), nullable=False, comment="配置项 key，例如 ribbon / glass / supplier")
++    option_label: Mapped[str] = mapped_column(String(256), nullable=False, comment="Excel 原始选项名")
++    normalized_option_label: Mapped[str] = mapped_column(String(256), nullable=False, comment="归一化选项名")
++    effect_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True, comment="功率影响值")
++    area_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True, comment="电池尺寸对应面积")
++    std_dev_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True, comment="电池尺寸对应标准差")
++    source_cell_ref: Mapped[str] = mapped_column(String(32), nullable=False, comment="选项原始单元格")
++    is_default: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0, comment="是否 Excel 当前默认选中项")
++    is_valid: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, comment="是否有效业务选项")
++    invalid_reason: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="无效原因")
++    raw_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="原始解析 JSON")
++    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
++
++
++class PlanPowerSupplierEfficiencyDistribution(Base):
++    """计划 BOM 功率模型供应商效率分布表。
++
++    设计说明：
++    1. 保存有效供应商在各效率段的比例；
++    2. 无效供应商标题只记录 parse issue，不作为有效供应商分布入库；
++    3. M3 计算引擎将基于本表做效率段加权。
++    """
++
++    __tablename__ = "plan_power_supplier_efficiency_distribution"
++    __table_args__ = (
++        Index("idx_plan_power_supplier_distribution_version", "version_id"),
++        Index("idx_plan_power_supplier_distribution_sheet", "sheet_id"),
++        Index("idx_plan_power_supplier_distribution_supplier", "normalized_supplier_name"),
++    )
++
++    id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, primary_key=True, autoincrement=True, comment="技术主键")
++    version_id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_version.id", ondelete="CASCADE"), nullable=False, comment="模型版本 ID")
++    sheet_id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_sheet.id", ondelete="CASCADE"), nullable=False, comment="模型 Sheet ID")
++    supplier_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="Excel 原始供应商名称")
++    normalized_supplier_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="归一化供应商名称")
++    efficiency_value: Mapped[Decimal] = mapped_column(Numeric(18, 8), nullable=False, comment="效率段值")
++    ratio_value: Mapped[Decimal] = mapped_column(Numeric(18, 10), nullable=False, comment="该效率段比例")
++    source_cell_ref: Mapped[str] = mapped_column(String(32), nullable=False, comment="比例来源单元格")
++    is_valid: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, comment="是否有效")
++    invalid_reason: Mapped[str | None] = mapped_column(String(512), nullable=True, comment="无效原因")
++    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
++
++
++class PlanPowerPowerBin(Base):
++    """计划 BOM 功率模型功率档位表。"""
++
++    __tablename__ = "plan_power_power_bin"
++    __table_args__ = (
++        UniqueConstraint("sheet_id", "bin_order", name="uk_plan_power_power_bin_sheet_order"),
++        Index("idx_plan_power_power_bin_version", "version_id"),
++        Index("idx_plan_power_power_bin_sheet", "sheet_id"),
++    )
++
++    id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, primary_key=True, autoincrement=True, comment="技术主键")
++    version_id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_version.id", ondelete="CASCADE"), nullable=False, comment="模型版本 ID")
++    sheet_id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_sheet.id", ondelete="CASCADE"), nullable=False, comment="模型 Sheet ID")
++    power_bin: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, comment="功率档位")
++    bin_order: Mapped[int] = mapped_column(Integer, nullable=False, comment="档位顺序，从 1 开始")
++    source_cell_ref: Mapped[str] = mapped_column(String(32), nullable=False, comment="档位来源单元格")
++    is_valid: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=1, comment="是否有效功率档")
++    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
++
++
++class PlanPowerBenchmarkFactor(Base):
++    """计划 BOM 功率模型标板基准表。"""
++
++    __tablename__ = "plan_power_benchmark_factor"
++    __table_args__ = (
++        Index("idx_plan_power_benchmark_version", "version_id"),
++        Index("idx_plan_power_benchmark_model", "model_code"),
++    )
++
++    id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, primary_key=True, autoincrement=True, comment="技术主键")
++    version_id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_version.id", ondelete="CASCADE"), nullable=False, comment="模型版本 ID")
++    model_code: Mapped[str] = mapped_column(String(128), nullable=False, comment="版型编码")
++    benchmark_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="Excel 原始标板列名")
++    normalized_benchmark_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="系统归一标板名称")
++    effect_value: Mapped[Decimal | None] = mapped_column(Numeric(18, 6), nullable=True, comment="标板影响值；功率最优列可为空")
++    source_sheet_name: Mapped[str] = mapped_column(String(128), nullable=False, comment="来源 Sheet 名")
++    source_cell_ref: Mapped[str] = mapped_column(String(32), nullable=False, comment="来源单元格")
++    raw_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="原始解析 JSON")
++    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
++
++
++class PlanPowerModelValidationCase(Base):
++    """计划 BOM 功率模型校验用例预留表。
++
++    设计说明：
++    M2 只建表预留，M3 才会写入 Excel parity / 抽样校验结果。
++    """
++
++    __tablename__ = "plan_power_model_validation_case"
++    __table_args__ = (
++        Index("idx_plan_power_validation_version", "version_id"),
++        Index("idx_plan_power_validation_model", "model_code"),
++        Index("idx_plan_power_validation_status", "status"),
++    )
++
++    id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, primary_key=True, autoincrement=True, comment="技术主键")
++    version_id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_version.id", ondelete="CASCADE"), nullable=False, comment="模型版本 ID")
++    model_code: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="版型编码")
++    case_name: Mapped[str | None] = mapped_column(String(256), nullable=True, comment="校验用例名称")
++    input_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="输入配置 JSON")
++    excel_expected_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="Excel 期望值 JSON")
++    system_result_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="系统计算值 JSON")
++    diff_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="差异 JSON")
++    status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", comment="校验状态")
++    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
++
++
++class PlanPowerParseIssue(Base):
++    """计划 BOM 功率模型解析问题表。"""
++
++    __tablename__ = "plan_power_parse_issue"
++    __table_args__ = (
++        Index("idx_plan_power_parse_issue_version", "version_id"),
++        Index("idx_plan_power_parse_issue_sheet", "sheet_id"),
++        Index("idx_plan_power_parse_issue_code", "issue_code"),
++        Index("idx_plan_power_parse_issue_level", "level"),
++    )
++
++    id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, primary_key=True, autoincrement=True, comment="技术主键")
++    version_id: Mapped[int] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_version.id", ondelete="CASCADE"), nullable=False, comment="模型版本 ID")
++    sheet_id: Mapped[int | None] = mapped_column(PLAN_BOM_ID_TYPE, ForeignKey("plan_power_model_sheet.id", ondelete="CASCADE"), nullable=True, comment="模型 Sheet ID，可为空")
++    level: Mapped[str] = mapped_column(String(32), nullable=False, comment="问题级别：warning / error")
++    issue_code: Mapped[str] = mapped_column(String(128), nullable=False, comment="问题编码")
++    message: Mapped[str] = mapped_column(Text, nullable=False, comment="问题说明")
++    source_sheet_name: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="来源 Sheet 名")
++    source_cell_ref: Mapped[str | None] = mapped_column(String(32), nullable=True, comment="来源单元格")
++    raw_json: Mapped[str | None] = mapped_column(Text, nullable=True, comment="原始上下文 JSON")
++    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now(), comment="创建时间")
++
++
+ __all__ = [
+     "PlanBomImportBatch",
+     "PlanBomHeader",
+@@ -292,4 +516,12 @@ __all__ = [
+     "PlanBomRevision",
+     "PlanBomExportTask",
+     "PlanBomExportFile",
++    "PlanPowerModelVersion",
++    "PlanPowerModelSheet",
++    "PlanPowerFactorOption",
++    "PlanPowerSupplierEfficiencyDistribution",
++    "PlanPowerPowerBin",
++    "PlanPowerBenchmarkFactor",
++    "PlanPowerModelValidationCase",
++    "PlanPowerParseIssue",
+ ]
+diff --git a/backend/app/models/__init__.py b/backend/app/models/__init__.py
+index 2a6a22c..041bdf2 100644
+--- a/backend/app/models/__init__.py
++++ b/backend/app/models/__init__.py
+@@ -12,6 +12,14 @@ from backend.app.domains.plan_bom.models import (
+     PlanBomImportBatch,
+     PlanBomMaterialLine,
+     PlanBomRevision,
++    PlanPowerBenchmarkFactor,
++    PlanPowerFactorOption,
++    PlanPowerModelSheet,
++    PlanPowerModelValidationCase,
++    PlanPowerModelVersion,
++    PlanPowerParseIssue,
++    PlanPowerPowerBin,
++    PlanPowerSupplierEfficiencyDistribution,
+ )
+ from backend.app.models.sys_query_log import SysQueryLog
+ from backend.app.models.sys_task_error_log import SysTaskErrorLog
+@@ -27,4 +35,12 @@ __all__ = [
+     "PlanBomRevision",
+     "PlanBomExportTask",
+     "PlanBomExportFile",
++    "PlanPowerModelVersion",
++    "PlanPowerModelSheet",
++    "PlanPowerFactorOption",
++    "PlanPowerSupplierEfficiencyDistribution",
++    "PlanPowerPowerBin",
++    "PlanPowerBenchmarkFactor",
++    "PlanPowerModelValidationCase",
++    "PlanPowerParseIssue",
+ ]
+diff --git a/backend/alembic/versions/20260508_0004_create_plan_power_model_versioning.py b/backend/alembic/versions/20260508_0004_create_plan_power_model_versioning.py
+new file mode 100644
+index 0000000..fa5c46d
+--- /dev/null
++++ b/backend/alembic/versions/20260508_0004_create_plan_power_model_versioning.py
+@@ -0,0 +1,242 @@
++"""创建计划 BOM 功率模型版本化表
++
++Revision ID: 20260508_0004
++Revises: 20260419_0003
++Create Date: 2026-05-08 00:00:00
++"""
++
++from __future__ import annotations
++
++from alembic import op
++import sqlalchemy as sa
++
++
++# revision identifiers, used by Alembic.
++revision = "20260508_0004"
++down_revision = "20260419_0003"
++branch_labels = None
++depends_on = None
++
++
++def upgrade() -> None:
++    """创建 M2 功率模型版本化入库所需的 8 张 plan_power 表。"""
++
++    op.create_table(
++        "plan_power_model_version",
++        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="技术主键"),
++        sa.Column("file_name", sa.String(length=512), nullable=False, comment="原始 xlsm 文件名"),
++        sa.Column("file_hash", sa.String(length=128), nullable=False, comment="文件 SHA256，用于防重复导入"),
++        sa.Column("source_type", sa.String(length=32), nullable=False, server_default="xlsm", comment="来源类型，M2 固定为 xlsm"),
++        sa.Column("business_version_label", sa.String(length=128), nullable=True, comment="业务版本标签，例如 TOPCon 26.04.13"),
++        sa.Column("formula_policy", sa.String(length=64), nullable=False, server_default="semantic_fixed_mode", comment="公式策略"),
++        sa.Column("vba_project_sha256", sa.String(length=128), nullable=True, comment="VBA 工程 SHA256，用于宏来源追溯"),
++        sa.Column("is_active", sa.SmallInteger(), nullable=False, server_default="0", comment="是否当前激活版本，1 表示激活"),
++        sa.Column("parse_status", sa.String(length=32), nullable=False, server_default="success", comment="解析状态"),
++        sa.Column("sheet_count", sa.Integer(), nullable=False, server_default="0", comment="Workbook sheet 总数"),
++        sa.Column("model_sheet_count", sa.Integer(), nullable=False, server_default="0", comment="有效模型页数量"),
++        sa.Column("warning_count", sa.Integer(), nullable=False, server_default="0", comment="解析 warning 数量"),
++        sa.Column("error_count", sa.Integer(), nullable=False, server_default="0", comment="解析 error 数量"),
++        sa.Column("parse_summary_json", sa.Text(), nullable=True, comment="解析摘要 JSON"),
++        sa.Column("warning_json", sa.Text(), nullable=True, comment="解析 warning JSON"),
++        sa.Column("change_history_json", sa.Text(), nullable=True, comment="更改履历 JSON，用于模型版本追溯"),
++        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP"), comment="创建时间"),
++        sa.Column("activated_at", sa.DateTime(), nullable=True, comment="激活时间"),
++        sa.PrimaryKeyConstraint("id"),
++        sa.UniqueConstraint("file_hash", name="uk_plan_power_model_version_file_hash"),
++        comment="计划 BOM 功率模型版本表",
++    )
++    op.create_index("idx_plan_power_model_version_active", "plan_power_model_version", ["is_active"], unique=False)
++    op.create_index("idx_plan_power_model_version_status", "plan_power_model_version", ["parse_status"], unique=False)
++
++    op.create_table(
++        "plan_power_model_sheet",
++        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="技术主键"),
++        sa.Column("version_id", sa.BigInteger(), nullable=False, comment="模型版本 ID"),
++        sa.Column("sheet_name", sa.String(length=128), nullable=False, comment="Excel 原始 Sheet 名"),
++        sa.Column("normalized_model_code", sa.String(length=128), nullable=False, comment="归一化版型编码"),
++        sa.Column("cell_count", sa.Integer(), nullable=True, comment="组件电池片数量"),
++        sa.Column("base_power", sa.Numeric(precision=18, scale=6), nullable=True, comment="基础功率，来源 J1 缓存值"),
++        sa.Column("center_power_cell", sa.String(length=32), nullable=True, comment="中心功率单元格"),
++        sa.Column("area_default", sa.Numeric(precision=18, scale=6), nullable=True, comment="默认面积，来源 B14"),
++        sa.Column("std_dev_default", sa.Numeric(precision=18, scale=6), nullable=True, comment="默认标准差，来源 B15"),
++        sa.Column("source_range", sa.String(length=64), nullable=True, comment="原始 sheet 数据范围"),
++        sa.Column("raw_meta_json", sa.Text(), nullable=True, comment="Sheet 原始元数据 JSON"),
++        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP"), comment="创建时间"),
++        sa.ForeignKeyConstraint(["version_id"], ["plan_power_model_version.id"], ondelete="CASCADE"),
++        sa.PrimaryKeyConstraint("id"),
++        sa.UniqueConstraint("version_id", "sheet_name", name="uk_plan_power_model_sheet_version_sheet"),
++        comment="计划 BOM 功率模型 Sheet 表",
++    )
++    op.create_index("idx_plan_power_model_sheet_model_code", "plan_power_model_sheet", ["normalized_model_code"], unique=False)
++    op.create_index("idx_plan_power_model_sheet_version", "plan_power_model_sheet", ["version_id"], unique=False)
++
++    op.create_table(
++        "plan_power_factor_option",
++        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="技术主键"),
++        sa.Column("version_id", sa.BigInteger(), nullable=False, comment="模型版本 ID"),
++        sa.Column("sheet_id", sa.BigInteger(), nullable=False, comment="模型 Sheet ID"),
++        sa.Column("factor_key", sa.String(length=64), nullable=False, comment="配置项 key"),
++        sa.Column("option_label", sa.String(length=256), nullable=False, comment="Excel 原始选项名"),
++        sa.Column("normalized_option_label", sa.String(length=256), nullable=False, comment="归一化选项名"),
++        sa.Column("effect_value", sa.Numeric(precision=18, scale=6), nullable=True, comment="功率影响值"),
++        sa.Column("area_value", sa.Numeric(precision=18, scale=6), nullable=True, comment="电池尺寸对应面积"),
++        sa.Column("std_dev_value", sa.Numeric(precision=18, scale=6), nullable=True, comment="电池尺寸对应标准差"),
++        sa.Column("source_cell_ref", sa.String(length=32), nullable=False, comment="选项原始单元格"),
++        sa.Column("is_default", sa.SmallInteger(), nullable=False, server_default="0", comment="是否 Excel 当前默认选中项"),
++        sa.Column("is_valid", sa.SmallInteger(), nullable=False, server_default="1", comment="是否有效业务选项"),
++        sa.Column("invalid_reason", sa.String(length=512), nullable=True, comment="无效原因"),
++        sa.Column("raw_json", sa.Text(), nullable=True, comment="原始解析 JSON"),
++        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP"), comment="创建时间"),
++        sa.ForeignKeyConstraint(["sheet_id"], ["plan_power_model_sheet.id"], ondelete="CASCADE"),
++        sa.ForeignKeyConstraint(["version_id"], ["plan_power_model_version.id"], ondelete="CASCADE"),
++        sa.PrimaryKeyConstraint("id"),
++        comment="计划 BOM 功率模型配置选项表",
++    )
++    op.create_index("idx_plan_power_factor_option_key", "plan_power_factor_option", ["factor_key"], unique=False)
++    op.create_index("idx_plan_power_factor_option_sheet", "plan_power_factor_option", ["sheet_id"], unique=False)
++    op.create_index("idx_plan_power_factor_option_valid", "plan_power_factor_option", ["is_valid"], unique=False)
++    op.create_index("idx_plan_power_factor_option_version", "plan_power_factor_option", ["version_id"], unique=False)
++
++    op.create_table(
++        "plan_power_supplier_efficiency_distribution",
++        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="技术主键"),
++        sa.Column("version_id", sa.BigInteger(), nullable=False, comment="模型版本 ID"),
++        sa.Column("sheet_id", sa.BigInteger(), nullable=False, comment="模型 Sheet ID"),
++        sa.Column("supplier_name", sa.String(length=128), nullable=False, comment="Excel 原始供应商名称"),
++        sa.Column("normalized_supplier_name", sa.String(length=128), nullable=False, comment="归一化供应商名称"),
++        sa.Column("efficiency_value", sa.Numeric(precision=18, scale=8), nullable=False, comment="效率段值"),
++        sa.Column("ratio_value", sa.Numeric(precision=18, scale=10), nullable=False, comment="该效率段比例"),
++        sa.Column("source_cell_ref", sa.String(length=32), nullable=False, comment="比例来源单元格"),
++        sa.Column("is_valid", sa.SmallInteger(), nullable=False, server_default="1", comment="是否有效"),
++        sa.Column("invalid_reason", sa.String(length=512), nullable=True, comment="无效原因"),
++        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP"), comment="创建时间"),
++        sa.ForeignKeyConstraint(["sheet_id"], ["plan_power_model_sheet.id"], ondelete="CASCADE"),
++        sa.ForeignKeyConstraint(["version_id"], ["plan_power_model_version.id"], ondelete="CASCADE"),
++        sa.PrimaryKeyConstraint("id"),
++        comment="计划 BOM 功率模型供应商效率分布表",
++    )
++    op.create_index("idx_plan_power_supplier_distribution_sheet", "plan_power_supplier_efficiency_distribution", ["sheet_id"], unique=False)
++    op.create_index("idx_plan_power_supplier_distribution_supplier", "plan_power_supplier_efficiency_distribution", ["normalized_supplier_name"], unique=False)
++    op.create_index("idx_plan_power_supplier_distribution_version", "plan_power_supplier_efficiency_distribution", ["version_id"], unique=False)
++
++    op.create_table(
++        "plan_power_power_bin",
++        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="技术主键"),
++        sa.Column("version_id", sa.BigInteger(), nullable=False, comment="模型版本 ID"),
++        sa.Column("sheet_id", sa.BigInteger(), nullable=False, comment="模型 Sheet ID"),
++        sa.Column("power_bin", sa.Numeric(precision=10, scale=2), nullable=False, comment="功率档位"),
++        sa.Column("bin_order", sa.Integer(), nullable=False, comment="档位顺序，从 1 开始"),
++        sa.Column("source_cell_ref", sa.String(length=32), nullable=False, comment="档位来源单元格"),
++        sa.Column("is_valid", sa.SmallInteger(), nullable=False, server_default="1", comment="是否有效功率档"),
++        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP"), comment="创建时间"),
++        sa.ForeignKeyConstraint(["sheet_id"], ["plan_power_model_sheet.id"], ondelete="CASCADE"),
++        sa.ForeignKeyConstraint(["version_id"], ["plan_power_model_version.id"], ondelete="CASCADE"),
++        sa.PrimaryKeyConstraint("id"),
++        sa.UniqueConstraint("sheet_id", "bin_order", name="uk_plan_power_power_bin_sheet_order"),
++        comment="计划 BOM 功率模型功率档位表",
++    )
++    op.create_index("idx_plan_power_power_bin_sheet", "plan_power_power_bin", ["sheet_id"], unique=False)
++    op.create_index("idx_plan_power_power_bin_version", "plan_power_power_bin", ["version_id"], unique=False)
++
++    op.create_table(
++        "plan_power_benchmark_factor",
++        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="技术主键"),
++        sa.Column("version_id", sa.BigInteger(), nullable=False, comment="模型版本 ID"),
++        sa.Column("model_code", sa.String(length=128), nullable=False, comment="版型编码"),
++        sa.Column("benchmark_name", sa.String(length=128), nullable=False, comment="Excel 原始标板列名"),
++        sa.Column("normalized_benchmark_name", sa.String(length=128), nullable=False, comment="系统归一标板名称"),
++        sa.Column("effect_value", sa.Numeric(precision=18, scale=6), nullable=True, comment="标板影响值；功率最优列可为空"),
++        sa.Column("source_sheet_name", sa.String(length=128), nullable=False, comment="来源 Sheet 名"),
++        sa.Column("source_cell_ref", sa.String(length=32), nullable=False, comment="来源单元格"),
++        sa.Column("raw_json", sa.Text(), nullable=True, comment="原始解析 JSON"),
++        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP"), comment="创建时间"),
++        sa.ForeignKeyConstraint(["version_id"], ["plan_power_model_version.id"], ondelete="CASCADE"),
++        sa.PrimaryKeyConstraint("id"),
++        comment="计划 BOM 功率模型标板基准表",
++    )
++    op.create_index("idx_plan_power_benchmark_model", "plan_power_benchmark_factor", ["model_code"], unique=False)
++    op.create_index("idx_plan_power_benchmark_version", "plan_power_benchmark_factor", ["version_id"], unique=False)
++
++    op.create_table(
++        "plan_power_model_validation_case",
++        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="技术主键"),
++        sa.Column("version_id", sa.BigInteger(), nullable=False, comment="模型版本 ID"),
++        sa.Column("model_code", sa.String(length=128), nullable=True, comment="版型编码"),
++        sa.Column("case_name", sa.String(length=256), nullable=True, comment="校验用例名称"),
++        sa.Column("input_json", sa.Text(), nullable=True, comment="输入配置 JSON"),
++        sa.Column("excel_expected_json", sa.Text(), nullable=True, comment="Excel 期望值 JSON"),
++        sa.Column("system_result_json", sa.Text(), nullable=True, comment="系统计算值 JSON"),
++        sa.Column("diff_json", sa.Text(), nullable=True, comment="差异 JSON"),
++        sa.Column("status", sa.String(length=32), nullable=False, server_default="pending", comment="校验状态"),
++        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP"), comment="创建时间"),
++        sa.ForeignKeyConstraint(["version_id"], ["plan_power_model_version.id"], ondelete="CASCADE"),
++        sa.PrimaryKeyConstraint("id"),
++        comment="计划 BOM 功率模型校验用例预留表",
++    )
++    op.create_index("idx_plan_power_validation_model", "plan_power_model_validation_case", ["model_code"], unique=False)
++    op.create_index("idx_plan_power_validation_status", "plan_power_model_validation_case", ["status"], unique=False)
++    op.create_index("idx_plan_power_validation_version", "plan_power_model_validation_case", ["version_id"], unique=False)
++
++    op.create_table(
++        "plan_power_parse_issue",
++        sa.Column("id", sa.BigInteger(), autoincrement=True, nullable=False, comment="技术主键"),
++        sa.Column("version_id", sa.BigInteger(), nullable=False, comment="模型版本 ID"),
++        sa.Column("sheet_id", sa.BigInteger(), nullable=True, comment="模型 Sheet ID，可为空"),
++        sa.Column("level", sa.String(length=32), nullable=False, comment="问题级别：warning / error"),
++        sa.Column("issue_code", sa.String(length=128), nullable=False, comment="问题编码"),
++        sa.Column("message", sa.Text(), nullable=False, comment="问题说明"),
++        sa.Column("source_sheet_name", sa.String(length=128), nullable=True, comment="来源 Sheet 名"),
++        sa.Column("source_cell_ref", sa.String(length=32), nullable=True, comment="来源单元格"),
++        sa.Column("raw_json", sa.Text(), nullable=True, comment="原始上下文 JSON"),
++        sa.Column("created_at", sa.DateTime(), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP"), comment="创建时间"),
++        sa.ForeignKeyConstraint(["sheet_id"], ["plan_power_model_sheet.id"], ondelete="CASCADE"),
++        sa.ForeignKeyConstraint(["version_id"], ["plan_power_model_version.id"], ondelete="CASCADE"),
++        sa.PrimaryKeyConstraint("id"),
++        comment="计划 BOM 功率模型解析问题表",
++    )
++    op.create_index("idx_plan_power_parse_issue_code", "plan_power_parse_issue", ["issue_code"], unique=False)
++    op.create_index("idx_plan_power_parse_issue_level", "plan_power_parse_issue", ["level"], unique=False)
++    op.create_index("idx_plan_power_parse_issue_sheet", "plan_power_parse_issue", ["sheet_id"], unique=False)
++    op.create_index("idx_plan_power_parse_issue_version", "plan_power_parse_issue", ["version_id"], unique=False)
++
++
++def downgrade() -> None:
++    """回滚 M2 功率模型版本化表。"""
++
++    op.drop_index("idx_plan_power_parse_issue_version", table_name="plan_power_parse_issue")
++    op.drop_index("idx_plan_power_parse_issue_sheet", table_name="plan_power_parse_issue")
++    op.drop_index("idx_plan_power_parse_issue_level", table_name="plan_power_parse_issue")
++    op.drop_index("idx_plan_power_parse_issue_code", table_name="plan_power_parse_issue")
++    op.drop_table("plan_power_parse_issue")
++
++    op.drop_index("idx_plan_power_validation_version", table_name="plan_power_model_validation_case")
++    op.drop_index("idx_plan_power_validation_status", table_name="plan_power_model_validation_case")
++    op.drop_index("idx_plan_power_validation_model", table_name="plan_power_model_validation_case")
++    op.drop_table("plan_power_model_validation_case")
++
++    op.drop_index("idx_plan_power_benchmark_version", table_name="plan_power_benchmark_factor")
++    op.drop_index("idx_plan_power_benchmark_model", table_name="plan_power_benchmark_factor")
++    op.drop_table("plan_power_benchmark_factor")
++
++    op.drop_index("idx_plan_power_power_bin_version", table_name="plan_power_power_bin")
++    op.drop_index("idx_plan_power_power_bin_sheet", table_name="plan_power_power_bin")
++    op.drop_table("plan_power_power_bin")
++
++    op.drop_index("idx_plan_power_supplier_distribution_version", table_name="plan_power_supplier_efficiency_distribution")
++    op.drop_index("idx_plan_power_supplier_distribution_supplier", table_name="plan_power_supplier_efficiency_distribution")
++    op.drop_index("idx_plan_power_supplier_distribution_sheet", table_name="plan_power_supplier_efficiency_distribution")
++    op.drop_table("plan_power_supplier_efficiency_distribution")
++
++    op.drop_index("idx_plan_power_factor_option_version", table_name="plan_power_factor_option")
++    op.drop_index("idx_plan_power_factor_option_valid", table_name="plan_power_factor_option")
++    op.drop_index("idx_plan_power_factor_option_sheet", table_name="plan_power_factor_option")
++    op.drop_index("idx_plan_power_factor_option_key", table_name="plan_power_factor_option")
++    op.drop_table("plan_power_factor_option")
++
++    op.drop_index("idx_plan_power_model_sheet_version", table_name="plan_power_model_sheet")
++    op.drop_index("idx_plan_power_model_sheet_model_code", table_name="plan_power_model_sheet")
++    op.drop_table("plan_power_model_sheet")
++
++    op.drop_index("idx_plan_power_model_version_status", table_name="plan_power_model_version")
++    op.drop_index("idx_plan_power_model_version_active", table_name="plan_power_model_version")
++    op.drop_table("plan_power_model_version")
+diff --git a/backend/app/domains/plan_bom/api/endpoints/power_model.py b/backend/app/domains/plan_bom/api/endpoints/power_model.py
+new file mode 100644
+index 0000000..c15136e
+--- /dev/null
++++ b/backend/app/domains/plan_bom/api/endpoints/power_model.py
+@@ -0,0 +1,105 @@
++from __future__ import annotations
++
++from fastapi import APIRouter, Depends, File, Path, Request, UploadFile
++
++from backend.app.api.deps import get_plan_power_model_service, require_plan_power_admin
++from backend.app.domains.plan_bom.schemas.power_model import (
++    PowerModelImportResponse,
++    PowerModelVersionDetailResponse,
++    PowerModelVersionListResponse,
++)
++from backend.app.domains.plan_bom.services.power_model_service import PowerModelImportError, PowerModelService
++from backend.app.schemas.common import ApiResponse
++
++router = APIRouter()
++
++
++@router.post("/import", response_model=ApiResponse)
++async def import_power_model(
++    request: Request,
++    file: UploadFile = File(...),
++    _: None = Depends(require_plan_power_admin),
++    service: PowerModelService = Depends(get_plan_power_model_service),
++) -> ApiResponse:
++    """导入计划 BOM 功率模型 xlsm。
++
++    参数：
++        file: xlsm 文件，M2 只做只读解析和版本化入库。
++
++    返回：
++        统一 ApiResponse，data 中包含 import_status、version 和详情摘要。
++    """
++    trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
++    if not (file.filename or "").lower().endswith(".xlsm"):
++        return ApiResponse(code=400, message="功率模型导入仅支持 .xlsm 文件。", data=None, trace_id=trace_id)
++    try:
++        result = await service.import_upload(file)
++    except PowerModelImportError as exc:
++        return ApiResponse(code=400, message=str(exc), data=None, trace_id=trace_id)
++    payload = PowerModelImportResponse(import_status=result.import_status, version=result.version, detail=result.detail)
++    return ApiResponse.success(payload.model_dump(mode="json"), trace_id=trace_id)
++
++
++@router.get("/versions", response_model=ApiResponse)
++def list_power_model_versions(
++    request: Request,
++    service: PowerModelService = Depends(get_plan_power_model_service),
++) -> ApiResponse:
++    """查询功率模型版本列表。
++
++    返回：
++        统一 ApiResponse，data 中包含 items 和 total。
++    """
++    trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
++    items = service.list_versions()
++    payload = PowerModelVersionListResponse(items=items, total=len(items))
++    return ApiResponse.success(payload.model_dump(mode="json"), trace_id=trace_id)
++
++
++@router.get("/versions/{version_id}", response_model=ApiResponse)
++def get_power_model_version_detail(
++    request: Request,
++    version_id: int = Path(..., ge=1, description="功率模型版本 ID"),
++    service: PowerModelService = Depends(get_plan_power_model_service),
++) -> ApiResponse:
++    """查询功率模型版本详情。
++
++    参数：
++        version_id: 功率模型版本 ID。
++
++    返回：
++        Sheet、配置项、供应商分布、功率档、标板和 issue 详情。
++    """
++    trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
++    try:
++        detail = service.get_version_detail(version_id)
++    except ValueError as exc:
++        return ApiResponse(code=404, message=str(exc), data=None, trace_id=trace_id)
++    payload = PowerModelVersionDetailResponse(**detail)
++    return ApiResponse.success(payload.model_dump(mode="json"), trace_id=trace_id)
++
++
++@router.post("/versions/{version_id}/activate", response_model=ApiResponse)
++def activate_power_model_version(
++    request: Request,
++    version_id: int = Path(..., ge=1, description="功率模型版本 ID"),
++    _: None = Depends(require_plan_power_admin),
++    service: PowerModelService = Depends(get_plan_power_model_service),
++) -> ApiResponse:
++    """激活功率模型版本。
++
++    参数：
++        version_id: 待激活版本 ID。
++
++    返回：
++        激活后的版本摘要。仓储层保证最多一个 active 版本。
++    """
++    trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
++    try:
++        version = service.activate_version(version_id)
++    except ValueError as exc:
++        return ApiResponse(code=404, message=str(exc), data=None, trace_id=trace_id)
++    return ApiResponse.success(version, trace_id=trace_id)
++
++
++__all__ = ["router"]
+diff --git a/backend/app/domains/plan_bom/repositories/power_model_repository.py b/backend/app/domains/plan_bom/repositories/power_model_repository.py
+new file mode 100644
+index 0000000..2d6f14b
+--- /dev/null
++++ b/backend/app/domains/plan_bom/repositories/power_model_repository.py
+@@ -0,0 +1,626 @@
++from __future__ import annotations
++
++import json
++from datetime import datetime
++from typing import Any
++
++from sqlalchemy import text
++from sqlalchemy.orm import Session
++
++from backend.app.domains.plan_bom.models import (
++    PlanPowerBenchmarkFactor,
++    PlanPowerFactorOption,
++    PlanPowerModelSheet,
++    PlanPowerModelValidationCase,
++    PlanPowerModelVersion,
++    PlanPowerParseIssue,
++    PlanPowerPowerBin,
++    PlanPowerSupplierEfficiencyDistribution,
++)
++from backend.app.domains.plan_bom.services.power_excel_parser_service import ParsedPowerModelWorkbook, dumps_power_json
++
++
++class PowerModelRepository:
++    """计划 BOM 功率模型版本仓储。
++
++    职责边界：
++    1. 负责 `plan_power_*` 版本化数据的落库和查询；
++    2. 不解析 Excel，不做功率预测计算；
++    3. 激活版本时在一个事务内保证最多一个 active 版本。
++    """
++
++    def __init__(self, db: Session) -> None:
++        self.db = db
++
++    def get_by_file_hash(self, file_hash: str) -> PlanPowerModelVersion | None:
++        """按文件 hash 查询模型版本。
++
++        参数：
++            file_hash: xlsm SHA256。
++
++        返回：
++            已存在版本；不存在时返回 None。
++        """
++        return self.db.query(PlanPowerModelVersion).filter(PlanPowerModelVersion.file_hash == file_hash).first()
++
++    def get_version(self, version_id: int) -> PlanPowerModelVersion | None:
++        """按 ID 查询模型版本。
++
++        参数：
++            version_id: 模型版本 ID。
++
++        返回：
++            模型版本；不存在时返回 None。
++        """
++        return self.db.query(PlanPowerModelVersion).filter(PlanPowerModelVersion.id == version_id).first()
++
++    def list_versions(self) -> list[PlanPowerModelVersion]:
++        """查询模型版本列表。
++
++        返回：
++            按创建时间倒序排列的模型版本。
++        """
++        return self.db.query(PlanPowerModelVersion).order_by(PlanPowerModelVersion.created_at.desc(), PlanPowerModelVersion.id.desc()).all()
++
++    def create_from_parsed(self, parsed: ParsedPowerModelWorkbook) -> PlanPowerModelVersion:
++        """保存解析结果。
++
++        参数：
++            parsed: PowerExcelParserService 输出的内存解析结构。
++
++        返回：
++            新创建的 PlanPowerModelVersion。失败时回滚事务并向上抛出异常。
++        """
++        try:
++            version = PlanPowerModelVersion(
++                file_name=parsed.file_name,
++                file_hash=parsed.file_hash,
++                source_type="xlsm",
++                business_version_label=parsed.business_version_label,
++                formula_policy=parsed.formula_policy,
++                vba_project_sha256=parsed.vba_project_sha256,
++                is_active=0,
++                parse_status=self._parse_status(parsed),
++                sheet_count=parsed.sheet_count,
++                model_sheet_count=parsed.model_sheet_count,
++                warning_count=parsed.warning_count,
++                error_count=parsed.error_count,
++                parse_summary_json=dumps_power_json(parsed.parse_summary),
++                warning_json=dumps_power_json([self._issue_to_dict(issue) for issue in parsed.issues if issue.level == "warning"]),
++                change_history_json=dumps_power_json([self._change_history_to_dict(row) for row in parsed.change_histories]),
++            )
++            self.db.add(version)
++            self.db.flush()
++
++            sheet_id_by_name: dict[str, int] = {}
++            for parsed_sheet in parsed.sheets:
++                sheet = PlanPowerModelSheet(
++                    version_id=version.id,
++                    sheet_name=parsed_sheet.sheet_name,
++                    normalized_model_code=parsed_sheet.normalized_model_code,
++                    cell_count=parsed_sheet.cell_count,
++                    base_power=parsed_sheet.base_power,
++                    center_power_cell=parsed_sheet.center_power_cell,
++                    area_default=parsed_sheet.area_default,
++                    std_dev_default=parsed_sheet.std_dev_default,
++                    source_range=parsed_sheet.source_range,
++                    raw_meta_json=dumps_power_json(parsed_sheet.raw_meta),
++                )
++                self.db.add(sheet)
++                self.db.flush()
++                sheet_id_by_name[parsed_sheet.sheet_name] = sheet.id
++
++                self.db.add_all(
++                    [
++                        PlanPowerFactorOption(
++                            version_id=version.id,
++                            sheet_id=sheet.id,
++                            factor_key=option.factor_key,
++                            option_label=option.option_label,
++                            normalized_option_label=option.normalized_option_label,
++                            effect_value=option.effect_value,
++                            area_value=option.area_value,
++                            std_dev_value=option.std_dev_value,
++                            source_cell_ref=option.source_cell_ref,
++                            is_default=1 if option.is_default else 0,
++                            is_valid=1 if option.is_valid else 0,
++                            invalid_reason=option.invalid_reason,
++                            raw_json=dumps_power_json(option.raw),
++                        )
++                        for option in parsed_sheet.factor_options
++                    ]
++                )
++                self.db.add_all(
++                    [
++                        PlanPowerSupplierEfficiencyDistribution(
++                            version_id=version.id,
++                            sheet_id=sheet.id,
++                            supplier_name=distribution.supplier_name,
++                            normalized_supplier_name=distribution.normalized_supplier_name,
++                            efficiency_value=distribution.efficiency_value,
++                            ratio_value=distribution.ratio_value,
++                            source_cell_ref=distribution.source_cell_ref,
++                            is_valid=1,
++                        )
++                        for distribution in parsed_sheet.supplier_distributions
++                    ]
++                )
++                self.db.add_all(
++                    [
++                        PlanPowerPowerBin(
++                            version_id=version.id,
++                            sheet_id=sheet.id,
++                            power_bin=power_bin.power_bin,
++                            bin_order=power_bin.bin_order,
++                            source_cell_ref=power_bin.source_cell_ref,
++                            is_valid=1 if power_bin.is_valid else 0,
++                        )
++                        for power_bin in parsed_sheet.power_bins
++                    ]
++                )
++
++            self.db.add_all(
++                [
++                    PlanPowerBenchmarkFactor(
++                        version_id=version.id,
++                        model_code=benchmark.model_code,
++                        benchmark_name=benchmark.benchmark_name,
++                        normalized_benchmark_name=benchmark.normalized_benchmark_name,
++                        effect_value=benchmark.effect_value,
++                        source_sheet_name=benchmark.source_sheet_name,
++                        source_cell_ref=benchmark.source_cell_ref,
++                        raw_json=dumps_power_json(benchmark.raw),
++                    )
++                    for benchmark in parsed.benchmark_factors
++                ]
++            )
++            self.db.flush()
++
++            self.db.add_all(
++                [
++                    PlanPowerParseIssue(
++                        version_id=version.id,
++                        sheet_id=sheet_id_by_name.get(issue.source_sheet_name or ""),
++                        level=issue.level,
++                        issue_code=issue.issue_code,
++                        message=issue.message,
++                        source_sheet_name=issue.source_sheet_name,
++                        source_cell_ref=issue.source_cell_ref,
++                        raw_json=dumps_power_json(issue.raw),
++                    )
++                    for issue in parsed.issues
++                ]
++            )
++            self.db.commit()
++            self.db.refresh(version)
++            return version
++        except Exception:
++            self.db.rollback()
++            raise
++
++    def activate_version(self, version_id: int) -> PlanPowerModelVersion:
++        """激活模型版本。
++
++        参数：
++            version_id: 待激活版本 ID。
++
++        返回：
++            激活后的模型版本。不存在时抛出 ValueError。
++
++        关键业务逻辑：
++            先通过 MySQL 命名锁 / 行锁保护激活流程，再把所有版本置为 inactive，
++            最后激活目标版本；事务失败时整体回滚。SQLite 测试环境会忽略行锁，
++            MySQL 生产环境通过 `plan_power_model_activation` GET_LOCK 降低并发双 active 风险。
++        """
++        lock_connection = None
++        try:
++            lock_connection = self._acquire_activation_lock()
++            version = (
++                self.db.query(PlanPowerModelVersion)
++                .filter(PlanPowerModelVersion.id == version_id)
++                .with_for_update()
++                .first()
++            )
++            if version is None:
++                raise ValueError(f"功率模型版本不存在：{version_id}")
++            if version.parse_status == "failed" or version.error_count:
++                raise ValueError(f"功率模型版本解析失败，不允许激活：{version_id}")
++            self.db.query(PlanPowerModelVersion).filter(
++                PlanPowerModelVersion.is_active == 1,
++                PlanPowerModelVersion.id != version_id,
++            ).update(
++                {"is_active": 0, "activated_at": None},
++                synchronize_session=False,
++            )
++            version.is_active = 1
++            version.activated_at = datetime.now()
++            self.db.add(version)
++            self.db.commit()
++            self._release_activation_lock(lock_connection)
++            self.db.refresh(version)
++            return version
++        except Exception:
++            self.db.rollback()
++            self._release_activation_lock(lock_connection)
++            raise
++
++    def _acquire_activation_lock(self):
++        """获取功率模型激活全局锁。
++
++        返回：
++            MySQL/MariaDB 下返回持有 GET_LOCK 的专用连接；其他数据库返回 None。
++
++        关键业务逻辑：
++            MySQL 环境使用专用连接持有 GET_LOCK，串行化 active 切换，避免两个请求并发激活不同版本；
++            SQLite 单测环境不支持命名锁，继续依赖事务顺序执行。
++        """
++        bind = self.db.get_bind()
++        if bind is None or bind.dialect.name not in {"mysql", "mariadb"}:
++            return None
++        lock_connection = bind.connect()
++        try:
++            acquired = lock_connection.execute(text("SELECT GET_LOCK('plan_power_model_activation', 10)")).scalar()
++            if acquired != 1:
++                raise ValueError("获取功率模型激活锁超时，请稍后重试。")
++            return lock_connection
++        except Exception:
++            lock_connection.close()
++            raise
++
++    def _release_activation_lock(self, lock_connection) -> None:
++        """释放功率模型激活全局锁。
++
++        参数：
++            lock_connection: `_acquire_activation_lock` 返回的专用连接。
++
++        返回：
++            无返回值。释放失败只忽略，避免覆盖主业务异常。
++        """
++        if lock_connection is None:
++            return
++        try:
++            lock_connection.execute(text("SELECT RELEASE_LOCK('plan_power_model_activation')"))
++        except Exception:  # noqa: BLE001
++            return
++        finally:
++            lock_connection.close()
++
++    def count_active_versions(self) -> int:
++        """统计 active 模型版本数量。
++
++        返回：
++            is_active=1 的版本数量，用于测试和运行期自检。
++        """
++        return self.db.query(PlanPowerModelVersion).filter(PlanPowerModelVersion.is_active == 1).count()
++
++    def get_detail_payload(self, version_id: int) -> dict[str, Any] | None:
++        """读取版本详情并组装为字典。
++
++        参数：
++            version_id: 模型版本 ID。
++
++        返回：
++            可直接序列化的详情字典；不存在时返回 None。
++        """
++        version = self.get_version(version_id)
++        if version is None:
++            return None
++        sheets = (
++            self.db.query(PlanPowerModelSheet)
++            .filter(PlanPowerModelSheet.version_id == version_id)
++            .order_by(PlanPowerModelSheet.id.asc())
++            .all()
++        )
++        return {
++            "version": self.version_to_dict(version),
++            "sheets": [self.sheet_to_dict(sheet) for sheet in sheets],
++            "factor_options": [
++                self.factor_option_to_dict(row)
++                for row in self.db.query(PlanPowerFactorOption)
++                .filter(PlanPowerFactorOption.version_id == version_id)
++                .order_by(PlanPowerFactorOption.sheet_id.asc(), PlanPowerFactorOption.id.asc())
++                .all()
++            ],
++            "supplier_distributions": [
++                self.supplier_distribution_to_dict(row)
++                for row in self.db.query(PlanPowerSupplierEfficiencyDistribution)
++                .filter(PlanPowerSupplierEfficiencyDistribution.version_id == version_id)
++                .order_by(
++                    PlanPowerSupplierEfficiencyDistribution.sheet_id.asc(),
++                    PlanPowerSupplierEfficiencyDistribution.supplier_name.asc(),
++                    PlanPowerSupplierEfficiencyDistribution.source_cell_ref.asc(),
++                )
++                .all()
++            ],
++            "power_bins": [
++                self.power_bin_to_dict(row)
++                for row in self.db.query(PlanPowerPowerBin)
++                .filter(PlanPowerPowerBin.version_id == version_id)
++                .order_by(PlanPowerPowerBin.sheet_id.asc(), PlanPowerPowerBin.bin_order.asc())
++                .all()
++            ],
++            "benchmark_factors": [
++                self.benchmark_factor_to_dict(row)
++                for row in self.db.query(PlanPowerBenchmarkFactor)
++                .filter(PlanPowerBenchmarkFactor.version_id == version_id)
++                .order_by(PlanPowerBenchmarkFactor.model_code.asc(), PlanPowerBenchmarkFactor.id.asc())
++                .all()
++            ],
++            "issues": [
++                self.parse_issue_to_dict(row)
++                for row in self.db.query(PlanPowerParseIssue)
++                .filter(PlanPowerParseIssue.version_id == version_id)
++                .order_by(PlanPowerParseIssue.level.desc(), PlanPowerParseIssue.id.asc())
++                .all()
++            ],
++            "validation_cases": [
++                self.validation_case_to_dict(row)
++                for row in self.db.query(PlanPowerModelValidationCase)
++                .filter(PlanPowerModelValidationCase.version_id == version_id)
++                .order_by(PlanPowerModelValidationCase.id.asc())
++                .all()
++            ],
++        }
++
++    def version_to_dict(self, version: PlanPowerModelVersion) -> dict[str, Any]:
++        """将版本 ORM 转为字典。
++
++        参数：
++            version: PlanPowerModelVersion ORM 对象。
++
++        返回：
++            接口可序列化的版本摘要字典。
++        """
++        return {
++            "id": version.id,
++            "file_name": version.file_name,
++            "file_hash": version.file_hash,
++            "source_type": version.source_type,
++            "business_version_label": version.business_version_label,
++            "formula_policy": version.formula_policy,
++            "vba_project_sha256": version.vba_project_sha256,
++            "is_active": bool(version.is_active),
++            "parse_status": version.parse_status,
++            "sheet_count": version.sheet_count,
++            "model_sheet_count": version.model_sheet_count,
++            "warning_count": version.warning_count,
++            "error_count": version.error_count,
++            "parse_summary": self._loads_json(version.parse_summary_json),
++            "warnings": self._loads_json(version.warning_json),
++            "change_histories": self._loads_json(version.change_history_json) or [],
++            "created_at": version.created_at.isoformat() if version.created_at else None,
++            "activated_at": version.activated_at.isoformat() if version.activated_at else None,
++        }
++
++    def sheet_to_dict(self, sheet: PlanPowerModelSheet) -> dict[str, Any]:
++        """将 Sheet ORM 转为字典。
++
++        参数：
++            sheet: PlanPowerModelSheet ORM 对象。
++
++        返回：
++            接口可序列化的模型页字典。
++        """
++        return {
++            "id": sheet.id,
++            "version_id": sheet.version_id,
++            "sheet_name": sheet.sheet_name,
++            "normalized_model_code": sheet.normalized_model_code,
++            "cell_count": sheet.cell_count,
++            "base_power": self._decimal_to_float(sheet.base_power),
++            "center_power_cell": sheet.center_power_cell,
++            "area_default": self._decimal_to_float(sheet.area_default),
++            "std_dev_default": self._decimal_to_float(sheet.std_dev_default),
++            "source_range": sheet.source_range,
++            "raw_meta": self._loads_json(sheet.raw_meta_json),
++        }
++
++    def factor_option_to_dict(self, option: PlanPowerFactorOption) -> dict[str, Any]:
++        """将配置选项 ORM 转为字典。
++
++        参数：
++            option: PlanPowerFactorOption ORM 对象。
++
++        返回：
++            接口可序列化的配置选项字典。
++        """
++        return {
++            "id": option.id,
++            "version_id": option.version_id,
++            "sheet_id": option.sheet_id,
++            "factor_key": option.factor_key,
++            "option_label": option.option_label,
++            "normalized_option_label": option.normalized_option_label,
++            "effect_value": self._decimal_to_float(option.effect_value),
++            "area_value": self._decimal_to_float(option.area_value),
++            "std_dev_value": self._decimal_to_float(option.std_dev_value),
++            "source_cell_ref": option.source_cell_ref,
++            "is_default": bool(option.is_default),
++            "is_valid": bool(option.is_valid),
++            "invalid_reason": option.invalid_reason,
++            "raw": self._loads_json(option.raw_json),
++        }
++
++    def supplier_distribution_to_dict(self, row: PlanPowerSupplierEfficiencyDistribution) -> dict[str, Any]:
++        """将供应商效率分布 ORM 转为字典。
++
++        参数：
++            row: PlanPowerSupplierEfficiencyDistribution ORM 对象。
++
++        返回：
++            接口可序列化的供应商效率分布字典。
++        """
++        return {
++            "id": row.id,
++            "version_id": row.version_id,
++            "sheet_id": row.sheet_id,
++            "supplier_name": row.supplier_name,
++            "normalized_supplier_name": row.normalized_supplier_name,
++            "efficiency_value": self._decimal_to_float(row.efficiency_value),
++            "ratio_value": self._decimal_to_float(row.ratio_value),
++            "source_cell_ref": row.source_cell_ref,
++            "is_valid": bool(row.is_valid),
++            "invalid_reason": row.invalid_reason,
++        }
++
++    def power_bin_to_dict(self, row: PlanPowerPowerBin) -> dict[str, Any]:
++        """将功率档 ORM 转为字典。
++
++        参数：
++            row: PlanPowerPowerBin ORM 对象。
++
++        返回：
++            接口可序列化的功率档字典。
++        """
++        return {
++            "id": row.id,
++            "version_id": row.version_id,
++            "sheet_id": row.sheet_id,
++            "power_bin": self._decimal_to_float(row.power_bin),
++            "bin_order": row.bin_order,
++            "source_cell_ref": row.source_cell_ref,
++            "is_valid": bool(row.is_valid),
++        }
++
++    def benchmark_factor_to_dict(self, row: PlanPowerBenchmarkFactor) -> dict[str, Any]:
++        """将标板基准 ORM 转为字典。
++
++        参数：
++            row: PlanPowerBenchmarkFactor ORM 对象。
++
++        返回：
++            接口可序列化的标板基准字典。
++        """
++        return {
++            "id": row.id,
++            "version_id": row.version_id,
++            "model_code": row.model_code,
++            "benchmark_name": row.benchmark_name,
++            "normalized_benchmark_name": row.normalized_benchmark_name,
++            "effect_value": self._decimal_to_float(row.effect_value),
++            "source_sheet_name": row.source_sheet_name,
++            "source_cell_ref": row.source_cell_ref,
++            "raw": self._loads_json(row.raw_json),
++        }
++
++    def parse_issue_to_dict(self, row: PlanPowerParseIssue) -> dict[str, Any]:
++        """将解析问题 ORM 转为字典。
++
++        参数：
++            row: PlanPowerParseIssue ORM 对象。
++
++        返回：
++            接口可序列化的解析问题字典。
++        """
++        return {
++            "id": row.id,
++            "version_id": row.version_id,
++            "sheet_id": row.sheet_id,
++            "level": row.level,
++            "issue_code": row.issue_code,
++            "message": row.message,
++            "source_sheet_name": row.source_sheet_name,
++            "source_cell_ref": row.source_cell_ref,
++            "raw": self._loads_json(row.raw_json),
++        }
++
++    def validation_case_to_dict(self, row: PlanPowerModelValidationCase) -> dict[str, Any]:
++        """将校验用例 ORM 转为字典。
++
++        参数：
++            row: PlanPowerModelValidationCase ORM 对象。
++
++        返回：
++            接口可序列化的预留校验用例字典。
++        """
++        return {
++            "id": row.id,
++            "version_id": row.version_id,
++            "model_code": row.model_code,
++            "case_name": row.case_name,
++            "input": self._loads_json(row.input_json),
++            "excel_expected": self._loads_json(row.excel_expected_json),
++            "system_result": self._loads_json(row.system_result_json),
++            "diff": self._loads_json(row.diff_json),
++            "status": row.status,
++            "created_at": row.created_at.isoformat() if row.created_at else None,
++        }
++
++    def _parse_status(self, parsed: ParsedPowerModelWorkbook) -> str:
++        """根据解析问题计算版本状态。
++
++        参数：
++            parsed: 内存 Workbook 解析结果。
++
++        返回：
++            failed / warning / success 三种解析状态。
++        """
++        if parsed.error_count:
++            return "failed"
++        if parsed.warning_count:
++            return "warning"
++        return "success"
++
++    def _issue_to_dict(self, issue) -> dict[str, Any]:
++        """将内存 issue 转为字典。
++
++        参数：
++            issue: ParsedPowerIssue 内存对象。
++
++        返回：
++            可序列化的 issue 字典。
++        """
++        return {
++            "level": issue.level,
++            "issue_code": issue.issue_code,
++            "message": issue.message,
++            "source_sheet_name": issue.source_sheet_name,
++            "source_cell_ref": issue.source_cell_ref,
++            "raw": issue.raw,
++        }
++
++    def _change_history_to_dict(self, row) -> dict[str, Any]:
++        """将内存更改履历转为字典。
++
++        参数：
++            row: ParsedChangeHistory 内存对象。
++
++        返回：
++            可序列化的更改履历字典，用于模型版本追溯。
++        """
++        return {
++            "sequence_no": row.sequence_no,
++            "change_content": row.change_content,
++            "reviser": row.reviser,
++            "change_date": row.change_date,
++            "source_cell_ref": row.source_cell_ref,
++        }
++
++    def _loads_json(self, value: str | None) -> Any:
++        """解析 JSON 文本。
++
++        参数：
++            value: JSON 字符串或 None。
++
++        返回：
++            解析后的 Python 对象；空值返回 None。
++        """
++        if not value:
++            return None
++        return json.loads(value)
++
++    def _decimal_to_float(self, value) -> float | None:
++        """将 Decimal 值转成接口友好的 float。
++
++        参数：
++            value: Decimal 或 None。
++
++        返回：
++            float 或 None，便于 ApiResponse JSON 序列化。
++        """
++        if value is None:
++            return None
++        return float(value)
++
++
++__all__ = ["PowerModelRepository"]
+diff --git a/backend/app/domains/plan_bom/schemas/power_model.py b/backend/app/domains/plan_bom/schemas/power_model.py
+new file mode 100644
+index 0000000..7b53081
+--- /dev/null
++++ b/backend/app/domains/plan_bom/schemas/power_model.py
+@@ -0,0 +1,73 @@
++from __future__ import annotations
++
++from typing import Any, Literal
++
++from pydantic import BaseModel, Field
++
++
++PowerModelImportStatus = Literal["created", "existing"]
++
++
++class PowerModelVersionSummary(BaseModel):
++    """功率模型版本摘要。
++
++    返回值说明：
++    - 只描述版本级状态；
++    - 详情中的配置项、供应商、功率档和 issue 由详情接口返回。
++    """
++
++    id: int
++    file_name: str
++    file_hash: str
++    source_type: str
++    business_version_label: str | None = None
++    formula_policy: str
++    vba_project_sha256: str | None = None
++    is_active: bool
++    parse_status: str
++    sheet_count: int
++    model_sheet_count: int
++    warning_count: int
++    error_count: int
++    parse_summary: dict[str, Any] | None = None
++    warnings: list[dict[str, Any]] | None = None
++    change_histories: list[dict[str, Any]] | None = None
++    created_at: str | None = None
++    activated_at: str | None = None
++
++
++class PowerModelImportResponse(BaseModel):
++    """功率模型导入响应。"""
++
++    import_status: PowerModelImportStatus = Field(..., description="created 表示新建版本，existing 表示同 hash 已存在")
++    version: PowerModelVersionSummary
++    detail: dict[str, Any] | None = None
++
++
++class PowerModelVersionListResponse(BaseModel):
++    """功率模型版本列表响应。"""
++
++    items: list[PowerModelVersionSummary]
++    total: int
++
++
++class PowerModelVersionDetailResponse(BaseModel):
++    """功率模型版本详情响应。"""
++
++    version: PowerModelVersionSummary
++    sheets: list[dict[str, Any]]
++    factor_options: list[dict[str, Any]]
++    supplier_distributions: list[dict[str, Any]]
++    power_bins: list[dict[str, Any]]
++    benchmark_factors: list[dict[str, Any]]
++    issues: list[dict[str, Any]]
++    validation_cases: list[dict[str, Any]]
++
++
++__all__ = [
++    "PowerModelImportResponse",
++    "PowerModelImportStatus",
++    "PowerModelVersionDetailResponse",
++    "PowerModelVersionListResponse",
++    "PowerModelVersionSummary",
++]
+diff --git a/backend/app/domains/plan_bom/services/power_excel_parser_service.py b/backend/app/domains/plan_bom/services/power_excel_parser_service.py
+new file mode 100644
+index 0000000..03db098
+--- /dev/null
++++ b/backend/app/domains/plan_bom/services/power_excel_parser_service.py
+@@ -0,0 +1,902 @@
++from __future__ import annotations
++
++import json
++import re
++import warnings
++from dataclasses import dataclass, field
++from decimal import Decimal, InvalidOperation
++from io import BytesIO
++from pathlib import Path
++from typing import Any
++from zipfile import BadZipFile, ZipFile
++
++from openpyxl import load_workbook
++from openpyxl.utils import get_column_letter
++from openpyxl.worksheet.worksheet import Worksheet
++
++
++FORMULA_POLICY = "semantic_fixed_mode"
++MAX_XLSM_BYTES = 50 * 1024 * 1024
++MAX_ZIP_MEMBER_COUNT = 500
++MAX_ZIP_UNCOMPRESSED_BYTES = 200 * 1024 * 1024
++
++EXPECTED_MODEL_SHEETS = [
++    "NT10-72GDF",
++    "NT10-78GDF",
++    "NT12R-66GDF",
++    "NT12R-66GDF (2.0)",
++    "NT12-66GDF",
++    "NT12R-78GDF ",
++    "NT12R-48GDF",
++    "NT12R-48BGDF",
++    "NT12R-54GDF",
++    "NT12R-54BGDF",
++]
++EXPECTED_SUPPORT_SHEETS = ["标板基准", "更改履历"]
++ANCHOR_CELLS = ["A3", "A6", "A9", "A12", "A17", "A20", "A23", "A26", "A76"]
++FACTOR_ROWS = {
++    3: "ribbon",
++    6: "glass",
++    9: "supplier",
++    12: "cell_size",
++    17: "cable",
++    20: "busbar",
++    23: "process",
++    26: "benchmark",
++}
++PLACEHOLDER_PATTERNS = [
++    re.compile(r"^规格\d+$"),
++    re.compile(r"^技术\d+$"),
++    re.compile(r"^厂家\d+$"),
++    re.compile(r"^汇流条\d+$"),
++    re.compile(r"^基准\d+$"),
++]
++
++
++@dataclass(slots=True)
++class ParsedChangeHistory:
++    """内存更改履历。"""
++
++    sequence_no: int | None
++    change_content: str
++    reviser: str | None
++    change_date: str | None
++    source_cell_ref: str
++
++
++@dataclass(slots=True)
++class ParsedPowerIssue:
++    """内存解析问题项。"""
++
++    level: str
++    issue_code: str
++    message: str
++    source_sheet_name: str | None = None
++    source_cell_ref: str | None = None
++    raw: dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass(slots=True)
++class ParsedFactorOption:
++    """内存配置选项。"""
++
++    factor_key: str
++    option_label: str
++    normalized_option_label: str
++    effect_value: Decimal | None
++    area_value: Decimal | None
++    std_dev_value: Decimal | None
++    source_cell_ref: str
++    is_default: bool
++    is_valid: bool
++    invalid_reason: str | None
++    raw: dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass(slots=True)
++class ParsedSupplierDistribution:
++    """内存供应商效率分布。"""
++
++    supplier_name: str
++    normalized_supplier_name: str
++    efficiency_value: Decimal
++    ratio_value: Decimal
++    source_cell_ref: str
++
++
++@dataclass(slots=True)
++class ParsedPowerBin:
++    """内存功率档位。"""
++
++    power_bin: Decimal
++    bin_order: int
++    source_cell_ref: str
++    is_valid: bool = True
++
++
++@dataclass(slots=True)
++class ParsedBenchmarkFactor:
++    """内存标板基准影响项。"""
++
++    model_code: str
++    benchmark_name: str
++    normalized_benchmark_name: str
++    effect_value: Decimal | None
++    source_sheet_name: str
++    source_cell_ref: str
++    raw: dict[str, Any] = field(default_factory=dict)
++
++
++@dataclass(slots=True)
++class ParsedPowerModelSheet:
++    """内存模型 Sheet 解析结果。"""
++
++    sheet_name: str
++    normalized_model_code: str
++    cell_count: int | None
++    base_power: Decimal | None
++    center_power_cell: str
++    area_default: Decimal | None
++    std_dev_default: Decimal | None
++    source_range: str
++    raw_meta: dict[str, Any] = field(default_factory=dict)
++    factor_options: list[ParsedFactorOption] = field(default_factory=list)
++    supplier_distributions: list[ParsedSupplierDistribution] = field(default_factory=list)
++    power_bins: list[ParsedPowerBin] = field(default_factory=list)
++
++
++@dataclass(slots=True)
++class ParsedPowerModelWorkbook:
++    """内存 Workbook 解析结果。"""
++
++    file_name: str
++    file_hash: str
++    business_version_label: str | None
++    formula_policy: str
++    has_vba_project: bool
++    vba_project_sha256: str | None
++    sheet_count: int
++    model_sheet_count: int
++    sheets: list[ParsedPowerModelSheet] = field(default_factory=list)
++    benchmark_factors: list[ParsedBenchmarkFactor] = field(default_factory=list)
++    change_histories: list[ParsedChangeHistory] = field(default_factory=list)
++    issues: list[ParsedPowerIssue] = field(default_factory=list)
++    parse_summary: dict[str, Any] = field(default_factory=dict)
++
++    @property
++    def warning_count(self) -> int:
++        """返回 warning 数量。"""
++        return sum(1 for issue in self.issues if issue.level == "warning")
++
++    @property
++    def error_count(self) -> int:
++        """返回 error 数量。"""
++        return sum(1 for issue in self.issues if issue.level == "error")
++
++
++class PowerExcelParserService:
++    """功率预测 xlsm 只读解析服务。
++
++    关键边界：
++    1. 使用 openpyxl 读取公式与缓存值，不执行 VBA；
++    2. 只输出结构化内存结果，不直接落库；
++    3. 对异常结构记录 issue，避免静默吞掉 Excel 模板问题。
++    """
++
++    def parse_file(self, file_path: str | Path, *, file_hash: str | None = None) -> ParsedPowerModelWorkbook:
++        """解析本地 xlsm 文件。
++
++        参数：
++            file_path: 本地 xlsm 路径；
++            file_hash: 可选文件 SHA256，调用方已计算时可传入。
++
++        返回：
++            ParsedPowerModelWorkbook，供版本服务落库。
++        """
++        path = Path(file_path)
++        content = path.read_bytes()
++        return self.parse_bytes(content, file_name=path.name, file_hash=file_hash)
++
++    def parse_bytes(self, content: bytes, *, file_name: str, file_hash: str | None = None) -> ParsedPowerModelWorkbook:
++        """解析 xlsm 二进制内容。
++
++        参数：
++            content: xlsm 文件字节；
++            file_name: 原始文件名；
++            file_hash: 可选 SHA256，调用方用于幂等防重复。
++
++        返回：
++            ParsedPowerModelWorkbook。解析过程不执行任何宏，只检查 VBA 工程是否存在。
++        """
++        import hashlib
++
++        resolved_hash = file_hash or hashlib.sha256(content).hexdigest()
++        issues: list[ParsedPowerIssue] = []
++        package_meta = self._inspect_xlsm_package(content)
++        has_vba_project = bool(package_meta["has_vba_project"])
++        vba_project_sha256 = package_meta["vba_project_sha256"]
++        if not has_vba_project:
++            issues.append(
++                ParsedPowerIssue(
++                    level="error",
++                    issue_code="VBA_PROJECT_MISSING",
++                    message="xlsm 内未发现 xl/vbaProject.bin，无法确认宏模型来源。",
++                    raw={"file_name": file_name},
++                )
++            )
++
++        formula_wb = self._load_workbook(content, data_only=False)
++        cached_wb = self._load_workbook(content, data_only=True)
++        issues.extend(self._validate_workbook_sheets(formula_wb.sheetnames))
++
++        sheets: list[ParsedPowerModelSheet] = []
++        for sheet_name in EXPECTED_MODEL_SHEETS:
++            if sheet_name not in formula_wb.sheetnames:
++                continue
++            formula_ws = formula_wb[sheet_name]
++            cached_ws = cached_wb[sheet_name]
++            issues.extend(self._validate_anchor_cells(formula_ws))
++            model_sheet = self._parse_model_sheet(formula_ws, cached_ws)
++            sheets.append(model_sheet)
++            issues.extend(self._detect_supplier_title_issues(formula_ws))
++            issues.extend(self._detect_semantic_formula_issues(formula_ws))
++
++        benchmark_factors: list[ParsedBenchmarkFactor] = []
++        if "标板基准" in formula_wb.sheetnames:
++            benchmark_factors = self._parse_benchmark_factors(formula_wb["标板基准"])
++
++        change_histories: list[ParsedChangeHistory] = []
++        if "更改履历" in cached_wb.sheetnames:
++            change_histories = self._parse_change_histories(cached_wb["更改履历"])
++
++        parse_summary = self._build_parse_summary(
++            sheet_count=len(formula_wb.sheetnames),
++            model_sheet_count=len(sheets),
++            sheets=sheets,
++            benchmark_factors=benchmark_factors,
++            change_histories=change_histories,
++            issues=issues,
++        )
++        return ParsedPowerModelWorkbook(
++            file_name=file_name,
++            file_hash=resolved_hash,
++            business_version_label=self._infer_business_version_label(file_name),
++            formula_policy=FORMULA_POLICY,
++            has_vba_project=has_vba_project,
++            vba_project_sha256=vba_project_sha256,
++            sheet_count=len(formula_wb.sheetnames),
++            model_sheet_count=len(sheets),
++            sheets=sheets,
++            benchmark_factors=benchmark_factors,
++            change_histories=change_histories,
++            issues=issues,
++            parse_summary=parse_summary,
++        )
++
++    def _load_workbook(self, content: bytes, *, data_only: bool):
++        """加载 Workbook。
++
++        参数：
++            content: xlsm 字节；
++            data_only: 是否读取 Excel 缓存结果。
++
++        返回：
++            openpyxl Workbook。公式版本按要求使用 keep_vba=True + data_only=False。
++        """
++        with warnings.catch_warnings():
++            warnings.simplefilter("ignore")
++            return load_workbook(BytesIO(content), keep_vba=True, data_only=data_only, read_only=False)
++
++    def _inspect_xlsm_package(self, content: bytes) -> dict[str, Any]:
++        """检查 xlsm ZIP 包安全边界和 VBA 工程摘要。
++
++        参数：
++            content: xlsm 文件字节。
++
++        返回：
++            包含 has_vba_project、vba_project_sha256、zip_member_count、zip_uncompressed_bytes 的字典。
++
++        关键业务逻辑：
++            M2 只读解析上传文件，不解压到磁盘；这里先限制 ZIP 成员数和未压缩总量，
++            避免超大文件或压缩炸弹在 openpyxl 解析阶段造成内存 / CPU DoS。
++        """
++        import hashlib
++
++        if len(content) > MAX_XLSM_BYTES:
++            raise ValueError(f"xlsm 文件大小超过限制：{MAX_XLSM_BYTES} bytes")
++        try:
++            with ZipFile(BytesIO(content)) as archive:
++                infos = archive.infolist()
++                if len(infos) > MAX_ZIP_MEMBER_COUNT:
++                    raise ValueError(f"xlsm ZIP 成员数超过限制：{MAX_ZIP_MEMBER_COUNT}")
++                uncompressed_size = sum(info.file_size for info in infos)
++                if uncompressed_size > MAX_ZIP_UNCOMPRESSED_BYTES:
++                    raise ValueError(f"xlsm ZIP 未压缩体积超过限制：{MAX_ZIP_UNCOMPRESSED_BYTES} bytes")
++                has_vba_project = "xl/vbaProject.bin" in archive.namelist()
++                vba_project_sha256 = None
++                if has_vba_project:
++                    vba_project_sha256 = hashlib.sha256(archive.read("xl/vbaProject.bin")).hexdigest()
++                return {
++                    "has_vba_project": has_vba_project,
++                    "vba_project_sha256": vba_project_sha256,
++                    "zip_member_count": len(infos),
++                    "zip_uncompressed_bytes": uncompressed_size,
++                }
++        except BadZipFile as exc:
++            raise ValueError("上传文件不是有效的 xlsm/zip 包。") from exc
++
++    def _validate_workbook_sheets(self, sheet_names: list[str]) -> list[ParsedPowerIssue]:
++        """校验 Workbook Sheet 集合。
++
++        参数：
++            sheet_names: Workbook 实际 Sheet 名称列表。
++
++        返回：
++            Sheet 数量、模型页和辅助页缺失问题列表。
++        """
++        issues: list[ParsedPowerIssue] = []
++        expected = EXPECTED_MODEL_SHEETS + EXPECTED_SUPPORT_SHEETS
++        if len(sheet_names) != 12:
++            issues.append(
++                ParsedPowerIssue(
++                    level="error",
++                    issue_code="SHEET_COUNT_MISMATCH",
++                    message=f"Workbook Sheet 数量应为 12，实际为 {len(sheet_names)}。",
++                    raw={"sheet_names": sheet_names},
++                )
++            )
++        for sheet_name in expected:
++            if sheet_name not in sheet_names:
++                issues.append(
++                    ParsedPowerIssue(
++                        level="error",
++                        issue_code="SHEET_MISSING",
++                        message=f"缺少必需 Sheet：{sheet_name}",
++                        source_sheet_name=sheet_name,
++                    )
++                )
++        return issues
++
++    def _validate_anchor_cells(self, ws: Worksheet) -> list[ParsedPowerIssue]:
++        """校验模型页固定锚点。
++
++        参数：
++            ws: 模型页 worksheet。
++
++        返回：
++            锚点缺失或为空的问题列表。
++        """
++        issues: list[ParsedPowerIssue] = []
++        for cell_ref in ANCHOR_CELLS:
++            if self._is_blank(ws[cell_ref].value):
++                issues.append(
++                    ParsedPowerIssue(
++                        level="error",
++                        issue_code="ANCHOR_CELL_MISSING",
++                        message=f"{ws.title}!{cell_ref} 锚点为空。",
++                        source_sheet_name=ws.title,
++                        source_cell_ref=cell_ref,
++                    )
++                )
++        return issues
++
++    def _parse_model_sheet(self, formula_ws: Worksheet, cached_ws: Worksheet) -> ParsedPowerModelSheet:
++        """解析单个版型模型页。
++
++        参数：
++            formula_ws: 读取公式文本的 worksheet；
++            cached_ws: 读取 Excel 缓存值的 worksheet。
++
++        返回：
++            ParsedPowerModelSheet，包含配置选项、功率档和供应商效率分布。
++        """
++        model_sheet = ParsedPowerModelSheet(
++            sheet_name=formula_ws.title,
++            normalized_model_code=self._normalize_model_code(formula_ws.title),
++            cell_count=self._infer_cell_count(formula_ws.title),
++            base_power=self._to_decimal(cached_ws["J1"].value),
++            center_power_cell="I36",
++            area_default=self._to_decimal(cached_ws["B14"].value),
++            std_dev_default=self._to_decimal(cached_ws["B15"].value),
++            source_range=formula_ws.calculate_dimension(),
++            raw_meta={
++                "max_row": formula_ws.max_row,
++                "max_column": formula_ws.max_column,
++                "base_power_formula": self._cell_raw_value(formula_ws["J1"].value),
++                "center_power_cached": self._cell_raw_value(cached_ws["I36"].value),
++                "has_tail_space": formula_ws.title != formula_ws.title.strip(),
++            },
++        )
++        model_sheet.factor_options = self._parse_factor_options(formula_ws, cached_ws)
++        model_sheet.power_bins = self._parse_power_bins(formula_ws)
++        model_sheet.supplier_distributions = self._parse_supplier_distributions(formula_ws, cached_ws)
++        return model_sheet
++
++    def _parse_factor_options(self, formula_ws: Worksheet, cached_ws: Worksheet) -> list[ParsedFactorOption]:
++        """解析配置区 A1:Y27 中的配置选项。
++
++        参数：
++            formula_ws: 公式 workbook 中的模型页；
++            cached_ws: 缓存值 workbook 中的模型页。
++
++        返回：
++            配置选项列表。占位项不伪造成有效业务选项，会以 is_valid=False 保留。
++        """
++        options: list[ParsedFactorOption] = []
++        for row_no, factor_key in FACTOR_ROWS.items():
++            current_effect = self._to_decimal(cached_ws.cell(row_no, 2).value)
++            for col_no in range(3, 26):
++                label = formula_ws.cell(row_no, col_no).value
++                if self._is_blank(label):
++                    continue
++                option_label = self._stringify(label)
++                effect_value = self._to_decimal(cached_ws.cell(row_no + 1, col_no).value)
++                area_value = self._to_decimal(cached_ws.cell(14, col_no).value) if factor_key == "cell_size" else None
++                std_dev_value = self._to_decimal(cached_ws.cell(15, col_no).value) if factor_key == "cell_size" else None
++                invalid_reason = self._factor_invalid_reason(
++                    factor_key=factor_key,
++                    option_label=option_label,
++                    effect_value=effect_value,
++                )
++                source_cell_ref = f"{get_column_letter(col_no)}{row_no}"
++                options.append(
++                    ParsedFactorOption(
++                        factor_key=factor_key,
++                        option_label=option_label,
++                        normalized_option_label=self._normalize_label(option_label),
++                        effect_value=effect_value,
++                        area_value=area_value,
++                        std_dev_value=std_dev_value,
++                        source_cell_ref=source_cell_ref,
++                        is_default=effect_value is not None and current_effect is not None and effect_value == current_effect,
++                        is_valid=invalid_reason is None,
++                        invalid_reason=invalid_reason,
++                        raw={
++                            "sheet_name": formula_ws.title,
++                            "anchor_label": self._cell_raw_value(formula_ws.cell(row_no, 1).value),
++                            "effect_cell_ref": f"{get_column_letter(col_no)}{row_no + 1}",
++                        },
++                    )
++                )
++        return options
++
++    def _parse_power_bins(self, formula_ws: Worksheet) -> list[ParsedPowerBin]:
++        """解析功率档位 K28:T28。
++
++        参数：
++            formula_ws: 模型页 worksheet。
++
++        返回：
++            有效数字功率档列表，48/54 系列会自动跳过“核验”和空列。
++        """
++        bins: list[ParsedPowerBin] = []
++        for col_no in range(11, 21):
++            raw_value = formula_ws.cell(28, col_no).value
++            power_bin = self._to_decimal(raw_value)
++            if power_bin is None:
++                continue
++            bins.append(
++                ParsedPowerBin(
++                    power_bin=power_bin,
++                    bin_order=len(bins) + 1,
++                    source_cell_ref=f"{get_column_letter(col_no)}28",
++                )
++            )
++        return bins
++
++    def _parse_supplier_distributions(self, formula_ws: Worksheet, cached_ws: Worksheet) -> list[ParsedSupplierDistribution]:
++        """解析供应商效率分布区 C77:Y96。
++
++        参数：
++            formula_ws: 公式 workbook 中的模型页；
++            cached_ws: 缓存值 workbook 中的模型页。
++
++        返回：
++            有效供应商标题下的效率段比例记录；无效供应商标题不作为有效供应商入库。
++        """
++        distributions: list[ParsedSupplierDistribution] = []
++        for col_no in range(3, 26):
++            title = self._resolve_supplier_title(formula_ws, col_no)
++            if self._is_blank(title):
++                continue
++            if self._supplier_title_invalid_reason(title) is not None:
++                continue
++            supplier_name = self._stringify(title)
++            for row_no in range(77, 97):
++                ratio_value = self._to_decimal(cached_ws.cell(row_no, col_no).value)
++                efficiency_value = self._to_decimal(cached_ws.cell(row_no, 2).value)
++                if ratio_value is None or efficiency_value is None:
++                    continue
++                distributions.append(
++                    ParsedSupplierDistribution(
++                        supplier_name=supplier_name,
++                        normalized_supplier_name=self._normalize_label(supplier_name),
++                        efficiency_value=efficiency_value,
++                        ratio_value=ratio_value,
++                        source_cell_ref=f"{get_column_letter(col_no)}{row_no}",
++                    )
++                )
++        return distributions
++
++    def _detect_supplier_title_issues(self, formula_ws: Worksheet) -> list[ParsedPowerIssue]:
++        """识别供应商标题异常。
++
++        参数：
++            formula_ws: 模型页 worksheet。
++
++        返回：
++            无效供应商标题 warning 列表，例如 0、#REF!、厂家X。
++        """
++        issues: list[ParsedPowerIssue] = []
++        seen: set[str] = set()
++        for col_no in range(3, 26):
++            title = self._resolve_supplier_title(formula_ws, col_no)
++            if self._is_blank(title):
++                continue
++            invalid_reason = self._supplier_title_invalid_reason(title)
++            if invalid_reason is None:
++                continue
++            source_cell_ref = f"{get_column_letter(col_no)}76"
++            key = f"{formula_ws.title}:{source_cell_ref}:{title}"
++            if key in seen:
++                continue
++            seen.add(key)
++            issues.append(
++                ParsedPowerIssue(
++                    level="warning",
++                    issue_code="INVALID_SUPPLIER_TITLE",
++                    message=f"{formula_ws.title}!{source_cell_ref} 供应商标题无效：{invalid_reason}",
++                    source_sheet_name=formula_ws.title,
++                    source_cell_ref=source_cell_ref,
++                    raw={
++                        "title": self._cell_raw_value(title),
++                        "row_76_value": self._cell_raw_value(formula_ws.cell(76, col_no).value),
++                        "row_9_value": self._cell_raw_value(formula_ws.cell(9, col_no).value),
++                    },
++                )
++            )
++        return issues
++
++    def _detect_semantic_formula_issues(self, formula_ws: Worksheet) -> list[ParsedPowerIssue]:
++        """识别 R30/R32 语义公式修正项。
++
++        参数：
++            formula_ws: 模型页 worksheet。
++
++        返回：
++            semantic_fixed_mode 需要追溯的公式 warning。
++        """
++        if formula_ws.title != "NT12R-66GDF":
++            return []
++        issues: list[ParsedPowerIssue] = []
++        for cell_ref in ["R30", "R32"]:
++            formula = formula_ws[cell_ref].value
++            if isinstance(formula, str) and re.search(r"L\d+\s*-\s*\$S\$28", formula):
++                issues.append(
++                    ParsedPowerIssue(
++                        level="warning",
++                        issue_code="SEMANTIC_FORMULA_FIX_REQUIRED",
++                        message=f"{formula_ws.title}!{cell_ref} 疑似仍引用 L行-$S$28，M3 应按 I行-$S$28 语义修正。",
++                        source_sheet_name=formula_ws.title,
++                        source_cell_ref=cell_ref,
++                        raw={"formula": formula, "formula_policy": FORMULA_POLICY},
++                    )
++                )
++        return issues
++
++    def _parse_change_histories(self, ws: Worksheet) -> list[ParsedChangeHistory]:
++        """解析更改履历页 A1:D20。
++
++        参数：
++            ws: `更改履历` worksheet。
++
++        返回：
++            更改履历列表，用于版本追溯。空内容行会跳过，不参与正式计算。
++        """
++        histories: list[ParsedChangeHistory] = []
++        for row_no in range(2, ws.max_row + 1):
++            change_content = ws.cell(row_no, 2).value
++            if self._is_blank(change_content):
++                continue
++            histories.append(
++                ParsedChangeHistory(
++                    sequence_no=int(ws.cell(row_no, 1).value) if self._to_decimal(ws.cell(row_no, 1).value) is not None else None,
++                    change_content=self._stringify(change_content),
++                    reviser=self._stringify(ws.cell(row_no, 3).value) if not self._is_blank(ws.cell(row_no, 3).value) else None,
++                    change_date=self._stringify(ws.cell(row_no, 4).value) if not self._is_blank(ws.cell(row_no, 4).value) else None,
++                    source_cell_ref=f"A{row_no}:D{row_no}",
++                )
++            )
++        return histories
++
++    def _parse_benchmark_factors(self, ws: Worksheet) -> list[ParsedBenchmarkFactor]:
++        """解析标板基准页 A1:E10。
++
++        参数：
++            ws: `标板基准` worksheet。
++
++        返回：
++            标板基准影响值列表，包含新版新增的“功率最优”列。
++        """
++        factors: list[ParsedBenchmarkFactor] = []
++        headers = [ws.cell(1, col_no).value for col_no in range(2, 6)]
++        for row_no in range(2, 11):
++            model_code = ws.cell(row_no, 1).value
++            if self._is_blank(model_code):
++                continue
++            normalized_model_code = self._normalize_model_code(self._stringify(model_code))
++            for offset, header in enumerate(headers, start=2):
++                if self._is_blank(header):
++                    continue
++                raw_value = ws.cell(row_no, offset).value
++                source_cell_ref = f"{get_column_letter(offset)}{row_no}"
++                factors.append(
++                    ParsedBenchmarkFactor(
++                        model_code=normalized_model_code,
++                        benchmark_name=self._stringify(header),
++                        normalized_benchmark_name=self._normalize_benchmark_name(self._stringify(header)),
++                        effect_value=self._to_decimal(raw_value),
++                        source_sheet_name=ws.title,
++                        source_cell_ref=source_cell_ref,
++                        raw={"value": self._cell_raw_value(raw_value)},
++                    )
++                )
++        return factors
++
++    def _build_parse_summary(
++        self,
++        *,
++        sheet_count: int,
++        model_sheet_count: int,
++        sheets: list[ParsedPowerModelSheet],
++        benchmark_factors: list[ParsedBenchmarkFactor],
++        change_histories: list[ParsedChangeHistory],
++        issues: list[ParsedPowerIssue],
++    ) -> dict[str, Any]:
++        """构造解析摘要。
++
++        参数：
++            sheet_count: Workbook sheet 总数；
++            model_sheet_count: 模型页数量；
++            sheets: 模型页解析结果；
++            benchmark_factors: 标板解析结果；
++            change_histories: 更改履历解析结果；
++            issues: 问题列表。
++
++        返回：
++            可 JSON 序列化的解析摘要。
++        """
++        return {
++            "sheet_count": sheet_count,
++            "model_sheet_count": model_sheet_count,
++            "model_codes": [sheet.normalized_model_code for sheet in sheets],
++            "factor_option_count": sum(len(sheet.factor_options) for sheet in sheets),
++            "valid_factor_option_count": sum(1 for sheet in sheets for option in sheet.factor_options if option.is_valid),
++            "power_bin_count": sum(len(sheet.power_bins) for sheet in sheets),
++            "supplier_distribution_count": sum(len(sheet.supplier_distributions) for sheet in sheets),
++            "benchmark_factor_count": len(benchmark_factors),
++            "change_history_count": len(change_histories),
++            "latest_change_date": change_histories[-1].change_date if change_histories else None,
++            "warning_count": sum(1 for issue in issues if issue.level == "warning"),
++            "error_count": sum(1 for issue in issues if issue.level == "error"),
++            "formula_policy": FORMULA_POLICY,
++        }
++
++    def _resolve_supplier_title(self, ws: Worksheet, col_no: int) -> Any:
++        """解析供应商标题。
++
++        参数：
++            ws: 模型页 worksheet；
++            col_no: 供应商分布区列号。
++
++        返回：
++            标题原始值。若第 76 行是 `=C9` 形式，则返回对应第 9 行供应商名。
++        """
++        title_ref = ws.cell(76, col_no).value
++        if isinstance(title_ref, str):
++            if "#REF!" in title_ref:
++                return title_ref
++            match = re.fullmatch(r"=([A-Z]+)9", title_ref.strip())
++            if match:
++                return ws[f"{match.group(1)}9"].value
++        return title_ref
++
++    def _factor_invalid_reason(self, *, factor_key: str, option_label: str, effect_value: Decimal | None) -> str | None:
++        """判断配置选项是否为有效业务选项。
++
++        参数：
++            factor_key: 配置项 key；
++            option_label: 原始选项名；
++            effect_value: 影响值。
++
++        返回：
++            无效原因；有效时返回 None。
++        """
++        if self._is_placeholder_label(option_label):
++            return "占位选项"
++        if factor_key != "process" and effect_value is None:
++            return "缺少影响值"
++        if factor_key == "process" and effect_value is None and self._is_blank(option_label):
++            return "缺少影响值"
++        return None
++
++    def _supplier_title_invalid_reason(self, title: Any) -> str | None:
++        """判断供应商标题是否有效。
++
++        参数：
++            title: 供应商标题原始值。
++
++        返回：
++            无效原因；有效时返回 None。
++        """
++        if isinstance(title, (int, float, Decimal)) and Decimal(str(title)) == Decimal("0"):
++            return "供应商标题为 0"
++        text = self._stringify(title)
++        if "#REF!" in text:
++            return "供应商标题为 #REF! 公式错误"
++        if re.fullmatch(r"厂家\d+", text):
++            return "供应商标题为厂家占位"
++        return None
++
++    def _is_placeholder_label(self, value: str) -> bool:
++        """判断选项名是否是模板占位。
++
++        参数：
++            value: 选项名。
++
++        返回：
++            命中规格X、技术X、厂家X、汇流条X、基准X 等占位模式时返回 True。
++        """
++        return any(pattern.fullmatch(value) for pattern in PLACEHOLDER_PATTERNS)
++
++    def _normalize_model_code(self, value: str) -> str:
++        """归一化版型编码。
++
++        参数：
++            value: Sheet 名或标板页版型名。
++
++        返回：
++            去除首尾空格后的版型编码；保留 `(2.0)` 独立语义。
++        """
++        return value.strip()
++
++    def _normalize_benchmark_name(self, value: str) -> str:
++        """归一化标板名称。
++
++        参数：
++            value: Excel 标板列名。
++
++        返回：
++            业务确认后的标准标板名称。
++        """
++        aliases = {
++            "北德基准": "新北德",
++            "北德": "新北德",
++            "莱茵": "莱茵基准",
++            "莱茵基准": "莱茵基准",
++            "计量院": "中国计量院",
++            "中国计量院": "中国计量院",
++            "功率最优": "功率最优",
++        }
++        return aliases.get(value.strip(), value.strip())
++
++    def _normalize_label(self, value: str) -> str:
++        """归一化通用标签。
++
++        参数：
++            value: 原始标签。
++
++        返回：
++            去掉多余空白后的标签。
++        """
++        return re.sub(r"\s+", "", value.strip())
++
++    def _infer_cell_count(self, sheet_name: str) -> int | None:
++        """从版型编码推断电池片数量。
++
++        参数：
++            sheet_name: 模型 Sheet 名。
++
++        返回：
++            GDF 前的片数；无法识别时返回 None。
++        """
++        match = re.search(r"-(\d+)[A-Z]*GDF", sheet_name.strip())
++        if not match:
++            return None
++        return int(match.group(1))
++
++    def _infer_business_version_label(self, file_name: str) -> str | None:
++        """从文件名推断业务版本标签。
++
++        参数：
++            file_name: 原始文件名。
++
++        返回：
++            例如 `TOPCon 26.04.13`；无法识别时返回 None。
++        """
++        match = re.search(r"(TOPCon)\s*(\d{2}\.\d{2}\.\d{2})", file_name, flags=re.IGNORECASE)
++        if match:
++            return f"{match.group(1)} {match.group(2)}"
++        return None
++
++    def _to_decimal(self, value: Any) -> Decimal | None:
++        """将单元格值转 Decimal。
++
++        参数：
++            value: openpyxl 单元格值。
++
++        返回：
++            数字值返回 Decimal；空、公式、文本和错误值返回 None。
++        """
++        if self._is_blank(value):
++            return None
++        if isinstance(value, str) and value.startswith("="):
++            return None
++        try:
++            return Decimal(str(value))
++        except (InvalidOperation, ValueError):
++            return None
++
++    def _is_blank(self, value: Any) -> bool:
++        """判断单元格值是否为空。
++
++        参数：
++            value: 任意单元格值。
++
++        返回：
++            None 或空白字符串返回 True。
++        """
++        return value is None or (isinstance(value, str) and value.strip() == "")
++
++    def _stringify(self, value: Any) -> str:
++        """稳定转成字符串。
++
++        参数：
++            value: 任意单元格值。
++
++        返回：
++            去掉首尾空白后的字符串。
++        """
++        return str(value).strip()
++
++    def _cell_raw_value(self, value: Any) -> Any:
++        """把单元格值转成 JSON 可序列化值。
++
++        参数：
++            value: 单元格原始值。
++
++        返回：
++            Decimal 等不可直接序列化对象会转成字符串。
++        """
++        if isinstance(value, Decimal):
++            return str(value)
++        return value
++
++
++def dumps_power_json(payload: Any) -> str:
++    """将功率模型解析 payload 序列化为 JSON。
++
++    参数：
++        payload: 任意可被 json.dumps 处理的对象，Decimal 会转字符串。
++
++    返回：
++        UTF-8 中文友好的 JSON 字符串。
++    """
++    return json.dumps(payload, ensure_ascii=False, default=str)
++
++
++__all__ = [
++    "FORMULA_POLICY",
++    "MAX_XLSM_BYTES",
++    "EXPECTED_MODEL_SHEETS",
++    "ParsedBenchmarkFactor",
++    "ParsedChangeHistory",
++    "ParsedFactorOption",
++    "ParsedPowerBin",
++    "ParsedPowerIssue",
++    "ParsedPowerModelSheet",
++    "ParsedPowerModelWorkbook",
++    "ParsedSupplierDistribution",
++    "PowerExcelParserService",
++    "dumps_power_json",
++]
+diff --git a/backend/app/domains/plan_bom/services/power_model_service.py b/backend/app/domains/plan_bom/services/power_model_service.py
+new file mode 100644
+index 0000000..e87308d
+--- /dev/null
++++ b/backend/app/domains/plan_bom/services/power_model_service.py
+@@ -0,0 +1,160 @@
++from __future__ import annotations
++
++import hashlib
++from dataclasses import dataclass
++from pathlib import Path
++from typing import Any
++
++import anyio
++from fastapi import UploadFile
++from sqlalchemy.exc import IntegrityError
++
++from backend.app.domains.plan_bom.repositories.power_model_repository import PowerModelRepository
++from backend.app.domains.plan_bom.services.power_excel_parser_service import FORMULA_POLICY, MAX_XLSM_BYTES, PowerExcelParserService
++
++
++class PowerModelImportError(ValueError):
++    """功率模型导入失败异常。"""
++
++
++@dataclass(slots=True)
++class PowerModelImportResult:
++    """功率模型导入结果。"""
++
++    import_status: str
++    version: dict[str, Any]
++    detail: dict[str, Any] | None
++
++
++class PowerModelService:
++    """计划 BOM 功率模型版本服务。
++
++    职责边界：
++    1. 调用解析器读取 xlsm 并调用仓储落库；
++    2. 按 file_hash 防重复导入；
++    3. 提供版本列表、详情和激活能力；
++    4. 不实现正式功率预测计算、推荐和 BOM 配置映射。
++    """
++
++    def __init__(
++        self,
++        *,
++        repository: PowerModelRepository,
++        parser: PowerExcelParserService | None = None,
++    ) -> None:
++        self.repository = repository
++        self.parser = parser or PowerExcelParserService()
++
++    async def import_upload(self, file: UploadFile) -> PowerModelImportResult:
++        """导入上传的 xlsm 文件。
++
++        参数：
++            file: FastAPI UploadFile。
++
++        返回：
++            PowerModelImportResult，包含新建或已存在版本信息。
++        """
++        content = await file.read(MAX_XLSM_BYTES + 1)
++        if len(content) > MAX_XLSM_BYTES:
++            raise PowerModelImportError(f"功率模型文件超过 {MAX_XLSM_BYTES} bytes 限制。")
++        file_name = file.filename or "plan_power_model.xlsm"
++        return await anyio.to_thread.run_sync(lambda: self.import_bytes(content, file_name=file_name))
++
++    def import_file(self, file_path: str | Path) -> PowerModelImportResult:
++        """导入本地 xlsm 文件。
++
++        参数：
++            file_path: 本地文件路径。
++
++        返回：
++            PowerModelImportResult，供测试和运维脚本使用。
++        """
++        path = Path(file_path)
++        return self.import_bytes(path.read_bytes(), file_name=path.name)
++
++    def import_bytes(self, content: bytes, *, file_name: str) -> PowerModelImportResult:
++        """导入 xlsm 字节内容。
++
++        参数：
++            content: xlsm 文件字节；
++            file_name: 原始文件名。
++
++        返回：
++            导入结果。若同 hash 已存在，则返回 existing，不新增版本。
++        """
++        if not content:
++            raise PowerModelImportError("功率模型文件为空。")
++        file_hash = hashlib.sha256(content).hexdigest()
++        existing = self.repository.get_by_file_hash(file_hash)
++        if existing is not None:
++            return PowerModelImportResult(
++                import_status="existing",
++                version=self.repository.version_to_dict(existing),
++                detail=self.repository.get_detail_payload(existing.id),
++            )
++
++        try:
++            parsed = self.parser.parse_bytes(content, file_name=file_name, file_hash=file_hash)
++        except Exception as exc:
++            raise PowerModelImportError(f"功率模型 xlsm 解析失败：{exc}") from exc
++        try:
++            version = self.repository.create_from_parsed(parsed)
++        except IntegrityError:
++            existing_after_race = self.repository.get_by_file_hash(file_hash)
++            if existing_after_race is not None:
++                return PowerModelImportResult(
++                    import_status="existing",
++                    version=self.repository.version_to_dict(existing_after_race),
++                    detail=self.repository.get_detail_payload(existing_after_race.id),
++                )
++            raise
++        return PowerModelImportResult(
++            import_status="created",
++            version=self.repository.version_to_dict(version),
++            detail=self.repository.get_detail_payload(version.id),
++        )
++
++    def list_versions(self) -> list[dict[str, Any]]:
++        """查询功率模型版本列表。
++
++        返回：
++            版本摘要字典列表。
++        """
++        return [self.repository.version_to_dict(version) for version in self.repository.list_versions()]
++
++    def get_version_detail(self, version_id: int) -> dict[str, Any]:
++        """查询功率模型版本详情。
++
++        参数：
++            version_id: 模型版本 ID。
++
++        返回：
++            版本详情字典；不存在时抛出 ValueError。
++        """
++        detail = self.repository.get_detail_payload(version_id)
++        if detail is None:
++            raise ValueError(f"功率模型版本不存在：{version_id}")
++        return detail
++
++    def activate_version(self, version_id: int) -> dict[str, Any]:
++        """激活功率模型版本。
++
++        参数：
++            version_id: 模型版本 ID。
++
++        返回：
++            激活后的版本摘要。
++        """
++        version = self.repository.activate_version(version_id)
++        return self.repository.version_to_dict(version)
++
++    def current_formula_policy(self) -> str:
++        """返回 M2 固定公式策略。
++
++        返回：
++            `semantic_fixed_mode`。
++        """
++        return FORMULA_POLICY
++
++
++__all__ = ["PowerModelImportError", "PowerModelImportResult", "PowerModelService"]
+diff --git a/tests/business_acceptance/test_plan_power_m2_model_versioning.py b/tests/business_acceptance/test_plan_power_m2_model_versioning.py
+new file mode 100644
+index 0000000..e7dabb3
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_power_m2_model_versioning.py
+@@ -0,0 +1,245 @@
++from __future__ import annotations
++
++from pathlib import Path
++from types import SimpleNamespace
++from zipfile import ZipFile
++
++import pytest
++from fastapi import HTTPException
++from sqlalchemy import create_engine
++from sqlalchemy.exc import IntegrityError
++from sqlalchemy.orm import sessionmaker
++
++from backend.app.api.deps import require_plan_power_admin
++from backend.app.core.config import Settings
++from backend.app.db.base import Base
++from backend.app.domains.plan_bom.models import (
++    PlanPowerBenchmarkFactor,
++    PlanPowerModelVersion,
++    PlanPowerParseIssue,
++    PlanPowerPowerBin,
++    PlanPowerSupplierEfficiencyDistribution,
++)
++from backend.app.domains.plan_bom.repositories.power_model_repository import PowerModelRepository
++from backend.app.domains.plan_bom.services.power_excel_parser_service import FORMULA_POLICY, PowerExcelParserService
++from backend.app.domains.plan_bom.services.power_model_service import PowerModelImportError, PowerModelService
++
++
++POWER_XLSM = Path("ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm")
++
++
++@pytest.fixture()
++def db_session():
++    """创建 SQLite 临时数据库会话。
++
++    返回：
++        SQLAlchemy Session。测试只建 ORM 表，不连接真实 MySQL。
++    """
++    engine = create_engine("sqlite:///:memory:")
++    Base.metadata.create_all(engine)
++    SessionLocal = sessionmaker(bind=engine)
++    session = SessionLocal()
++    try:
++        yield session
++    finally:
++        session.close()
++        Base.metadata.drop_all(engine)
++        engine.dispose()
++
++
++def _service(db_session) -> PowerModelService:
++    """构造功率模型服务。"""
++    return PowerModelService(repository=PowerModelRepository(db_session), parser=PowerExcelParserService())
++
++
++def test_parse_topcon_xlsm_structure_and_vba_presence() -> None:
++    """解析新版 xlsm，校验 sheet 数、模型页数量、公式策略和 VBA 工程存在。"""
++    parsed = PowerExcelParserService().parse_file(POWER_XLSM)
++
++    assert parsed.sheet_count == 12
++    assert parsed.model_sheet_count == 10
++    assert parsed.formula_policy == FORMULA_POLICY
++    assert parsed.has_vba_project is True
++    assert parsed.vba_project_sha256 == "7138e906f9f7b7eb244bf270dd19411f018839dcdb9a7ce0c76b83f7f7674b38"
++    assert parsed.parse_summary["power_bin_count"] == 92
++    assert parsed.parse_summary["supplier_distribution_count"] > 0
++    assert parsed.parse_summary["benchmark_factor_count"] == 36
++    assert parsed.parse_summary["change_history_count"] == 19
++    assert parsed.parse_summary["latest_change_date"] == "2026.04.13"
++
++
++def test_parse_records_semantic_formula_fix_and_invalid_supplier_issues() -> None:
++    """解析新版 xlsm，校验 R30/R32 语义修正和异常供应商标题 warning。"""
++    parsed = PowerExcelParserService().parse_file(POWER_XLSM)
++    semantic_issues = [
++        issue for issue in parsed.issues if issue.issue_code == "SEMANTIC_FORMULA_FIX_REQUIRED"
++    ]
++    invalid_supplier_issues = [
++        issue for issue in parsed.issues if issue.issue_code == "INVALID_SUPPLIER_TITLE"
++    ]
++
++    assert {(issue.source_sheet_name, issue.source_cell_ref) for issue in semantic_issues} == {
++        ("NT12R-66GDF", "R30"),
++        ("NT12R-66GDF", "R32"),
++    }
++    assert any("#REF!" in str(issue.raw) for issue in invalid_supplier_issues)
++    assert any("厂家" in str(issue.raw) for issue in invalid_supplier_issues)
++
++
++def test_import_persists_model_version_children_and_formula_policy(db_session) -> None:
++    """导入新版 xlsm，校验版本、功率档、供应商分布、标板和 issue 已落库。"""
++    service = _service(db_session)
++    result = service.import_file(POWER_XLSM)
++    version_id = result.version["id"]
++
++    version = db_session.get(PlanPowerModelVersion, version_id)
++    assert result.import_status == "created"
++    assert version is not None
++    assert version.formula_policy == FORMULA_POLICY
++    assert version.vba_project_sha256 == "7138e906f9f7b7eb244bf270dd19411f018839dcdb9a7ce0c76b83f7f7674b38"
++    assert version.sheet_count == 12
++    assert version.model_sheet_count == 10
++    assert version.file_hash == "97207519ff88a2cb58c79e75fb94381331a953affd0685099ccd7bf2145f36a7"
++    assert result.version["change_histories"][-1]["change_date"] == "2026.04.13"
++    assert result.version["parse_summary"]["change_history_count"] == 19
++    assert db_session.query(PlanPowerPowerBin).filter_by(version_id=version_id).count() == 92
++    assert db_session.query(PlanPowerSupplierEfficiencyDistribution).filter_by(version_id=version_id).count() > 0
++    assert db_session.query(PlanPowerBenchmarkFactor).filter_by(version_id=version_id).count() == 36
++    assert (
++        db_session.query(PlanPowerBenchmarkFactor)
++        .filter_by(version_id=version_id, benchmark_name="功率最优")
++        .count()
++        == 9
++    )
++    assert (
++        db_session.query(PlanPowerParseIssue)
++        .filter_by(version_id=version_id, issue_code="SEMANTIC_FORMULA_FIX_REQUIRED")
++        .count()
++        == 2
++    )
++    assert (
++        db_session.query(PlanPowerParseIssue)
++        .filter_by(version_id=version_id, issue_code="INVALID_SUPPLIER_TITLE")
++        .count()
++        > 0
++    )
++
++
++def test_import_same_file_hash_returns_existing_without_duplicate(db_session) -> None:
++    """同一 xlsm hash 重复导入时返回 existing，不新增模型版本。"""
++    service = _service(db_session)
++    first = service.import_file(POWER_XLSM)
++    second = service.import_file(POWER_XLSM)
++
++    assert first.import_status == "created"
++    assert second.import_status == "existing"
++    assert second.version["id"] == first.version["id"]
++    assert db_session.query(PlanPowerModelVersion).count() == 1
++
++
++def test_activate_version_switch_keeps_single_active_version(db_session) -> None:
++    """激活版本切换时最多保留一个 active 版本。"""
++    service = _service(db_session)
++    content = POWER_XLSM.read_bytes()
++    first = service.import_bytes(content, file_name=POWER_XLSM.name)
++    second = service.import_bytes(content + b"\nM2-active-switch-copy", file_name="GCL功率测试基准（V2.1）TOPCon 26.04.13-copy.xlsm")
++
++    activated_first = service.activate_version(first.version["id"])
++    assert activated_first["is_active"] is True
++    assert PowerModelRepository(db_session).count_active_versions() == 1
++
++    activated_second = service.activate_version(second.version["id"])
++    assert activated_second["is_active"] is True
++    assert PowerModelRepository(db_session).count_active_versions() == 1
++    assert db_session.get(PlanPowerModelVersion, first.version["id"]).is_active == 0
++    assert db_session.get(PlanPowerModelVersion, second.version["id"]).is_active == 1
++
++    reactivated_second = service.activate_version(second.version["id"])
++    assert reactivated_second["is_active"] is True
++    assert PowerModelRepository(db_session).count_active_versions() == 1
++
++
++def test_import_rejects_empty_or_invalid_xlsm_with_controlled_error(db_session) -> None:
++    """空文件、损坏文件和超出 ZIP 成员限制的文件应返回受控导入异常。"""
++    service = _service(db_session)
++
++    with pytest.raises(PowerModelImportError, match="为空"):
++        service.import_bytes(b"", file_name="empty.xlsm")
++
++    with pytest.raises(PowerModelImportError, match="解析失败"):
++        service.import_bytes(b"not-a-zip", file_name="broken.xlsm")
++
++    oversized_zip = Path("tmp/too_many_members.xlsm")
++    oversized_zip.parent.mkdir(parents=True, exist_ok=True)
++    with ZipFile(oversized_zip, "w") as zf:
++        for index in range(501):
++            zf.writestr(f"xl/fake-{index}.xml", "x")
++    try:
++        with pytest.raises(PowerModelImportError, match="ZIP 成员数"):
++            service.import_file(oversized_zip)
++    finally:
++        oversized_zip.unlink(missing_ok=True)
++
++
++def test_activate_failed_version_is_rejected(db_session) -> None:
++    """解析失败版本不能被激活，避免把不可用模型设为生产活动版本。"""
++    failed = PlanPowerModelVersion(
++        file_name="failed.xlsm",
++        file_hash="failed-hash",
++        source_type="xlsm",
++        formula_policy=FORMULA_POLICY,
++        parse_status="failed",
++        sheet_count=0,
++        model_sheet_count=0,
++        warning_count=0,
++        error_count=1,
++    )
++    db_session.add(failed)
++    db_session.commit()
++
++    service = _service(db_session)
++    with pytest.raises(ValueError, match="解析失败"):
++        service.activate_version(failed.id)
++
++
++def test_admin_dependency_requires_token_outside_local() -> None:
++    """dev/prod 环境的功率模型写接口必须携带管理令牌。"""
++    local_settings = Settings(app_env="local", plan_power_admin_token="")
++    require_plan_power_admin(x_plan_power_admin_token=None, settings=local_settings)
++
++    prod_settings = Settings(app_env="prod", plan_power_admin_token="ok")
++    with pytest.raises(HTTPException):
++        require_plan_power_admin(x_plan_power_admin_token="bad", settings=prod_settings)
++    require_plan_power_admin(x_plan_power_admin_token="ok", settings=prod_settings)
++
++
++def test_import_integrity_conflict_returns_existing_version() -> None:
++    """并发同 hash 导入触发唯一键冲突时应回查已有版本并返回 existing。"""
++
++    class FakeRepository:
++        def __init__(self) -> None:
++            self.calls = 0
++            self.existing = SimpleNamespace(id=7)
++
++        def get_by_file_hash(self, file_hash: str):
++            self.calls += 1
++            return None if self.calls == 1 else self.existing
++
++        def create_from_parsed(self, parsed):
++            raise IntegrityError("insert plan_power_model_version", {}, Exception("duplicate"))
++
++        def version_to_dict(self, version):
++            return {"id": version.id, "file_hash": "race-hash"}
++
++        def get_detail_payload(self, version_id: int):
++            return {"version_id": version_id}
++
++    class FakeParser:
++        def parse_bytes(self, content: bytes, *, file_name: str, file_hash: str | None = None):
++            return SimpleNamespace(file_hash=file_hash, file_name=file_name)
++
++    service = PowerModelService(repository=FakeRepository(), parser=FakeParser())
++    result = service.import_bytes(b"race-content", file_name="race.xlsm")
++
++    assert result.import_status == "existing"
++    assert result.version["id"] == 7
+diff --git a/ai/tasks/running/TASK-plan-power-m2-model-versioning/plan.md b/ai/tasks/running/TASK-plan-power-m2-model-versioning/plan.md
+new file mode 100644
+index 0000000..1774fbb
+--- /dev/null
++++ b/ai/tasks/running/TASK-plan-power-m2-model-versioning/plan.md
+@@ -0,0 +1,68 @@
++# TASK-plan-power-m2-model-versioning 计划
++
++## 当前仓库已完成能力判断
++
++1. 已有 PlanBom 基础链路：Excel BOM 导入、BOM 明细查询、compare、PlanBom QA、NLU、答案表达层。
++2. 已有 Alembic 迁移目录和计划 BOM ORM 集中在 `backend/app/domains/plan_bom/models.py`。
++3. M1/M1.5 已完成 Excel 审计与业务口径固化：新版 TOPCon xlsm 为主目标，`formula_policy = semantic_fixed_mode`。
++4. 当前尚无 `plan_power_*` ORM、迁移、功率 Excel 解析服务、模型版本管理服务和功率模型管理 API。
++
++## 当前未完成能力判断
++
++1. 不能导入功率预测 xlsm 生成模型版本。
++2. 不能结构化查询模型 sheet、配置项、供应商效率分布、功率档、标板基准和 parse issue。
++3. 不能激活/切换 active 功率模型版本。
++4. 尚未实现 M3 计算引擎、M4 BOM 配置映射、M5 QA/前端接入。
++
++## 本次任务与当前仓库状态一致性
++
++一致。用户已确认进入 M2；`docs/NEXT_TASK.md` 明确 M2 可以新增 ORM、迁移、解析服务、模型版本服务和内部管理 API，但禁止越界进入 M3/M4/M5。
++
++## 本轮允许修改范围
++
++- `backend/app/domains/plan_bom/models.py`
++- `backend/alembic/versions/*plan_power*.py`
++- `backend/app/domains/plan_bom/services/power_excel_parser_service.py`
++- `backend/app/domains/plan_bom/services/power_model_service.py`
++- `backend/app/domains/plan_bom/repositories/power_model_repository.py`（如需要）
++- `backend/app/domains/plan_bom/schemas/power_model.py`
++- `backend/app/domains/plan_bom/api/endpoints/power_model.py`
++- `backend/app/domains/plan_bom/api/router.py`
++- `backend/app/api/deps.py`
++- `tests/business_acceptance/test_plan_power_m2_model_versioning.py` 或等价测试文件
++- `ai/tasks/running/TASK-plan-power-m2-model-versioning/*` 任务产物
++
++## 本轮禁止修改范围
++
++1. 不修改前端。
++2. 不接入 `PlanBomQaService`、`/smart-chat` 或现有 QA 可答逻辑。
++3. 不实现正式功率预测计算引擎。
++4. 不实现 BOM 配置自动映射。
++5. 不 hardcode `BOM配置搭配问询：.docx` 假订单/假版型/假项目/假答案。
++6. 不修改 `.env`、密钥、真实生产连接配置。
++7. 不自动 commit、push、deploy。
++8. 不覆盖、重命名、删除 `ai/inbox/attachments/` 原始附件。
++9. 不修改当前已存在的 logistics 相关脏工作区文件。
++
++## M2 实施拆解
++
++1. 先写 M2 单测：解析新版 xlsm、保存 `formula_policy`、记录 R30/R32 issue、记录异常供应商标题、hash 去重、active 切换。
++2. 新增 `plan_power_*` ORM 与 Alembic 迁移。
++3. 新增 `PowerExcelParserService`：只读解析 xlsm，不执行 VBA，固定锚点校验，输出内存结构和 warnings/issues。
++4. 新增 `PowerModelRepository/PowerModelService`：防重复导入、落库、查询版本列表/详情、激活版本。
++5. 新增内部管理 API：导入、版本列表、版本详情、激活。
++6. 运行编译、pytest、必要时前端 build 作为回归确认。
++7. 生成 diff/test/final acceptance 产物并执行 reviewer 审查。
++
++## 验收标准
++
++1. 新版 `GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm` 可被解析并生成一个模型版本。
++2. 入库版本保存 `formula_policy = semantic_fixed_mode` 和文件 SHA256。
++3. 解析到 12 个 Sheet、10 个模型页。
++4. 可查询 sheet、配置项、供应商效率分布、功率档、标板基准、parse issues。
++5. 记录 `NT12R-66GDF!R30/R32` semantic fix issue。
++6. 记录异常供应商标题（例如 0、#REF!、厂家占位）为 warning/issue。
++7. 同一文件 hash 重复导入不新增重复版本。
++8. active 版本切换保证最多一个 active。
++9. 现有 BOM/物流测试不被破坏。
++10. M2 不越界实现 M3/M4/M5。
+diff --git a/ai/tasks/running/TASK-plan-power-m2-model-versioning/codex_prompt.md b/ai/tasks/running/TASK-plan-power-m2-model-versioning/codex_prompt.md
+new file mode 100644
+index 0000000..236c7c4
+--- /dev/null
++++ b/ai/tasks/running/TASK-plan-power-m2-model-versioning/codex_prompt.md
+@@ -0,0 +1,128 @@
++你是受控 Codex 工程师，当前任务是实现 gcl-bp-ai 项目的 M2：计划 BOM 功率模型版本化入库。
++
++工作目录：/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai
++当前分支应为：agent/TASK-plan-power-m2-model-versioning
++
++【必须先读取】
++1. AGENTS.md
++2. docs/NEXT_TASK.md
++3. docs/CURRENT_STATUS.md
++4. docs/PLAN_POWER_BUSINESS_CONFIRMATION.md
++5. docs/PLAN_POWER_EXCEL_FORMULA_AUDIT.md
++6. docs/PLAN_POWER_IMPLEMENTATION_PLAN.md
++7. ai/inbox/attachments_manifest.md
++8. ai/tasks/running/TASK-plan-power-m2-model-versioning/plan.md
++9. backend/app/domains/plan_bom/models.py
++10. backend/app/domains/plan_bom/api/router.py
++11. backend/app/api/deps.py
++12. backend/alembic/versions/*.py
++
++【重要脏工作区保护】
++开始前运行 git status。当前已有与本轮无关的 logistics 修改/未跟踪文件，不能改动、格式化、回滚、删除这些文件：
++- backend/app/domains/logistics/repositories/data_qa_repository.py
++- backend/app/domains/logistics/services/data_qa_planner.py
++- backend/app/domains/logistics/services/sync_service.py
++- tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
++- tests/business_acceptance/test_logistics_system_sync_normalization.py
++- ai/eval/runs/run_20260507_001940_full_all/logistics_planner_clarification_scan_after_fix_round5.md
++
++【本轮目标】
++实现 M2 功率模型版本化入库：把新版 xlsm 解析成可追溯、可查询、可激活的结构化模型版本。主文件：
++ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm
++
++【允许修改】
++- backend/app/domains/plan_bom/models.py
++- backend/alembic/versions/*plan_power*.py
++- backend/app/domains/plan_bom/services/power_excel_parser_service.py
++- backend/app/domains/plan_bom/services/power_model_service.py
++- backend/app/domains/plan_bom/repositories/power_model_repository.py
++- backend/app/domains/plan_bom/schemas/power_model.py
++- backend/app/domains/plan_bom/api/endpoints/power_model.py
++- backend/app/domains/plan_bom/api/router.py
++- backend/app/api/deps.py
++- tests/business_acceptance/test_plan_power_m2_model_versioning.py
++- ai/tasks/running/TASK-plan-power-m2-model-versioning/codex_final.md（最终总结）
++
++【禁止修改/禁止行为】
++1. 不修改 frontend。
++2. 不修改 PlanBom QA 可答逻辑，不接入 /smart-chat。
++3. 不实现正式功率预测计算引擎、推荐服务、BOM 配置映射。
++4. 不 hardcode BOM配置搭配问询.docx 中假数据。
++5. 不修改 .env/密钥/账号/token，不连接生产库。
++6. 不覆盖/重命名/删除 ai/inbox/attachments 原始附件。
++7. 不自动 commit/push/deploy。
++8. 不动 logistics 既有脏文件。
++
++【实现要求】
++A. ORM + 迁移
++新增以下表（字段可按项目风格略作调整，但必须覆盖语义）：
++1. plan_power_model_version：文件名、hash、source_type=xlsm、business_version_label、formula_policy、is_active、parse_status、sheet_count、model_sheet_count、warning_count、error_count、parse_summary_json、warning_json、created_at、activated_at。
++2. plan_power_model_sheet：version_id、sheet_name、normalized_model_code、cell_count、base_power、center_power_cell、area_default、std_dev_default、source_range、raw_meta_json。
++3. plan_power_factor_option：version_id、sheet_id、factor_key、option_label、normalized_option_label、effect_value、area_value、std_dev_value、source_cell_ref、is_default、is_valid、invalid_reason、raw_json。
++4. plan_power_supplier_efficiency_distribution：version_id、sheet_id、supplier_name、normalized_supplier_name、efficiency_value、ratio_value、source_cell_ref、is_valid、invalid_reason。
++5. plan_power_power_bin：version_id、sheet_id、power_bin、bin_order、source_cell_ref、is_valid。
++6. plan_power_benchmark_factor：version_id、model_code、benchmark_name、normalized_benchmark_name、effect_value、source_sheet_name、source_cell_ref、raw_json。
++7. plan_power_model_validation_case：预留 M3 parity 字段，可简化但需建表。
++8. plan_power_parse_issue：version_id、sheet_id nullable、level、issue_code、message、source_sheet_name、source_cell_ref、raw_json。
++
++B. PowerExcelParserService
++新增 backend/app/domains/plan_bom/services/power_excel_parser_service.py。
++职责：
++1. 只读读取 xlsm，使用 openpyxl load_workbook(..., keep_vba=True, data_only=False)，不执行 VBA。
++2. 校验文件含 xl/vbaProject.bin。
++3. 校验 12 个 sheet = 10 个模型页 + 标板基准 + 更改履历；模型页使用审计文档中的名称，注意 NT12R-78GDF 末尾空格。
++4. 校验模型页锚点 A3/A6/A9/A12/A17/A20/A23/A26/A76。
++5. 提取配置项选项和影响值：上方配置区 A1:Y27，按锚点分组；可以保守解析为 factor_key + option_label + effect_value + source_cell_ref，不能伪造。
++6. 提取功率档 K28:T28（空/无效跳过，48/54 系列可只有 8 档）。
++7. 提取供应商效率分布区 C77:Y96：识别供应商标题、效率段、比例；无效供应商标题如 0/#REF!/厂家X 记录 issue/warning，不作为有效供应商。
++8. 提取标板基准页 A1:E10，支持新增“功率最优”列，保存 benchmark factor。
++9. 识别并记录 semantic fix issue：新版仍有 NT12R-66GDF!R30 和 NT12R-66GDF!R32 疑似 L行-$S$28 引用，记录 issue_code=SEMANTIC_FORMULA_FIX_REQUIRED，formula_policy=semantic_fixed_mode。
++10. 输出内存解析结构，供 service 落库。
++11. 所有新增/修改函数写中文注释，说明功能、参数、返回值、关键业务逻辑。
++
++C. PowerModelService + Repository
++1. 按 file_hash 防重复导入：同一 hash 已存在则返回 existing，不新增版本。
++2. 创建模型版本和所有解析子记录。
++3. 查询版本列表、版本详情。
++4. 激活版本时保证最多一个 active 版本。
++5. 入库 formula_policy 固定 semantic_fixed_mode。
++6. 事务失败必须 rollback。
++
++D. API
++新增 backend/app/domains/plan_bom/api/endpoints/power_model.py 并在 plan_bom/api/router.py 注册。
++接口建议：
++1. POST /api/v1/plan-bom/power-model/import：上传 xlsm 并解析入库。
++2. GET /api/v1/plan-bom/power-model/versions：版本列表。
++3. GET /api/v1/plan-bom/power-model/versions/{id}：版本详情。
++4. POST /api/v1/plan-bom/power-model/versions/{id}/activate：激活版本。
++返回统一 ApiResponse。不要接入 QA。
++
++E. Tests（必须 TDD 思路，至少新增单测）
++新增 tests/business_acceptance/test_plan_power_m2_model_versioning.py，使用 SQLite in-memory 或临时 DB，Base.metadata.create_all 直接建表，不连接真实 MySQL。
++至少覆盖：
++1. 解析新版 xlsm：sheet_count=12，model_sheet_count=10。
++2. formula_policy = semantic_fixed_mode。
++3. 记录 NT12R-66GDF!R30/R32 semantic issue。
++4. 解析出功率档、供应商效率分布、标板基准。
++5. 异常供应商标题 issue/warning 存在。
++6. 同文件 hash 去重。
++7. active 版本切换最多一个 active。
++8. 不执行 VBA：只检查存在 vbaProject.bin，不调用任何宏。
++
++【必须运行并把结果写入 codex_final.md】
++- PYTHONPATH=. pytest tests/business_acceptance/test_plan_power_m2_model_versioning.py -q
++- PYTHONPATH=. pytest tests -q
++- python -m compileall backend/app scripts
++如遇前端未修改可不跑 npm build，但 codex_final.md 中要说明 M2 未修改前端。
++
++【最终输出文件】
++写入 ai/tasks/running/TASK-plan-power-m2-model-versioning/codex_final.md，包含：
++1. 修改文件列表。
++2. 新增表和迁移说明。
++3. 解析 Excel 文件名和 hash。
++4. 解析到的 sheet/model/config/power_bin/supplier/benchmark/issue 摘要。
++5. 测试命令和真实执行数量/结果。
++6. 是否遵守 M2 边界。
++7. 未 commit/push/deploy 声明。
++
++请直接实施，不要提问。
+\ No newline at end of file
+diff --git a/ai/tasks/running/TASK-plan-power-m2-model-versioning/codex_final.md b/ai/tasks/running/TASK-plan-power-m2-model-versioning/codex_final.md
+new file mode 100644
+index 0000000..13d8de6
+--- /dev/null
++++ b/ai/tasks/running/TASK-plan-power-m2-model-versioning/codex_final.md
+@@ -0,0 +1,184 @@
++# TASK-plan-power-m2-model-versioning Codex 最终总结
++
++## 1. 修改文件列表
++
++本轮按 M2 允许范围新增 / 修改：
++
++1. `backend/app/domains/plan_bom/models.py`
++2. `backend/alembic/versions/20260508_0004_create_plan_power_model_versioning.py`
++3. `backend/app/domains/plan_bom/services/power_excel_parser_service.py`
++4. `backend/app/domains/plan_bom/services/power_model_service.py`
++5. `backend/app/domains/plan_bom/repositories/power_model_repository.py`
++6. `backend/app/domains/plan_bom/schemas/power_model.py`
++7. `backend/app/domains/plan_bom/api/endpoints/power_model.py`
++8. `backend/app/domains/plan_bom/api/router.py`
++9. `backend/app/api/deps.py`
++10. `tests/business_acceptance/test_plan_power_m2_model_versioning.py`
++11. `ai/tasks/running/TASK-plan-power-m2-model-versioning/codex_final.md`
++
++未修改本轮禁止范围中的 PlanBom QA、`/smart-chat`、前端、正式计算引擎、BOM 配置映射、原始附件、密钥配置、部署配置。
++
++## 2. 新增表和迁移说明
++
++新增 Alembic 迁移：
++
++```text
++backend/alembic/versions/20260508_0004_create_plan_power_model_versioning.py
++```
++
++新增 8 张表：
++
++1. `plan_power_model_version`
++2. `plan_power_model_sheet`
++3. `plan_power_factor_option`
++4. `plan_power_supplier_efficiency_distribution`
++5. `plan_power_power_bin`
++6. `plan_power_benchmark_factor`
++7. `plan_power_model_validation_case`
++8. `plan_power_parse_issue`
++
++迁移 `down_revision = 20260419_0003`。`plan_power_model_version.file_hash` 建唯一约束，用于同一 xlsm 防重复导入。激活版本通过服务层事务保证最多一个 `is_active=1`。
++
++## 3. 解析 Excel 文件名和 hash
++
++解析文件：
++
++```text
++ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm
++```
++
++SHA256：
++
++```text
++97207519ff88a2cb58c79e75fb94381331a953affd0685099ccd7bf2145f36a7
++```
++
++解析器只读读取 xlsm，使用 `openpyxl.load_workbook(..., keep_vba=True, data_only=False)` 读取公式结构，并额外读取缓存值用于 J1/B14/B15/效率分布等入库字段；未执行 VBA，只检查到 `xl/vbaProject.bin` 存在。
++
++## 4. 解析摘要
++
++实际解析摘要：
++
++```text
++sheet_count=12
++model_sheet_count=10
++formula_policy=semantic_fixed_mode
++factor_option_count=916
++valid_factor_option_count=307
++power_bin_count=92
++supplier_distribution_count=178
++benchmark_factor_count=36
++warning_count=66
++error_count=0
++```
++
++模型页：
++
++```text
++NT10-72GDF
++NT10-78GDF
++NT12R-66GDF
++NT12R-66GDF (2.0)
++NT12-66GDF
++NT12R-78GDF
++NT12R-48GDF
++NT12R-48BGDF
++NT12R-54GDF
++NT12R-54BGDF
++```
++
++注意：Excel 原始 Sheet `NT12R-78GDF ` 带尾随空格，入库保留原始 `sheet_name`，`normalized_model_code` 归一为 `NT12R-78GDF`。
++
++已记录 parse issue：
++
++1. `SEMANTIC_FORMULA_FIX_REQUIRED`：2 条，`NT12R-66GDF!R30`、`NT12R-66GDF!R32`。
++2. `INVALID_SUPPLIER_TITLE`：64 条，覆盖 `#REF!` 和 `厂家X` 等异常供应商标题。
++
++## 5. 实现说明
++
++1. `PowerExcelParserService`：只读解析 xlsm，校验 VBA 工程、12 个 Sheet、10 个模型页、固定锚点，提取配置选项、功率档、供应商效率分布、标板基准和 parse issue。
++2. `PowerModelRepository`：负责 `plan_power_*` 落库、hash 去重查询、版本详情组装、active 切换。
++3. `PowerModelService`：负责导入入口、同 hash existing 返回、版本列表、版本详情、激活版本。
++4. `power_model.py` API：新增导入、版本列表、版本详情、激活接口，统一返回 `ApiResponse`，未接入 PlanBom QA。
++
++## 6. 测试命令和真实执行结果
++
++已运行：
++
++```bash
++PYTHONPATH=. pytest tests/business_acceptance/test_plan_power_m2_model_versioning.py -q
++```
++
++结果：
++
++```text
++5 passed in 3.47s
++```
++
++已运行：
++
++```bash
++python -m compileall backend/app scripts
++```
++
++结果：
++
++```text
++通过，退出码 0
++```
++
++已运行：
++
++```bash
++PYTHONPATH=. pytest tests -q
++```
++
++结果：
++
++```text
++27 tests collected
++13 passed
++14 failed
++```
++
++失败原因：14 个失败均来自既有 logistics business acceptance 测试在当前沙箱内尝试连接 `mysql+pymysql://root:***@127.0.0.1:3306/logistics_ai`，socket 连接被拒绝：
++
++```text
++PermissionError: [Errno 1] Operation not permitted
++pymysql.err.OperationalError: Can't connect to MySQL server on '127.0.0.1'
++```
++
++新增 M2 测试使用 SQLite in-memory，未连接真实 MySQL，已通过。
++
++## 7. 是否遵守 M2 边界
++
++已遵守：
++
++1. 未修改前端。
++2. 未接入 `/smart-chat`。
++3. 未修改 PlanBom QA 可答逻辑。
++4. 未实现正式功率预测计算引擎。
++5. 未实现 BOM 配置自动映射。
++6. 未 hardcode `BOM配置搭配问询：.docx` 中假数据。
++7. 未修改 `.env`、密钥、账号、token。
++8. 未覆盖、重命名、删除 `ai/inbox/attachments` 原始附件。
++9. 未主动修改本轮禁止触碰的 logistics 脏文件。
++
++脏工作区说明：最终 `git status` 中仍可见与本轮无关的 logistics 脏文件、logistics 测试文件、`ai/eval` 未跟踪文件，以及前端页面脏文件；这些文件未纳入本轮修改清单，M2 交付只以上方“修改文件列表”为准。
++
++## 8. 当前仍未解决的问题
++
++1. `PYTHONPATH=. pytest tests -q` 受当前沙箱网络/本机 MySQL 连接限制影响，既有 logistics DB 依赖测试未能通过。
++2. M2 只完成模型版本化入库，尚未进入 M3 计算引擎、M4 BOM 映射、M5 QA/前端接入。
++3. 解析器保存了 Excel 缓存值和公式追溯信息，但不会执行宏，也不会重算公式；正式计算需 M3 按 `semantic_fixed_mode` 实现。
++
++## 9. 对现有 BOM / 物流能力影响
++
++1. 未修改 BOM 查询、BOM compare、PlanBom QA 逻辑。
++2. 未修改 logistics 业务代码。
++3. 新增 API 仅注册在计划 BOM 子路径 `power-model` 下，作为 M2 内部模型管理接口。
++4. 前端未修改，M2 未运行 npm build。
++
++## 10. 未 commit / push / deploy 声明
++
++本轮未执行 commit、push、deploy。

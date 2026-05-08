@@ -12,6 +12,14 @@ from backend.app.domains.plan_bom.models import (
     PlanBomImportBatch,
     PlanBomMaterialLine,
     PlanBomRevision,
+    PlanPowerBenchmarkFactor,
+    PlanPowerFactorOption,
+    PlanPowerModelSheet,
+    PlanPowerModelValidationCase,
+    PlanPowerModelVersion,
+    PlanPowerParseIssue,
+    PlanPowerPowerBin,
+    PlanPowerSupplierEfficiencyDistribution,
 )
 from backend.app.models.sys_query_log import SysQueryLog
 from backend.app.models.sys_task_error_log import SysTaskErrorLog
@@ -27,4 +35,12 @@ __all__ = [
     "PlanBomRevision",
     "PlanBomExportTask",
     "PlanBomExportFile",
+    "PlanPowerModelVersion",
+    "PlanPowerModelSheet",
+    "PlanPowerFactorOption",
+    "PlanPowerSupplierEfficiencyDistribution",
+    "PlanPowerPowerBin",
+    "PlanPowerBenchmarkFactor",
+    "PlanPowerModelValidationCase",
+    "PlanPowerParseIssue",
 ]

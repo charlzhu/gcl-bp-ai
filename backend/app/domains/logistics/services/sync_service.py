@@ -370,7 +370,7 @@ class LogisticsSystemSyncService:
             "rd_number": row.get("rd_number"),
             "procurement_type": row.get("procurement_type"),
             "car_model": row.get("car_model"),
-            "loading_trucks": row.get("loading_trucks"),
+            "loading_trucks": LogisticsSystemSyncService._normalize_decimal(row.get("loading_trucks")),
             "delivery_province": row.get("delivery_province"),
             "delivery_city": row.get("delivery_city"),
             "delivery_area": row.get("delivery_area"),
