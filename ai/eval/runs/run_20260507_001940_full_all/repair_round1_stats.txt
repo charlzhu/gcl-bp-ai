@@ -1,0 +1,8 @@
+expected_total=1391
+expected_status={'no_answer': 6, 'expected': 248, 'unsupported': 977, 'blocked': 160}
+actual_total=1391
+actual_status={'clarification': 92, 'success': 1249, 'no_answer': 50}
+comparison_total=248
+comparison_status={'PASS': 205, 'FAIL': 43}
+fail_count=43
+fail_by_capability={'logistics_total_shipment_count': 1, 'logistics_month_total_fee': 7, 'logistics_total_fee': 15, 'logistics_vehicle_count': 20}

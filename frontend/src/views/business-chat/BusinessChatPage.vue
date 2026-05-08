@@ -1045,7 +1045,14 @@ const columnNameMap: Record<string, string> = {
   task_share_pct: '任务占比',
   delivery_city: '送达城市',
   driver_name: '司机',
+  driver_phone: '司机手机号',
+  driver_names: '司机姓名列表',
+  driver_id_number: '司机身份证号',
+  driver_phones: '手机号列表',
+  driver_name_count: '司机姓名数',
+  driver_phone_count: '手机号数',
   assign_task_count: '派车任务数',
+  distinct_task_count: '去重任务数',
   logistics_company: '物流公司',
   logistics_company_name: '物流公司',
   carrier_name: '承运商',
@@ -1055,6 +1062,9 @@ const columnNameMap: Record<string, string> = {
   max_fee: '最高运费',
   min_fee: '最低运费',
   shipment_trip_count: '车次',
+  avg_pallet_per_vehicle: '平均每车装载托数',
+  valid_record_count: '有效记录数',
+  missing_record_count: '缺失记录数',
   unit_price_per_vehicle: '单价/车',
   fee_per_watt: '元/瓦',
   avg_fee_per_watt: '平均元/瓦',
@@ -1132,7 +1142,8 @@ function localizeCards(cards: UnifiedResult['cards']) {
     const normalizedLabel = normalizeColumnKey(card.label)
     // 发运件数与车次是两个不同业务口径：shipment_count 用“件”，shipment_trip_count 才用“次”。
     // 后端 presentation 历史兼容字段可能把 count 类指标统一带成“次”，这里在展示层做最小纠偏。
-    const correctedUnit = normalizedLabel === 'shipment_count' ? '件' : card.unit
+    const correctedUnit =
+      normalizedLabel === 'shipment_count' ? '件' : normalizedLabel === 'avg_pallet_per_vehicle' ? '托' : card.unit
     return {
       ...card,
       unit: correctedUnit,

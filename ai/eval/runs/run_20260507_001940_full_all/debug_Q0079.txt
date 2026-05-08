@@ -1,0 +1,57 @@
+EXP
+{'answer': {'filters': {'region': '华东', 'transport_mode_std': '公路', 'year': [2024]}, 'unit': '件', 'value': 5379298},
+ 'capability': 'logistics_total_shipment_count',
+ 'category': 'logistics_count',
+ 'domain': 'logistics',
+ 'question': '2024年华东区域通过公路发运的总件数是多少?',
+ 'question_id': 'Q0079',
+ 'reason': '',
+ 'seq': 79,
+ 'status': 'expected',
+ 'trace_id': 'TRACE-Q0079'}
+
+ACT
+{'api_errors': [],
+ 'console_errors': [],
+ 'elapsed_ms': 8885,
+ 'error': '',
+ 'expected_capability': 'logistics_total_shipment_count',
+ 'expected_status': 'expected',
+ 'html_path': '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/runs/run_20260507_001940_full_all/page_html/0079_Q0079.html',
+ 'question': '2024年华东区域通过公路发运的总件数是多少?',
+ 'question_id': 'Q0079',
+ 'screenshot_path': '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/runs/run_20260507_001940_full_all/screenshots/0079_Q0079.png',
+ 'status': 'clarification',
+ 'table_rows': [],
+ 'table_text': '',
+ 'visible_answer_text': '经营计划智能助手\n'
+                        '物流数据\n'
+                        '刚刚\n'
+                        '需补充信息\n'
+                        '澄清\n'
+                        '还需要补充几个条件\n'
+                        '\n'
+                        '当前问题需要先明确运输方式同义口径、统计指标、单位和时间范围，避免把运输方式样本直接混算。\n'
+                        '\n'
+                        '关键结论\n'
+                        '当前问题需要澄清后才能继续查询。\n'
+                        '需要补充的信息\n'
+                        '请明确运输方式口径，例如公路/汽运、铁路/铁运、水路和多式联运是否需要合并同义口径。\n'
+                        '请说明要统计的指标和单位，是发运量 MW、总运费、车次、件数、单瓦成本，还是降本金额。\n'
+                        '请补充统计时间范围，以及是否需要按区域、省份、承运商或线路继续拆分。\n'
+                        '请确认输出形态：只输出汇总总数/总额，还是需要表格、排名或按月/区域/承运商展开。\n'
+                        '口径与风险提示\n'
+                        '为避免误算，系统先返回澄清问题。'}
+
+CMP
+{'actual_status': 'clarification',
+ 'compare_status': 'FAIL',
+ 'expected_number_count': 1,
+ 'expected_status': 'expected',
+ 'failure_type': 'BACKEND_OR_NLU_OR_RENDER_MISMATCH',
+ 'html_path': '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/runs/run_20260507_001940_full_all/page_html/0079_Q0079.html',
+ 'matched_numbers': 0,
+ 'question': '2024年华东区域通过公路发运的总件数是多少?',
+ 'question_id': 'Q0079',
+ 'reason': 'expected 数字 1 个，命中 0 个；页面文本长度 303',
+ 'screenshot_path': '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/runs/run_20260507_001940_full_all/screenshots/0079_Q0079.png'}

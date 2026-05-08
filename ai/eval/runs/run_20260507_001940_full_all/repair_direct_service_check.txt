@@ -1,0 +1,7 @@
+Q=2024年华东区域通过公路发运的总件数是多少?
+plan=hist_quantity_by_region clarification=False filters={'year': 2024, 'region_name': '华东', 'transport_mode': '公路'}
+result clarification=False summary=2024年华东区域通过公路总发运件数为5,379,298件。
+
+Q=请按月份汇总发往贵州的发运量和总费用，并区分2023、2024、2025三个年度？
+plan=None clarification=True filters={}
+result clarification=True summary=当前查询链路不支持一次性生成宽表、透视表、同比变化或多指标经营汇总表。

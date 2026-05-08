@@ -214,6 +214,12 @@ class LogisticsSlotExtractor:
                 for month in range(start_month, end_month + 1):
                     if month not in months:
                         months.append(month)
+        for match in re.finditer(r"(?:20\d{2}|2[3-6])[-/.年](?P<month>0?[1-9]|1[0-2])(?:月)?", compact):
+            # 兼容样例题中的“2024-01 / 2024.01 / 2024年01月”写法，
+            # 只抽取月份槽位；年份仍由 extract_year 统一负责，避免重复解析时间范围。
+            month = int(match.group("month"))
+            if month not in months:
+                months.append(month)
         for match in re.finditer(r"(?<!\d)(?P<month>1[0-2]|[1-9])月份?", compact):
             month = int(match.group("month"))
             if month not in months:

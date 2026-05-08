@@ -1,0 +1,10 @@
+# Phase 3 对比摘要
+
+- 已对比题数：190
+- PASS：189
+- FAIL：1
+- MISSING_ACTUAL：0
+
+## 失败类型
+
+- BACKEND_OR_NLU_OR_RENDER_MISMATCH: 1

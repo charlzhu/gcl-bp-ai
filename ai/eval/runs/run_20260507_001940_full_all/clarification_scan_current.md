@@ -1,0 +1,105 @@
+# 当前 clarification 扫描
+
+- clarification_like_count: 92
+
+## 按问题类型聚类
+- 运量/MW: 49
+- 其他: 19
+- 车次/车辆: 8
+- 费用: 7
+- 件数: 5
+- 均值/单价: 4
+
+## 样例（前 120 条）
+- Q0001 | 其他 | status=clarification | 订单A-00001和订单B-00002材料对比,有哪些材料不一致? | clarification
+- Q0002 | 其他 | status=clarification | 订单00001的玻璃、间隙贴膜,焊带、汇流条、接线盒的规格描述? | clarification
+- Q0003 | 其他 | status=clarification | 查找订单00001/00002/00003/00004/00005这几个订单的玻璃、间隙贴膜,焊带、汇流条、接线盒的规格描述并生成表格? | clarification
+- Q0005 | 其他 | status=clarification | 订单00067和订单00106玻璃、间隙贴膜,焊带、汇流条、接线盒的规格描述有什么不一样,并用表格统计出来 | clarification
+- Q0009 | 其他 | status=clarification | NT12R/66GDF(法国Synapsun-2026-00114)和NT12R/66GDF(法国Synapsun-2026-00114)订单的玻璃,焊带,汇流条,间隙贴膜线盒的规格对比 | clarification
+- Q0011 | 其他 | status=clarification | 针对现有的订单把玻璃,焊带,汇流条,间隙贴膜线盒的规格并用表格的形式呈现 | clarification
+- Q0075 | 其他 | status=clarification | 最近物流成本是不是变高了? | clarification
+- Q0076 | 其他 | status=clarification | 帮我看看华东发运有没有异常。 | clarification
+- Q0078 | 其他 | status=clarification | 把最近几个特殊订单列出来。 | clarification
+- Q0079 | 件数 | status=clarification | 2024年华东区域通过公路发运的总件数是多少? | clarification
+- Q0089 | 费用 | status=clarification | 2024年长距离订单(路程≥1500KM)中,不同物流公司的平均总费用排名如何? | clarification
+- Q0091 | 件数 | status=clarification | 2025年实际发运件数超计划比例最高的前10条记录是什么? | clarification
+- Q0092 | 车次/车辆 | status=clarification | 哪些记录出现“每车装在托数偏高但车辆数很少”的装载异常? | clarification
+- Q0102 | 其他 | status=clarification | 2026年是否存在同一身份证号关联多个手机号的司机记录? | clarification
+- Q0103 | 其他 | status=clarification | 2026年是否存在同一手机号关联多个司机姓名的情况? | clarification
+- Q0741 | 运量/MW | status=clarification | 2026年辅料送样总发运量是多少? | clarification
+- Q0743 | 运量/MW | status=clarification | 2026年经营计划总发运量是多少? | clarification
+- Q0745 | 运量/MW | status=clarification | 2026年刘娟用车总发运量是多少? | clarification
+- Q0751 | 运量/MW | status=clarification | 请按月份把2023年至2025年的平均元/瓦做成对比表，并标出每年最高和最低月份？ | clarification
+- Q0763 | 车次/车辆 | status=clarification | 请把2023年至2025年各年度的前十大收货城市列成排行榜，并同时展示车次和平均单价/车？ | clarification
+- Q0768 | 运量/MW | status=clarification | 请把2023年各城市的发运件数、发运瓦数、总费用做成城市明细排行榜，取前20名？ | clarification
+- Q0772 | 件数 | status=clarification | 请按2023年各区域统计计划发运件数、实际发运件数、缺口件数和达标率，并按缺口件数降序展示？ | clarification
+- Q0773 | 均值/单价 | status=clarification | 请把2023年各区域的平均路程、最长路程、最短路程做成距离分布表？ | clarification
+- Q0778 | 运量/MW | status=clarification | 请把2024年各城市的发运件数、发运瓦数、总费用做成城市明细排行榜，取前20名？ | clarification
+- Q0782 | 件数 | status=clarification | 请按2024年各区域统计计划发运件数、实际发运件数、缺口件数和达标率，并按缺口件数降序展示？ | clarification
+- Q0783 | 均值/单价 | status=clarification | 请把2024年各区域的平均路程、最长路程、最短路程做成距离分布表？ | clarification
+- Q0788 | 运量/MW | status=clarification | 请把2025年各城市的发运件数、发运瓦数、总费用做成城市明细排行榜，取前20名？ | clarification
+- Q0792 | 件数 | status=clarification | 请按2025年各区域统计计划发运件数、实际发运件数、缺口件数和达标率，并按缺口件数降序展示？ | clarification
+- Q0793 | 均值/单价 | status=clarification | 请把2025年各区域的平均路程、最长路程、最短路程做成距离分布表？ | clarification
+- Q1037 | 运量/MW | status=clarification | 请统计南京创维光伏科技有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1043 | 运量/MW | status=clarification | 请统计电能易购（北京）科技有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1049 | 运量/MW | status=clarification | 请统计浙江杭泰数智能源开发有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1055 | 运量/MW | status=clarification | 请统计苏州中来民生能源有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1061 | 运量/MW | status=clarification | 请统计华润新能源（皮山）有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1067 | 运量/MW | status=clarification | 请统计中国建筑第二工程局有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1073 | 运量/MW | status=clarification | 请统计毕节七星关乌江水电新能源有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1079 | 运量/MW | status=clarification | 请统计华阳集团（阳泉）新能源销售有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1085 | 运量/MW | status=clarification | 请统计江苏苏美达电力运营有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1091 | 运量/MW | status=clarification | 请统计广东粤电阳西新能源有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1097 | 运量/MW | status=clarification | 请统计国科新能源有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1103 | 运量/MW | status=clarification | 请统计福建永福绿能设备有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1109 | 运量/MW | status=clarification | 请统计北京迪信通商贸股份有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1115 | 运量/MW | status=clarification | 请统计滁州创维光伏科技有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1121 | 运量/MW | status=clarification | 请统计浙江协鑫鑫宏电力工程有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1127 | 运量/MW | status=clarification | 请统计福建协鑫鑫科建设工程有限公司按月份拆分的发运量和总费用，并生成月度汇总表？ | clarification
+- Q1133 | 其他 | status=clarification | 请统计2023年各客户使用的物流公司数量，并找出使用物流公司最多的前20个客户？ | clarification
+- Q1135 | 费用 | status=clarification | 请统计2023年同一合同编号对应多个目的城市的记录，并列出合同编号、城市数、总费用？ | clarification
+- Q1136 | 费用 | status=clarification | 请统计2023年同一询比价编号对应多个物流公司的记录，并列出询比价编号、物流公司数、总费用？ | clarification
+- Q1138 | 其他 | status=clarification | 请统计2024年各客户使用的物流公司数量，并找出使用物流公司最多的前20个客户？ | clarification
+- Q1140 | 费用 | status=clarification | 请统计2024年同一合同编号对应多个目的城市的记录，并列出合同编号、城市数、总费用？ | clarification
+- Q1141 | 费用 | status=clarification | 请统计2024年同一询比价编号对应多个物流公司的记录，并列出询比价编号、物流公司数、总费用？ | clarification
+- Q1143 | 其他 | status=clarification | 请统计2025年各客户使用的物流公司数量，并找出使用物流公司最多的前20个客户？ | clarification
+- Q1145 | 费用 | status=clarification | 请统计2025年同一合同编号对应多个目的城市的记录，并列出合同编号、城市数、总费用？ | clarification
+- Q1146 | 费用 | status=clarification | 请统计2025年同一询比价编号对应多个物流公司的记录，并列出询比价编号、物流公司数、总费用？ | clarification
+- Q1148 | 运量/MW | status=clarification | 请统计545W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1149 | 运量/MW | status=clarification | 请统计545W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1151 | 运量/MW | status=clarification | 请统计550W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1152 | 运量/MW | status=clarification | 请统计550W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1154 | 运量/MW | status=clarification | 请统计575W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1155 | 运量/MW | status=clarification | 请统计575W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1157 | 运量/MW | status=clarification | 请统计580W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1158 | 运量/MW | status=clarification | 请统计580W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1160 | 运量/MW | status=clarification | 请统计585W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1161 | 运量/MW | status=clarification | 请统计585W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1163 | 运量/MW | status=clarification | 请统计590W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1164 | 运量/MW | status=clarification | 请统计590W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1166 | 运量/MW | status=clarification | 请统计620W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1167 | 运量/MW | status=clarification | 请统计620W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1169 | 运量/MW | status=clarification | 请统计625W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1170 | 运量/MW | status=clarification | 请统计625W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1172 | 运量/MW | status=clarification | 请统计640W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1173 | 运量/MW | status=clarification | 请统计640W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1175 | 运量/MW | status=clarification | 请统计660W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1176 | 运量/MW | status=clarification | 请统计660W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1178 | 运量/MW | status=clarification | 请统计665W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1179 | 运量/MW | status=clarification | 请统计665W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1181 | 运量/MW | status=clarification | 请统计710W功率产品按区域拆分的发运量和总费用，并按发运量降序展示？ | clarification
+- Q1182 | 运量/MW | status=clarification | 请统计710W功率产品按物流公司拆分的承运量、费用和平均元/瓦？ | clarification
+- Q1215 | 车次/车辆 | status=clarification | 请统计17.5车型各物流公司的承运车次、平均单车费用和最高单车费用？ | clarification
+- Q1219 | 车次/车辆 | status=clarification | 请统计13车型各物流公司的承运车次、平均单车费用和最高单车费用？ | clarification
+- Q1223 | 车次/车辆 | status=clarification | 请统计9.6车型各物流公司的承运车次、平均单车费用和最高单车费用？ | clarification
+- Q1227 | 车次/车辆 | status=clarification | 请统计6.8车型各物流公司的承运车次、平均单车费用和最高单车费用？ | clarification
+- Q1231 | 车次/车辆 | status=clarification | 请统计4.2车型各物流公司的承运车次、平均单车费用和最高单车费用？ | clarification
+- Q1235 | 车次/车辆 | status=clarification | 请统计依维柯车型各物流公司的承运车次、平均单车费用和最高单车费用？ | clarification
+- Q1291 | 其他 | status=clarification | 请按2026年收货省份统计任务数、产品数量、装车数、涉及项目数，并按任务数降序展示？ | clarification
+- Q1292 | 均值/单价 | status=clarification | 请按2026年收货城市统计任务数、平均送达距离、最大送达距离、涉及物流公司数，并取前30名？ | clarification
+- Q1294 | 其他 | status=clarification | 请按2026年采购类型统计任务数、产品数量、装车数、涉及项目数，并区分招标和询比价？ | clarification
+- Q1297 | 其他 | status=clarification | 请统计2026年每个收货省份对应的项目数量和物流公司数量，形成省份覆盖表？ | clarification
+- Q1329 | 其他 | status=clarification | 请检查2026年同一手机号对应多个司机姓名的情况，并输出手机号、司机姓名列表和任务数？ | clarification
+- Q1330 | 其他 | status=clarification | 请检查2026年同一身份证号对应多个手机号的情况，并输出身份证号、手机号列表和任务数？ | clarification
+- Q1345 | 运量/MW | status=clarification | 请输出一张明细加汇总的表格，先列出发运明细，再在末尾合计发运件数、发运瓦数和总费用？ | clarification
+- Q1346 | 运量/MW | status=clarification | 请输出一张分层汇总表，第一层是年份，第二层是区域，第三层是物流公司，指标为发运量和总费用？ | clarification

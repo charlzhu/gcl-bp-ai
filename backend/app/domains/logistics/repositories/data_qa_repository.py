@@ -1510,14 +1510,16 @@ class LogisticsDataQaRepository:
     def hist_origin_vehicle_breakdown_summary(
         self,
         *,
-        year: int,
+        year: int | None = None,
+        years: list[int] | None = None,
         origin_place: str | None = None,
         include_origin_dimension: bool = False,
     ) -> list[dict[str, Any]]:
         """按始发地和车型汇总历史车次、费用和平均单车费用。
 
         参数：
-            year: 历史台账年份，仅支持 2023–2025。
+            year: 历史台账年份，仅支持 2023–2025；为空时按 years 多年范围过滤。
+            years: 多年历史台账范围，当前用于无时间条件但字段仅存在历史台账的装载托数类问题。
             origin_place: 已校验的始发地；为空时不下推过滤。
             include_origin_dimension: 为空始发地时是否保留“始发地”分组列。
         返回值：
@@ -1529,8 +1531,21 @@ class LogisticsDataQaRepository:
             3. 当问题中的始发地无法在别名表安全校验时，不编造过滤条件，改为展示真实源数据里的始发地分组。
         """
 
-        filters = ["biz_year = :year"]
-        params: dict[str, Any] = {"year": year}
+        filters = []
+        params: dict[str, Any] = {}
+        if year is not None:
+            filters.append("biz_year = :year")
+            params["year"] = year
+        else:
+            scoped_years = [int(item) for item in (years or [2023, 2024, 2025]) if int(item) in {2023, 2024, 2025}]
+            if not scoped_years:
+                scoped_years = [2023, 2024, 2025]
+            year_placeholders: list[str] = []
+            for index, scoped_year in enumerate(scoped_years):
+                key = f"year_{index}"
+                year_placeholders.append(f":{key}")
+                params[key] = scoped_year
+            filters.append(f"biz_year IN ({', '.join(year_placeholders)})")
         if origin_place:
             filters.append("origin_place = :origin_place")
             params["origin_place"] = origin_place
@@ -1545,8 +1560,12 @@ class LogisticsDataQaRepository:
                 SELECT
                     {select_dimensions},
                     ROUND(SUM(COALESCE(shipment_trip_count, 0)), 0) AS shipment_trip_count,
+                    ROUND(SUM(COALESCE(actual_qty, 0)), 0) AS shipment_count,
                     ROUND(SUM(COALESCE(total_fee, 0)), 2) AS total_fee,
                     ROUND(SUM(COALESCE(total_fee, 0)) / NULLIF(SUM(COALESCE(shipment_trip_count, 0)), 0), 2) AS avg_fee_per_trip,
+                    ROUND(AVG(CASE WHEN pallet_per_vehicle IS NOT NULL THEN pallet_per_vehicle END), 2) AS avg_pallet_per_vehicle,
+                    COUNT(pallet_per_vehicle) AS valid_pallet_record_count,
+                    COUNT(*) - COUNT(pallet_per_vehicle) AS missing_pallet_record_count,
                     COUNT(*) AS row_count
                 FROM dwd_logistics_hist_shipment_detail
                 WHERE {" AND ".join(filters)}
@@ -1842,6 +1861,44 @@ class LogisticsDataQaRepository:
             "items": [dict(row) for row in rows],
         }
 
+    def hist_avg_pallet_per_vehicle(
+        self,
+        *,
+        year: int,
+        months: list[int],
+        origin_place: str,
+    ) -> dict[str, Any]:
+        """历史平均每车装载托数。
+
+        参数：
+            year: 历史台账年份。
+            months: 月份列表；当前由 planner 保证非空。
+            origin_place: 始发地，例如合肥、阜宁。
+        返回值：
+            包含平均托数、有效记录数和总记录数的字典。
+        业务逻辑：
+            pallet_per_vehicle 是原始历史台账中的“每车装载托数”字段；
+            默认只对非空记录求平均，并额外返回空值数量用于答案质量提示。
+        """
+        month_placeholders = ", ".join(str(int(month)) for month in months)
+        row = self.db.execute(
+            text(
+                f"""
+                SELECT
+                    ROUND(AVG(pallet_per_vehicle), 2) AS avg_pallet_per_vehicle,
+                    COUNT(pallet_per_vehicle) AS valid_record_count,
+                    COUNT(*) AS total_record_count,
+                    SUM(CASE WHEN pallet_per_vehicle IS NULL THEN 1 ELSE 0 END) AS missing_record_count
+                FROM dwd_logistics_hist_shipment_detail
+                WHERE biz_year = :year
+                  AND CAST(SUBSTRING(biz_month, 6, 2) AS UNSIGNED) IN ({month_placeholders})
+                  AND origin_place = :origin_place
+                """
+            ),
+            {"year": year, "origin_place": origin_place},
+        ).mappings().first()
+        return dict(row or {})
+
     def hist_vehicle_type_trip_count(self, *, year: int, vehicle_type: str, origin_place: str | None = None) -> dict[str, Any]:
         """历史按车型查询总车次。
 
@@ -1961,6 +2018,7 @@ class LogisticsDataQaRepository:
         transport_mode: str | None = None,
         base_code: str | None = None,
         region_name: str | None = None,
+        special_scope: str | None = None,
         monthly_breakdown: bool = False,
     ) -> dict[str, Any]:
         """2026 系统发运量 MW 与车次。
@@ -1979,6 +2037,8 @@ class LogisticsDataQaRepository:
         base_filter_plain_sql = ""
         region_filter_sql = ""
         region_filter_plain_sql = ""
+        special_filter_sql = ""
+        special_filter_plain_sql = ""
         if months:
             month_placeholders = ", ".join(str(int(month)) for month in months)
             month_filter_sql = f" AND MONTH({self.PICKUP_DATE_SQL}) IN ({month_placeholders})"
@@ -1995,6 +2055,16 @@ class LogisticsDataQaRepository:
             region_filter_sql = f" AND COALESCE(st.normalized_region_name, {self.REGION_CASE_SQL}) = :region_name"
             region_filter_plain_sql = " AND normalized_region_name = :region_name"
             params["region_name"] = region_name
+        if special_scope:
+            # 特殊业务范围复用系统总运费已锁定过滤条件；同时生成带 st 前缀和纯任务表两套 SQL，
+            # 保证 power、车次、任务数和 pickup_date 质量提示使用完全一致的数据范围。
+            special_field_sql = {
+                "planning": "expand_dept IN ('经营计划', '经营计划部')",
+                "sample": "ship_type = '2'",
+                "liujuan": "entrusted_person = '刘娟'",
+            }[special_scope]
+            special_filter_plain_sql = f" AND {special_field_sql}"
+            special_filter_sql = f" AND st.{special_field_sql}"
         power_missing_count = self.db.execute(
             text(
                 f"""
@@ -2007,6 +2077,7 @@ class LogisticsDataQaRepository:
                   {transport_filter_sql}
                   {base_filter_sql}
                   {region_filter_sql}
+                  {special_filter_sql}
                   AND sp.power IS NULL
                 """
             ),
@@ -2021,6 +2092,7 @@ class LogisticsDataQaRepository:
                   AND pickup_date IS NULL
                   {base_filter_plain_sql}
                   {region_filter_plain_sql}
+                  {special_filter_plain_sql}
                 """
             ),
             params,
@@ -2037,6 +2109,7 @@ class LogisticsDataQaRepository:
                   {transport_filter_sql}
                   {base_filter_sql}
                   {region_filter_sql}
+                  {special_filter_sql}
                   AND sp.power IS NOT NULL
                 """
             ),
@@ -2054,6 +2127,7 @@ class LogisticsDataQaRepository:
                   {transport_filter_sql}
                   {base_filter_sql}
                   {region_filter_sql}
+                  {special_filter_sql}
                   AND at.status IN ('ENTER', 'LEAVE')
                 """
             ),
@@ -2073,6 +2147,7 @@ class LogisticsDataQaRepository:
                   {transport_filter_sql}
                   {base_filter_sql}
                   {region_filter_sql}
+                  {special_filter_sql}
                 """
             ),
             params,
@@ -2088,6 +2163,7 @@ class LogisticsDataQaRepository:
                   {transport_filter_sql}
                   {base_filter_sql}
                   {region_filter_sql}
+                  {special_filter_sql}
                 """
             ),
             params,
@@ -2100,6 +2176,7 @@ class LogisticsDataQaRepository:
                 WHERE biz_year = :year
                   {base_filter_plain_sql}
                   {region_filter_plain_sql}
+                  {special_filter_plain_sql}
                 """
             ),
             params,
@@ -2113,6 +2190,7 @@ class LogisticsDataQaRepository:
                   AND pickup_date IS NOT NULL
                   {base_filter_plain_sql}
                   {region_filter_plain_sql}
+                  {special_filter_plain_sql}
                 """
             ),
             params,
@@ -2128,6 +2206,7 @@ class LogisticsDataQaRepository:
                 WHERE biz_year = :year
                   {base_filter_plain_sql}
                   {region_filter_plain_sql}
+                  {special_filter_plain_sql}
                 """
             ),
             params,
@@ -2148,6 +2227,7 @@ class LogisticsDataQaRepository:
                       {transport_filter_sql}
                       {base_filter_sql}
                   {region_filter_sql}
+                  {special_filter_sql}
                       AND sp.power IS NOT NULL
                     GROUP BY DATE_FORMAT({self.PICKUP_DATE_SQL}, '%Y-%m')
                     ORDER BY biz_month
@@ -2169,6 +2249,7 @@ class LogisticsDataQaRepository:
                       {transport_filter_sql}
                       {base_filter_sql}
                   {region_filter_sql}
+                  {special_filter_sql}
                       AND at.status IN ('ENTER', 'LEAVE')
                     GROUP BY DATE_FORMAT({self.PICKUP_DATE_SQL}, '%Y-%m')
                     ORDER BY biz_month
@@ -2730,6 +2811,92 @@ class LogisticsDataQaRepository:
             {"year": year, "limit_value": top_n},
         ).mappings().all()
         return [dict(row) for row in rows]
+
+    def sys_driver_phone_name_consistency(self, *, year: int, top_n: int = 50) -> dict[str, Any]:
+        """检查同一手机号关联多个司机姓名的派车数据。
+
+        参数：
+            year: 系统侧年份，当前用于 2026 正式系统数据。
+            top_n: 返回异常手机号明细上限。
+        返回值：
+            包含异常组数量、异常任务数和明细行的字典。
+        业务逻辑：
+            按 driver_phone 分组，统计 distinct driver_name；姓名数大于 1 视为一号多人。
+            空手机号或空司机姓名不参与一致性判断，避免把缺失值误判为异常。
+        """
+
+        rows = self.db.execute(
+            text(
+                """
+                SELECT
+                    driver_phone,
+                    GROUP_CONCAT(DISTINCT driver_name ORDER BY driver_name SEPARATOR '、') AS driver_names,
+                    COUNT(DISTINCT driver_name) AS driver_name_count,
+                    COUNT(*) AS assign_task_count,
+                    COUNT(DISTINCT task_id) AS distinct_task_count
+                FROM dwd_logistics_assign_task
+                WHERE YEAR(created_at) = :year
+                  AND driver_phone IS NOT NULL
+                  AND TRIM(driver_phone) <> ''
+                  AND driver_name IS NOT NULL
+                  AND TRIM(driver_name) <> ''
+                GROUP BY driver_phone
+                HAVING COUNT(DISTINCT driver_name) > 1
+                ORDER BY assign_task_count DESC, driver_phone ASC
+                LIMIT :limit_value
+                """
+            ),
+            {"year": year, "limit_value": top_n},
+        ).mappings().all()
+        items = [dict(row) for row in rows]
+        return {
+            "abnormal_group_count": len(items),
+            "abnormal_task_count": sum(int(item.get("assign_task_count") or 0) for item in items),
+            "items": items,
+        }
+
+    def sys_driver_id_phone_consistency(self, *, year: int, top_n: int = 50) -> dict[str, Any]:
+        """检查同一身份证号关联多个手机号的派车数据。
+
+        参数：
+            year: 系统侧年份，当前用于 2026 正式系统数据。
+            top_n: 返回异常身份证号明细上限。
+        返回值：
+            包含异常组数量、异常任务数和明细行的字典。
+        业务逻辑：
+            按 driver_id_number 分组，统计 distinct driver_phone；手机号数大于 1 视为一人多号。
+            空身份证号或空手机号不参与一致性判断，避免缺失值污染异常结果。
+        """
+
+        rows = self.db.execute(
+            text(
+                """
+                SELECT
+                    driver_id_number,
+                    GROUP_CONCAT(DISTINCT driver_phone ORDER BY driver_phone SEPARATOR '、') AS driver_phones,
+                    COUNT(DISTINCT driver_phone) AS driver_phone_count,
+                    COUNT(*) AS assign_task_count,
+                    COUNT(DISTINCT task_id) AS distinct_task_count
+                FROM dwd_logistics_assign_task
+                WHERE YEAR(created_at) = :year
+                  AND driver_id_number IS NOT NULL
+                  AND TRIM(driver_id_number) <> ''
+                  AND driver_phone IS NOT NULL
+                  AND TRIM(driver_phone) <> ''
+                GROUP BY driver_id_number
+                HAVING COUNT(DISTINCT driver_phone) > 1
+                ORDER BY assign_task_count DESC, driver_id_number ASC
+                LIMIT :limit_value
+                """
+            ),
+            {"year": year, "limit_value": top_n},
+        ).mappings().all()
+        items = [dict(row) for row in rows]
+        return {
+            "abnormal_group_count": len(items),
+            "abnormal_task_count": sum(int(item.get("assign_task_count") or 0) for item in items),
+            "items": items,
+        }
 
     def sys_delivery_note_parse_status_distribution(self, *, year: int) -> dict[str, Any]:
         """2026 派车任务回单解析状态分布。"""

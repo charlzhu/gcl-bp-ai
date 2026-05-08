@@ -1,0 +1,229 @@
+## agent/TASK-frontend-ui-assistant-polish
+D  ai/company/CEO_GOALS.md
+D  ai/company/COMPANY_RULES.md
+D  ai/company/DELIVERY_STANDARD.md
+D  ai/company/RISK_CONTROL.md
+A  ai/company/roles/technical_manager.md
+D  ai/context/BUSINESS_RULES.md
+D  ai/context/CURRENT_STATUS.md
+D  ai/context/KNOWN_ISSUES.md
+D  ai/context/PROJECT_CONTEXT.md
+D  ai/context/TECH_ARCH.md
+A  ai/hermes_skills/company-code-builder/SKILL.md
+A  "ai/inbox/attachments/\347\211\251\346\265\201\345\222\214 bom\346\240\267\344\276\213\351\242\230.docx"
+AM ai/inbox/attachments_manifest.md
+MM ai/inbox/requirement.md
+D  ai/memory/CHANGELOG_AI.md
+D  ai/memory/DECISIONS.md
+D  ai/memory/LESSONS_LEARNED.md
+A  ai/protocols/company_task_protocol.md
+D  ai/reports/.gitignore
+D  ai/reports/README.md
+D  ai/roles/CODEX_BACKEND.md
+D  ai/roles/CODEX_DOCS.md
+D  ai/roles/CODEX_FRONTEND.md
+D  ai/roles/CODEX_FULLSTACK.md
+D  ai/roles/CODEX_REVIEWER.md
+D  ai/roles/CODEX_REWORKER.md
+D  ai/roles/CODEX_TESTER.md
+D  ai/roles/HERMES_CTO.md
+D  ai/scripts/acceptance_judge.py
+A  ai/scripts/attachment_manager.py
+D  ai/scripts/build_rework_task.py
+A  ai/scripts/codex_runner.py
+M  ai/scripts/collect_diff.sh
+A  ai/scripts/company_orchestrator.py
+A  ai/scripts/event_bus.py
+D  ai/scripts/hermes_orchestrator.py
+A  ai/scripts/quality_review.py
+A  ai/scripts/report_builder.py
+D  ai/scripts/run_codex_worker.sh
+M  ai/scripts/run_tests.sh
+M  ai/scripts/safety_check.sh
+D  ai/scripts/select_test_profile.py
+A  ai/scripts/task_state.py
+D  ai/tasks/done/.gitkeep
+D  ai/tasks/pending/.gitkeep
+D  ai/tasks/rejected/.gitkeep
+D  ai/tasks/running/.gitkeep
+A  ai/technical_manager.md
+ M backend/app/domains/logistics/repositories/data_qa_repository.py
+ M backend/app/domains/logistics/schemas/data_qa.py
+ M backend/app/domains/logistics/services/data_qa_planner.py
+ M backend/app/domains/logistics/services/data_qa_service.py
+ M backend/app/domains/logistics/services/llm_answer_presentation_service.py
+ M backend/app/domains/logistics/services/slot_extractor.py
+ M docs/LOGISTICS_DATA_QA_REAL_E2E_ACCEPTANCE.md
+ M docs/LOGISTICS_DATA_QA_UI_UPGRADE.md
+R  docs/FRONTEND_V2_1_REGRESSION_CHECKLIST.md -> docs/archive/frontend-v2/FRONTEND_V2_1_REGRESSION_CHECKLIST.md
+R  docs/FRONTEND_V2_ACCEPTANCE_CHECKLIST.md -> docs/archive/frontend-v2/FRONTEND_V2_ACCEPTANCE_CHECKLIST.md
+R  docs/FRONTEND_V2_DELIVERY_SUMMARY.md -> docs/archive/frontend-v2/FRONTEND_V2_DELIVERY_SUMMARY.md
+R  docs/FRONTEND_V2_NEXT_STAGE_CANDIDATES.md -> docs/archive/frontend-v2/FRONTEND_V2_NEXT_STAGE_CANDIDATES.md
+R  docs/LOGISTICS_903_ACCEPTANCE_REPORT.md -> docs/archive/logistics-903/LOGISTICS_903_ACCEPTANCE_REPORT.md
+R  docs/LOGISTICS_903_A_PRECISE_ACCEPTANCE_BATCH4.md -> docs/archive/logistics-903/LOGISTICS_903_A_PRECISE_ACCEPTANCE_BATCH4.md
+R  docs/LOGISTICS_903_A_PRECISE_WAVE3_BATCH1.md -> docs/archive/logistics-903/LOGISTICS_903_A_PRECISE_WAVE3_BATCH1.md
+R  docs/LOGISTICS_903_A_PRECISE_WAVE4_BATCH2.md -> docs/archive/logistics-903/LOGISTICS_903_A_PRECISE_WAVE4_BATCH2.md
+R  docs/LOGISTICS_903_A_PRECISE_WAVE5_BATCH3.md -> docs/archive/logistics-903/LOGISTICS_903_A_PRECISE_WAVE5_BATCH3.md
+R  docs/LOGISTICS_903_B2A_A_REGRESSION.md -> docs/archive/logistics-903/LOGISTICS_903_B2A_A_REGRESSION.md
+R  docs/LOGISTICS_903_B2A_MIGRATION_UPDATE.md -> docs/archive/logistics-903/LOGISTICS_903_B2A_MIGRATION_UPDATE.md
+R  docs/LOGISTICS_903_B_BUSINESS_CONFIRMATION_PACKAGE_V3.md -> docs/archive/logistics-903/LOGISTICS_903_B_BUSINESS_CONFIRMATION_PACKAGE_V3.md
+R  docs/LOGISTICS_903_B_BUSINESS_CONFIRMATION_SHORTLIST_V3.md -> docs/archive/logistics-903/LOGISTICS_903_B_BUSINESS_CONFIRMATION_SHORTLIST_V3.md
+R  docs/LOGISTICS_903_B_FOLLOWUP_CLOSURE.md -> docs/archive/logistics-903/LOGISTICS_903_B_FOLLOWUP_CLOSURE.md
+R  docs/LOGISTICS_903_B_GAP_CAPABILITY_ROADMAP.md -> docs/archive/logistics-903/LOGISTICS_903_B_GAP_CAPABILITY_ROADMAP.md
+R  docs/LOGISTICS_903_B_GAP_WAVE1.md -> docs/archive/logistics-903/LOGISTICS_903_B_GAP_WAVE1.md
+R  docs/LOGISTICS_903_B_GAP_WAVE1_A_REGRESSION.md -> docs/archive/logistics-903/LOGISTICS_903_B_GAP_WAVE1_A_REGRESSION.md
+R  docs/LOGISTICS_903_B_GAP_WAVE2.md -> docs/archive/logistics-903/LOGISTICS_903_B_GAP_WAVE2.md
+R  docs/LOGISTICS_903_B_GAP_WAVE2_A_REGRESSION.md -> docs/archive/logistics-903/LOGISTICS_903_B_GAP_WAVE2_A_REGRESSION.md
+R  docs/LOGISTICS_903_B_GAP_WAVE3.md -> docs/archive/logistics-903/LOGISTICS_903_B_GAP_WAVE3.md
+R  docs/LOGISTICS_903_B_GAP_WAVE3_A_REGRESSION.md -> docs/archive/logistics-903/LOGISTICS_903_B_GAP_WAVE3_A_REGRESSION.md
+R  docs/LOGISTICS_903_B_GAP_WAVE4.md -> docs/archive/logistics-903/LOGISTICS_903_B_GAP_WAVE4.md
+R  docs/LOGISTICS_903_B_GAP_WAVE4_A_REGRESSION.md -> docs/archive/logistics-903/LOGISTICS_903_B_GAP_WAVE4_A_REGRESSION.md
+R  docs/LOGISTICS_903_B_MIGRATION_GAP_REVIEW.md -> docs/archive/logistics-903/LOGISTICS_903_B_MIGRATION_GAP_REVIEW.md
+R  docs/LOGISTICS_903_B_WAVE2_SECONDARY_REVIEW.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE2_SECONDARY_REVIEW.md
+R  docs/LOGISTICS_903_B_WAVE3_BUSINESS_CONFIRMATION_MATRIX.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE3_BUSINESS_CONFIRMATION_MATRIX.md
+R  docs/LOGISTICS_903_B_WAVE3_FOLLOWUP_CLOSURE_REGRESSION.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE3_FOLLOWUP_CLOSURE_REGRESSION.md
+R  docs/LOGISTICS_903_B_WAVE3_SECONDARY_REVIEW.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE3_SECONDARY_REVIEW.md
+R  docs/LOGISTICS_903_B_WAVE3_UNCLOSED_ATTRIBUTION.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE3_UNCLOSED_ATTRIBUTION.md
+R  docs/LOGISTICS_903_B_WAVE4_BUSINESS_CONFIRMATION_PACKAGE.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE4_BUSINESS_CONFIRMATION_PACKAGE.md
+R  docs/LOGISTICS_903_B_WAVE4_BUSINESS_CONFIRMATION_SHORTLIST.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE4_BUSINESS_CONFIRMATION_SHORTLIST.md
+R  docs/LOGISTICS_903_B_WAVE4_FINAL_CLASSIFICATION.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE4_FINAL_CLASSIFICATION.md
+R  docs/LOGISTICS_903_B_WAVE4_FOLLOWUP_CLOSURE.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE4_FOLLOWUP_CLOSURE.md
+R  docs/LOGISTICS_903_B_WAVE5_BUSINESS_CONFIRMATION_PACKAGE_V2.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE5_BUSINESS_CONFIRMATION_PACKAGE_V2.md
+R  docs/LOGISTICS_903_B_WAVE5_BUSINESS_CONFIRMATION_SHORTLIST_V2.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE5_BUSINESS_CONFIRMATION_SHORTLIST_V2.md
+R  docs/LOGISTICS_903_B_WAVE5_CLARIFICATION_QUALITY.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE5_CLARIFICATION_QUALITY.md
+R  docs/LOGISTICS_903_B_WAVE5_EXECUTABLE_REVIEW.md -> docs/archive/logistics-903/LOGISTICS_903_B_WAVE5_EXECUTABLE_REVIEW.md
+R  docs/LOGISTICS_903_CLOSURE_MASTER_LEDGER.md -> docs/archive/logistics-903/LOGISTICS_903_CLOSURE_MASTER_LEDGER.md
+R  docs/LOGISTICS_903_C_UNSUPPORTED_DELIVERY_PACKAGE.md -> docs/archive/logistics-903/LOGISTICS_903_C_UNSUPPORTED_DELIVERY_PACKAGE.md
+R  docs/LOGISTICS_903_C_UNSUPPORTED_EXPLANATION_WAVE2.md -> docs/archive/logistics-903/LOGISTICS_903_C_UNSUPPORTED_EXPLANATION_WAVE2.md
+R  docs/LOGISTICS_903_C_UNSUPPORTED_EXPLANATION_WAVE3.md -> docs/archive/logistics-903/LOGISTICS_903_C_UNSUPPORTED_EXPLANATION_WAVE3.md
+R  docs/LOGISTICS_903_C_UNSUPPORTED_EXPLANATION_WAVE4.md -> docs/archive/logistics-903/LOGISTICS_903_C_UNSUPPORTED_EXPLANATION_WAVE4.md
+R  docs/LOGISTICS_903_C_UNSUPPORTED_EXPLANATION_WAVE5.md -> docs/archive/logistics-903/LOGISTICS_903_C_UNSUPPORTED_EXPLANATION_WAVE5.md
+R  docs/LOGISTICS_903_DELIVERY_CHECKLIST.md -> docs/archive/logistics-903/LOGISTICS_903_DELIVERY_CHECKLIST.md
+R  docs/LOGISTICS_903_DEMO_SCRIPT.md -> docs/archive/logistics-903/LOGISTICS_903_DEMO_SCRIPT.md
+R  docs/LOGISTICS_903_FULL_CLOSURE_EVALUATION.md -> docs/archive/logistics-903/LOGISTICS_903_FULL_CLOSURE_EVALUATION.md
+R  docs/LOGISTICS_903_LEADER_BRIEFING.md -> docs/archive/logistics-903/LOGISTICS_903_LEADER_BRIEFING.md
+R  docs/LOGISTICS_903_SEMANTIC_CLOSURE_EVAL.md -> docs/archive/logistics-903/LOGISTICS_903_SEMANTIC_CLOSURE_EVAL.md
+R  docs/LOGISTICS_903_SEMANTIC_CLOSURE_FULL.md -> docs/archive/logistics-903/LOGISTICS_903_SEMANTIC_CLOSURE_FULL.md
+R  docs/LOGISTICS_903_TRIAL_FEEDBACK_TEMPLATE.md -> docs/archive/logistics-903/LOGISTICS_903_TRIAL_FEEDBACK_TEMPLATE.md
+R  docs/LOGISTICS_903_TRIAL_RUN_PLAN.md -> docs/archive/logistics-903/LOGISTICS_903_TRIAL_RUN_PLAN.md
+R  docs/LOGISTICS_903_USER_ACCEPTANCE_SAMPLES.md -> docs/archive/logistics-903/LOGISTICS_903_USER_ACCEPTANCE_SAMPLES.md
+R  docs/LOGISTICS_A_STABILITY_ROUND1.md -> docs/archive/logistics-abc-migration/LOGISTICS_A_STABILITY_ROUND1.md
+R  docs/LOGISTICS_A_STABILITY_ROUND2.md -> docs/archive/logistics-abc-migration/LOGISTICS_A_STABILITY_ROUND2.md
+R  docs/LOGISTICS_A_STABILITY_ROUND3.md -> docs/archive/logistics-abc-migration/LOGISTICS_A_STABILITY_ROUND3.md
+R  docs/LOGISTICS_B2A_P1_PRECISE_REGRESSION.md -> docs/archive/logistics-abc-migration/LOGISTICS_B2A_P1_PRECISE_REGRESSION.md
+R  docs/LOGISTICS_B2A_P2_PRECISE_REGRESSION.md -> docs/archive/logistics-abc-migration/LOGISTICS_B2A_P2_PRECISE_REGRESSION.md
+R  docs/LOGISTICS_B2A_P3_PRECISE_REGRESSION.md -> docs/archive/logistics-abc-migration/LOGISTICS_B2A_P3_PRECISE_REGRESSION.md
+R  docs/LOGISTICS_B_CANDIDATE_CLARIFICATION_REVIEW_PLAN.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_CANDIDATE_CLARIFICATION_REVIEW_PLAN.md
+R  docs/LOGISTICS_B_CANDIDATE_REVIEW_ROUND1.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_CANDIDATE_REVIEW_ROUND1.md
+R  docs/LOGISTICS_B_CANDIDATE_REVIEW_ROUND2.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_CANDIDATE_REVIEW_ROUND2.md
+R  docs/LOGISTICS_B_CANDIDATE_REVIEW_ROUND3.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_CANDIDATE_REVIEW_ROUND3.md
+R  docs/LOGISTICS_B_CANDIDATE_REVIEW_ROUND4.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_CANDIDATE_REVIEW_ROUND4.md
+R  docs/LOGISTICS_B_LONG_CLARIFICATION_ROUND1.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_LONG_CLARIFICATION_ROUND1.md
+R  docs/LOGISTICS_B_LONG_CLARIFICATION_ROUND2.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_LONG_CLARIFICATION_ROUND2.md
+R  docs/LOGISTICS_B_LONG_CLARIFICATION_ROUND3.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_LONG_CLARIFICATION_ROUND3.md
+R  docs/LOGISTICS_B_LONG_CLARIFICATION_ROUND4.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_LONG_CLARIFICATION_ROUND4.md
+R  docs/LOGISTICS_B_LONG_CLARIFICATION_ROUND5.md -> docs/archive/logistics-abc-migration/LOGISTICS_B_LONG_CLARIFICATION_ROUND5.md
+R  docs/LOGISTICS_C2A_P1_PRECISE_REGRESSION.md -> docs/archive/logistics-abc-migration/LOGISTICS_C2A_P1_PRECISE_REGRESSION.md
+R  docs/LOGISTICS_C2A_P2_PRECISE_REGRESSION.md -> docs/archive/logistics-abc-migration/LOGISTICS_C2A_P2_PRECISE_REGRESSION.md
+R  docs/LOGISTICS_C2A_P3_PRECISE_REGRESSION.md -> docs/archive/logistics-abc-migration/LOGISTICS_C2A_P3_PRECISE_REGRESSION.md
+R  docs/LOGISTICS_C2A_P4_PRECISE_REGRESSION.md -> docs/archive/logistics-abc-migration/LOGISTICS_C2A_P4_PRECISE_REGRESSION.md
+R  docs/LOGISTICS_C_BOUNDARY_OBSERVATION_EVALUATION.md -> docs/archive/logistics-abc-migration/LOGISTICS_C_BOUNDARY_OBSERVATION_EVALUATION.md
+R  docs/LOGISTICS_C_BOUNDARY_ROUND1.md -> docs/archive/logistics-abc-migration/LOGISTICS_C_BOUNDARY_ROUND1.md
+R  docs/LOGISTICS_C_BOUNDARY_ROUND2.md -> docs/archive/logistics-abc-migration/LOGISTICS_C_BOUNDARY_ROUND2.md
+R  docs/LOGISTICS_C_ROUND2_A_CANDIDATE_REGRESSION.md -> docs/archive/logistics-abc-migration/LOGISTICS_C_ROUND2_A_CANDIDATE_REGRESSION.md
+R  docs/LOGISTICS_C_ROUND2_NEW_A_PRECISE_PLAN.md -> docs/archive/logistics-abc-migration/LOGISTICS_C_ROUND2_NEW_A_PRECISE_PLAN.md
+R  docs/LOGISTICS_NLU_CANDIDATE_ASSIST_READINESS.md -> docs/archive/logistics-abc-migration/LOGISTICS_NLU_CANDIDATE_ASSIST_READINESS.md
+R  docs/LOGISTICS_NLU_CANDIDATE_ASSIST_SHADOW_OBSERVATION.md -> docs/archive/logistics-abc-migration/LOGISTICS_NLU_CANDIDATE_ASSIST_SHADOW_OBSERVATION.md
+R  docs/LOGISTICS_CAPABILITY_MATRIX.md -> docs/archive/logistics-question-bank/LOGISTICS_CAPABILITY_MATRIX.md
+R  docs/LOGISTICS_DATA_QA_BACKFILL_PREPARATION.md -> docs/archive/logistics-question-bank/LOGISTICS_DATA_QA_BACKFILL_PREPARATION.md
+R  docs/LOGISTICS_DATA_QA_EXPECTATION_REVIEW.md -> docs/archive/logistics-question-bank/LOGISTICS_DATA_QA_EXPECTATION_REVIEW.md
+R  docs/LOGISTICS_QUESTION_BANK_A_REGRESSION.md -> docs/archive/logistics-question-bank/LOGISTICS_QUESTION_BANK_A_REGRESSION.md
+R  docs/LOGISTICS_QUESTION_BANK_B_CLARIFICATION_TEMPLATES.md -> docs/archive/logistics-question-bank/LOGISTICS_QUESTION_BANK_B_CLARIFICATION_TEMPLATES.md
+R  docs/LOGISTICS_QUESTION_BANK_CLASSIFICATION.md -> docs/archive/logistics-question-bank/LOGISTICS_QUESTION_BANK_CLASSIFICATION.md
+R  docs/LOGISTICS_QUESTION_BANK_RESPONSE_POLICY.md -> docs/archive/logistics-question-bank/LOGISTICS_QUESTION_BANK_RESPONSE_POLICY.md
+R  docs/LOGISTICS_TOP200_B_CLUSTERING.md -> docs/archive/logistics-top200/LOGISTICS_TOP200_B_CLUSTERING.md
+R  docs/LOGISTICS_TOP200_B_FACTORY_ROUND1.md -> docs/archive/logistics-top200/LOGISTICS_TOP200_B_FACTORY_ROUND1.md
+R  docs/LOGISTICS_TOP200_B_FACTORY_ROUND2.md -> docs/archive/logistics-top200/LOGISTICS_TOP200_B_FACTORY_ROUND2.md
+R  docs/LOGISTICS_TOP200_B_FACTORY_ROUND3.md -> docs/archive/logistics-top200/LOGISTICS_TOP200_B_FACTORY_ROUND3.md
+R  docs/LOGISTICS_TOP200_B_FACTORY_ROUND4.md -> docs/archive/logistics-top200/LOGISTICS_TOP200_B_FACTORY_ROUND4.md
+R  docs/LOGISTICS_TOP200_B_FACTORY_ROUND5.md -> docs/archive/logistics-top200/LOGISTICS_TOP200_B_FACTORY_ROUND5.md
+R  docs/LOGISTICS_TOP200_P1_P2_CLOSURE.md -> docs/archive/logistics-top200/LOGISTICS_TOP200_P1_P2_CLOSURE.md
+R  docs/LOGISTICS_TOP200_ROADMAP.md -> docs/archive/logistics-top200/LOGISTICS_TOP200_ROADMAP.md
+R  docs/LOGISTICS_TOP200_ROUND45_NEW_A_PRECISE_REGRESSION.md -> docs/archive/logistics-top200/LOGISTICS_TOP200_ROUND45_NEW_A_PRECISE_REGRESSION.md
+R  docs/LOGISTICS_TOPN_V2_SELECTION.md -> docs/archive/logistics-top200/LOGISTICS_TOPN_V2_SELECTION.md
+R  docs/P0_A_SHARED_FIELDS_AND_SNAPSHOT_BASELINE.md -> docs/archive/platform-p0-m1/P0_A_SHARED_FIELDS_AND_SNAPSHOT_BASELINE.md
+R  docs/P0_BLOCKER_CLOSURE_PLAN.md -> docs/archive/platform-p0-m1/P0_BLOCKER_CLOSURE_PLAN.md
+ M frontend/.env.example
+D  frontend/src/api/logistics.js
+ M frontend/src/api/logistics.ts
+D  frontend/src/api/planBom.js
+D  frontend/src/utils/http.js
+ M frontend/src/utils/http.ts
+D  frontend/src/utils/logisticsDataQaExport.js
+D  frontend/src/utils/logisticsDataQaHistory.js
+D  frontend/src/utils/logisticsDataQaSessions.js
+D  frontend/src/utils/nlQuerySessions.js
+D  frontend/src/utils/queryResultPresentation.js
+D  frontend/src/utils/queryStorage.js
+ M frontend/src/views/business-chat/BusinessChatPage.vue
+ M frontend/src/views/logistics-data-qa/LogisticsDataQaPage.vue
+ M frontend/src/vite-env.d.ts
+ M frontend/vite.config.ts
+R  scripts/logistics_903_a_precise_acceptance_batch4.py -> scripts/archive/logistics-903/logistics_903_a_precise_acceptance_batch4.py
+R  scripts/logistics_903_a_precise_wave3_batch1.py -> scripts/archive/logistics-903/logistics_903_a_precise_wave3_batch1.py
+R  scripts/logistics_903_a_precise_wave4_batch2.py -> scripts/archive/logistics-903/logistics_903_a_precise_wave4_batch2.py
+R  scripts/logistics_903_a_precise_wave5_batch3.py -> scripts/archive/logistics-903/logistics_903_a_precise_wave5_batch3.py
+R  scripts/logistics_903_b2a_a_regression.py -> scripts/archive/logistics-903/logistics_903_b2a_a_regression.py
+R  scripts/logistics_903_b2a_migration_update.py -> scripts/archive/logistics-903/logistics_903_b2a_migration_update.py
+R  scripts/logistics_903_b2a_precise_regression.py -> scripts/archive/logistics-903/logistics_903_b2a_precise_regression.py
+R  scripts/logistics_903_b_followup_closure.py -> scripts/archive/logistics-903/logistics_903_b_followup_closure.py
+R  scripts/logistics_903_b_gap_wave1.py -> scripts/archive/logistics-903/logistics_903_b_gap_wave1.py
+R  scripts/logistics_903_b_gap_wave2.py -> scripts/archive/logistics-903/logistics_903_b_gap_wave2.py
+R  scripts/logistics_903_b_gap_wave3.py -> scripts/archive/logistics-903/logistics_903_b_gap_wave3.py
+R  scripts/logistics_903_b_gap_wave4.py -> scripts/archive/logistics-903/logistics_903_b_gap_wave4.py
+R  scripts/logistics_903_b_migration_gap_review.py -> scripts/archive/logistics-903/logistics_903_b_migration_gap_review.py
+R  scripts/logistics_903_b_wave5_clarification_closure.py -> scripts/archive/logistics-903/logistics_903_b_wave5_clarification_closure.py
+R  scripts/logistics_903_c_unsupported_explanation_wave2.py -> scripts/archive/logistics-903/logistics_903_c_unsupported_explanation_wave2.py
+R  scripts/logistics_903_c_unsupported_explanation_wave3.py -> scripts/archive/logistics-903/logistics_903_c_unsupported_explanation_wave3.py
+R  scripts/logistics_903_c_unsupported_explanation_wave4.py -> scripts/archive/logistics-903/logistics_903_c_unsupported_explanation_wave4.py
+R  scripts/logistics_903_c_unsupported_explanation_wave5.py -> scripts/archive/logistics-903/logistics_903_c_unsupported_explanation_wave5.py
+R  scripts/logistics_903_post_migration_plan.py -> scripts/archive/logistics-903/logistics_903_post_migration_plan.py
+R  scripts/logistics_a_stability_round1_regression.py -> scripts/archive/logistics-abc-migration/logistics_a_stability_round1_regression.py
+R  scripts/logistics_a_stability_round2_regression.py -> scripts/archive/logistics-abc-migration/logistics_a_stability_round2_regression.py
+R  scripts/logistics_a_stability_round3_regression.py -> scripts/archive/logistics-abc-migration/logistics_a_stability_round3_regression.py
+R  scripts/logistics_b_candidate_review_round1.py -> scripts/archive/logistics-abc-migration/logistics_b_candidate_review_round1.py
+R  scripts/logistics_b_long_clarification_round1.py -> scripts/archive/logistics-abc-migration/logistics_b_long_clarification_round1.py
+R  scripts/logistics_b_long_clarification_round2.py -> scripts/archive/logistics-abc-migration/logistics_b_long_clarification_round2.py
+R  scripts/logistics_b_long_clarification_round3.py -> scripts/archive/logistics-abc-migration/logistics_b_long_clarification_round3.py
+R  scripts/logistics_b_long_clarification_round4.py -> scripts/archive/logistics-abc-migration/logistics_b_long_clarification_round4.py
+R  scripts/logistics_b_long_clarification_round5.py -> scripts/archive/logistics-abc-migration/logistics_b_long_clarification_round5.py
+R  scripts/logistics_c2a_p1_precise_regression.py -> scripts/archive/logistics-abc-migration/logistics_c2a_p1_precise_regression.py
+R  scripts/logistics_c_boundary_and_903_evaluation.py -> scripts/archive/logistics-abc-migration/logistics_c_boundary_and_903_evaluation.py
+R  scripts/logistics_c_boundary_round1.py -> scripts/archive/logistics-abc-migration/logistics_c_boundary_round1.py
+R  scripts/logistics_c_boundary_round2.py -> scripts/archive/logistics-abc-migration/logistics_c_boundary_round2.py
+R  scripts/logistics_c_round2_a_candidate_regression.py -> scripts/archive/logistics-abc-migration/logistics_c_round2_a_candidate_regression.py
+R  scripts/logistics_nlu_candidate_assist_readiness.py -> scripts/archive/logistics-abc-migration/logistics_nlu_candidate_assist_readiness.py
+R  scripts/logistics_nlu_candidate_assist_shadow_observation.py -> scripts/archive/logistics-abc-migration/logistics_nlu_candidate_assist_shadow_observation.py
+R  scripts/logistics_round45_new_a_precise_regression.py -> scripts/archive/logistics-abc-migration/logistics_round45_new_a_precise_regression.py
+R  scripts/logistics_rag_mvp.py -> scripts/archive/logistics-poc/logistics_rag_mvp.py
+R  scripts/logistics_top200_b_factory_round1.py -> scripts/archive/logistics-top200/logistics_top200_b_factory_round1.py
+R  scripts/logistics_top200_b_factory_round2.py -> scripts/archive/logistics-top200/logistics_top200_b_factory_round2.py
+R  scripts/logistics_top200_b_factory_round3.py -> scripts/archive/logistics-top200/logistics_top200_b_factory_round3.py
+R  scripts/logistics_top200_b_factory_round4.py -> scripts/archive/logistics-top200/logistics_top200_b_factory_round4.py
+R  scripts/logistics_top200_b_factory_round5.py -> scripts/archive/logistics-top200/logistics_top200_b_factory_round5.py
+R  scripts/logistics_top200_p1_p2_regression.py -> scripts/archive/logistics-top200/logistics_top200_p1_p2_regression.py
+R  scripts/logistics_top200_selection.py -> scripts/archive/logistics-top200/logistics_top200_selection.py
+R  scripts/logistics_topn_v2_selection.py -> scripts/archive/logistics-top200/logistics_topn_v2_selection.py
+D  tests/business_acceptance/README.md
+D  tests/business_acceptance/fixtures/README.md
+D  tests/business_acceptance/oracle/__init__.py
+D  tests/business_acceptance/oracle/engine.py
+D  tests/business_acceptance/oracle/logistics_excel_calculator.py
+D  tests/business_acceptance/oracle/logistics_excel_loader.py
+D  tests/business_acceptance/oracle/logistics_excel_mapping.py
+D  tests/business_acceptance/oracle/source_router.py
+D  tests/business_acceptance/oracle/test_logistics_excel_oracle.py
+D  tests/business_acceptance/oracle/test_logistics_source_router.py
+D  tests/business_acceptance/outputs/README.md
+D  tests/business_acceptance/test_question_importer.py
+?? tests/

@@ -1,0 +1,102 @@
+# 物流/BOM 全量 E2E 失败分类报告（修复轮 1 前置重分流后）
+
+## 覆盖与对比统计
+- 样例实际执行：1391
+- 标准答案总数：1391
+- 标准答案状态：{'no_answer': 6, 'expected': 248, 'unsupported': 977, 'blocked': 160}
+- 参与数值对比：248
+- 对比结果：{'PASS': 205, 'FAIL': 43}
+
+## FAIL 按 capability 分类
+- logistics_vehicle_count: 20
+- logistics_total_fee: 15
+- logistics_month_total_fee: 7
+- logistics_total_shipment_count: 1
+
+## FAIL 样例清单
+- Q0079 | logistics_total_shipment_count | actual=clarification/None | 2024年华东区域通过公路发运的总件数是多少?
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 303
+- Q0876 | logistics_month_total_fee | actual=success/None | 请按月份汇总发往贵州的发运量和总费用，并区分2023、2024、2025三个年度？
+  - reason: expected 数字 1 个，命中 1 个；页面文本长度 1182
+- Q1043 | logistics_month_total_fee | actual=clarification/None | 请统计电能易购（北京）科技有限公司按月份拆分的发运量和总费用，并生成月度汇总表？
+  - reason: expected 数字 2 个，命中 2 个；页面文本长度 201
+- Q1061 | logistics_month_total_fee | actual=clarification/None | 请统计华润新能源（皮山）有限公司按月份拆分的发运量和总费用，并生成月度汇总表？
+  - reason: expected 数字 6 个，命中 4 个；页面文本长度 201
+- Q1073 | logistics_month_total_fee | actual=clarification/None | 请统计毕节七星关乌江水电新能源有限公司按月份拆分的发运量和总费用，并生成月度汇总表？
+  - reason: expected 数字 4 个，命中 4 个；页面文本长度 201
+- Q1079 | logistics_month_total_fee | actual=clarification/None | 请统计华阳集团（阳泉）新能源销售有限公司按月份拆分的发运量和总费用，并生成月度汇总表？
+  - reason: expected 数字 4 个，命中 4 个；页面文本长度 201
+- Q1109 | logistics_month_total_fee | actual=clarification/None | 请统计北京迪信通商贸股份有限公司按月份拆分的发运量和总费用，并生成月度汇总表？
+  - reason: expected 数字 2 个，命中 2 个；页面文本长度 201
+- Q1115 | logistics_month_total_fee | actual=clarification/None | 请统计滁州创维光伏科技有限公司按月份拆分的发运量和总费用，并生成月度汇总表？
+  - reason: expected 数字 10 个，命中 10 个；页面文本长度 201
+- Q1135 | logistics_total_fee | actual=clarification/None | 请统计2023年同一合同编号对应多个目的城市的记录，并列出合同编号、城市数、总费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 201
+- Q1140 | logistics_total_fee | actual=clarification/None | 请统计2024年同一合同编号对应多个目的城市的记录，并列出合同编号、城市数、总费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 201
+- Q1145 | logistics_total_fee | actual=clarification/None | 请统计2025年同一合同编号对应多个目的城市的记录，并列出合同编号、城市数、总费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 201
+- Q1184 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-M10/72H-550W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1187 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-NT10/72GDF-575W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1190 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-NT10/72GDF-585W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1193 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-NT10/72GDF-590W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1196 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-NT10/78GDF-640W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1199 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-NT12R/66GDF-620W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1202 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-NT12R/66GDF-625W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1205 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-NT12/66GDF-710W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1208 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-M12/66GDF-660W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1211 | logistics_vehicle_count | actual=success/None | 请统计规格GCL-M12/66GDF-665W发往各省份的发运量、总费用和车次，并按总费用降序展示？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1267 | logistics_total_fee | actual=success/None | 请统计备注中包含“倒运”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1269 | logistics_total_fee | actual=success/None | 请统计备注中包含“中转”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1271 | logistics_total_fee | actual=success/None | 请统计备注中包含“换车”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1273 | logistics_total_fee | actual=success/None | 请统计备注中包含“压车”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1275 | logistics_total_fee | actual=success/None | 请统计备注中包含“放空”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1277 | logistics_total_fee | actual=success/None | 请统计备注中包含“改地址”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1279 | logistics_total_fee | actual=success/None | 请统计备注中包含“铁路改公路”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1281 | logistics_total_fee | actual=success/None | 请统计备注中包含“13米改17.5米”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1283 | logistics_total_fee | actual=success/None | 请统计备注中包含“启用二标”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1285 | logistics_total_fee | actual=success/None | 请统计备注中包含“仓库发货错误”的历史发运记录数量、总费用和涉及区域，并按年份拆分？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1337 | logistics_total_fee | actual=success/None | 请输出一张“年月×物流公司”的总费用热力表，使用历史台账2023年至2025年数据？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1339 | logistics_vehicle_count | actual=success/None | 请输出一张“车型×区域”的车次交叉表，并分别展示2024、2025两个年度？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 239
+- Q1345 | logistics_total_fee | actual=clarification/None | 请输出一张明细加汇总的表格，先列出发运明细，再在末尾合计发运件数、发运瓦数和总费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 201
+- Q1355 | logistics_vehicle_count | actual=success/None | 请统计2023年合肥始发按目的省份和车型组合后的车次、总费用和平均单车费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 198
+- Q1356 | logistics_vehicle_count | actual=success/None | 请统计2023年阜宁始发按目的省份和车型组合后的车次、总费用和平均单车费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 198
+- Q1357 | logistics_vehicle_count | actual=success/None | 请统计2023年广德始发按目的省份和车型组合后的车次、总费用和平均单车费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 198
+- Q1369 | logistics_vehicle_count | actual=success/None | 请统计2024年合肥始发按目的省份和车型组合后的车次、总费用和平均单车费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 198
+- Q1370 | logistics_vehicle_count | actual=success/None | 请统计2024年阜宁始发按目的省份和车型组合后的车次、总费用和平均单车费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 198
+- Q1371 | logistics_vehicle_count | actual=success/None | 请统计2024年广德始发按目的省份和车型组合后的车次、总费用和平均单车费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 198
+- Q1383 | logistics_vehicle_count | actual=success/None | 请统计2025年合肥始发按目的省份和车型组合后的车次、总费用和平均单车费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 198
+- Q1384 | logistics_vehicle_count | actual=success/None | 请统计2025年阜宁始发按目的省份和车型组合后的车次、总费用和平均单车费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 198
+- Q1385 | logistics_vehicle_count | actual=success/None | 请统计2025年广德始发按目的省份和车型组合后的车次、总费用和平均单车费用？
+  - reason: expected 数字 1 个，命中 0 个；页面文本长度 198

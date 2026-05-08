@@ -1352,7 +1352,8 @@ class LogisticsDataQaService:
 
         if plan.query_key == "hist_origin_vehicle_breakdown_summary":
             rows = self.repository.hist_origin_vehicle_breakdown_summary(
-                year=filters["year"],
+                year=filters.get("year"),
+                years=filters.get("years"),
                 origin_place=filters.get("origin_place"),
                 include_origin_dimension=bool(filters.get("include_origin_dimension")),
             )
@@ -1365,15 +1366,24 @@ class LogisticsDataQaService:
                     {
                         "车型": row.get("required_vehicle_type") or "未填车型",
                         "发运车次": int(float(row.get("shipment_trip_count") or 0)),
+                        "发运件数": int(float(row.get("shipment_count") or 0)),
                         "总运费": float(row.get("total_fee") or 0),
                         "平均单车费用": float(row.get("avg_fee_per_trip") or 0),
+                        "平均每车装载托数": float(row.get("avg_pallet_per_vehicle") or 0),
+                        "有效托数记录数": int(row.get("valid_pallet_record_count") or 0),
+                        "缺失托数记录数": int(row.get("missing_pallet_record_count") or 0),
                         "记录数": int(row.get("row_count") or 0),
                     }
                 )
                 table_rows.append(item)
             scope_text = f"{filters['origin_place']}始发" if filters.get("origin_place") else "按始发地"
-            summary = f"{filters['year']}年{scope_text}不同车型的发运车次、总运费和平均单车费用已汇总。"
-            columns = ["车型", "发运车次", "总运费", "平均单车费用", "记录数"]
+            if filters.get("year"):
+                time_text = f"{filters['year']}年"
+            else:
+                time_text = "2023-2025年历史台账"
+                warnings.append("平均每车装载托数字段当前仅在历史台账可审计，2026 正式系统侧暂无 pallet_per_vehicle 字段，本汇总未伪造 2026 装载托数。")
+            summary = f"{time_text}{scope_text}不同车型的发运车次、发运件数、总运费和平均每车装载托数已汇总。"
+            columns = ["车型", "发运车次", "发运件数", "总运费", "平均单车费用", "平均每车装载托数", "有效托数记录数", "缺失托数记录数", "记录数"]
             if filters.get("include_origin_dimension"):
                 columns = ["始发地", *columns]
             return self._build_result(
@@ -1383,8 +1393,10 @@ class LogisticsDataQaService:
                 table_rows=table_rows,
                 calculation_logic=[
                     "发运车次按 dwd_logistics_hist_shipment_detail.shipment_trip_count 汇总。",
+                    "发运件数按 dwd_logistics_hist_shipment_detail.actual_qty 汇总。",
                     "总运费按 dwd_logistics_hist_shipment_detail.total_fee 汇总。",
                     "平均单车费用 = SUM(total_fee) / SUM(shipment_trip_count)。",
+                    "平均每车装载托数 = AVG(pallet_per_vehicle)，只统计非空记录，空值不按 0 处理。",
                     "车型按 required_vehicle_type 分组；无法安全识别始发地时保留真实始发地分组，不编造过滤条件。",
                 ],
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
@@ -1483,6 +1495,32 @@ class LogisticsDataQaService:
                     "未给年份时默认按 2023–2025 历史台账累计统计。",
                 ],
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters, "scope_label": data["scope_label"]},
+                warnings=warnings,
+            )
+
+        if plan.query_key == "hist_avg_pallet_per_vehicle":
+            data = self.repository.hist_avg_pallet_per_vehicle(
+                year=filters["year"],
+                months=filters["months"],
+                origin_place=filters["origin_place"],
+            )
+            if data.get("missing_record_count"):
+                warnings.append(f"共有 {int(data['missing_record_count'] or 0):,} 条记录的每车装载托数为空，未参与平均值计算。")
+            month_text = "、".join(f"{month}月" for month in filters["months"])
+            summary = (
+                f"{filters['year']}年{month_text}{filters['origin_place']}始发订单的"
+                f"平均每车装载托数为{data.get('avg_pallet_per_vehicle') or 0}托。"
+            )
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=["avg_pallet_per_vehicle", "valid_record_count", "total_record_count", "missing_record_count"],
+                table_rows=[data],
+                calculation_logic=[
+                    "平均每车装载托数 = AVG(pallet_per_vehicle)。",
+                    "只统计 pallet_per_vehicle 非空记录；空值不按 0 处理，避免拉低平均值。",
+                ],
+                data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
                 warnings=warnings,
             )
 
@@ -1585,6 +1623,7 @@ class LogisticsDataQaService:
                 months=filters["months"],
                 transport_mode=filters.get("transport_mode"),
                 base_code=filters.get("base_code"),
+                special_scope=filters.get("special_scope"),
                 monthly_breakdown=bool(filters.get("monthly_breakdown")),
             )
             if filters.get("default_ytd_scope"):
@@ -1607,9 +1646,14 @@ class LogisticsDataQaService:
             )
             month_text = "、".join(f"{month}月" for month in (filters.get("months") or []))
             base_text = filters.get("base_name") or ""
+            special_text = {
+                "planning": "经营计划用车",
+                "sample": "辅料送样",
+                "liujuan": "刘娟用车",
+            }.get(filters.get("special_scope"), "")
             transport_text = f"{filters['transport_mode']}方式" if filters.get("transport_mode") else ""
             scope_label = month_text or "截至目前累计"
-            scope_prefix = f"{filters['year']}年{base_text}"
+            scope_prefix = f"{filters['year']}年{base_text}{special_text}"
             if data["strict_scope_task_count"] == 0 and data["year_task_count"] > 0:
                 summary = (
                     f"{scope_prefix}{scope_label}{transport_text}的系统任务尚未同步 pickup_date，"
@@ -1842,6 +1886,48 @@ class LogisticsDataQaService:
                 table_columns=["driver_name", "assign_task_count"],
                 table_rows=data,
                 calculation_logic=["派车任务量按 dwd_logistics_assign_task.driver_name 分组计数。"],
+                data_scope={"table": "dwd_logistics_assign_task", **filters},
+                warnings=warnings,
+            )
+
+        if plan.query_key == "sys_driver_phone_name_consistency":
+            data = self.repository.sys_driver_phone_name_consistency(
+                year=filters["year"],
+                top_n=filters.get("top_n", plan.limit or 50),
+            )
+            count = int(data.get("abnormal_group_count") or 0)
+            task_count = int(data.get("abnormal_task_count") or 0)
+            summary = f"{filters['year']}年存在{count}个同一手机号关联多个司机姓名的异常手机号，涉及{task_count}条派车任务。"
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=["driver_phone", "driver_names", "driver_name_count", "assign_task_count", "distinct_task_count"],
+                table_rows=data["items"],
+                calculation_logic=[
+                    "按 dwd_logistics_assign_task.driver_phone 分组，统计 DISTINCT driver_name。",
+                    "仅统计手机号和司机姓名均非空的派车记录；driver_name_count > 1 判定为一号多人异常。",
+                ],
+                data_scope={"table": "dwd_logistics_assign_task", **filters},
+                warnings=warnings,
+            )
+
+        if plan.query_key == "sys_driver_id_phone_consistency":
+            data = self.repository.sys_driver_id_phone_consistency(
+                year=filters["year"],
+                top_n=filters.get("top_n", plan.limit or 50),
+            )
+            count = int(data.get("abnormal_group_count") or 0)
+            task_count = int(data.get("abnormal_task_count") or 0)
+            summary = f"{filters['year']}年存在{count}个同一身份证号对应多个手机号的异常身份证号，涉及{task_count}条派车任务。"
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=["driver_id_number", "driver_phones", "driver_phone_count", "assign_task_count", "distinct_task_count"],
+                table_rows=data["items"],
+                calculation_logic=[
+                    "按 dwd_logistics_assign_task.driver_id_number 分组，统计 DISTINCT driver_phone。",
+                    "仅统计身份证号和手机号均非空的派车记录；driver_phone_count > 1 判定为一人多号异常。",
+                ],
                 data_scope={"table": "dwd_logistics_assign_task", **filters},
                 warnings=warnings,
             )

@@ -1,0 +1,7 @@
+expected_total=1391
+expected_status={'no_answer': 6, 'expected': 197, 'unsupported': 1028, 'blocked': 160}
+comparison_total=197
+comparison_status={'PASS': 195, 'FAIL': 2}
+fail_count=2
+fail_by_capability={'logistics_total_shipment_count': 1, 'logistics_month_total_fee': 1}
+fail_ids=Q0079,Q0876

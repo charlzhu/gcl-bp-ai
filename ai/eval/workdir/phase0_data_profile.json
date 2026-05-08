@@ -1,0 +1,3453 @@
+{
+  "generated_at": "2026-05-07T00:30:18",
+  "attachments": [
+    {
+      "name": "23 年至 25 年物流源数据.zip",
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/inbox/attachments/23 年至 25 年物流源数据.zip",
+      "type": "zip",
+      "size": 5239988,
+      "extracted_count": 4,
+      "filtered_count": 4,
+      "error_count": 0,
+      "errors": []
+    },
+    {
+      "name": "BOM 源数据.zip",
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/inbox/attachments/BOM 源数据.zip",
+      "type": "zip",
+      "size": 695347,
+      "extracted_count": 34,
+      "filtered_count": 35,
+      "error_count": 0,
+      "errors": []
+    },
+    {
+      "name": "物流和 bom样例题.docx",
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/inbox/attachments/物流和 bom样例题.docx",
+      "type": "docx",
+      "size": 75790,
+      "extracted_count": 0,
+      "filtered_count": 0,
+      "error_count": 0,
+      "errors": []
+    }
+  ],
+  "extraction": [
+    {
+      "zip_name": "23 年至 25 年物流源数据.zip",
+      "zip_path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/inbox/attachments/23 年至 25 年物流源数据.zip",
+      "target_dir": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/23 年至 25 年物流源数据",
+      "extracted_files": [
+        {
+          "member": "2023年安徽阜宁物流发运台账.xlsx",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/23 年至 25 年物流源数据/2023年安徽阜宁物流发运台账.xlsx",
+          "size": 212826
+        },
+        {
+          "member": "2023年安徽合肥发运台账.xlsx",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/23 年至 25 年物流源数据/2023年安徽合肥发运台账.xlsx",
+          "size": 935303
+        },
+        {
+          "member": "2024年物流发运总台账.xlsx",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/23 年至 25 年物流源数据/2024年物流发运总台账.xlsx",
+          "size": 1773046
+        },
+        {
+          "member": "2025年物流发运总台账.xlsx",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/23 年至 25 年物流源数据/2025年物流发运总台账.xlsx",
+          "size": 2629566
+        }
+      ],
+      "filtered_members": [
+        "__MACOSX/._2023年安徽阜宁物流发运台账.xlsx",
+        "__MACOSX/._2023年安徽合肥发运台账.xlsx",
+        "__MACOSX/._2024年物流发运总台账.xlsx",
+        "__MACOSX/._2025年物流发运总台账.xlsx"
+      ],
+      "errors": []
+    },
+    {
+      "zip_name": "BOM 源数据.zip",
+      "zip_path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/inbox/attachments/BOM 源数据.zip",
+      "target_dir": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据",
+      "extracted_files": [
+        {
+          "member": "BOM/NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (2).xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (2).xls",
+          "size": 84480
+        },
+        {
+          "member": "BOM/NT12R78GDF(华电南通-2025-01220)Billofmaterials-D.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R78GDF(华电南通-2025-01220)Billofmaterials-D.xls",
+          "size": 75264
+        },
+        {
+          "member": "BOM/NT12R66GDF(意大利-2026-00097)Billofmaterials-C.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(意大利-2026-00097)Billofmaterials-C.xls",
+          "size": 49664
+        },
+        {
+          "member": "BOM/NT12R66GDF(意大利-2026-00097)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(意大利-2026-00097)Billofmaterials-B.xls",
+          "size": 49152
+        },
+        {
+          "member": "BOM/NT12R66GDF(印尼Hijau-2026-00117)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(印尼Hijau-2026-00117)Billofmaterials-A.xls",
+          "size": 46080
+        },
+        {
+          "member": "BOM/NT1078GDF(泰州中来-2026-00127)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(泰州中来-2026-00127)Billofmaterials-B.xls",
+          "size": 80896
+        },
+        {
+          "member": "BOM/NT1266GDF(国科华鑫仙居-2025-01063)Billofmaterials-E.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(国科华鑫仙居-2025-01063)Billofmaterials-E.xls",
+          "size": 74240
+        },
+        {
+          "member": "BOM/NT1078GDF(石家庄科林-2026-00106)Billofmaterials-A (2).xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(石家庄科林-2026-00106)Billofmaterials-A (2).xls",
+          "size": 89600
+        },
+        {
+          "member": "BOM/NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (3).xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (3).xls",
+          "size": 83456
+        },
+        {
+          "member": "BOM/NT12R66GDF(西班牙SII-2026-00111)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(西班牙SII-2026-00111)Billofmaterials-A.xls",
+          "size": 83968
+        },
+        {
+          "member": "BOM/NT12R66GDF(突尼斯MIM2A-2026-00061)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(突尼斯MIM2A-2026-00061)Billofmaterials-B.xls",
+          "size": 65024
+        },
+        {
+          "member": "BOM/NT12R66GDF(哥伦比亚Amara-2026-00115)Billofmaterials-A (1).xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(哥伦比亚Amara-2026-00115)Billofmaterials-A (1).xls",
+          "size": 83968
+        },
+        {
+          "member": "BOM/NT1266GDF(柬埔寨太阳花-2026-00082)Billofmaterials-C.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(柬埔寨太阳花-2026-00082)Billofmaterials-C.xls",
+          "size": 62464
+        },
+        {
+          "member": "BOM/NT1266GDF(苏格兰-2026-00048)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(苏格兰-2026-00048)Billofmaterials-A.xls",
+          "size": 48128
+        },
+        {
+          "member": "BOM/NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-B.xls",
+          "size": 85504
+        },
+        {
+          "member": "BOM/NT12R66GDF(法国-2026-00104)Billofmaterials-B (2).xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(法国-2026-00104)Billofmaterials-B (2).xls",
+          "size": 54272
+        },
+        {
+          "member": "BOM/NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-A.xls",
+          "size": 84992
+        },
+        {
+          "member": "BOM/NT12R66GDF(法国Synapsun-2026-00114)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(法国Synapsun-2026-00114)Billofmaterials-A.xls",
+          "size": 51712
+        },
+        {
+          "member": "BOM/NT12R66GDF(德国Kumandra芜湖电池-2026-00113)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(德国Kumandra芜湖电池-2026-00113)Billofmaterials-B.xls",
+          "size": 85504
+        },
+        {
+          "member": "BOM/NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-B.xls",
+          "size": 84992
+        },
+        {
+          "member": "BOM/NT1078GDF(江苏汉腾-2026-00106)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(江苏汉腾-2026-00106)Billofmaterials-A.xls",
+          "size": 76288
+        },
+        {
+          "member": "BOM/NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-B.xls",
+          "size": 50176
+        },
+        {
+          "member": "BOM/NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-A.xls",
+          "size": 83968
+        },
+        {
+          "member": "BOM/NT1266GDF(苏格兰-2026-00048)Billofmaterials-B(2).xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(苏格兰-2026-00048)Billofmaterials-B(2).xls",
+          "size": 47104
+        },
+        {
+          "member": "BOM/NT1266GDF(多米尼加Sistemi-2026-00099)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(多米尼加Sistemi-2026-00099)Billofmaterials-A.xls",
+          "size": 77312
+        },
+        {
+          "member": "BOM/NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-C.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-C.xls",
+          "size": 49664
+        },
+        {
+          "member": "BOM/NT12R66GDF(深圳建融钢边框-2025-01073)Billofmaterials-D(1).xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(深圳建融钢边框-2025-01073)Billofmaterials-D(1).xls",
+          "size": 88064
+        },
+        {
+          "member": "BOM/NT1266GDF(苏州康达尔-2026-00087)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(苏州康达尔-2026-00087)Billofmaterials-B.xls",
+          "size": 79872
+        },
+        {
+          "member": "BOM/NT1266GDF(天合富家新-2025-00844)Billofmaterials-C.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(天合富家新-2025-00844)Billofmaterials-C.xls",
+          "size": 58880
+        },
+        {
+          "member": "BOM/NT12R66GDF(印尼宾坦岛-2026-00096)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(印尼宾坦岛-2026-00096)Billofmaterials-A.xls",
+          "size": 53248
+        },
+        {
+          "member": "BOM/NT12R66GDF(多米尼加Escala-2026-00107)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(多米尼加Escala-2026-00107)Billofmaterials-B.xls",
+          "size": 57856
+        },
+        {
+          "member": "BOM/NT12R66GDF(菲律宾LUCA-2026-00102)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(菲律宾LUCA-2026-00102)Billofmaterials-B.xls",
+          "size": 65024
+        },
+        {
+          "member": "BOM/NT1266GDF(萨尔瓦多Compania-2026-00103)Billofmaterials-A.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(萨尔瓦多Compania-2026-00103)Billofmaterials-A.xls",
+          "size": 70656
+        },
+        {
+          "member": "BOM/NT12R66GDF(危地马拉ECOLUMEN-2026-00121)Billofmaterials-B.xls",
+          "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(危地马拉ECOLUMEN-2026-00121)Billofmaterials-B.xls",
+          "size": 83456
+        }
+      ],
+      "filtered_members": [
+        "__MACOSX/._BOM",
+        "__MACOSX/BOM/._NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (2).xls",
+        "__MACOSX/BOM/._NT12R78GDF(华电南通-2025-01220)Billofmaterials-D.xls",
+        "__MACOSX/BOM/._NT12R66GDF(意大利-2026-00097)Billofmaterials-C.xls",
+        "__MACOSX/BOM/._NT12R66GDF(意大利-2026-00097)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT12R66GDF(印尼Hijau-2026-00117)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT1078GDF(泰州中来-2026-00127)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT1266GDF(国科华鑫仙居-2025-01063)Billofmaterials-E.xls",
+        "__MACOSX/BOM/._NT1078GDF(石家庄科林-2026-00106)Billofmaterials-A (2).xls",
+        "__MACOSX/BOM/._NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (3).xls",
+        "__MACOSX/BOM/._NT12R66GDF(西班牙SII-2026-00111)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT12R66GDF(突尼斯MIM2A-2026-00061)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT12R66GDF(哥伦比亚Amara-2026-00115)Billofmaterials-A (1).xls",
+        "__MACOSX/BOM/._NT1266GDF(柬埔寨太阳花-2026-00082)Billofmaterials-C.xls",
+        "__MACOSX/BOM/._NT1266GDF(苏格兰-2026-00048)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT12R66GDF(法国-2026-00104)Billofmaterials-B (2).xls",
+        "__MACOSX/BOM/._NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT12R66GDF(法国Synapsun-2026-00114)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT12R66GDF(德国Kumandra芜湖电池-2026-00113)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT1078GDF(江苏汉腾-2026-00106)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT1266GDF(苏格兰-2026-00048)Billofmaterials-B(2).xls",
+        "__MACOSX/BOM/._NT1266GDF(多米尼加Sistemi-2026-00099)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-C.xls",
+        "__MACOSX/BOM/._NT12R66GDF(深圳建融钢边框-2025-01073)Billofmaterials-D(1).xls",
+        "__MACOSX/BOM/._NT1266GDF(苏州康达尔-2026-00087)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT1266GDF(天合富家新-2025-00844)Billofmaterials-C.xls",
+        "__MACOSX/BOM/._NT12R66GDF(印尼宾坦岛-2026-00096)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT12R66GDF(多米尼加Escala-2026-00107)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT12R66GDF(菲律宾LUCA-2026-00102)Billofmaterials-B.xls",
+        "__MACOSX/BOM/._NT1266GDF(萨尔瓦多Compania-2026-00103)Billofmaterials-A.xls",
+        "__MACOSX/BOM/._NT12R66GDF(危地马拉ECOLUMEN-2026-00121)Billofmaterials-B.xls"
+      ],
+      "errors": []
+    }
+  ],
+  "logistics_profiles": [
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/23 年至 25 年物流源数据/2023年安徽合肥发运台账.xlsx",
+      "file_name": "2023年安徽合肥发运台账.xlsx",
+      "domain": "logistics",
+      "size": 935303,
+      "year_guess": [
+        2023
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 3490,
+      "sheets": [
+        {
+          "sheet_name": "Sheet1",
+          "header_row": 1,
+          "row_count": 3490,
+          "field_count": 31,
+          "fields": [
+            "发货日期",
+            "客户名称（标准名称；最终客户）",
+            "合同编号",
+            "询比价编号",
+            "地址",
+            "省份",
+            "城市",
+            "路程/KM",
+            "规格",
+            "功率",
+            "日计划发运件数",
+            "日实际发运件数",
+            "日实际发运瓦数",
+            "发运达标率",
+            "要求中标车辆型号",
+            "每车装在托数",
+            "车辆数",
+            "车号",
+            "物流公司",
+            "单价/车",
+            "总费用(元)",
+            "元/瓦",
+            "异常费",
+            "产生原因",
+            "备注（倒运，中转等特殊情况）",
+            "配件",
+            "运输方式",
+            "区域",
+            "月度",
+            "始发地",
+            "发货指令"
+          ],
+          "key_fields": [
+            {
+              "group": "date",
+              "field": "发货日期",
+              "keyword": "日期"
+            },
+            {
+              "group": "region",
+              "field": "区域",
+              "keyword": "区域"
+            },
+            {
+              "group": "province",
+              "field": "省份",
+              "keyword": "省"
+            },
+            {
+              "group": "city",
+              "field": "城市",
+              "keyword": "市"
+            },
+            {
+              "group": "origin",
+              "field": "始发地",
+              "keyword": "始发"
+            },
+            {
+              "group": "customer",
+              "field": "客户名称（标准名称；最终客户）",
+              "keyword": "客户"
+            },
+            {
+              "group": "product_spec",
+              "field": "规格",
+              "keyword": "规格"
+            },
+            {
+              "group": "product_spec",
+              "field": "要求中标车辆型号",
+              "keyword": "型号"
+            },
+            {
+              "group": "transport_mode",
+              "field": "运输方式",
+              "keyword": "运输方式"
+            },
+            {
+              "group": "carrier",
+              "field": "物流公司",
+              "keyword": "物流公司"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日计划发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运瓦数",
+              "keyword": "实际发运"
+            },
+            {
+              "group": "planned_count",
+              "field": "日计划发运件数",
+              "keyword": "计划发运"
+            },
+            {
+              "group": "watt",
+              "field": "功率",
+              "keyword": "功率"
+            },
+            {
+              "group": "watt",
+              "field": "日实际发运瓦数",
+              "keyword": "瓦数"
+            },
+            {
+              "group": "pallet",
+              "field": "每车装在托数",
+              "keyword": "托数"
+            },
+            {
+              "group": "vehicle",
+              "field": "要求中标车辆型号",
+              "keyword": "车辆"
+            },
+            {
+              "group": "vehicle",
+              "field": "车辆数",
+              "keyword": "车辆"
+            },
+            {
+              "group": "fee",
+              "field": "总费用(元)",
+              "keyword": "费用"
+            },
+            {
+              "group": "unit_price",
+              "field": "单价/车",
+              "keyword": "单价"
+            },
+            {
+              "group": "unit_price",
+              "field": "元/瓦",
+              "keyword": "元/瓦"
+            }
+          ],
+          "year_guess": [
+            2023
+          ],
+          "material_hits": {}
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/23 年至 25 年物流源数据/2023年安徽阜宁物流发运台账.xlsx",
+      "file_name": "2023年安徽阜宁物流发运台账.xlsx",
+      "domain": "logistics",
+      "size": 212826,
+      "year_guess": [
+        2023
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 867,
+      "sheets": [
+        {
+          "sheet_name": "Sheet1",
+          "header_row": 1,
+          "row_count": 867,
+          "field_count": 31,
+          "fields": [
+            "发货日期",
+            "客户名称（标准名称；最终客户）",
+            "合同编号",
+            "询比价编号",
+            "地址",
+            "省份",
+            "城市",
+            "路程/KM",
+            "规格",
+            "功率",
+            "日计划发运件数",
+            "日实际发运件数",
+            "日实际发运瓦数",
+            "发运达标率",
+            "要求中标车辆型号",
+            "每车装在托数",
+            "车辆数",
+            "车号",
+            "物流公司",
+            "单价/车",
+            "总费用(元)",
+            "元/瓦",
+            "额外费用",
+            "产生原因",
+            "备注（倒运，中转等特殊情况）",
+            "配件",
+            "运输方式",
+            "区域",
+            "月度",
+            "始发地",
+            "SAP系统单号"
+          ],
+          "key_fields": [
+            {
+              "group": "date",
+              "field": "发货日期",
+              "keyword": "日期"
+            },
+            {
+              "group": "region",
+              "field": "区域",
+              "keyword": "区域"
+            },
+            {
+              "group": "province",
+              "field": "省份",
+              "keyword": "省"
+            },
+            {
+              "group": "city",
+              "field": "城市",
+              "keyword": "市"
+            },
+            {
+              "group": "origin",
+              "field": "始发地",
+              "keyword": "始发"
+            },
+            {
+              "group": "customer",
+              "field": "客户名称（标准名称；最终客户）",
+              "keyword": "客户"
+            },
+            {
+              "group": "product_spec",
+              "field": "规格",
+              "keyword": "规格"
+            },
+            {
+              "group": "product_spec",
+              "field": "要求中标车辆型号",
+              "keyword": "型号"
+            },
+            {
+              "group": "transport_mode",
+              "field": "运输方式",
+              "keyword": "运输方式"
+            },
+            {
+              "group": "carrier",
+              "field": "物流公司",
+              "keyword": "物流公司"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日计划发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运瓦数",
+              "keyword": "实际发运"
+            },
+            {
+              "group": "planned_count",
+              "field": "日计划发运件数",
+              "keyword": "计划发运"
+            },
+            {
+              "group": "watt",
+              "field": "功率",
+              "keyword": "功率"
+            },
+            {
+              "group": "watt",
+              "field": "日实际发运瓦数",
+              "keyword": "瓦数"
+            },
+            {
+              "group": "pallet",
+              "field": "每车装在托数",
+              "keyword": "托数"
+            },
+            {
+              "group": "vehicle",
+              "field": "要求中标车辆型号",
+              "keyword": "车辆"
+            },
+            {
+              "group": "vehicle",
+              "field": "车辆数",
+              "keyword": "车辆"
+            },
+            {
+              "group": "fee",
+              "field": "总费用(元)",
+              "keyword": "费用"
+            },
+            {
+              "group": "fee",
+              "field": "额外费用",
+              "keyword": "费用"
+            },
+            {
+              "group": "unit_price",
+              "field": "单价/车",
+              "keyword": "单价"
+            },
+            {
+              "group": "unit_price",
+              "field": "元/瓦",
+              "keyword": "元/瓦"
+            }
+          ],
+          "year_guess": [
+            2023
+          ],
+          "material_hits": {}
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/23 年至 25 年物流源数据/2024年物流发运总台账.xlsx",
+      "file_name": "2024年物流发运总台账.xlsx",
+      "domain": "logistics",
+      "size": 1773046,
+      "year_guess": [
+        2024
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 7049,
+      "sheets": [
+        {
+          "sheet_name": "Sheet1",
+          "header_row": 1,
+          "row_count": 7049,
+          "field_count": 30,
+          "fields": [
+            "发货日期",
+            "客户名称（标准名称；最终客户）",
+            "合同编号",
+            "询比价编号",
+            "地址",
+            "省份",
+            "城市",
+            "路程/KM",
+            "规格",
+            "功率",
+            "日计划发运件数",
+            "日实际发运件数",
+            "日实际发运瓦数",
+            "发运达标率",
+            "要求中标车辆型号",
+            "每车装在托数",
+            "车辆数",
+            "车号",
+            "物流公司",
+            "单价/车",
+            "总费用(元)",
+            "元/瓦",
+            "异常费",
+            "产生原因",
+            "备注（倒运，中转等特殊情况）",
+            "配件",
+            "运输方式",
+            "区域",
+            "月度",
+            "始发地"
+          ],
+          "key_fields": [
+            {
+              "group": "date",
+              "field": "发货日期",
+              "keyword": "日期"
+            },
+            {
+              "group": "region",
+              "field": "区域",
+              "keyword": "区域"
+            },
+            {
+              "group": "province",
+              "field": "省份",
+              "keyword": "省"
+            },
+            {
+              "group": "city",
+              "field": "城市",
+              "keyword": "市"
+            },
+            {
+              "group": "origin",
+              "field": "始发地",
+              "keyword": "始发"
+            },
+            {
+              "group": "customer",
+              "field": "客户名称（标准名称；最终客户）",
+              "keyword": "客户"
+            },
+            {
+              "group": "product_spec",
+              "field": "规格",
+              "keyword": "规格"
+            },
+            {
+              "group": "product_spec",
+              "field": "要求中标车辆型号",
+              "keyword": "型号"
+            },
+            {
+              "group": "transport_mode",
+              "field": "运输方式",
+              "keyword": "运输方式"
+            },
+            {
+              "group": "carrier",
+              "field": "物流公司",
+              "keyword": "物流公司"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日计划发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运瓦数",
+              "keyword": "实际发运"
+            },
+            {
+              "group": "planned_count",
+              "field": "日计划发运件数",
+              "keyword": "计划发运"
+            },
+            {
+              "group": "watt",
+              "field": "功率",
+              "keyword": "功率"
+            },
+            {
+              "group": "watt",
+              "field": "日实际发运瓦数",
+              "keyword": "瓦数"
+            },
+            {
+              "group": "pallet",
+              "field": "每车装在托数",
+              "keyword": "托数"
+            },
+            {
+              "group": "vehicle",
+              "field": "要求中标车辆型号",
+              "keyword": "车辆"
+            },
+            {
+              "group": "vehicle",
+              "field": "车辆数",
+              "keyword": "车辆"
+            },
+            {
+              "group": "fee",
+              "field": "总费用(元)",
+              "keyword": "费用"
+            },
+            {
+              "group": "unit_price",
+              "field": "单价/车",
+              "keyword": "单价"
+            },
+            {
+              "group": "unit_price",
+              "field": "元/瓦",
+              "keyword": "元/瓦"
+            }
+          ],
+          "year_guess": [
+            2024
+          ],
+          "material_hits": {}
+        }
+      ],
+      "errors": []
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/23 年至 25 年物流源数据/2025年物流发运总台账.xlsx",
+      "file_name": "2025年物流发运总台账.xlsx",
+      "domain": "logistics",
+      "size": 2629566,
+      "year_guess": [
+        2025
+      ],
+      "sheet_count": 2,
+      "total_data_rows": 12829,
+      "sheets": [
+        {
+          "sheet_name": "Sheet1",
+          "header_row": 1,
+          "row_count": 12829,
+          "field_count": 30,
+          "fields": [
+            "发货日期",
+            "客户名称（标准名称； 最终客户）",
+            "合同编号",
+            "询比价编号",
+            "地址",
+            "省份",
+            "城市",
+            "路程/KM",
+            "规格",
+            "功率",
+            "日计划发运件数",
+            "日实际发运件数",
+            "日实际发运瓦数",
+            "发运达标率",
+            "要求中标车辆型号",
+            "每车装在托数",
+            "车次",
+            "车号",
+            "物流公司",
+            "单价/车",
+            "总费用(元)",
+            "元/瓦",
+            "额外费用",
+            "产生原因",
+            "备注（倒运，中转等特殊情况）",
+            "配件",
+            "运输方式",
+            "区域",
+            "月度",
+            "始发地"
+          ],
+          "key_fields": [
+            {
+              "group": "date",
+              "field": "发货日期",
+              "keyword": "日期"
+            },
+            {
+              "group": "region",
+              "field": "区域",
+              "keyword": "区域"
+            },
+            {
+              "group": "province",
+              "field": "省份",
+              "keyword": "省"
+            },
+            {
+              "group": "city",
+              "field": "城市",
+              "keyword": "市"
+            },
+            {
+              "group": "origin",
+              "field": "始发地",
+              "keyword": "始发"
+            },
+            {
+              "group": "customer",
+              "field": "客户名称（标准名称； 最终客户）",
+              "keyword": "客户"
+            },
+            {
+              "group": "product_spec",
+              "field": "规格",
+              "keyword": "规格"
+            },
+            {
+              "group": "product_spec",
+              "field": "要求中标车辆型号",
+              "keyword": "型号"
+            },
+            {
+              "group": "transport_mode",
+              "field": "运输方式",
+              "keyword": "运输方式"
+            },
+            {
+              "group": "carrier",
+              "field": "物流公司",
+              "keyword": "物流公司"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日计划发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运瓦数",
+              "keyword": "实际发运"
+            },
+            {
+              "group": "planned_count",
+              "field": "日计划发运件数",
+              "keyword": "计划发运"
+            },
+            {
+              "group": "watt",
+              "field": "功率",
+              "keyword": "功率"
+            },
+            {
+              "group": "watt",
+              "field": "日实际发运瓦数",
+              "keyword": "瓦数"
+            },
+            {
+              "group": "pallet",
+              "field": "每车装在托数",
+              "keyword": "托数"
+            },
+            {
+              "group": "vehicle",
+              "field": "要求中标车辆型号",
+              "keyword": "车辆"
+            },
+            {
+              "group": "vehicle",
+              "field": "车次",
+              "keyword": "车次"
+            },
+            {
+              "group": "fee",
+              "field": "总费用(元)",
+              "keyword": "费用"
+            },
+            {
+              "group": "fee",
+              "field": "额外费用",
+              "keyword": "费用"
+            },
+            {
+              "group": "unit_price",
+              "field": "单价/车",
+              "keyword": "单价"
+            },
+            {
+              "group": "unit_price",
+              "field": "元/瓦",
+              "keyword": "元/瓦"
+            }
+          ],
+          "year_guess": [
+            2025
+          ],
+          "material_hits": {}
+        },
+        {
+          "sheet_name": "Sheet2",
+          "header_row": 1,
+          "row_count": 0,
+          "field_count": 30,
+          "fields": [
+            "发货日期",
+            "客户名称（标准名称； 最终客户）",
+            "合同编号",
+            "询比价编号",
+            "地址",
+            "省份",
+            "城市",
+            "路程/KM",
+            "规格",
+            "功率",
+            "日计划发运件数",
+            "日实际发运件数",
+            "日实际发运瓦数",
+            "发运达标率",
+            "要求中标车辆型号",
+            "每车装在托数",
+            "车次",
+            "车号",
+            "物流公司",
+            "单价/车",
+            "总费用(元)",
+            "元/瓦",
+            "额外费用",
+            "产生原因",
+            "备注（倒运，中转等特殊情况）",
+            "配件",
+            "运输方式",
+            "区域",
+            "月度",
+            "始发地"
+          ],
+          "key_fields": [
+            {
+              "group": "date",
+              "field": "发货日期",
+              "keyword": "日期"
+            },
+            {
+              "group": "region",
+              "field": "区域",
+              "keyword": "区域"
+            },
+            {
+              "group": "province",
+              "field": "省份",
+              "keyword": "省"
+            },
+            {
+              "group": "city",
+              "field": "城市",
+              "keyword": "市"
+            },
+            {
+              "group": "origin",
+              "field": "始发地",
+              "keyword": "始发"
+            },
+            {
+              "group": "customer",
+              "field": "客户名称（标准名称； 最终客户）",
+              "keyword": "客户"
+            },
+            {
+              "group": "product_spec",
+              "field": "规格",
+              "keyword": "规格"
+            },
+            {
+              "group": "product_spec",
+              "field": "要求中标车辆型号",
+              "keyword": "型号"
+            },
+            {
+              "group": "transport_mode",
+              "field": "运输方式",
+              "keyword": "运输方式"
+            },
+            {
+              "group": "carrier",
+              "field": "物流公司",
+              "keyword": "物流公司"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日计划发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运件数",
+              "keyword": "发运件数"
+            },
+            {
+              "group": "shipment_count",
+              "field": "日实际发运瓦数",
+              "keyword": "实际发运"
+            },
+            {
+              "group": "planned_count",
+              "field": "日计划发运件数",
+              "keyword": "计划发运"
+            },
+            {
+              "group": "watt",
+              "field": "功率",
+              "keyword": "功率"
+            },
+            {
+              "group": "watt",
+              "field": "日实际发运瓦数",
+              "keyword": "瓦数"
+            },
+            {
+              "group": "pallet",
+              "field": "每车装在托数",
+              "keyword": "托数"
+            },
+            {
+              "group": "vehicle",
+              "field": "要求中标车辆型号",
+              "keyword": "车辆"
+            },
+            {
+              "group": "vehicle",
+              "field": "车次",
+              "keyword": "车次"
+            },
+            {
+              "group": "fee",
+              "field": "总费用(元)",
+              "keyword": "费用"
+            },
+            {
+              "group": "fee",
+              "field": "额外费用",
+              "keyword": "费用"
+            },
+            {
+              "group": "unit_price",
+              "field": "单价/车",
+              "keyword": "单价"
+            },
+            {
+              "group": "unit_price",
+              "field": "元/瓦",
+              "keyword": "元/瓦"
+            }
+          ],
+          "year_guess": [
+            2025
+          ],
+          "material_hits": {}
+        }
+      ],
+      "errors": []
+    }
+  ],
+  "bom_profiles": [
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-A.xls",
+      "file_name": "NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 84992,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 308,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 308,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "汇流条": 8,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00067"
+      ],
+      "model_guess": "NT1078GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-B.xls",
+      "file_name": "NT1078GDF(哥伦比亚COEXITO-2026-00067)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 85504,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 310,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 310,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "焊带": 1,
+            "汇流条": 8,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00067"
+      ],
+      "model_guess": "NT1078GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(江苏汉腾-2026-00106)Billofmaterials-A.xls",
+      "file_name": "NT1078GDF(江苏汉腾-2026-00106)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 76288,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 253,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 253,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 72,
+            "汇流条": 8,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00106"
+      ],
+      "model_guess": "NT1078GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(泰州中来-2026-00127)Billofmaterials-B.xls",
+      "file_name": "NT1078GDF(泰州中来-2026-00127)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 80896,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 280,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 280,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 3,
+            "线盒": 6
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00127"
+      ],
+      "model_guess": "NT1078GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1078GDF(石家庄科林-2026-00106)Billofmaterials-A (2).xls",
+      "file_name": "NT1078GDF(石家庄科林-2026-00106)Billofmaterials-A (2).xls",
+      "domain": "bom",
+      "size": 89600,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 328,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 328,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 64,
+            "汇流条": 7,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00106"
+      ],
+      "model_guess": "NT1078GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(国科华鑫仙居-2025-01063)Billofmaterials-E.xls",
+      "file_name": "NT1266GDF(国科华鑫仙居-2025-01063)Billofmaterials-E.xls",
+      "domain": "bom",
+      "size": 74240,
+      "year_guess": [
+        2025
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 248,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 248,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2025
+          ],
+          "material_hits": {
+            "玻璃": 12,
+            "间隙贴膜": 1,
+            "汇流条": 5,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2025-01063"
+      ],
+      "model_guess": "NT1266GDF",
+      "bom_version_guess": "E"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(多米尼加Sistemi-2026-00099)Billofmaterials-A.xls",
+      "file_name": "NT1266GDF(多米尼加Sistemi-2026-00099)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 77312,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 265,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 265,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 8,
+            "间隙贴膜": 2,
+            "汇流条": 8,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00099"
+      ],
+      "model_guess": "NT1266GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(天合富家新-2025-00844)Billofmaterials-C.xls",
+      "file_name": "NT1266GDF(天合富家新-2025-00844)Billofmaterials-C.xls",
+      "domain": "bom",
+      "size": 58880,
+      "year_guess": [
+        2025
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 156,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 156,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2025
+          ],
+          "material_hits": {
+            "玻璃": 32,
+            "焊带": 7,
+            "汇流条": 10,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2025-00844"
+      ],
+      "model_guess": "NT1266GDF",
+      "bom_version_guess": "C"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(柬埔寨太阳花-2026-00082)Billofmaterials-C.xls",
+      "file_name": "NT1266GDF(柬埔寨太阳花-2026-00082)Billofmaterials-C.xls",
+      "domain": "bom",
+      "size": 62464,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 180,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 180,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 26,
+            "焊带": 1,
+            "汇流条": 9,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00082"
+      ],
+      "model_guess": "NT1266GDF",
+      "bom_version_guess": "C"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(苏州康达尔-2026-00087)Billofmaterials-B.xls",
+      "file_name": "NT1266GDF(苏州康达尔-2026-00087)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 79872,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 276,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 276,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 50,
+            "焊带": 2,
+            "汇流条": 12,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00087"
+      ],
+      "model_guess": "NT1266GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(苏格兰-2026-00048)Billofmaterials-A.xls",
+      "file_name": "NT1266GDF(苏格兰-2026-00048)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 48128,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 100,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 100,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 9,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 4,
+            "线盒": 9
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00048"
+      ],
+      "model_guess": "NT1266GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(苏格兰-2026-00048)Billofmaterials-B(2).xls",
+      "file_name": "NT1266GDF(苏格兰-2026-00048)Billofmaterials-B(2).xls",
+      "domain": "bom",
+      "size": 47104,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 96,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 96,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 9,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 4,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00048"
+      ],
+      "model_guess": "NT1266GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT1266GDF(萨尔瓦多Compania-2026-00103)Billofmaterials-A.xls",
+      "file_name": "NT1266GDF(萨尔瓦多Compania-2026-00103)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 70656,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 268,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 268,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 50,
+            "汇流条": 4,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00103"
+      ],
+      "model_guess": "NT1266GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(印尼Hijau-2026-00117)Billofmaterials-A.xls",
+      "file_name": "NT12R66GDF(印尼Hijau-2026-00117)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 46080,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 90,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 90,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00117"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(印尼宾坦岛-2026-00096)Billofmaterials-A.xls",
+      "file_name": "NT12R66GDF(印尼宾坦岛-2026-00096)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 53248,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 130,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 130,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00096"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(危地马拉ECOLUMEN-2026-00121)Billofmaterials-B.xls",
+      "file_name": "NT12R66GDF(危地马拉ECOLUMEN-2026-00121)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 83456,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 298,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 298,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00121"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(哥伦比亚Amara-2026-00115)Billofmaterials-A (1).xls",
+      "file_name": "NT12R66GDF(哥伦比亚Amara-2026-00115)Billofmaterials-A (1).xls",
+      "domain": "bom",
+      "size": 83968,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 299,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 299,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "汇流条": 5,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00115"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(多米尼加Escala-2026-00107)Billofmaterials-B.xls",
+      "file_name": "NT12R66GDF(多米尼加Escala-2026-00107)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 57856,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 204,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 204,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "焊带": 2,
+            "汇流条": 4,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00107"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-B.xls",
+      "file_name": "NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 50176,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 132,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 132,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 8,
+            "间隙贴膜": 1,
+            "汇流条": 9,
+            "接线盒": 6,
+            "线盒": 8
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00077"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-C.xls",
+      "file_name": "NT12R66GDF(德国Anumar-2026-00077)Billofmaterials-C.xls",
+      "domain": "bom",
+      "size": 49664,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 135,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 135,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 8,
+            "间隙贴膜": 1,
+            "焊带": 1,
+            "汇流条": 9,
+            "接线盒": 6,
+            "线盒": 8
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00077"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "C"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(德国Kumandra芜湖电池-2026-00113)Billofmaterials-B.xls",
+      "file_name": "NT12R66GDF(德国Kumandra芜湖电池-2026-00113)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 85504,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 308,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 308,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "汇流条": 4,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00113"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(意大利-2026-00097)Billofmaterials-B.xls",
+      "file_name": "NT12R66GDF(意大利-2026-00097)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 49152,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 103,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 103,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 8,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 6,
+            "线盒": 8
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00097"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(意大利-2026-00097)Billofmaterials-C.xls",
+      "file_name": "NT12R66GDF(意大利-2026-00097)Billofmaterials-C.xls",
+      "domain": "bom",
+      "size": 49664,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 106,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 106,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 8,
+            "间隙贴膜": 1,
+            "汇流条": 9,
+            "接线盒": 6,
+            "线盒": 8
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00097"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "C"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-A.xls",
+      "file_name": "NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 83968,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 299,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 299,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00109"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-B.xls",
+      "file_name": "NT12R66GDF(日本Krannich-2026-00109)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 84992,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 303,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 303,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00109"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(法国-2026-00104)Billofmaterials-B (2).xls",
+      "file_name": "NT12R66GDF(法国-2026-00104)Billofmaterials-B (2).xls",
+      "domain": "bom",
+      "size": 54272,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 133,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 133,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 11,
+            "焊带": 1,
+            "汇流条": 5,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00104"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(法国Synapsun-2026-00114)Billofmaterials-A.xls",
+      "file_name": "NT12R66GDF(法国Synapsun-2026-00114)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 51712,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 120,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 120,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 9,
+            "汇流条": 4,
+            "接线盒": 4,
+            "线盒": 4
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00114"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(深圳建融钢边框-2025-01073)Billofmaterials-D(1).xls",
+      "file_name": "NT12R66GDF(深圳建融钢边框-2025-01073)Billofmaterials-D(1).xls",
+      "domain": "bom",
+      "size": 88064,
+      "year_guess": [
+        2025
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 413,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 413,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2025
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "焊带": 6,
+            "汇流条": 15,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2025-01073"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "D"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(突尼斯MIM2A-2026-00061)Billofmaterials-B.xls",
+      "file_name": "NT12R66GDF(突尼斯MIM2A-2026-00061)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 65024,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 196,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 196,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 11,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00061"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (2).xls",
+      "file_name": "NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (2).xls",
+      "domain": "bom",
+      "size": 84480,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 301,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 301,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 8,
+            "间隙贴膜": 3,
+            "汇流条": 8,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00120"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (3).xls",
+      "file_name": "NT12R66GDF(肯尼亚Nationwide-2026-00120)Billofmaterials-A (3).xls",
+      "domain": "bom",
+      "size": 83456,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 298,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 298,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 10,
+            "汇流条": 7,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00120"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(菲律宾LUCA-2026-00102)Billofmaterials-B.xls",
+      "file_name": "NT12R66GDF(菲律宾LUCA-2026-00102)Billofmaterials-B.xls",
+      "domain": "bom",
+      "size": 65024,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 194,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 194,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 12,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00102"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "B"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R66GDF(西班牙SII-2026-00111)Billofmaterials-A.xls",
+      "file_name": "NT12R66GDF(西班牙SII-2026-00111)Billofmaterials-A.xls",
+      "domain": "bom",
+      "size": 83968,
+      "year_guess": [
+        2026
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 299,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 299,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2026
+          ],
+          "material_hits": {
+            "玻璃": 7,
+            "间隙贴膜": 1,
+            "汇流条": 4,
+            "接线盒": 5,
+            "线盒": 7
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2026-00111"
+      ],
+      "model_guess": "NT12R66GDF",
+      "bom_version_guess": "A"
+    },
+    {
+      "path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted/BOM 源数据/BOM/NT12R78GDF(华电南通-2025-01220)Billofmaterials-D.xls",
+      "file_name": "NT12R78GDF(华电南通-2025-01220)Billofmaterials-D.xls",
+      "domain": "bom",
+      "size": 75264,
+      "year_guess": [
+        2025
+      ],
+      "sheet_count": 1,
+      "total_data_rows": 247,
+      "sheets": [
+        {
+          "sheet_name": "材料清单",
+          "header_row": 5,
+          "row_count": 247,
+          "field_count": 8,
+          "fields": [
+            "序号",
+            "SAP编码",
+            "物料名称",
+            "描述",
+            "标准用量",
+            "单位",
+            "生产损耗",
+            "备注"
+          ],
+          "key_fields": [
+            {
+              "group": "material_name",
+              "field": "物料名称",
+              "keyword": "物料名称"
+            },
+            {
+              "group": "spec_desc",
+              "field": "描述",
+              "keyword": "描述"
+            },
+            {
+              "group": "quantity",
+              "field": "标准用量",
+              "keyword": "用量"
+            },
+            {
+              "group": "unit",
+              "field": "单位",
+              "keyword": "单位"
+            }
+          ],
+          "year_guess": [
+            2025
+          ],
+          "material_hits": {
+            "玻璃": 12,
+            "间隙贴膜": 3,
+            "汇流条": 5,
+            "接线盒": 3,
+            "线盒": 5
+          }
+        }
+      ],
+      "errors": [],
+      "order_no_guess": [
+        "2025-01220"
+      ],
+      "model_guess": "NT12R78GDF",
+      "bom_version_guess": "D"
+    }
+  ],
+  "question_stats": {
+    "total": 1391,
+    "domain": {
+      "bom": 12,
+      "logistics": 1377,
+      "unknown": 2
+    },
+    "category": {
+      "logistics_other": 408,
+      "logistics_shipment_watt": 305,
+      "logistics_vehicle_count": 175,
+      "logistics_cost_sort": 174,
+      "logistics_company_unit_price": 78,
+      "logistics_ambiguous_or_current": 52,
+      "logistics_total_fee": 42,
+      "logistics_topn": 36,
+      "logistics_procurement_task": 34,
+      "logistics_count": 26,
+      "logistics_transport_mode_count": 18,
+      "logistics_loading_efficiency": 9,
+      "logistics_distance": 7,
+      "logistics_plan_actual_variance": 5,
+      "logistics_driver_consistency": 5,
+      "bom_material_compare": 4,
+      "bom_material_spec": 4,
+      "bom_material_table": 4,
+      "logistics_rate_statistics": 3,
+      "unknown": 2
+    },
+    "year": {
+      "2023": 343,
+      "2024": 345,
+      "2025": 480,
+      "2026": 167,
+      "未识别": 344
+    },
+    "needs_db_2026": 160
+  },
+  "outputs": {
+    "extract_dir": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/attachments_extracted",
+    "sample_questions": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/sample_questions.jsonl",
+    "report": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/data_profile_report.md",
+    "profile_json": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/eval/workdir/phase0_data_profile.json"
+  }
+}

@@ -81,6 +81,9 @@ class LogisticsDataQaPlanner:
         "总瓦数",
         "发运瓦数",
         "总发运瓦数",
+        "发运合计多少量",
+        "物流发运合计多少量",
+        "发运多少量",
     )
     TRIP_KEYWORDS = ("总车次", "承运车次", "发运车次", "多少车次", "多少车", "总共发了多少车次", "总车数", "车数", "车辆数")
     TOTAL_FEE_KEYWORDS = (
@@ -109,6 +112,9 @@ class LogisticsDataQaPlanner:
         "hist_multi_origin_customers",
         "sys_companies_without_tasks",
         "hist_plan_actual_deviation",
+        "hist_avg_pallet_per_vehicle",
+        "sys_driver_phone_name_consistency",
+        "sys_driver_id_phone_consistency",
         "sys_special_total_fee",
     }
 
@@ -173,10 +179,17 @@ class LogisticsDataQaPlanner:
                 clarification_missing_slots=["目的省份分组口径", "车型口径", "平均单车费用口径"],
                 clarification_reason="当前查询链路不支持始发地、目的省份、车型和平均单车费用的组合报表。",
             )
-        if self._is_hist_origin_vehicle_breakdown_question(compact) and pre_year in {2023, 2024, 2025}:
-            # “某年某基地始发不同车型的车次/费用/单车费用”是源数据可稳定计算的明细汇总题，
-            # 需要在复杂报表兜底之前放行，避免被多指标保护逻辑误降级为 B。
-            filters: dict[str, Any] = {"year": pre_year}
+        if self._is_hist_origin_vehicle_breakdown_question(compact) and (pre_year in {2023, 2024, 2025} or pre_year is None):
+            # “某年某基地始发不同/各车型的车次/费用/装载托数”是源数据可稳定计算的明细汇总题，
+            # 需要在复杂报表兜底之前放行，避免被“平均每车装载托数”通用澄清策略截断。
+            filters: dict[str, Any] = {}
+            if pre_year in {2023, 2024, 2025}:
+                filters["year"] = pre_year
+            else:
+                # pallet_per_vehicle 当前只存在历史台账，问题未给时间时不追问，默认用可审计的 2023-2025 历史范围，
+                # 并在 service 输出中明确说明 2026 系统侧暂无该字段，避免伪造 2026 装载托数。
+                filters["years"] = [2023, 2024, 2025]
+                filters["source_scope"] = "hist_pallet_metric"
             dimensions = ["required_vehicle_type"]
             if pre_origin_place:
                 filters["origin_place"] = pre_origin_place
@@ -185,10 +198,15 @@ class LogisticsDataQaPlanner:
                 # 保留始发地分组，让业务能看到真实源数据中可核验的始发地 + 车型汇总。
                 filters["include_origin_dimension"] = True
                 dimensions = ["origin_place", "required_vehicle_type"]
+            metrics = ["shipment_trip_count", "total_fee", "avg_fee_per_trip"]
+            if any(keyword in compact for keyword in ("发运件数", "总件数", "件数")):
+                metrics.insert(1, "shipment_count")
+            if "平均每车装载托数" in compact:
+                metrics.append("avg_pallet_per_vehicle")
             return LogisticsDataQaPlan(
                 intent="aggregate",
                 query_key="hist_origin_vehicle_breakdown_summary",
-                metrics=["shipment_trip_count", "total_fee", "avg_fee_per_trip"],
+                metrics=metrics,
                 dimensions=dimensions,
                 filters=filters,
                 group_by=dimensions,
@@ -1009,6 +1027,75 @@ class LogisticsDataQaPlanner:
         system_base_name = self._extract_system_base_name(compact)
         system_base_code = self._extract_system_base_code(compact)
         quarter = self.slot_extractor.extract_quarter(compact)
+        special_scope = None
+        if "经营计划" in compact:
+            special_scope = "planning"
+        elif "辅料送样" in compact:
+            special_scope = "sample"
+        elif "刘娟" in compact:
+            special_scope = "liujuan"
+
+        if (
+            year in {2023, 2024, 2025}
+            and "平均每车装载托数" in compact
+            and origin_place
+            and months
+        ):
+            # 历史台账已落地 pallet_per_vehicle 字段，且题目明确年份、月份和始发地；
+            # 默认按非空发运记录平均，避免把可确定计算的问题继续误判为“需补充口径”。
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="hist_avg_pallet_per_vehicle",
+                metrics=["avg_pallet_per_vehicle"],
+                dimensions=[],
+                filters={"year": year, "months": months, "origin_place": origin_place},
+            )
+
+        if year == 2026 and "手机号" in compact and "司机姓名" in compact and any(keyword in compact for keyword in ("多个", "多名", "对应多个", "关联多个", "一号多人")):
+            # 2026 派车表已有手机号和司机姓名字段，可按手机号分组做确定性一致性检查，
+            # 不需要继续泛化追问“对账对象/输出形态”。
+            return LogisticsDataQaPlan(
+                intent="detail_list",
+                query_key="sys_driver_phone_name_consistency",
+                metrics=["driver_name_count", "assign_task_count"],
+                dimensions=["driver_phone"],
+                filters={"year": 2026, "top_n": 50},
+                group_by=["driver_phone"],
+                sort=[{"field": "assign_task_count", "direction": "desc"}],
+                limit=50,
+            )
+
+        if year == 2026 and "身份证号" in compact and "手机号" in compact and any(keyword in compact for keyword in ("多个", "对应多个", "关联多个", "一人多号")):
+            # 2026 派车表已有身份证号和手机号字段，可按身份证号分组返回多手机号异常清单。
+            return LogisticsDataQaPlan(
+                intent="detail_list",
+                query_key="sys_driver_id_phone_consistency",
+                metrics=["driver_phone_count", "assign_task_count"],
+                dimensions=["driver_id_number"],
+                filters={"year": 2026, "top_n": 50},
+                group_by=["driver_id_number"],
+                sort=[{"field": "assign_task_count", "direction": "desc"}],
+                limit=50,
+            )
+
+        if year == 2026 and special_scope and self._is_mw_question(compact):
+            # 2026 特殊业务范围 + 总发运量已具备确定性过滤条件；未给月份时按系统侧当前累计，
+            # 与“2026 年总发运量”口径一致，不再要求用户额外说明 1 月或 1-2 月。
+            filters: dict[str, Any] = {
+                "year": 2026,
+                "months": months or None,
+                "special_scope": special_scope,
+                "default_ytd_scope": not bool(months),
+            }
+            if monthly_breakdown:
+                filters["monthly_breakdown"] = True
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="sys_mw_and_trip_count",
+                metrics=["shipment_mw"],
+                dimensions=["biz_month"] if monthly_breakdown else [],
+                filters=filters,
+            )
 
         if region and any(keyword in compact for keyword in ("总发运件数", "发运件数", "总件数", "多少件")):
             # “华东区域历史物流一共发运了多少件”这类问法没有显式写“总发运件数”，但业务口径仍是 actual_qty 件数汇总。
@@ -1090,6 +1177,27 @@ class LogisticsDataQaPlanner:
 
         # 历史承运商简称题族：如“2023年晶茂物流全年总发运量/总运输费用/单瓦运输成本/承运车次”。
         # 这里只处理已在历史台账中可校验的承运商别名，避免把任意“物流”字样误当承运商。
+        if (
+            year in {2023, 2024, 2025}
+            and self._is_mw_question(compact)
+            and not region
+            and not province
+            and not customer_name
+            and not carrier_name
+            and not origin_place
+            and not transport_mode
+            and not any(keyword in compact for keyword in ("各", "排名", "前十", "前10", "占比", "表"))
+        ):
+            # “2023年物流发运合计多少量”这类问法里的“量”按当前稳定 MW 发运量口径处理；
+            # 用户已明确年份和全量主体时，不再因没有显式写 MW 而进入澄清。
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="hist_mw_summary",
+                metrics=["shipment_mw"],
+                dimensions=[],
+                filters={"year": year, "months": months or None},
+            )
+
         if year in {2023, 2024, 2025} and carrier_name and not origin_place and not customer_name:
             if self._is_mw_question(compact):
                 return LogisticsDataQaPlan(
@@ -1097,7 +1205,7 @@ class LogisticsDataQaPlanner:
                     query_key="hist_mw_summary",
                     metrics=["shipment_mw"],
                     dimensions=[],
-                    filters={"year": year, "months": months, "carrier_name": carrier_name},
+                    filters={"year": year, "months": months or None, "carrier_name": carrier_name},
                 )
             if self._is_unit_fee_question(compact):
                 return LogisticsDataQaPlan(
@@ -1105,7 +1213,7 @@ class LogisticsDataQaPlanner:
                     query_key="hist_unit_fee_per_watt",
                     metrics=["unit_fee_per_watt"],
                     dimensions=[],
-                    filters={"year": year, "months": months, "carrier_name": carrier_name},
+                    filters={"year": year, "months": months or None, "carrier_name": carrier_name},
                 )
             if self._is_trip_question(compact):
                 return LogisticsDataQaPlan(
@@ -1113,7 +1221,7 @@ class LogisticsDataQaPlanner:
                     query_key="hist_total_fee_summary",
                     metrics=["shipment_trip_count"],
                     dimensions=[],
-                    filters={"year": year, "months": months, "carrier_name": carrier_name},
+                    filters={"year": year, "months": months or None, "carrier_name": carrier_name},
                 )
             if self._is_total_fee_question(compact):
                 return LogisticsDataQaPlan(
@@ -1121,7 +1229,7 @@ class LogisticsDataQaPlanner:
                     query_key="hist_total_fee_summary",
                     metrics=["total_fee"],
                     dimensions=[],
-                    filters={"year": year, "months": months, "carrier_name": carrier_name},
+                    filters={"year": year, "months": months or None, "carrier_name": carrier_name},
                 )
 
         if year == 2026 and months and "运量综合" in compact and self._is_mw_question(compact):
@@ -1942,14 +2050,16 @@ class LogisticsDataQaPlanner:
             矩阵表等真正需要模板确认的问题误迁为 A。
         """
 
-        if "不同车型" not in question or "始发" not in question:
+        if not (("不同车型" in question or "各车型" in question) and "始发" in question):
             return False
         metric_hits = sum(
             1
             for keyword_group in (
                 ("发运车次", "车次", "车数"),
+                ("发运件数", "总件数", "件数"),
                 ("总费用", "总运费", "运输费用"),
                 ("平均单车费用", "平均单车运费", "平均单价/车"),
+                ("平均每车装载托数", "装载托数"),
             )
             if any(keyword in question for keyword in keyword_group)
         )
