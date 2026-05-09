@@ -76,7 +76,7 @@
             </div>
           </div>
           <el-button
-            type="success"
+            type="primary"
             :disabled="!powerModelSelectedFile"
             :loading="powerModelUploading"
             @click="uploadPowerModelFile"
@@ -891,8 +891,8 @@ function handlePowerHistoryPageChange(page: number) {
 }
 
 .upload-type-badge--power {
-  background: rgba(47, 110, 66, 0.1);
-  color: var(--enterprise-primary);
+  background: var(--accent-violet-soft);
+  color: #6d28d9;
 }
 
 .upload-card {
@@ -989,8 +989,8 @@ function handlePowerHistoryPageChange(page: number) {
 }
 
 .power-result-card {
-  border-color: rgba(47, 110, 66, 0.2);
-  background: #fbfffc;
+  border-color: rgba(139, 92, 246, 0.22);
+  background: #fbfaff;
 }
 
 .history-panel {
@@ -1001,7 +1001,7 @@ function handlePowerHistoryPageChange(page: number) {
 
 .history-tabs {
   min-width: 0;
-  --el-color-primary: var(--enterprise-primary);
+  --el-color-primary: var(--accent-blue);
 }
 
 :deep(.el-tab-pane) {
