@@ -645,12 +645,13 @@ function handlePowerHistoryPageChange(page: number) {
 
 .enterprise-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
-  gap: 24px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 420px);
+  gap: 28px;
   padding: 34px;
   background:
-    radial-gradient(circle at 8% 0%, rgba(47, 110, 66, 0.12), transparent 26%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+    radial-gradient(circle at 12% 0%, var(--accent-blue-soft), transparent 28%),
+    radial-gradient(circle at 94% 12%, var(--accent-violet-soft), transparent 30%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(247, 247, 248, 0.92));
 }
 
 .page-kicker,
@@ -713,10 +714,25 @@ function handlePowerHistoryPageChange(page: number) {
   height: 28px;
   padding: 0 10px;
   border-radius: 999px;
-  background: rgba(47, 110, 66, 0.08);
-  color: var(--enterprise-primary);
+  background: #f4f4f5;
+  color: #3f3f46;
   font-size: 12px;
   font-weight: 600;
+}
+
+.hero-tags span:nth-child(1) {
+  background: var(--accent-blue-soft);
+  color: #1d4ed8;
+}
+
+.hero-tags span:nth-child(2) {
+  background: var(--accent-amber-soft);
+  color: #92400e;
+}
+
+.hero-tags span:nth-child(3) {
+  background: var(--accent-violet-soft);
+  color: #6d28d9;
 }
 
 .operation-guide {
@@ -756,15 +772,53 @@ function handlePowerHistoryPageChange(page: number) {
   letter-spacing: 0.08em;
 }
 
-.ops-overview-grid {
+.primary-overview {
   display: grid;
   min-width: 0;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  align-self: stretch;
 }
 
-.hero-metric-strip {
-  gap: 12px;
+.secondary-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #eceff3;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #64748b;
+  box-shadow: var(--enterprise-ring);
+  font-size: 12px;
+}
+
+.status-chip b {
+  color: #111827;
+  font-weight: 650;
+}
+
+.status-chip--violet {
+  border-color: rgba(139, 92, 246, 0.22);
+  background: var(--accent-violet-soft);
+}
+
+.status-chip--amber {
+  border-color: rgba(245, 158, 11, 0.24);
+  background: var(--accent-amber-soft);
+}
+
+.status-chip--mint {
+  border-color: rgba(20, 184, 166, 0.22);
+  background: var(--accent-mint-soft);
 }
 
 .overview-card {
