@@ -655,8 +655,7 @@ function handlePowerHistoryPageChange(page: number) {
 }
 
 .page-kicker,
-.section-eyebrow,
-.guide-label {
+.section-eyebrow {
   display: inline-flex;
   align-items: center;
   color: var(--enterprise-primary);
@@ -686,7 +685,6 @@ function handlePowerHistoryPageChange(page: number) {
 .panel-head p,
 .history-head p,
 .history-tip,
-.guide-steps span,
 .overview-card em,
 .file-info span,
 .next-action {
@@ -840,10 +838,6 @@ function handlePowerHistoryPageChange(page: number) {
   white-space: nowrap;
   font-style: normal;
   font-size: 12px;
-}
-
-.hero-metric-strip .overview-card em {
-  display: none;
 }
 
 .upload-zone-grid {
