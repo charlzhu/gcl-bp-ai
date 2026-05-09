@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, File, Path, Request, UploadFile
 
-from backend.app.api.deps import get_plan_power_model_service, require_plan_power_admin
+from backend.app.api.deps import get_plan_power_model_service, require_plan_power_write_access
 from backend.app.domains.plan_bom.schemas.power_model import (
     PowerModelImportResponse,
     PowerModelVersionDetailResponse,
@@ -18,7 +18,7 @@ router = APIRouter()
 async def import_power_model(
     request: Request,
     file: UploadFile = File(...),
-    _: None = Depends(require_plan_power_admin),
+    _write_access: None = Depends(require_plan_power_write_access),
     service: PowerModelService = Depends(get_plan_power_model_service),
 ) -> ApiResponse:
     """导入计划 BOM 功率模型 xlsm。
@@ -28,6 +28,9 @@ async def import_power_model(
 
     返回：
         统一 ApiResponse，data 中包含 import_status、version 和详情摘要。
+
+    权限说明：
+        已按用户要求移除旧的临时管理令牌；生产环境在正式用户/权限模块接入前由环境门禁阻断写操作。
     """
     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
     if not (file.filename or "").lower().endswith(".xlsm"):
@@ -83,7 +86,7 @@ def get_power_model_version_detail(
 def activate_power_model_version(
     request: Request,
     version_id: int = Path(..., ge=1, description="功率模型版本 ID"),
-    _: None = Depends(require_plan_power_admin),
+    _write_access: None = Depends(require_plan_power_write_access),
     service: PowerModelService = Depends(get_plan_power_model_service),
 ) -> ApiResponse:
     """激活功率模型版本。
@@ -93,6 +96,9 @@ def activate_power_model_version(
 
     返回：
         激活后的版本摘要。仓储层保证最多一个 active 版本。
+
+    权限说明：
+        已按用户要求移除旧的临时管理令牌；生产环境在正式用户/权限模块接入前由环境门禁阻断写操作。
     """
     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
     try:

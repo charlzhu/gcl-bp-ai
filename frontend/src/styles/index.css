@@ -4,13 +4,35 @@
   font-family: "Avenir Next", "SF Pro Display", "PingFang SC", "Hiragino Sans GB",
     "Microsoft YaHei", sans-serif;
 
-  /* -------- 品牌色板（绿色系，与协鑫品牌一致）-------- */
+  /* -------- 品牌色板（绿色只保留为业务成功/品牌点缀，避免页面单色化）-------- */
   --brand-green: #2f6e42;
   --brand-green-strong: #1f4d2d;
   --brand-green-light: #3f7b50;
   --brand-green-soft: rgba(47, 110, 66, 0.08);
   --brand-green-bg: #f0f7f4;
   --brand-green-border: rgba(47, 110, 66, 0.18);
+
+  /* -------- ChatGPT-like 中性色 + 多彩辅助色 -------- */
+  --chatgpt-bg: #f7f7f8;
+  --chatgpt-sidebar: #f9f9f9;
+  --chatgpt-panel: #ffffff;
+  --accent-blue: #3b82f6;
+  --accent-blue-soft: rgba(59, 130, 246, 0.1);
+  --accent-violet: #8b5cf6;
+  --accent-violet-soft: rgba(139, 92, 246, 0.1);
+  --accent-amber: #f59e0b;
+  --accent-amber-soft: rgba(245, 158, 11, 0.12);
+  --accent-coral: #f97373;
+  --accent-coral-soft: rgba(249, 115, 115, 0.12);
+  --accent-mint: #14b8a6;
+  --accent-mint-soft: rgba(20, 184, 166, 0.1);
+
+  /* -------- 企业级平台设计 token（简约、生产级、可复用）-------- */
+  --enterprise-primary: #111827;
+  --enterprise-primary-soft: rgba(17, 24, 39, 0.06);
+  --enterprise-ring: 0 0 0 1px rgba(15, 23, 42, 0.04);
+  --enterprise-card-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
+  --enterprise-muted-bg: #f6f8f7;
 
   /* -------- 语义色 -------- */
   --success: #2f6e42;

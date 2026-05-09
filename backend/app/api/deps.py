@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
@@ -19,6 +19,9 @@ from backend.app.domains.plan_bom.services.answer_presentation_service import Pl
 from backend.app.domains.plan_bom.services.excel_import_service import PlanBomExcelImportService
 from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
 from backend.app.domains.plan_bom.services.power_model_service import PowerModelService
+from backend.app.domains.plan_bom.services.power_config_resolver_service import PlanBomPowerConfigResolverService
+from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine
+from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
 from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
 from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
 from backend.app.repositories.logistics_query_repo import InMemoryLogisticsQueryRepository
@@ -170,34 +173,27 @@ def get_plan_bom_query_service(
     return PlanBomQueryService(repository=PlanBomQueryRepository(db))
 
 
-def require_plan_power_admin(
-    x_plan_power_admin_token: str | None = Header(default=None, alias="X-Plan-Power-Admin-Token"),
+
+def require_plan_power_write_access(
     settings: Settings = Depends(get_settings),
 ) -> None:
-    """校验功率模型管理写接口的管理员令牌。
+    """功率模型写操作的临时环境保护。
 
     参数：
-        x_plan_power_admin_token: 请求头里的管理令牌；
-        settings: 应用配置，读取 `plan_power_admin_token`。
+        settings: 当前应用配置，用于判断运行环境。
 
     返回：
-        校验通过时返回 None。
+        无返回值。非生产环境允许继续执行，生产环境在正式用户/权限模块接入前阻断写操作。
 
-    关键业务逻辑：
-        M2 的模型导入和激活会改变后续功率模型版本状态，属于管理写操作。
-        本地 / 测试环境若未配置令牌则允许联调；dev/prod 环境必须配置并匹配令牌。
+    业务说明：
+        用户已明确废弃旧的功率模型管理令牌，因此这里不再校验临时 token。
+        为避免生产环境在权限模块接入前暴露模型上传/生效切换能力，先以环境门禁兜底。
     """
-    expected_token = settings.plan_power_admin_token.strip()
-    if not expected_token:
-        if settings.app_env in {"local", "test"}:
-            return None
+    if settings.app_env == "prod":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="未配置功率模型管理令牌，拒绝执行管理写操作。",
+            detail="功率模型写操作需要用户权限模块授权后才能在生产环境执行。",
         )
-    if x_plan_power_admin_token != expected_token:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="功率模型管理令牌无效。")
-    return None
 
 
 def get_plan_power_model_service(
@@ -220,9 +216,13 @@ def get_plan_bom_qa_service(
     不复用物流 query_key，也不让 LLM 直接生成事实性答案。
     """
     repository = PlanBomQueryRepository(db)
+    engine = PowerPredictionEngine(db)
     return PlanBomQaService(
         repository=repository,
         query_service=PlanBomQueryService(repository=repository),
         nlu_service=PlanBomNluCenterService(repository=repository),
         presentation_service=PlanBomAnswerPresentationService(),
+        power_config_resolver=PlanBomPowerConfigResolverService(db, repository=repository),
+        power_prediction_engine=engine,
+        power_recommendation_service=PowerRecommendationService(db, engine=engine),
     )

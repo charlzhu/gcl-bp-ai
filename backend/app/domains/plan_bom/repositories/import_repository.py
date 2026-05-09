@@ -83,6 +83,47 @@ class PlanBomImportRepository:
             self.db.rollback()
             raise
 
+    def list_batches(self, *, limit: int = 50) -> list[dict]:
+        """查询 BOM Excel 上传批次历史。
+
+        参数：
+            limit: 最多返回的批次数量，接口层已限制范围。
+
+        返回值：
+            按创建时间倒序排列的批次摘要列表。
+        """
+        rows = (
+            self.db.query(PlanBomImportBatch)
+            .order_by(PlanBomImportBatch.created_at.desc(), PlanBomImportBatch.batch_id.desc())
+            .limit(limit)
+            .all()
+        )
+        return [self.batch_to_dict(row) for row in rows]
+
+    def batch_to_dict(self, batch: PlanBomImportBatch) -> dict:
+        """将导入批次 ORM 转为接口摘要字典。
+
+        参数：
+            batch: 计划 BOM 导入批次对象。
+
+        返回值：
+            前端历史列表可直接展示的字典。
+        """
+        return {
+            "batch_id": batch.batch_id,
+            "source_type": batch.source_type,
+            "source_tag": batch.source_tag,
+            "file_name": batch.file_name,
+            "file_hash": batch.file_hash,
+            "status": batch.status,
+            "total_files": batch.total_files,
+            "total_headers": batch.total_headers,
+            "total_lines": batch.total_lines,
+            "error_message": batch.error_message,
+            "created_at": batch.created_at.isoformat() if batch.created_at else None,
+            "finished_at": batch.finished_at.isoformat() if batch.finished_at else None,
+        }
+
     def _delete_existing_versions(self, headers: list[PlanBomHeader]) -> None:
         """删除本批次覆盖的旧 BOM 版本数据。
 

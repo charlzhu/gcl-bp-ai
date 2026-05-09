@@ -1,0 +1,22 @@
+# TASK-plan-bom-upload-history-power-version 静态扫描
+
+扫描对象：本轮 scoped diff（后端 token 移除、BOM 上传历史、功率模型版本默认生效与前端历史/切换 UI）。
+
+```text
+## hardcoded secrets
+无发现
+## shell injection
+无发现
+## dangerous eval/exec
+无发现
+## unsafe deserialization
+无发现
+## SQL injection formatting
+无发现
+```
+
+额外检查：
+
+- `frontend/src` 中未发现 `X-Plan-Power-Admin-Token`、`powerModelAdminToken`、`adminToken` 等旧功率模型 token 请求头/状态。
+- 后端当前功率模型 endpoint 不再依赖 `require_plan_power_admin`。
+- 前端功率模型上传仅使用 FormData 上传文件，不解析 Excel、不执行宏、不做功率计算。

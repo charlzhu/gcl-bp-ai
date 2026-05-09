@@ -31,6 +31,7 @@ class PlanBomAnswerPresentationService:
         "mixed",
         "error",
     }
+    POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation"}
 
     def __init__(
         self,
@@ -71,6 +72,11 @@ class PlanBomAnswerPresentationService:
         """
 
         fallback = self._build_deterministic_presentation(response)
+        if response.nlu.intent in self.POWER_INTENTS:
+            # 功率预测类答案包含中心功率、档位比例、供应商匹配度等数值结果。
+            # 这些结果只能来自 M3 确定性服务，表达层不再调用 LLM，避免改写或新增数值事实。
+            fallback.debug["fallback_reason"] = "plan_power_deterministic_only"
+            return fallback
         if not self.enabled:
             fallback.debug["fallback_reason"] = "presentation_disabled"
             return fallback
@@ -99,16 +105,19 @@ class PlanBomAnswerPresentationService:
         """
 
         display_type = self._resolve_display_type(response)
+        caveats = [
+            "所有订单、物料、版本和规格均来自已导入的计划 BOM 结构化数据。",
+            "LLM 只允许优化表达，不作为查数或改写结果来源。",
+        ]
+        if response.nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
+            caveats.append("功率预测数值来自后端确定性功率模型；LLM、前端和 Excel 宏均不参与计算。")
         presentation = PlanBomPresentation(
             display_type=display_type,
             title=self._build_title(response),
             answer=response.answer_summary,
             highlights=self._build_highlights(response),
             table_spec=response.result_table if response.result_table.rows else None,
-            caveats=[
-                "所有订单、物料、版本和规格均来自已导入的计划 BOM 结构化数据。",
-                "LLM 只允许优化表达，不作为查数或改写结果来源。",
-            ],
+            caveats=caveats,
             debug={"presentation_source": "deterministic", "status_code": response.status.code},
         )
         if response.classification == "B":
@@ -159,6 +168,10 @@ class PlanBomAnswerPresentationService:
         """
 
         if response.classification == "A":
+            if response.nlu.intent == "plan_power_prediction":
+                return "计划 BOM 功率预测结果"
+            if response.nlu.intent == "plan_power_supplier_recommendation":
+                return "计划 BOM 供应商功率推荐结果"
             return "计划 BOM 查询结果"
         if response.classification == "B":
             return "需要补充条件后继续查询"
@@ -182,6 +195,14 @@ class PlanBomAnswerPresentationService:
             highlights.append(f"返回 {len(response.result_table.rows)} 条结构化记录。")
         if response.nlu.slots.get("material_category"):
             highlights.append(f"材料范围：{', '.join(response.nlu.slots['material_category'])}")
+        if response.nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
+            model_code = response.raw_result.get("bom_config_resolution", {}).get("model_code")
+            if model_code:
+                highlights.append(f"功率模型版型：{model_code}")
+            if response.raw_result.get("power_prediction", {}).get("supplier_name"):
+                highlights.append(f"供应商：{response.raw_result['power_prediction']['supplier_name']}")
+            if response.raw_result.get("power_recommendation", {}).get("recommendations"):
+                highlights.append(f"推荐供应商数：{len(response.raw_result['power_recommendation']['recommendations'])}")
         return highlights
 
     @staticmethod
@@ -196,7 +217,13 @@ class PlanBomAnswerPresentationService:
         """
 
         if "order_id" in response.nlu.missing_slots:
+            if response.nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
+                return ["请补充订单号，例如：订单00104做功率预测。"]
             return ["请补充订单号，例如：订单00104的接线盒规格是什么？"]
+        if "target_power_ratio" in response.nlu.missing_slots:
+            return ["请补充目标功率比例，例如：订单00104目标620W 50%，625W 50%，推荐供应商。"]
+        if "power_configuration" in response.nlu.missing_slots:
+            return ["请确认未识别的功率配置，例如玻璃、接线盒线径、标板基准或供应商。"]
         if "compare_orders" in response.nlu.missing_slots:
             return ["请补充两个订单号，例如：订单00067和00106的接线盒有什么不一样？"]
         return ["请补充订单、版本、材料类别或查询范围后继续。"]

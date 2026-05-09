@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from zipfile import ZipFile
@@ -10,7 +13,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import sessionmaker
 
-from backend.app.api.deps import require_plan_power_admin
+from backend.app.api.deps import require_plan_power_write_access
 from backend.app.core.config import Settings
 from backend.app.db.base import Base
 from backend.app.domains.plan_bom.models import (
@@ -26,6 +29,53 @@ from backend.app.domains.plan_bom.services.power_model_service import PowerModel
 
 
 POWER_XLSM = Path("ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm")
+
+
+def test_power_model_schema_import_has_no_pydantic_protected_namespace_warning() -> None:
+    """启动加载功率模型响应模型时不应输出 model_ 保护命名空间 warning。"""
+    python = Path("backend/.venv/bin/python")
+    interpreter = str(python) if python.exists() else sys.executable
+    env = {**os.environ, "PYTHONPATH": f".{os.pathsep}{os.environ.get('PYTHONPATH', '')}"}
+    result = subprocess.run(
+        [
+            interpreter,
+            "-W",
+            "default",
+            "-c",
+            "from backend.app.domains.plan_bom.schemas.power_model import PowerModelVersionSummary; print(PowerModelVersionSummary.__name__)",
+        ],
+        env=env,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0
+    assert "PowerModelVersionSummary" in result.stdout
+    assert "protected namespace" not in result.stderr
+    assert "model_sheet_count" not in result.stderr
+
+
+def test_plan_power_write_access_allows_non_prod_and_blocks_prod_until_user_permission_module() -> None:
+    """功率模型写接口不再使用旧 token，但生产环境应在用户权限模块接管前阻断写操作。"""
+    require_plan_power_write_access(Settings(app_env="local"))
+    require_plan_power_write_access(Settings(app_env="test"))
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_plan_power_write_access(Settings(app_env="prod"))
+
+    assert exc_info.value.status_code == 403
+    assert "用户权限模块" in str(exc_info.value.detail)
+
+
+def test_power_model_write_endpoints_use_environment_write_guard_without_legacy_token() -> None:
+    """功率模型导入/激活接口应挂载环境门禁，但不能恢复旧管理 token。"""
+    endpoint_source = Path("backend/app/domains/plan_bom/api/endpoints/power_model.py").read_text(encoding="utf-8")
+
+    assert "require_plan_power_write_access" in endpoint_source
+    assert endpoint_source.count("Depends(require_plan_power_write_access)") >= 2
+    assert "X-Plan-Power-Admin-Token" not in endpoint_source
+    assert "plan_power_admin_token" not in endpoint_source
 
 
 @pytest.fixture()
@@ -202,16 +252,6 @@ def test_activate_failed_version_is_rejected(db_session) -> None:
         service.activate_version(failed.id)
 
 
-def test_admin_dependency_requires_token_outside_local() -> None:
-    """dev/prod 环境的功率模型写接口必须携带管理令牌。"""
-    local_settings = Settings(app_env="local", plan_power_admin_token="")
-    require_plan_power_admin(x_plan_power_admin_token=None, settings=local_settings)
-
-    prod_settings = Settings(app_env="prod", plan_power_admin_token="ok")
-    with pytest.raises(HTTPException):
-        require_plan_power_admin(x_plan_power_admin_token="bad", settings=prod_settings)
-    require_plan_power_admin(x_plan_power_admin_token="ok", settings=prod_settings)
-
 
 def test_import_integrity_conflict_returns_existing_version() -> None:
     """并发同 hash 导入触发唯一键冲突时应回查已有版本并返回 existing。"""
@@ -219,7 +259,7 @@ def test_import_integrity_conflict_returns_existing_version() -> None:
     class FakeRepository:
         def __init__(self) -> None:
             self.calls = 0
-            self.existing = SimpleNamespace(id=7)
+            self.existing = SimpleNamespace(id=7, parse_status="success", error_count=0)
 
         def get_by_file_hash(self, file_hash: str):
             self.calls += 1
@@ -227,6 +267,13 @@ def test_import_integrity_conflict_returns_existing_version() -> None:
 
         def create_from_parsed(self, parsed):
             raise IntegrityError("insert plan_power_model_version", {}, Exception("duplicate"))
+
+        def get_version(self, version_id: int):
+            return self.existing if version_id == self.existing.id else None
+
+        def activate_version(self, version_id: int):
+            self.existing.is_active = 1
+            return self.existing
 
         def version_to_dict(self, version):
             return {"id": version.id, "file_hash": "race-hash"}

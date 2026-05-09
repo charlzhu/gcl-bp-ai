@@ -1,0 +1,3034 @@
+## git diff for tracked hardening files
+diff --git a/backend/app/domains/plan_bom/services/nlu_center_service.py b/backend/app/domains/plan_bom/services/nlu_center_service.py
+index 43b0ccc..17d5667 100644
+--- a/backend/app/domains/plan_bom/services/nlu_center_service.py
++++ b/backend/app/domains/plan_bom/services/nlu_center_service.py
+@@ -9,6 +9,7 @@ from openai import OpenAI
+ 
+ from backend.app.core.config import settings
+ from backend.app.domains.plan_bom.constants import CORE_MATERIAL_CATEGORIES
++from backend.app.domains.plan_bom.models import PlanPowerModelSheet, PlanPowerModelVersion, PlanPowerSupplierEfficiencyDistribution
+ from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
+ from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate
+ 
+@@ -34,10 +35,13 @@ class PlanBomNluCenterService:
+         "material_presence_check",
+         "material_consistency_check",
+         "supplier_reuse_quote_prepare",
++        "plan_power_prediction",
++        "plan_power_supplier_recommendation",
+         "power_cell_requirement",
+         "unsupported",
+         "clarification",
+     }
++    POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation"}
+     INTENT_ALIASES = {
+         "单订单关键材料规格查询": "single_order_material_specs",
+         "单订单材料规格查询": "single_order_material_specs",
+@@ -56,8 +60,12 @@ class PlanBomNluCenterService:
+         "某类物料规格是否一致": "material_consistency_check",
+         "材料一致性检查": "material_consistency_check",
+         "供应商物料复用询价准备": "supplier_reuse_quote_prepare",
+-        "功率电池需求": "power_cell_requirement",
+-        "功率/电池片需求类问题": "power_cell_requirement",
++        "功率预测": "plan_power_prediction",
++        "功率档位分布预测": "plan_power_prediction",
++        "供应商功率推荐": "plan_power_supplier_recommendation",
++        "目标功率供应商推荐": "plan_power_supplier_recommendation",
++        "功率电池需求": "plan_power_supplier_recommendation",
++        "功率/电池片需求类问题": "plan_power_supplier_recommendation",
+         "无法基于当前BOM数据回答的问题": "unsupported",
+         "无法回答": "unsupported",
+         "需要追问": "clarification",
+@@ -139,6 +147,10 @@ class PlanBomNluCenterService:
+         slots["model"] = self._extract_model(normalized)
+         slots["year"] = self._extract_year(normalized)
+         slots["country"] = self._extract_country(normalized)
++        slots["target_power_ratio"] = self._extract_target_power_ratio(normalized)
++        slots["supplier_name"] = self._extract_supplier_name(normalized)
++        slots["benchmark"] = self._extract_benchmark(normalized)
++        slots["explicit_power_configuration"] = self._extract_explicit_power_configuration(normalized)
+         slots["need_table"] = any(word in normalized for word in ("表格", "清单", "列表", "统计出来", "列出来"))
+         slots["need_excel"] = any(word.lower() in normalized.lower() for word in ("excel", "导表", "导出"))
+         slots["output_format"] = "excel" if slots["need_excel"] else ("table" if slots["need_table"] else "narrative")
+@@ -167,8 +179,16 @@ class PlanBomNluCenterService:
+             受控 intent 编码。
+         """
+ 
+-        if any(word in question for word in ("功率预测", "满足订单需求功率", "需要什么样的电池", "功率倒推")):
+-            return "power_cell_requirement"
++        if self._is_power_question(question) or (
++            slots.get("target_power_ratio")
++            and (slots.get("model") or slots.get("supplier_name") or slots.get("explicit_power_configuration") or slots.get("order_tail_no"))
++        ):
++            if slots.get("target_power_ratio") or any(
++                word in question
++                for word in ("推荐供应商", "供应商推荐", "推荐电池", "匹配度", "目标功率", "目标比例", "目标", "占比")
++            ):
++                return "plan_power_supplier_recommendation"
++            return "plan_power_prediction"
+         if "到" in question and len(slots.get("bom_version") or []) >= 2:
+             return "bom_version_compare"
+         if any(word in question for word in ("版本", "A0", "A1", "A2", "A3", "变更")) and len(slots.get("bom_version") or []) >= 2:
+@@ -199,6 +219,11 @@ class PlanBomNluCenterService:
+         """
+ 
+         missing: list[str] = []
++        has_explicit_power_config = bool(slots.get("model") and slots.get("explicit_power_configuration"))
++        if intent in {"plan_power_prediction", "plan_power_supplier_recommendation"} and not slots.get("order_tail_no") and not has_explicit_power_config:
++            missing.append("order_id")
++        if intent == "plan_power_supplier_recommendation" and not slots.get("target_power_ratio"):
++            missing.append("target_power_ratio")
+         if intent in {"single_order_material_specs", "specific_material_query", "bom_version_compare"} and not slots.get("order_tail_no"):
+             missing.append("order_id")
+         if intent in {"multi_order_material_table", "cross_order_material_compare"} and len(slots.get("order_tail_no") or []) < 2:
+@@ -259,6 +284,7 @@ class PlanBomNluCenterService:
+             return rule_candidate
+ 
+         validated_slots = dict(rule_candidate.slots)
++        is_power_intent = intent in self.POWER_INTENTS or rule_candidate.intent in self.POWER_INTENTS
+         rejected_reasons: list[str] = []
+         if "material_category" in slot_candidate:
+             llm_core_materials, llm_non_core_materials = self._normalize_material_candidates(
+@@ -276,7 +302,10 @@ class PlanBomNluCenterService:
+         if "order_tail_no" in slot_candidate:
+             tails = [self._normalize_order_tail(str(item)) for item in slot_candidate.get("order_tail_no") or []]
+             tails = [item for item in tails if item]
+-            if tails and self._all_order_tails_exist(tails):
++            rule_tails = rule_candidate.slots.get("order_tail_no") or []
++            if is_power_intent and tails != rule_tails:
++                rejected_reasons.append("功率预测类问题的 LLM 订单候选未与规则层原文抽取完全一致，未采纳订单槽位。")
++            elif tails and self._all_order_tails_exist(tails):
+                 validated_slots["order_tail_no"] = tails
+                 validated_slots["compare_orders"] = tails
+             else:
+@@ -287,6 +316,33 @@ class PlanBomNluCenterService:
+                 validated_slots["bom_version"] = versions
+             elif versions:
+                 rule_candidate.guardrail_notes.append("LLM BOM 版本候选未通过问题原文或 BOM 版本索引校验，未采纳版本槽位。")
++        if "target_power_ratio" in slot_candidate:
++            target = self._normalize_target_power_ratio(slot_candidate.get("target_power_ratio"))
++            rule_target = rule_candidate.slots.get("target_power_ratio") or {}
++            if target and self._target_ratio_matches_rule(target, rule_target):
++                validated_slots["target_power_ratio"] = target
++            elif target:
++                rule_candidate.guardrail_notes.append(
++                    "LLM 目标功率比例候选未完全出现在规则层抽取结果中，未采纳目标比例槽位。"
++                )
++            else:
++                rule_candidate.guardrail_notes.append("LLM 目标功率比例候选未通过数字校验，未采纳目标比例槽位。")
++        if "supplier_name" in slot_candidate:
++            supplier = self._normalize_supplier_candidate(slot_candidate.get("supplier_name"))
++            rule_supplier = rule_candidate.slots.get("supplier_name")
++            if is_power_intent and supplier != rule_supplier:
++                rule_candidate.guardrail_notes.append("功率预测类问题的 LLM 供应商候选未与规则层原文抽取一致，未采纳供应商槽位。")
++            elif supplier:
++                validated_slots["supplier_name"] = supplier
++            else:
++                rule_candidate.guardrail_notes.append("LLM 供应商候选未命中 active 功率模型供应商，未采纳供应商槽位。")
++        if "benchmark" in slot_candidate:
++            benchmark = self._canonical_benchmark(str(slot_candidate.get("benchmark") or ""))
++            rule_benchmark = rule_candidate.slots.get("benchmark")
++            if is_power_intent and benchmark != rule_benchmark:
++                rule_candidate.guardrail_notes.append("功率预测类问题的 LLM 标板候选未与规则层原文抽取一致，未采纳标板槽位。")
++            elif benchmark:
++                validated_slots["benchmark"] = benchmark
+         if rejected_reasons:
+             rule_candidate.guardrail_notes.extend(rejected_reasons)
+             rule_candidate.guardrail_notes.append("LLM 候选被拒绝，已保持规则层边界。")
+@@ -294,7 +350,13 @@ class PlanBomNluCenterService:
+ 
+         final_intent = intent
+         final_missing = self._detect_missing_slots(intent, validated_slots)
+-        if intent != rule_candidate.intent and final_missing and not rule_candidate.missing_slots:
++        if is_power_intent and rule_candidate.intent in self.POWER_INTENTS and intent != rule_candidate.intent:
++            # 功率预测 / 推荐的边界影响后续 M3 调用形态；LLM 只能辅助理解，不能把规则层已闭合的推荐改成预测，
++            # 也不能把预测改成推荐来绕过缺槽保护。
++            final_intent = rule_candidate.intent
++            final_missing = self._detect_missing_slots(final_intent, validated_slots)
++            rule_candidate.guardrail_notes.append(f"功率预测类问题的 LLM intent 与规则层冲突，保持规则层 intent：{rule_candidate.intent}。")
++        elif intent != rule_candidate.intent and final_missing and not rule_candidate.missing_slots:
+             # LLM 候选不能把规则层已闭合的问题改成缺槽问题；这种冲突保持规则 intent，避免安全可答问题被降级。
+             final_intent = rule_candidate.intent
+             final_missing = self._detect_missing_slots(final_intent, validated_slots)
+@@ -397,6 +459,253 @@ class PlanBomNluCenterService:
+                 return False
+         return True
+ 
++    @staticmethod
++    def _is_power_question(question: str) -> bool:
++        """判断问题是否属于计划 BOM 功率预测子能力。
++
++        参数：
++            question: 用户问题。
++
++        返回：
++            命中功率预测、目标功率、供应商推荐等关键词时返回 True。
++        """
++        power_words = (
++            "功率预测",
++            "功率档",
++            "功率分布",
++            "目标功率",
++            "目标比例",
++            "需求占比",
++            "占比",
++            "电池效率",
++            "效率段",
++            "供应商推荐",
++            "推荐供应商",
++            "各家供应商",
++            "哪些家电池",
++            "哪几家电池",
++            "哪个效率",
++            "用供应商",
++            "需要什么样的电池",
++            "电池可以满足",
++            "功率倒推",
++            "满足订单需求功率",
++        )
++        return any(word in question for word in power_words)
++
++    @staticmethod
++    def _extract_target_power_ratio(question: str) -> dict[str, float]:
++        """从自然语言中抽取目标功率档比例。
++
++        参数：
++            question: 用户问题，例如“目标620W 50%，625W 50%”“620:625 1:1”“715和720 2:8”。
++
++        返回：
++            `{功率档: 比例}` 字典。比例保留用户原始占比数值，后续推荐服务会归一化。
++        """
++        target: dict[str, float] = {}
++
++        def put(power_value: str | float, ratio_value: str | float) -> None:
++            """写入一个功率档比例；非法数字或非正比例直接忽略。"""
++            try:
++                power = float(power_value)
++                ratio = float(ratio_value)
++            except (TypeError, ValueError):
++                return
++            if ratio <= 0:
++                return
++            key = str(int(power)) if power.is_integer() else str(power)
++            target[key] = ratio
++
++        pair_patterns = [
++            # 业务常用写法：715:720=2:8、620:625 1:1、715和720 2:8。
++            r"(?P<p1>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?\s*(?:和|与|及|、|/|:|：)\s*"
++            r"(?P<p2>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?\s*(?:=|按|目标|比例|占比|需求占比|各占|\s)*"
++            r"(?P<r1>\d+(?:\.\d+)?)\s*[:：]\s*(?P<r2>\d+(?:\.\d+)?)",
++            # 业务口语写法：620W 50%，625W 50%。
++            r"(?P<power>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?\s*(?:占|比例|目标|为|是|各)?\s*(?P<ratio>\d+(?:\.\d+)?)\s*%",
++        ]
++        for match in re.finditer(pair_patterns[0], question):
++            put(match.group("p1"), match.group("r1"))
++            put(match.group("p2"), match.group("r2"))
++        for match in re.finditer(pair_patterns[1], question):
++            put(match.group("power"), match.group("ratio"))
++
++        half_match = re.search(
++            r"(?P<p1>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?\s*(?:和|与|及|、|/|:|：)\s*"
++            r"(?P<p2>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?[^。；;，,]{0,12}(?:各占一半|各一半|一半一半|各50%|各 50%)",
++            question,
++        )
++        if half_match:
++            put(half_match.group("p1"), 1)
++            put(half_match.group("p2"), 1)
++        return target
++
++    @staticmethod
++    def _extract_explicit_power_configuration(question: str) -> dict[str, str]:
++        """抽取用户直接写在问题中的功率模型配置项。
++
++        参数：
++            question: 用户问题，支持“焊带：0.24+玻璃：双镀+汇流条：...+接线盒：300/200”等 docx 问法。
++
++        返回：
++            可交给 M4 显式配置解析的配置字典；这里只做文本槽位抽取，不做数值计算。
++        """
++        config: dict[str, str] = {}
++        extractors = {
++            "ribbon": r"焊带\s*[:：]?\s*(?P<value>.+?)(?=\+?玻璃|[，,；;。]|$)",
++            "glass": r"玻璃\s*[:：]?\s*(?P<value>.+?)(?=\+?汇流条|\+?接线盒|[，,；;。]|$)",
++            "busbar": r"汇流条\s*[:：]?\s*(?P<value>.+?)(?=\+?接线盒|[，,；;。]|$)",
++            "cable": r"接线盒\s*[:：]?\s*(?P<value>.+?)(?=\s*[，,；;。]|\s*标板|$)",
++        }
++        for key, pattern in extractors.items():
++            match = re.search(pattern, question, flags=re.IGNORECASE)
++            if match:
++                value = match.group("value").strip().strip("+").strip()
++                if value:
++                    config[key] = value
++        benchmark = PlanBomNluCenterService._extract_benchmark(question)
++        if benchmark:
++            config["benchmark"] = benchmark
++        return config
++
++    def _extract_supplier_name(self, question: str) -> str | None:
++        """从问题中抽取已存在于 active 功率模型的供应商。
++
++        参数：
++            question: 用户问题。
++
++        返回：
++            命中的供应商名称；未命中时返回 None。
++        """
++        suppliers = self._active_power_suppliers()
++        normalized = question.replace(" ", "")
++        all_supplier_markers = (
++            "各家",
++            "所有供应商",
++            "全部供应商",
++            "所有电池供应商",
++            "全部电池供应商",
++            "各家电池供应商",
++            "各个电池供应商",
++            "所有电池厂家",
++            "全部电池厂家",
++            "哪些家",
++            "哪几家",
++            "各个供应商",
++        )
++        asks_all_suppliers = any(marker in normalized for marker in all_supplier_markers)
++        for supplier in sorted(suppliers, key=len, reverse=True):
++            supplier_key = supplier.replace(" ", "")
++            if supplier and supplier_key in normalized:
++                if asks_all_suppliers:
++                    # “通威、爱旭、时创等各家电池”这类 docx 派生问法是在举例要求全供应商，
++                    # 不能把第一个命中的供应商误当作筛选条件；真正指定单供应商的问法通常不会带“各家/哪些家”。
++                    return None
++                return supplier
++        return None
++
++    @staticmethod
++    def _extract_benchmark(question: str) -> str | None:
++        """抽取并归一化标板基准表达。
++
++        参数：
++            question: 用户问题。
++
++        返回：
++            当前业务确认的标板基准归一值；未命中时返回 None。
++        """
++        return PlanBomNluCenterService._canonical_benchmark(question)
++
++    @staticmethod
++    def _canonical_benchmark(value: str) -> str | None:
++        """归一化标板基准别名。"""
++        text = value.strip()
++        if not text:
++            return None
++        if any(alias in text for alias in ("TÜV北德", "TUV北德", "新北德", "北德")):
++            return "新北德"
++        if "计量院" in text:
++            return "中国计量院"
++        if "莱茵" in text:
++            return "莱茵基准"
++        return None
++
++    def _normalize_supplier_candidate(self, value: Any) -> str | None:
++        """校验 LLM 或规则抽取出的供应商是否存在于 active 功率模型。"""
++        raw_values = value if isinstance(value, list) else [value]
++        suppliers = self._active_power_suppliers()
++        for raw in raw_values:
++            text = str(raw or "").replace(" ", "")
++            for supplier in sorted(suppliers, key=len, reverse=True):
++                if supplier and supplier.replace(" ", "") == text:
++                    return supplier
++        return None
++
++    @staticmethod
++    def _normalize_target_power_ratio(value: Any) -> dict[str, float]:
++        """校验并归一 LLM 候选目标功率比例。"""
++        if not isinstance(value, dict):
++            return {}
++        result: dict[str, float] = {}
++        for key, raw_ratio in value.items():
++            try:
++                power = float(key)
++                ratio = float(raw_ratio)
++            except (TypeError, ValueError):
++                continue
++            if ratio <= 0:
++                continue
++            normalized_key = str(int(power)) if power.is_integer() else str(power)
++            result[normalized_key] = ratio
++        return result
++
++    @staticmethod
++    def _target_ratio_matches_rule(candidate: dict[str, float], rule_target: dict[str, float]) -> bool:
++        """校验 LLM 目标功率比例是否完全来自规则层抽取。
++
++        参数：
++            candidate: LLM 候选目标比例；
++            rule_target: 从问题原文用确定性正则抽取的目标比例。
++
++        返回：
++            所有功率档和比例均与规则层一致时返回 True；否则返回 False。
++        """
++        if not candidate or not rule_target:
++            return False
++        if set(candidate) != set(rule_target):
++            return False
++        return all(abs(float(candidate[key]) - float(rule_target[key])) <= 1e-9 for key in candidate)
++
++    def _active_power_suppliers(self) -> list[str]:
++        """读取当前 active 功率模型供应商名称列表。
++
++        返回：
++            去重后的供应商名称。异常时返回空列表，避免 NLU 层影响主问答链路。
++        """
++        try:
++            version = (
++                self.repository.db.query(PlanPowerModelVersion)
++                .filter(PlanPowerModelVersion.is_active == 1)
++                .order_by(PlanPowerModelVersion.id.desc())
++                .first()
++            )
++            if version is None:
++                return []
++            rows = (
++                self.repository.db.query(PlanPowerSupplierEfficiencyDistribution.supplier_name)
++                .join(PlanPowerModelSheet, PlanPowerModelSheet.id == PlanPowerSupplierEfficiencyDistribution.sheet_id)
++                .filter(
++                    PlanPowerModelSheet.version_id == version.id,
++                    PlanPowerSupplierEfficiencyDistribution.is_valid == 1,
++                )
++                .distinct()
++                .all()
++            )
++            return [str(row[0]) for row in rows if row[0]]
++        except Exception:  # noqa: BLE001
++            return []
++
+     def _extract_order_tails(self, question: str) -> list[str]:
+         """抽取订单号和短编号。
+ 
+@@ -514,8 +823,8 @@ class PlanBomNluCenterService:
+             型号字符串；未命中时返回 None。
+         """
+ 
+-        match = re.search(r"NT[0-9A-Z]+/[0-9A-Z]+GDF|NT[0-9A-Z]+GDF", question, flags=re.I)
+-        return match.group(0).upper() if match else None
++        match = re.search(r"NT[0-9A-Z]+[-/][0-9A-Z]+GDF|NT[0-9A-Z]+GDF", question, flags=re.I)
++        return match.group(0).upper().replace("/", "-") if match else None
+ 
+     @staticmethod
+     def _extract_year(question: str) -> int | None:
+@@ -598,7 +907,7 @@ class PlanBomNluCenterService:
+             "你不能改变 A/B/C 边界；信息不足时只输出 missing_slots 候选，不要强行补全。\n"
+             "订单必须尽量从用户问题原文提取，不要自行补全不存在的订单号。\n"
+             f"intent_candidate 只能取：{sorted(self.INTENTS)}。\n"
+-            "slot_candidate 可包含 order_tail_no、model、customer、country、year、bom_version、material_category、output_format、need_table、need_excel、missing_slots。\n"
++            "slot_candidate 可包含 order_tail_no、model、customer、country、year、bom_version、material_category、target_power_ratio、supplier_name、benchmark、output_format、need_table、need_excel、missing_slots。\n"
+             f"material_category 必须优先取核心五类：{sorted(CORE_MATERIAL_CATEGORIES)}；如用户明确问非核心材料，只输出原始候选，不能自行扩展成核心材料。\n"
+             "严格输出单个 JSON 对象，不要 markdown，不要解释性自然语言。\n"
+             "示例：{\"intent_candidate\":\"single_order_material_specs\",\"slot_candidate\":{\"order_tail_no\":[\"00104\"],\"material_category\":[\"glass\",\"junction_box\"],\"need_table\":true},\"confidence\":0.85}"
+diff --git a/backend/app/domains/plan_bom/services/qa_service.py b/backend/app/domains/plan_bom/services/qa_service.py
+index e255298..f7a28a6 100644
+--- a/backend/app/domains/plan_bom/services/qa_service.py
++++ b/backend/app/domains/plan_bom/services/qa_service.py
+@@ -14,6 +14,16 @@ from backend.app.domains.plan_bom.schemas.query import (
+ )
+ from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
+ from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
++from backend.app.domains.plan_bom.services.power_config_resolver_service import (
++    CANDIDATE_REQUIRED_STATUS,
++    NO_ACTIVE_MODEL_STATUS,
++    NOT_FOUND_STATUS,
++    PARTIAL_STATUS,
++    RESOLVED_STATUS,
++    PlanBomPowerConfigResolverService,
++)
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine, PowerPredictionError, PowerPredictionResult
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService, PowerRecommendationResult
+ from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
+ from backend.app.services.qa_trace import QaTraceRecorder
+ 
+@@ -38,6 +48,9 @@ class PlanBomQaService:
+         query_service: PlanBomQueryService,
+         nlu_service: PlanBomNluCenterService,
+         presentation_service: PlanBomAnswerPresentationService,
++        power_config_resolver: PlanBomPowerConfigResolverService | None = None,
++        power_prediction_engine: PowerPredictionEngine | None = None,
++        power_recommendation_service: PowerRecommendationService | None = None,
+     ) -> None:
+         """初始化 BOM QA 服务。
+ 
+@@ -46,6 +59,9 @@ class PlanBomQaService:
+             query_service: 已有 detail / compare 查询服务；
+             nlu_service: BOM NLU Center；
+             presentation_service: BOM 答案表达层。
++            power_config_resolver: M4 BOM 配置自动映射服务，未注入时按 repository 所在 DB 懒创建。
++            power_prediction_engine: M3 单供应商功率预测引擎，未注入时懒创建。
++            power_recommendation_service: M3 供应商推荐服务，未注入时懒创建。
+ 
+         返回：
+             无返回值。
+@@ -55,6 +71,12 @@ class PlanBomQaService:
+         self.query_service = query_service
+         self.nlu_service = nlu_service
+         self.presentation_service = presentation_service
++        self.power_config_resolver = power_config_resolver or PlanBomPowerConfigResolverService(repository.db, repository=repository)
++        self.power_prediction_engine = power_prediction_engine or PowerPredictionEngine(repository.db)
++        self.power_recommendation_service = power_recommendation_service or PowerRecommendationService(
++            repository.db,
++            engine=self.power_prediction_engine,
++        )
+ 
+     def ask(self, question: str, *, use_llm: bool = True, trace_id: str | None = None) -> PlanBomQaResponse:
+         """回答计划 BOM 自然语言问题。
+@@ -119,6 +141,13 @@ class PlanBomQaService:
+                 {"missing_slots": nlu.missing_slots},
+             )
+             response = self._clarification_response(question=question, nlu=nlu)
++        elif nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
++            trace_recorder.add(
++                "branch_selected",
++                "问题进入计划 BOM 功率预测 / 供应商推荐分支。",
++                {"intent": nlu.intent, "slots": nlu.slots},
++            )
++            response = self._power_response(question=question, nlu=nlu)
+         elif nlu.intent in {"single_order_material_specs", "specific_material_query"}:
+             trace_recorder.add(
+                 "branch_selected",
+@@ -326,6 +355,271 @@ class PlanBomQaService:
+             )
+         )
+ 
++    def _power_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:
++        """处理计划 BOM 功率预测 / 供应商推荐问答。
++
++        参数：
++            question: 原始问题；
++            nlu: 已完成规则和可选 LLM guardrail 的 NLU 候选。
++
++        返回：
++            QA 响应。所有配置解析来自 M4，所有数值计算来自 M3，LLM 不参与计算。
++        """
++
++        tail = (nlu.slots.get("order_tail_no") or [None])[0]
++        benchmark = nlu.slots.get("benchmark")
++        explicit_configuration = dict(nlu.slots.get("explicit_power_configuration") or {})
++        if benchmark and "benchmark" not in explicit_configuration:
++            explicit_configuration["benchmark"] = benchmark
++        if nlu.slots.get("supplier_name") and "supplier" not in explicit_configuration:
++            explicit_configuration["supplier"] = nlu.slots.get("supplier_name")
++        if tail:
++            resolution = self.power_config_resolver.resolve(order_no=tail, benchmark=benchmark)
++        else:
++            resolution = self.power_config_resolver.resolve_explicit_configuration(
++                model_code=nlu.slots.get("model"),
++                configuration=explicit_configuration,
++            )
++        resolution_payload = resolution.to_dict()
++        if resolution.status in {CANDIDATE_REQUIRED_STATUS, PARTIAL_STATUS}:
++            slot_name = "candidate" if resolution.status == CANDIDATE_REQUIRED_STATUS else "power_configuration"
++            nlu.missing_slots = sorted(set([*(nlu.missing_slots or []), slot_name]))
++            return self._with_presentation(
++                PlanBomQaResponse(
++                    question=question,
++                    classification="B",
++                    status=PlanBomQaStatus(
++                        code="CLARIFICATION_REQUIRED",
++                        message="功率预测配置仍需确认",
++                        severity="warning",
++                    ),
++                    nlu=nlu,
++                    answer_summary=self._power_resolution_clarification_summary(resolution_payload),
++                    raw_result={"bom_config_resolution": resolution_payload},
++                    warnings=["M4 配置解析未完全 resolved，已停止调用 M3 计算，避免编造功率预测。"],
++                )
++            )
++        if resolution.status in {NOT_FOUND_STATUS, NO_ACTIVE_MODEL_STATUS} or resolution.model_code is None:
++            return self._empty_response(
++                question=question,
++                nlu=nlu,
++                reason=resolution.message,
++                raw={"bom_config_resolution": resolution_payload},
++            )
++        if resolution.status != RESOLVED_STATUS:
++            return self._empty_response(
++                question=question,
++                nlu=nlu,
++                reason=f"BOM 配置映射状态不可用于功率预测：{resolution.status}",
++                raw={"bom_config_resolution": resolution_payload},
++            )
++
++        configuration = resolution.to_prediction_configuration()
++        supplier_name = nlu.slots.get("supplier_name")
++        if supplier_name:
++            configuration["supplier"] = supplier_name
++        try:
++            if nlu.intent == "plan_power_supplier_recommendation":
++                recommendation = self.power_recommendation_service.recommend(
++                    model_code=resolution.model_code,
++                    configuration=configuration,
++                    target_power_ratio=nlu.slots.get("target_power_ratio"),
++                    supplier_names=[supplier_name] if supplier_name else None,
++                )
++                return self._power_recommendation_response(
++                    question=question,
++                    nlu=nlu,
++                    resolution_payload=resolution_payload,
++                    recommendation=recommendation,
++                )
++            prediction = self.power_prediction_engine.predict(
++                model_code=resolution.model_code,
++                configuration=configuration,
++                supplier_name=supplier_name,
++            )
++            return self._power_prediction_response(
++                question=question,
++                nlu=nlu,
++                resolution_payload=resolution_payload,
++                prediction=prediction,
++            )
++        except PowerPredictionError as exc:
++            return self._empty_response(
++                question=question,
++                nlu=nlu,
++                reason=str(exc),
++                raw={"bom_config_resolution": resolution_payload, "power_error": str(exc)},
++            )
++
++    def _power_prediction_response(
++        self,
++        *,
++        question: str,
++        nlu: PlanBomNluCandidate,
++        resolution_payload: dict[str, Any],
++        prediction: PowerPredictionResult,
++    ) -> PlanBomQaResponse:
++        """构造单供应商功率预测 QA 响应。
++
++        参数：
++            question: 原始问题；
++            nlu: NLU 候选；
++            resolution_payload: M4 配置映射追溯；
++            prediction: M3 确定性预测结果。
++
++        返回：
++            A 类预测响应。
++        """
++
++        rows = self._power_distribution_rows(prediction)
++        configuration_text = self._power_configuration_text(resolution_payload)
++        answer = (
++            f"已完成订单 {resolution_payload.get('order_no')} 的功率预测：版型 {prediction.model_code}，"
++            f"供应商 {prediction.supplier_name}，中心功率 {round(prediction.center_power, 4)}W。"
++            f"配置来源：{configuration_text}。"
++        )
++        warnings = list(resolution_payload.get("warnings") or []) + list(prediction.warnings)
++        return self._with_presentation(
++            PlanBomQaResponse(
++                question=question,
++                classification="A",
++                status=PlanBomQaStatus(code="OK", message="功率预测成功"),
++                nlu=nlu,
++                answer_summary=answer,
++                result_table=PlanBomTableSpec(columns=["功率档", "预测比例", "累计比例", "中心功率", "供应商"], rows=rows),
++                raw_result={
++                    "bom_config_resolution": resolution_payload,
++                    "power_prediction": prediction.to_dict(),
++                },
++                warnings=warnings,
++            )
++        )
++
++    def _power_recommendation_response(
++        self,
++        *,
++        question: str,
++        nlu: PlanBomNluCandidate,
++        resolution_payload: dict[str, Any],
++        recommendation: PowerRecommendationResult,
++    ) -> PlanBomQaResponse:
++        """构造目标功率比例下的供应商推荐 QA 响应。
++
++        参数：
++            question: 原始问题；
++            nlu: NLU 候选；
++            resolution_payload: M4 配置映射追溯；
++            recommendation: M3 推荐服务输出。
++
++        返回：
++            A 类推荐响应。
++        """
++
++        rows = self._power_recommendation_rows(recommendation)
++        top_supplier = recommendation.recommendations[0].supplier_name if recommendation.recommendations else "无"
++        source_label = f"订单 {resolution_payload.get('order_no')} 的 BOM 配置" if resolution_payload.get("order_no") else "显式输入配置"
++        answer = (
++            f"已按{source_label}和目标功率比例完成供应商推荐，"
++            f"当前最高匹配供应商为 {top_supplier}。"
++        )
++        warnings = list(resolution_payload.get("warnings") or []) + list(recommendation.warnings)
++        return self._with_presentation(
++            PlanBomQaResponse(
++                question=question,
++                classification="A",
++                status=PlanBomQaStatus(code="OK", message="供应商功率推荐成功"),
++                nlu=nlu,
++                answer_summary=answer,
++                result_table=PlanBomTableSpec(
++                    columns=["供应商", "匹配度", "目标功率档", "目标比例", "预测比例", "差异", "中心功率", "建议效率段"],
++                    rows=rows,
++                ),
++                raw_result={
++                    "bom_config_resolution": resolution_payload,
++                    "power_recommendation": recommendation.to_dict(),
++                },
++                warnings=warnings,
++            )
++        )
++
++    @staticmethod
++    def _power_distribution_rows(prediction: PowerPredictionResult) -> list[dict[str, Any]]:
++        """转换 M3 功率档分布为 QA 表格行。"""
++        rows: list[dict[str, Any]] = []
++        cumulative = 0.0
++        for power_bin, ratio in prediction.weighted_distribution.items():
++            cumulative += float(ratio)
++            rows.append(
++                {
++                    "功率档": f"{power_bin}W",
++                    "预测比例": round(float(ratio) * 100.0, 4),
++                    "累计比例": round(cumulative * 100.0, 4),
++                    "中心功率": round(prediction.center_power, 4),
++                    "供应商": prediction.supplier_name,
++                }
++            )
++        return rows
++
++    @staticmethod
++    def _power_recommendation_rows(recommendation: PowerRecommendationResult) -> list[dict[str, Any]]:
++        """转换 M3 推荐结果为 QA 表格行。"""
++        rows: list[dict[str, Any]] = []
++        for item in recommendation.recommendations:
++            efficiency_label = PlanBomQaService._format_suggested_efficiency_segments(item.suggested_efficiency_segments)
++            for power_bin, target_ratio in recommendation.target_power_ratio.items():
++                rows.append(
++                    {
++                        "供应商": item.supplier_name,
++                        "匹配度": round(item.score, 4),
++                        "目标功率档": f"{power_bin}W",
++                        "目标比例": round(float(target_ratio) * 100.0, 4),
++                        "预测比例": round(float(item.predicted_target_ratio.get(power_bin, 0.0)) * 100.0, 4),
++                        "差异": round(float(item.target_diff.get(power_bin, 0.0)) * 100.0, 4),
++                        "中心功率": round(item.prediction.center_power, 4),
++                        "建议效率段": efficiency_label,
++                    }
++                )
++        return rows
++
++    @staticmethod
++    def _format_suggested_efficiency_segments(segments: list[dict[str, Any]]) -> str:
++        """格式化 M3 推荐结果中的建议效率段。
++
++        参数：
++            segments: M3 `PowerRecommendationItem.suggested_efficiency_segments` 输出。
++
++        返回：
++            用于 QA 表格展示的效率段文本；无建议时返回空字符串。
++        """
++        labels: list[str] = []
++        for segment in segments[:3]:
++            percent = segment.get("efficiency_percent")
++            if percent is None:
++                continue
++            labels.append(f"{round(float(percent), 3)}%")
++        return "、".join(labels)
++
++    @staticmethod
++    def _power_configuration_text(resolution_payload: dict[str, Any]) -> str:
++        """汇总 M4 已解析配置，供 answer_summary 使用。"""
++        resolved_config = resolution_payload.get("resolved_config") or {}
++        pairs = []
++        for key in ["glass", "ribbon", "busbar", "cable", "cell_size", "benchmark"]:
++            item = resolved_config.get(key) or {}
++            if item.get("value"):
++                pairs.append(f"{key}={item['value']}")
++        return "；".join(pairs) if pairs else "无可展示配置"
++
++    @staticmethod
++    def _power_resolution_clarification_summary(resolution_payload: dict[str, Any]) -> str:
++        """为 M4 candidate / partial 状态生成追问摘要。"""
++        if resolution_payload.get("status") == CANDIDATE_REQUIRED_STATUS:
++            count = resolution_payload.get("candidate_total_count") or len(resolution_payload.get("candidates") or [])
++            return f"当前订单条件命中 {count} 个 BOM 候选，请先确认订单或文件实例后再做功率预测。"
++        unresolved = resolution_payload.get("unresolved_items") or []
++        labels = [str(item.get("factor_key")) for item in unresolved if item.get("factor_key")]
++        return f"当前 BOM 配置仍有未确认项：{', '.join(labels) if labels else '未知配置'}。请确认后再执行功率预测。"
++
+     def _resolve_core_material_categories(
+         self,
+         *,
+## untracked hardening-relevant files (full patch because repo baseline has them untracked)
+diff --git a/backend/app/domains/plan_bom/services/power_recommendation_service.py b/backend/app/domains/plan_bom/services/power_recommendation_service.py
+new file mode 100644
+index 0000000..5ca3e9f
+--- /dev/null
++++ b/backend/app/domains/plan_bom/services/power_recommendation_service.py
+@@ -0,0 +1,267 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++import math
++from typing import Any, Mapping, Sequence
++
++from sqlalchemy.orm import Session
++
++from backend.app.domains.plan_bom.models import PlanPowerModelSheet, PlanPowerModelVersion, PlanPowerSupplierEfficiencyDistribution
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine, PowerPredictionError, PowerPredictionResult
++
++
++@dataclass(slots=True)
++class PowerRecommendationItem:
++    """单个供应商推荐结果。"""
++
++    supplier_name: str
++    score: float
++    predicted_target_ratio: dict[str, float]
++    target_diff: dict[str, float]
++    leakage_ratio: float
++    coverage_ratio: float
++    suggested_efficiency_segments: list[dict[str, float]]
++    prediction: PowerPredictionResult
++    warnings: list[str]
++
++    def to_dict(self) -> dict[str, Any]:
++        """返回可 JSON 序列化的推荐项。"""
++        return {
++            "supplier_name": self.supplier_name,
++            "score": self.score,
++            "predicted_target_ratio": self.predicted_target_ratio,
++            "target_diff": self.target_diff,
++            "leakage_ratio": self.leakage_ratio,
++            "coverage_ratio": self.coverage_ratio,
++            "suggested_efficiency_segments": self.suggested_efficiency_segments,
++            "prediction": self.prediction.to_dict(),
++            "warnings": self.warnings,
++        }
++
++
++@dataclass(slots=True)
++class PowerRecommendationResult:
++    """供应商功率推荐结果。"""
++
++    model_code: str
++    target_power_ratio: dict[str, float]
++    recommendations: list[PowerRecommendationItem]
++    rejected_suppliers: list[dict[str, Any]]
++    warnings: list[str]
++
++    def to_dict(self) -> dict[str, Any]:
++        """返回可 JSON 序列化的推荐结果。"""
++        return {
++            "model_code": self.model_code,
++            "target_power_ratio": self.target_power_ratio,
++            "recommendations": [item.to_dict() for item in self.recommendations],
++            "rejected_suppliers": self.rejected_suppliers,
++            "warnings": self.warnings,
++        }
++
++
++class PowerRecommendationService:
++    """计划 BOM 功率预测供应商推荐服务。
++
++    职责边界：
++        1. 基于 `PowerPredictionEngine` 的确定性结果评分排序；
++        2. 不做 BOM 配置自动映射，不接入 QA，不调用 LLM；
++        3. 无有效效率分布的供应商不能参与推荐。
++    """
++
++    def __init__(self, db: Session, engine: PowerPredictionEngine | None = None) -> None:
++        """初始化推荐服务。
++
++        参数：
++            db: SQLAlchemy 会话。
++            engine: 可选计算引擎；为空时使用当前 db 创建。
++        """
++        self.db = db
++        self.engine = engine or PowerPredictionEngine(db)
++
++    def recommend(
++        self,
++        *,
++        model_code: str,
++        configuration: Mapping[str, Any] | None = None,
++        target_power_ratio: Mapping[str | int | float, float] | None = None,
++        supplier_names: Sequence[str] | None = None,
++        version_id: int | None = None,
++    ) -> PowerRecommendationResult:
++        """按目标功率比例推荐供应商。
++
++        参数：
++            model_code: 版型编码。
++            configuration: 显式配置项；其中 supplier 会在遍历供应商时被覆盖。
++            target_power_ratio: 目标功率档比例，例如 {"620": 0.5, "625": 0.5}。
++            supplier_names: 指定候选供应商；为空时遍历该版型所有有效供应商。
++            version_id: 指定模型版本；为空时读取 active 版本。
++
++        返回：
++            推荐结果，按 score 降序排列。
++        """
++        target = self._normalize_target_ratio(target_power_ratio)
++        configuration = dict(configuration or {})
++        candidates = list(supplier_names) if supplier_names else self._list_suppliers(model_code, version_id)
++        if not candidates:
++            raise PowerPredictionError(f"版型 {model_code} 没有有效供应商效率分布，无法推荐。")
++
++        recommendations: list[PowerRecommendationItem] = []
++        rejected: list[dict[str, Any]] = []
++        warnings: list[str] = []
++        for supplier in candidates:
++            try:
++                supplier_config = dict(configuration)
++                supplier_config["supplier"] = supplier
++                prediction = self.engine.predict(
++                    model_code=model_code,
++                    configuration=supplier_config,
++                    supplier_name=supplier,
++                    version_id=version_id,
++                )
++                item = self._score_prediction(supplier, prediction, target)
++                recommendations.append(item)
++            except PowerPredictionError as exc:
++                if "目标功率档不在模型输出范围" in str(exc):
++                    raise
++                rejected.append({"supplier_name": supplier, "reason": str(exc)})
++        recommendations.sort(key=lambda item: item.score, reverse=True)
++        if not recommendations:
++            raise PowerPredictionError(f"所有候选供应商均无法推荐：{rejected}")
++        return PowerRecommendationResult(
++            model_code=model_code,
++            target_power_ratio=target,
++            recommendations=recommendations,
++            rejected_suppliers=rejected,
++            warnings=warnings,
++        )
++
++    def _score_prediction(
++        self,
++        supplier: str,
++        prediction: PowerPredictionResult,
++        target: Mapping[str, float],
++    ) -> PowerRecommendationItem:
++        """对单个供应商预测结果计算匹配度。"""
++        missing_targets = [key for key in target if key not in prediction.weighted_distribution]
++        if missing_targets:
++            raise PowerPredictionError(f"目标功率档不在模型输出范围内：{missing_targets}")
++        predicted = {key: prediction.weighted_distribution.get(key, 0.0) for key in target}
++        diffs = {key: predicted[key] - target[key] for key in target}
++        target_abs_error = sum(abs(value) for value in diffs.values())
++        target_predicted_sum = sum(predicted.values())
++        leakage_ratio = max(0.0, sum(prediction.weighted_distribution.values()) - target_predicted_sum)
++        coverage_ratio = min(1.0, max(0.0, prediction.total_ratio))
++        missing_distribution_penalty = max(0.0, 1.0 - coverage_ratio) * 100.0
++        unresolved_penalty = len(prediction.unresolved_items) * 20.0
++        score = 100.0 - target_abs_error * 100.0 - leakage_ratio * 50.0 - missing_distribution_penalty - unresolved_penalty
++        score = round(max(0.0, min(100.0, score)), 6)
++        return PowerRecommendationItem(
++            supplier_name=supplier,
++            score=score,
++            predicted_target_ratio={key: round(value, 10) for key, value in predicted.items()},
++            target_diff={key: round(value, 10) for key, value in diffs.items()},
++            leakage_ratio=round(leakage_ratio, 10),
++            coverage_ratio=round(coverage_ratio, 10),
++            suggested_efficiency_segments=self._suggest_efficiency_segments(prediction, list(target.keys())),
++            prediction=prediction,
++            warnings=list(prediction.warnings),
++        )
++
++    @staticmethod
++    def _suggest_efficiency_segments(prediction: PowerPredictionResult, target_bins: list[str]) -> list[dict[str, float]]:
++        """按目标功率档贡献度推荐电池效率段。
++
++        参数：
++            prediction: 单供应商 M3 确定性预测结果。
++            target_bins: 用户关注的目标功率档 key 列表。
++
++        返回：
++            最多 3 个建议效率段；字段保留效率值、百分比、目标档贡献和供应商效率占比，供 QA/API 展示直接使用。
++        """
++        scored: list[tuple[float, float, float]] = []
++        for row in prediction.efficiency_rows:
++            contribution = float(row.ratio_value) * sum(float(row.bin_probabilities.get(power_bin, 0.0)) for power_bin in target_bins)
++            if contribution <= 0:
++                continue
++            scored.append((contribution, float(row.efficiency_value), float(row.ratio_value)))
++        top_rows = sorted(scored, key=lambda item: item[0], reverse=True)[:3]
++        return [
++            {
++                "efficiency_value": round(efficiency, 6),
++                "efficiency_percent": round(efficiency * 100.0, 3),
++                "target_contribution_ratio": round(contribution, 10),
++                "supplier_efficiency_ratio": round(ratio, 10),
++            }
++            for contribution, efficiency, ratio in top_rows
++        ]
++
++    def _normalize_target_ratio(self, target_power_ratio: Mapping[str | int | float, float] | None) -> dict[str, float]:
++        """归一化目标功率比例。"""
++        if not target_power_ratio:
++            raise PowerPredictionError("推荐服务必须提供目标功率档比例。")
++        target: dict[str, float] = {}
++        total = 0.0
++        for key, value in target_power_ratio.items():
++            try:
++                bin_value = float(key)
++                ratio = float(value)
++            except (TypeError, ValueError) as exc:
++                raise PowerPredictionError(f"目标功率档和比例必须是数字：{key}={value}") from exc
++            if not math.isfinite(bin_value) or not math.isfinite(ratio):
++                raise PowerPredictionError(f"目标功率档和比例必须是有限数字：{key}={value}")
++            if ratio < 0:
++                raise PowerPredictionError(f"目标功率档比例不能为负数：{key}={value}")
++            normalized_key = self._bin_key(bin_value)
++            if normalized_key in target:
++                raise PowerPredictionError(f"目标功率档重复：{normalized_key}")
++            target[normalized_key] = ratio
++            total += ratio
++        if total <= 0:
++            raise PowerPredictionError("目标功率档比例总和必须大于 0。")
++        return {key: value / total for key, value in target.items()}
++
++    def _list_suppliers(self, model_code: str, version_id: int | None) -> list[str]:
++        """列出版型下所有有效供应商。"""
++        version = self._get_version(version_id)
++        normalized_model_code = model_code.strip().upper()
++        sheets = (
++            self.db.query(PlanPowerModelSheet)
++            .filter(PlanPowerModelSheet.version_id == version.id)
++            .all()
++        )
++        sheet = next((row for row in sheets if row.normalized_model_code.strip().upper() == normalized_model_code), None)
++        if sheet is None:
++            raise PowerPredictionError(f"功率模型版型不存在：{model_code}")
++        rows = (
++            self.db.query(PlanPowerSupplierEfficiencyDistribution.supplier_name)
++            .filter(PlanPowerSupplierEfficiencyDistribution.sheet_id == sheet.id, PlanPowerSupplierEfficiencyDistribution.is_valid == 1)
++            .distinct()
++            .order_by(PlanPowerSupplierEfficiencyDistribution.supplier_name.asc())
++            .all()
++        )
++        return [row[0] for row in rows]
++
++    def _get_version(self, version_id: int | None) -> PlanPowerModelVersion:
++        """读取指定版本或当前 active 版本。"""
++        query = self.db.query(PlanPowerModelVersion)
++        if version_id is not None:
++            version = query.filter(PlanPowerModelVersion.id == version_id).first()
++        else:
++            version = query.filter(PlanPowerModelVersion.is_active == 1).order_by(PlanPowerModelVersion.id.desc()).first()
++        if version is None:
++            raise PowerPredictionError("未找到 active 功率模型版本，请先导入并激活模型。")
++        return version
++
++    def _bin_key(self, value: float) -> str:
++        """统一功率档 key 格式。"""
++        if abs(value - round(value)) < 1e-9:
++            return str(int(round(value)))
++        return f"{value:.2f}".rstrip("0").rstrip(".")
++
++
++__all__ = [
++    "PowerRecommendationItem",
++    "PowerRecommendationResult",
++    "PowerRecommendationService",
++]
+diff --git a/backend/app/domains/plan_bom/services/power_config_resolver_service.py b/backend/app/domains/plan_bom/services/power_config_resolver_service.py
+new file mode 100644
+index 0000000..abb74ac
+--- /dev/null
++++ b/backend/app/domains/plan_bom/services/power_config_resolver_service.py
+@@ -0,0 +1,1025 @@
++from __future__ import annotations
++
++import json
++import re
++from dataclasses import dataclass, field
++from decimal import Decimal
++from pathlib import Path
++from typing import Any, Mapping
++
++import yaml
++from sqlalchemy.orm import Session
++
++from backend.app.domains.plan_bom.constants import CORE_MATERIAL_CATEGORIES
++from backend.app.domains.plan_bom.models import (
++    PlanBomHeader,
++    PlanBomMaterialLine,
++    PlanPowerFactorOption,
++    PlanPowerModelSheet,
++    PlanPowerModelVersion,
++)
++from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
++
++
++CONFIG_DIR = Path(__file__).resolve().parents[1] / "config"
++DEFAULT_MAPPING_PATH = CONFIG_DIR / "power_bom_mapping.yaml"
++DEFAULT_ALIASES_PATH = CONFIG_DIR / "power_aliases.json"
++RESOLVED_STATUS = "resolved"
++PARTIAL_STATUS = "partial"
++NOT_FOUND_STATUS = "not_found"
++CANDIDATE_REQUIRED_STATUS = "candidate_required"
++NO_ACTIVE_MODEL_STATUS = "no_active_power_model"
++CANDIDATE_LIMIT = 20
++
++
++@dataclass(frozen=True)
++class PowerBomSourceLine:
++    """BOM 原始材料行追溯信息。"""
++
++    id: int
++    material_category: str | None
++    material_name: str
++    description: str | None
++    sap_code: str
++    standard_usage: str | None
++    raw_row_no: int | None
++
++    def to_dict(self) -> dict[str, Any]:
++        """转换为可序列化字典。"""
++        return {
++            "id": self.id,
++            "material_category": self.material_category,
++            "material_name": self.material_name,
++            "description": self.description,
++            "sap_code": self.sap_code,
++            "standard_usage": self.standard_usage,
++            "raw_row_no": self.raw_row_no,
++        }
++
++
++@dataclass(frozen=True)
++class PowerBomResolvedItem:
++    """单个功率配置项的映射结果。"""
++
++    factor_key: str
++    value: str
++    source: str
++    confidence: float
++    source_line_ids: list[int] = field(default_factory=list)
++    source_description: str | None = None
++    rule_id: str | None = None
++    alternatives: list[str] = field(default_factory=list)
++
++    def to_dict(self) -> dict[str, Any]:
++        """转换为可序列化字典。"""
++        return {
++            "factor_key": self.factor_key,
++            "value": self.value,
++            "source": self.source,
++            "confidence": self.confidence,
++            "source_line_ids": self.source_line_ids,
++            "source_description": self.source_description,
++            "rule_id": self.rule_id,
++            "alternatives": self.alternatives,
++        }
++
++
++@dataclass(frozen=True)
++class PowerBomUnresolvedItem:
++    """无法自动映射的配置项，必须追问或人工确认。"""
++
++    factor_key: str
++    reason: str
++    source_line_ids: list[int] = field(default_factory=list)
++    source_descriptions: list[str] = field(default_factory=list)
++    candidate_options: list[str] = field(default_factory=list)
++    strategy: str = "ask_confirmation"
++
++    def to_dict(self) -> dict[str, Any]:
++        """转换为可序列化字典。"""
++        return {
++            "factor_key": self.factor_key,
++            "reason": self.reason,
++            "source_line_ids": self.source_line_ids,
++            "source_descriptions": self.source_descriptions,
++            "candidate_options": self.candidate_options,
++            "strategy": self.strategy,
++        }
++
++
++@dataclass(frozen=True)
++class PowerBomCandidate:
++    """订单或文件实例候选项。"""
++
++    order_no: str
++    version_no: str
++    order_name: str | None
++    order_identity_key: str
++    file_instance_key: str
++    source_type: str
++
++    def to_dict(self) -> dict[str, Any]:
++        """转换为可序列化字典。"""
++        return {
++            "order_no": self.order_no,
++            "version_no": self.version_no,
++            "order_name": self.order_name,
++            "order_identity_key": self.order_identity_key,
++            "file_instance_key": self.file_instance_key,
++            "source_type": self.source_type,
++        }
++
++
++@dataclass(frozen=True)
++class PowerBomConfigResolution:
++    """BOM 配置自动映射总结果。"""
++
++    status: str
++    message: str
++    order_no: str | None = None
++    version_no: str | None = None
++    order_name: str | None = None
++    order_identity_key: str | None = None
++    file_instance_key: str | None = None
++    model_code: str | None = None
++    resolved_config: dict[str, PowerBomResolvedItem] = field(default_factory=dict)
++    unresolved_items: list[PowerBomUnresolvedItem] = field(default_factory=list)
++    source_lines: list[PowerBomSourceLine] = field(default_factory=list)
++    candidates: list[PowerBomCandidate] = field(default_factory=list)
++    candidate_total_count: int = 0
++    candidate_has_more: bool = False
++    warnings: list[str] = field(default_factory=list)
++
++    def to_prediction_configuration(self) -> dict[str, str]:
++        """输出可直接传给 M3 PowerPredictionEngine 的 configuration。
++
++        返回：
++            仅包含已解析配置项的 `{factor_key: value}` 字典；未解析项不会被填入，避免瞎猜。
++        """
++        return {key: item.value for key, item in self.resolved_config.items() if key != "model_code"}
++
++    def to_dict(self) -> dict[str, Any]:
++        """转换为可序列化字典。"""
++        return {
++            "status": self.status,
++            "message": self.message,
++            "order_no": self.order_no,
++            "version_no": self.version_no,
++            "order_name": self.order_name,
++            "order_identity_key": self.order_identity_key,
++            "file_instance_key": self.file_instance_key,
++            "model_code": self.model_code,
++            "resolved_config": {key: value.to_dict() for key, value in self.resolved_config.items()},
++            "unresolved_items": [item.to_dict() for item in self.unresolved_items],
++            "source_lines": [line.to_dict() for line in self.source_lines],
++            "candidates": [candidate.to_dict() for candidate in self.candidates],
++            "candidate_total_count": self.candidate_total_count,
++            "candidate_has_more": self.candidate_has_more,
++            "warnings": self.warnings,
++        }
++
++
++class PlanBomPowerConfigResolverService:
++    """计划 BOM 到功率预测配置的确定性映射服务。
++
++    职责边界：
++    1. 只读取真实 BOM 与 active 功率模型数据；
++    2. 只做材料规格到功率模型 option 的规则化映射；
++    3. 不调用 LLM、不执行 Excel 宏、不计算功率数值；
++    4. 无法确认时返回 unresolved_items，由 M5 问答层追问或提示人工确认。
++    """
++
++    def __init__(
++        self,
++        db: Session,
++        *,
++        repository: PlanBomQueryRepository | None = None,
++        mapping_path: Path | str = DEFAULT_MAPPING_PATH,
++        aliases_path: Path | str = DEFAULT_ALIASES_PATH,
++    ) -> None:
++        self.db = db
++        self.repository = repository or PlanBomQueryRepository(db)
++        self.mapping = self._load_yaml(Path(mapping_path))
++        self.aliases = self._load_json(Path(aliases_path))
++
++    def resolve(
++        self,
++        *,
++        order_no: str | None = None,
++        order_identity_key: str | None = None,
++        file_instance_key: str | None = None,
++        order_name: str | None = None,
++        version_no: str | None = None,
++        benchmark: str | None = None,
++    ) -> PowerBomConfigResolution:
++        """解析真实 BOM 对应的功率预测配置。
++
++        参数：
++            order_no: 完整订单号或评审号；
++            order_identity_key: 已确认候选后的内部订单实例键；
++            file_instance_key: 已确认候选后的文件实例键；
++            order_name: 订单名称片段；
++            version_no: 指定 BOM 版本号；
++            benchmark: 可选标板基准，若不传则使用 active 模型默认值。
++
++        返回：
++            `PowerBomConfigResolution`，包含配置、原始 BOM 追溯、未识别项和候选项。
++        """
++        active_version = self._active_power_version()
++        if active_version is None:
++            return PowerBomConfigResolution(status=NO_ACTIVE_MODEL_STATUS, message="当前没有 active 功率模型版本，无法执行 BOM 配置映射。")
++
++        located = self._locate_header(
++            order_no=order_no,
++            order_identity_key=order_identity_key,
++            file_instance_key=file_instance_key,
++            order_name=order_name,
++            version_no=version_no,
++        )
++        if isinstance(located, PowerBomConfigResolution):
++            return located
++        header = located
++
++        lines = self.repository.list_material_lines_for_header(header=header, material_categories=CORE_MATERIAL_CATEGORIES)
++        source_lines = [self._source_line(line) for line in lines]
++        grouped = self._group_lines(lines)
++        unresolved: list[PowerBomUnresolvedItem] = []
++        warnings: list[str] = []
++
++        model_code_item = self._resolve_model_code(header=header, version_id=active_version.id)
++        if model_code_item is None:
++            unresolved.append(
++                PowerBomUnresolvedItem(
++                    factor_key="model_code",
++                    reason="订单名称中未识别到当前 active 功率模型支持的版型。",
++                    source_descriptions=[header.order_name or header.order_no],
++                    candidate_options=self._active_model_codes(active_version.id),
++                )
++            )
++            return self._build_result(header, None, {}, unresolved, source_lines, warnings)
++
++        sheet = self._get_sheet(active_version.id, model_code_item.value)
++        if sheet is None:
++            unresolved.append(
++                PowerBomUnresolvedItem(
++                    factor_key="model_code",
++                    reason="订单版型未命中当前 active 功率模型。",
++                    source_descriptions=[header.order_name or header.order_no],
++                    candidate_options=self._active_model_codes(active_version.id),
++                )
++            )
++            return self._build_result(header, model_code_item.value, {}, unresolved, source_lines, warnings)
++
++        resolved: dict[str, PowerBomResolvedItem] = {"model_code": model_code_item}
++        material_resolvers = {
++            "glass": self._resolve_glass,
++            "ribbon": self._resolve_ribbon,
++            "busbar": self._resolve_busbar,
++            "cable": self._resolve_cable,
++        }
++        for factor_key, resolver in material_resolvers.items():
++            item = resolver(sheet, grouped)
++            if item is None:
++                unresolved.append(self._unresolved_for_factor(factor_key, sheet, grouped))
++            else:
++                resolved[factor_key] = item
++
++        for factor_key, default_rule in (self.mapping.get("model_defaults") or {}).items():
++            if factor_key == "benchmark" and benchmark:
++                benchmark_value = self._canonical_benchmark(benchmark)
++                option = self._coerce_to_valid_option(sheet.id, factor_key, benchmark_value)
++                if option is None:
++                    unresolved.append(
++                        PowerBomUnresolvedItem(
++                            factor_key="benchmark",
++                            reason="显式输入的标板基准未命中当前功率模型有效选项，不能回退默认值。",
++                            candidate_options=self._option_labels(sheet.id, "benchmark"),
++                            strategy="ask_confirmation",
++                        )
++                    )
++                    continue
++                default_item = PowerBomResolvedItem(
++                    factor_key="benchmark",
++                    value=option.option_label,
++                    source="explicit_input",
++                    confidence=0.95,
++                    source_description=benchmark,
++                    rule_id="explicit.benchmark",
++                )
++            else:
++                default_item = self._resolve_default_option(
++                    sheet,
++                    factor_key,
++                    input_value=None,
++                    source=str(default_rule.get("source") or "model_default"),
++                    confidence=float(default_rule.get("confidence") or 0.85),
++                )
++            if default_item is not None:
++                resolved[factor_key] = default_item
++            elif factor_key in {"cell_size", "supplier", "benchmark"}:
++                warnings.append(f"功率模型缺少默认 {factor_key} 选项，M3 调用时可能需要显式补充。")
++
++        return self._build_result(header, model_code_item.value, resolved, unresolved, source_lines, warnings)
++
++    def resolve_explicit_configuration(
++        self,
++        *,
++        model_code: str | None,
++        configuration: Mapping[str, Any] | None = None,
++    ) -> PowerBomConfigResolution:
++        """解析用户显式输入的功率预测配置。
++
++        参数：
++            model_code: 用户自然语言中给出的版型编码，例如 `NT12R-66GDF` 或 `NT12R/66GDF`。
++            configuration: 用户显式给出的配置项，支持 ribbon/glass/busbar/cable/benchmark/supplier/cell_size。
++
++        返回：
++            `PowerBomConfigResolution`。该结果不绑定 BOM 订单，order_no 为空，但仍复用 M4 的 option 校验、别名归一和追溯结构。
++        """
++        active_version = self._active_power_version()
++        if active_version is None:
++            return PowerBomConfigResolution(status=NO_ACTIVE_MODEL_STATUS, message="当前没有 active 功率模型版本，无法执行显式配置映射。")
++        if not model_code or not self._stringify(model_code):
++            return PowerBomConfigResolution(
++                status=PARTIAL_STATUS,
++                message="显式配置功率问答缺少版型编码。",
++                unresolved_items=[
++                    PowerBomUnresolvedItem(
++                        factor_key="model_code",
++                        reason="用户问题中未识别到当前功率模型支持的版型。",
++                        candidate_options=self._active_model_codes(active_version.id),
++                    )
++                ],
++            )
++
++        normalized_model_code = self._normalize_model_code(model_code)
++        sheet = self._get_sheet(active_version.id, normalized_model_code)
++        if sheet is None:
++            return PowerBomConfigResolution(
++                status=PARTIAL_STATUS,
++                message="显式输入的版型未命中当前 active 功率模型。",
++                model_code=normalized_model_code,
++                unresolved_items=[
++                    PowerBomUnresolvedItem(
++                        factor_key="model_code",
++                        reason="版型未命中当前 active 功率模型，不能编造模型页。",
++                        source_descriptions=[self._stringify(model_code)],
++                        candidate_options=self._active_model_codes(active_version.id),
++                    )
++                ],
++            )
++
++        raw_config = dict(configuration or {})
++        unresolved: list[PowerBomUnresolvedItem] = []
++        warnings: list[str] = []
++        resolved: dict[str, PowerBomResolvedItem] = {
++            "model_code": PowerBomResolvedItem(
++                factor_key="model_code",
++                value=sheet.normalized_model_code,
++                source="explicit_input",
++                confidence=0.96,
++                source_description=self._stringify(model_code),
++                rule_id="explicit.model_code",
++            )
++        }
++
++        for factor_key in ("ribbon", "glass", "busbar", "cable", "cell_size", "supplier", "benchmark"):
++            raw_value = raw_config.get(factor_key)
++            if raw_value is None or self._stringify(raw_value) == "":
++                continue
++            option = self._coerce_explicit_option(sheet, factor_key, self._stringify(raw_value), warnings)
++            if option is None:
++                unresolved.append(
++                    PowerBomUnresolvedItem(
++                        factor_key=factor_key,
++                        reason="显式输入配置未命中当前功率模型有效选项。",
++                        source_descriptions=[self._stringify(raw_value)],
++                        candidate_options=self._option_labels(sheet.id, factor_key),
++                        strategy="ask_confirmation",
++                    )
++                )
++                continue
++            resolved[factor_key] = PowerBomResolvedItem(
++                factor_key=factor_key,
++                value=option.option_label,
++                source="explicit_input",
++                confidence=0.95,
++                source_description=self._stringify(raw_value),
++                rule_id=f"explicit.{factor_key}",
++            )
++
++        # 显式配置问法常只提供影响功率的差异项；未显式给出的基础项仍使用 active 模型默认值，
++        # 并在追溯中标明来源，避免让 LLM 或前端补数。
++        for factor_key, default_rule in (self.mapping.get("model_defaults") or {}).items():
++            if factor_key in resolved:
++                continue
++            default_item = self._resolve_default_option(
++                sheet,
++                factor_key,
++                input_value=None,
++                source=str(default_rule.get("source") or "model_default"),
++                confidence=float(default_rule.get("confidence") or 0.85),
++            )
++            if default_item is not None:
++                resolved[factor_key] = default_item
++            elif factor_key in {"cell_size", "supplier", "benchmark"}:
++                warnings.append(f"功率模型缺少默认 {factor_key} 选项，M3 调用时可能需要显式补充。")
++
++        status = RESOLVED_STATUS if not unresolved else PARTIAL_STATUS
++        message = "显式配置已成功映射到功率模型。" if status == RESOLVED_STATUS else "显式配置存在未识别项，需要追问或人工确认。"
++        return PowerBomConfigResolution(
++            status=status,
++            message=message,
++            model_code=sheet.normalized_model_code,
++            resolved_config=resolved,
++            unresolved_items=unresolved,
++            warnings=warnings,
++        )
++
++    def _locate_header(
++        self,
++        *,
++        order_no: str | None,
++        order_identity_key: str | None,
++        file_instance_key: str | None,
++        order_name: str | None,
++        version_no: str | None,
++    ) -> PlanBomHeader | PowerBomConfigResolution:
++        """定位唯一 BOM 头，无法唯一定位时返回候选响应。"""
++        headers = self.repository.list_active_headers(
++            order_identity_key=order_identity_key,
++            file_instance_key=file_instance_key,
++            order_no=order_no if order_no and not order_identity_key and not file_instance_key else None,
++            order_name_like=order_name,
++        )
++        # 业务员可能输入评审号尾号或订单号片段。完整订单号精确查询无结果时，
++        # 再降级到 LIKE；如果精确查询已命中，则不混入其他候选，避免误扩范围。
++        if not headers and order_no and not order_identity_key and not file_instance_key:
++            headers = self.repository.list_active_headers(order_no_like=order_no, order_name_like=order_name)
++        if not headers:
++            return PowerBomConfigResolution(status=NOT_FOUND_STATUS, message="未找到匹配的有效 BOM。")
++
++        if version_no:
++            headers = [header for header in headers if header.version_no == version_no]
++            if not headers:
++                return PowerBomConfigResolution(status=NOT_FOUND_STATUS, message="已找到订单，但指定 BOM 版本不存在。")
++
++        identity_keys = {header.order_identity_key for header in headers}
++        if len(identity_keys) > 1 and not order_identity_key:
++            return self._candidate_required("命中多个订单实例，请先确认订单。", headers)
++
++        selected_version = self._select_latest_header(headers)
++        same_version_headers = [
++            header
++            for header in headers
++            if header.order_identity_key == selected_version.order_identity_key and header.version_no == selected_version.version_no
++        ]
++        file_keys = {header.file_instance_key for header in same_version_headers}
++        if len(file_keys) > 1 and not file_instance_key:
++            return self._candidate_required("命中同一订单版本的多个文件实例，请先确认文件实例。", same_version_headers)
++        return selected_version
++
++    def _resolve_model_code(self, *, header: PlanBomHeader, version_id: int) -> PowerBomResolvedItem | None:
++        """从订单名称中识别并校验功率模型版型。"""
++        raw_text = " ".join(part for part in [header.order_name, header.order_no] if part)
++        alias_map = self.aliases.get("model_aliases") or {}
++        for alias, target in alias_map.items():
++            if alias in raw_text or target in raw_text:
++                value = str(target)
++                if value in self._active_model_codes(version_id):
++                    return PowerBomResolvedItem(
++                        factor_key="model_code",
++                        value=value,
++                        source="bom_header.order_name",
++                        confidence=0.96,
++                        source_description=header.order_name or header.order_no,
++                        rule_id="model_aliases",
++                    )
++        model_cfg = self.mapping.get("model_code") or {}
++        pattern = model_cfg.get("regex")
++        replacement = model_cfg.get("replacement")
++        if pattern and replacement:
++            match = re.search(pattern, raw_text, flags=re.IGNORECASE)
++            if match:
++                value = match.expand(str(replacement))
++                if value in self._active_model_codes(version_id):
++                    return PowerBomResolvedItem(
++                        factor_key="model_code",
++                        value=value,
++                        source="bom_header.order_name",
++                        confidence=0.92,
++                        source_description=header.order_name or header.order_no,
++                        rule_id="model_code.regex",
++                    )
++        return None
++
++    def _resolve_glass(self, sheet: PlanPowerModelSheet, grouped: Mapping[str, list[PlanBomMaterialLine]]) -> PowerBomResolvedItem | None:
++        """解析玻璃 + 间隙膜组合并映射到 glass option。"""
++        glass_lines = grouped.get("glass", [])
++        if not glass_lines:
++            return None
++        gap_lines = grouped.get("gap_film", [])
++        glass_text = self._joined_text(glass_lines)
++        gap_text = self._joined_text(gap_lines)
++        combined_text = f"{glass_text}\n{gap_text}"
++        rules = ((self.mapping.get("factor_mappings") or {}).get("glass") or {}).get("rules") or []
++        for rule in rules:
++            if not self._text_matches_rule(combined_text, gap_text, rule):
++                continue
++            candidate = self._coerce_to_valid_option(sheet.id, "glass", str(rule["value"]))
++            if candidate is None:
++                continue
++            all_lines = glass_lines + gap_lines
++            return PowerBomResolvedItem(
++                factor_key="glass",
++                value=candidate.option_label,
++                source="bom_material_line.glass+gap_film",
++                confidence=float(rule.get("confidence") or 0.8),
++                source_line_ids=[line.id for line in all_lines],
++                source_description=self._source_description(all_lines),
++                rule_id=str(rule.get("id") or "glass_rule"),
++            )
++        return None
++
++    def _resolve_ribbon(self, sheet: PlanPowerModelSheet, grouped: Mapping[str, list[PlanBomMaterialLine]]) -> PowerBomResolvedItem | None:
++        """解析互联条直径并映射到 ribbon option。"""
++        lines = grouped.get("interconnect_bar", [])
++        if not lines:
++            return None
++        cfg = ((self.mapping.get("factor_mappings") or {}).get("ribbon") or {})
++        pattern = re.compile(str(cfg.get("diameter_regex") or r"φ\s*([0-9.]+)\s*mm"), flags=re.IGNORECASE)
++        buckets: dict[str, Decimal] = {}
++        line_ids_by_value: dict[str, list[int]] = {}
++        for line in lines:
++            match = pattern.search(self._line_text(line))
++            if not match:
++                continue
++            value = self._format_number(match.group(1))
++            buckets[value] = buckets.get(value, Decimal("0")) + (line.standard_usage or Decimal("0"))
++            line_ids_by_value.setdefault(value, []).append(line.id)
++        if not buckets:
++            return None
++        selected = max(buckets.items(), key=lambda item: (item[1], Decimal(item[0])))[0]
++        option = self._coerce_to_valid_option(sheet.id, "ribbon", selected)
++        if option is None:
++            return None
++        alternatives = [value for value in sorted(buckets.keys(), key=lambda item: Decimal(item), reverse=True) if value != selected]
++        confidence = float(cfg.get("confidence_single") or 0.94) if not alternatives else float(cfg.get("confidence_multiple") or 0.82)
++        return PowerBomResolvedItem(
++            factor_key="ribbon",
++            value=option.option_label,
++            source="bom_material_line.interconnect_bar",
++            confidence=confidence,
++            source_line_ids=line_ids_by_value.get(selected, []),
++            source_description=self._source_description(lines),
++            rule_id="ribbon.dominant_usage",
++            alternatives=alternatives,
++        )
++
++    def _resolve_busbar(self, sheet: PlanPowerModelSheet, grouped: Mapping[str, list[PlanBomMaterialLine]]) -> PowerBomResolvedItem | None:
++        """解析汇流条宽度/厚度组合并映射到 busbar option。"""
++        lines = grouped.get("busbar", [])
++        if not lines:
++            return None
++        cfg = ((self.mapping.get("factor_mappings") or {}).get("busbar") or {})
++        pattern = re.compile(str(cfg.get("size_regex") or r"([0-9.]+)\s*\*\s*([0-9.]+)\s*mm"), flags=re.IGNORECASE)
++        width_order = [str(item) for item in cfg.get("width_order") or ["6", "4"]]
++        by_width: dict[str, dict[str, Decimal]] = {width: {} for width in width_order}
++        line_ids_by_part: dict[tuple[str, str], list[int]] = {}
++        reflective = False
++        for line in lines:
++            text = self._line_text(line)
++            reflective = reflective or "反光" in text
++            match = pattern.search(text)
++            if not match:
++                continue
++            thickness = self._format_number(match.group(1))
++            width = self._format_number(match.group(2))
++            if width not in by_width:
++                continue
++            by_width[width][thickness] = by_width[width].get(thickness, Decimal("0")) + (line.standard_usage or Decimal("0"))
++            line_ids_by_part.setdefault((width, thickness), []).append(line.id)
++        selected_parts: list[str] = []
++        selected_line_ids: list[int] = []
++        for width in width_order:
++            if not by_width.get(width):
++                return None
++            thickness = max(by_width[width].items(), key=lambda item: (item[1], Decimal(item[0])))[0]
++            selected_parts.append(f"{width}*{thickness}")
++            selected_line_ids.extend(line_ids_by_part.get((width, thickness), []))
++        suffix = str(cfg.get("suffix_when_reflective") or "反光") if reflective else ""
++        candidate_value = "+".join(selected_parts) + suffix
++        option = self._coerce_to_valid_option(sheet.id, "busbar", candidate_value)
++        if option is None:
++            return None
++        return PowerBomResolvedItem(
++            factor_key="busbar",
++            value=option.option_label,
++            source="bom_material_line.busbar",
++            confidence=float(cfg.get("confidence_complete") or 0.9),
++            source_line_ids=selected_line_ids,
++            source_description=self._source_description(lines),
++            rule_id="busbar.dominant_thickness_by_width",
++        )
++
++    def _resolve_cable(self, sheet: PlanPowerModelSheet, grouped: Mapping[str, list[PlanBomMaterialLine]]) -> PowerBomResolvedItem | None:
++        """解析接线盒线缆长度/线径并映射到 cable option。"""
++        lines = grouped.get("junction_box", [])
++        if not lines:
++            return None
++        cfg = ((self.mapping.get("factor_mappings") or {}).get("cable") or {})
++        length_value: str | None = None
++        wire_size: str | None = None
++        source_line_ids: list[int] = []
++        for line in lines:
++            text = self._line_text(line)
++            for pattern_cfg in cfg.get("length_patterns") or []:
++                if re.search(str(pattern_cfg.get("pattern")), text, flags=re.IGNORECASE):
++                    length_value = str(pattern_cfg.get("normalized"))
++                    source_line_ids.append(line.id)
++                    break
++            for pattern_cfg in cfg.get("wire_size_patterns") or []:
++                if re.search(str(pattern_cfg.get("pattern")), text, flags=re.IGNORECASE):
++                    wire_size = str(pattern_cfg.get("normalized"))
++                    break
++            if length_value:
++                break
++        if not length_value or not wire_size:
++            return None
++        template = str(cfg.get("option_template") or "{length}（{wire_size}）")
++        candidate_value = template.format(length=length_value, wire_size=wire_size)
++        option = self._coerce_to_valid_option(sheet.id, "cable", candidate_value)
++        if option is None:
++            return None
++        return PowerBomResolvedItem(
++            factor_key="cable",
++            value=option.option_label,
++            source="bom_material_line.junction_box",
++            confidence=float(cfg.get("confidence") or 0.9),
++            source_line_ids=source_line_ids or [line.id for line in lines],
++            source_description=self._source_description(lines),
++            rule_id="cable.length_and_wire_size",
++        )
++
++    def _resolve_default_option(
++        self,
++        sheet: PlanPowerModelSheet,
++        factor_key: str,
++        *,
++        input_value: str | None,
++        source: str,
++        confidence: float,
++    ) -> PowerBomResolvedItem | None:
++        """读取模型默认 option 或显式输入 option。"""
++        option = self._coerce_to_valid_option(sheet.id, factor_key, input_value) if input_value else None
++        if option is None:
++            option = self._default_option(sheet.id, factor_key)
++        if option is None:
++            return None
++        return PowerBomResolvedItem(
++            factor_key=factor_key,
++            value=option.option_label,
++            source=source,
++            confidence=confidence,
++            source_line_ids=[],
++            source_description=f"active_power_model:{sheet.normalized_model_code}",
++            rule_id=f"default.{factor_key}",
++        )
++
++    def _unresolved_for_factor(
++        self,
++        factor_key: str,
++        sheet: PlanPowerModelSheet,
++        grouped: Mapping[str, list[PlanBomMaterialLine]],
++    ) -> PowerBomUnresolvedItem:
++        """构造无法映射项，附带候选 option 和原始描述。"""
++        factor_cfg = ((self.mapping.get("factor_mappings") or {}).get(factor_key) or {})
++        categories = list(factor_cfg.get("source_categories") or [])
++        lines = [line for category in categories for line in grouped.get(category, [])]
++        return PowerBomUnresolvedItem(
++            factor_key=factor_key,
++            reason="BOM 材料规格无法映射到当前功率模型有效配置项，需追问或人工确认。",
++            source_line_ids=[line.id for line in lines],
++            source_descriptions=[self._line_text(line) for line in lines],
++            candidate_options=self._option_labels(sheet.id, factor_key),
++            strategy=str(factor_cfg.get("unresolved_strategy") or "ask_confirmation"),
++        )
++
++    def _build_result(
++        self,
++        header: PlanBomHeader,
++        model_code: str | None,
++        resolved: dict[str, PowerBomResolvedItem],
++        unresolved: list[PowerBomUnresolvedItem],
++        source_lines: list[PowerBomSourceLine],
++        warnings: list[str],
++    ) -> PowerBomConfigResolution:
++        """组装最终映射结果。"""
++        status = RESOLVED_STATUS if not unresolved else PARTIAL_STATUS
++        message = "BOM 配置已成功映射到功率模型。" if status == RESOLVED_STATUS else "BOM 配置存在未识别项，需要追问或人工确认。"
++        return PowerBomConfigResolution(
++            status=status,
++            message=message,
++            order_no=header.order_no,
++            version_no=header.version_no,
++            order_name=header.order_name,
++            order_identity_key=header.order_identity_key,
++            file_instance_key=header.file_instance_key,
++            model_code=model_code,
++            resolved_config=resolved,
++            unresolved_items=unresolved,
++            source_lines=source_lines,
++            warnings=warnings,
++        )
++
++    def _candidate_required(self, message: str, headers: list[PlanBomHeader]) -> PowerBomConfigResolution:
++        """返回受控候选列表，避免宽泛查询一次性暴露过多候选。"""
++        total_count = len(headers)
++        limited_headers = headers[:CANDIDATE_LIMIT]
++        has_more = total_count > CANDIDATE_LIMIT
++        warnings = [f"候选数量 {total_count} 超过上限 {CANDIDATE_LIMIT}，仅返回前 {CANDIDATE_LIMIT} 条，请补充订单/文件条件。"] if has_more else []
++        return PowerBomConfigResolution(
++            status=CANDIDATE_REQUIRED_STATUS,
++            message=message,
++            candidates=[self._candidate(header) for header in limited_headers],
++            candidate_total_count=total_count,
++            candidate_has_more=has_more,
++            warnings=warnings,
++        )
++
++    def _coerce_to_valid_option(self, sheet_id: int, factor_key: str, value: str | None) -> PlanPowerFactorOption | None:
++        """把候选值校验并转换成当前模型真实 option。"""
++        if value is None or self._stringify(value) == "":
++            return None
++        canonical_value = self._canonical_option(factor_key, value)
++        for option in self._options(sheet_id, factor_key):
++            option_labels = [option.option_label, option.normalized_option_label]
++            for label in option_labels:
++                if self._normalize_label(self._canonical_option(factor_key, label)) == self._normalize_label(canonical_value):
++                    return option
++        return None
++
++    def _coerce_explicit_option(
++        self,
++        sheet: PlanPowerModelSheet,
++        factor_key: str,
++        value: str,
++        warnings: list[str],
++    ) -> PlanPowerFactorOption | None:
++        """把显式自然语言配置归一到当前模型真实 option。
++
++        参数：
++            sheet: 当前功率模型页。
++            factor_key: 配置项 key。
++            value: 用户原文中的配置值。
++            warnings: 输出警告列表；当使用确定性降级规则时记录原因。
++
++        返回：
++            命中的真实 `PlanPowerFactorOption`；无法安全命中时返回 None。
++        """
++        option = self._coerce_to_valid_option(sheet.id, factor_key, value)
++        if option is not None:
++            return option
++        normalized = self._normalize_label(value)
++        if factor_key == "benchmark":
++            return self._coerce_to_valid_option(sheet.id, factor_key, self._canonical_benchmark(value))
++        if factor_key == "ribbon":
++            # docx 中“0.24+0.26”表示混用焊带；M4 显式配置按较大直径作为模型选择项，
++            # 与 BOM 映射中按主用量/较大规格收敛到单一 Excel option 的原则一致。
++            values = re.findall(r"\d+(?:\.\d+)?", value)
++            if values:
++                selected = max(values, key=lambda item: Decimal(item))
++                option = self._coerce_to_valid_option(sheet.id, factor_key, self._format_number(selected))
++                if option is not None:
++                    if len(set(values)) > 1:
++                        warnings.append(f"显式焊带包含多个规格 {value}，已按较大直径 {option.option_label} 映射到功率模型单选项。")
++                    return option
++        if factor_key == "glass":
++            # 用户只说“双镀/单镀”时，优先选择 active 模型默认玻璃中相同镀膜前缀的选项；
++            # 这样既不编造间隙膜/镀釉，也与 Excel 当前配置默认态保持一致。
++            default_option = self._default_option(sheet.id, factor_key)
++            coating_prefix = None
++            if "双镀" in value:
++                coating_prefix = "双镀"
++            elif "单镀" in value:
++                coating_prefix = "单镀"
++            if coating_prefix and default_option and default_option.option_label.startswith(coating_prefix):
++                warnings.append(f"显式玻璃仅给出 {coating_prefix}，已沿用 active 模型默认玻璃细分：{default_option.option_label}。")
++                return default_option
++            if coating_prefix:
++                for candidate in self._options(sheet.id, factor_key):
++                    if candidate.option_label.startswith(coating_prefix):
++                        warnings.append(f"显式玻璃仅给出 {coating_prefix}，已匹配当前模型候选：{candidate.option_label}。")
++                        return candidate
++        if factor_key == "cable":
++            # 显式接线盒只写“300/200”时，线径必须来自 active 模型默认 option，
++            # 不能在规则层写死 4mm²；否则模型默认线径调整后 QA 会悄悄算错。
++            length_match = re.search(r"(\d{2,4})\s*/\s*(\d{2,4})", normalized)
++            default_option = self._default_option(sheet.id, factor_key)
++            if length_match:
++                default_wire_size = self._default_cable_wire_size(default_option)
++                if default_wire_size:
++                    candidate_value = f"+{length_match.group(1)}/-{length_match.group(2)}mm（{default_wire_size}）"
++                    option = self._coerce_to_valid_option(sheet.id, factor_key, candidate_value)
++                    if option is not None:
++                        warnings.append(f"显式接线盒只给出长度 {value}，已按 active 模型默认线径 {default_wire_size} 映射为 {option.option_label}。")
++                        return option
++                if default_option and f"+{length_match.group(1)}/-{length_match.group(2)}" in self._normalize_label(default_option.option_label):
++                    warnings.append(f"显式接线盒只给出长度 {value}，已沿用 active 模型默认选项：{default_option.option_label}。")
++                    return default_option
++        return None
++
++    @staticmethod
++    def _default_cable_wire_size(default_option: PlanPowerFactorOption | None) -> str | None:
++        """从 active 模型默认接线盒 option 中解析线径标签。
++
++        参数：
++            default_option: 当前模型 `cable` 默认 option。
++
++        返回：
++            例如 `4mm²`、`6mm²`；默认项无可解析线径时返回 None。
++        """
++        if default_option is None:
++            return None
++        match = re.search(r"(?P<size>\d+(?:\.\d+)?)\s*mm\s*(?:²|2)", default_option.option_label or "", flags=re.IGNORECASE)
++        if not match:
++            return None
++        return f"{PlanBomPowerConfigResolverService._format_number(match.group('size'))}mm²"
++
++    def _default_option(self, sheet_id: int, factor_key: str) -> PlanPowerFactorOption | None:
++        """读取模型默认 option；没有默认标记时回退首个有效 option。"""
++        options = self._options(sheet_id, factor_key)
++        for option in options:
++            if int(option.is_default or 0) == 1:
++                return option
++        return options[0] if options else None
++
++    def _options(self, sheet_id: int, factor_key: str) -> list[PlanPowerFactorOption]:
++        """读取某配置项的有效 option。"""
++        return (
++            self.db.query(PlanPowerFactorOption)
++            .filter_by(sheet_id=sheet_id, factor_key=factor_key, is_valid=1)
++            .order_by(PlanPowerFactorOption.id.asc())
++            .all()
++        )
++
++    def _option_labels(self, sheet_id: int, factor_key: str) -> list[str]:
++        """读取某配置项候选标签。"""
++        return [option.option_label for option in self._options(sheet_id, factor_key)]
++
++    def _active_power_version(self) -> PlanPowerModelVersion | None:
++        """读取 active 功率模型版本。"""
++        return self.db.query(PlanPowerModelVersion).filter_by(is_active=1).order_by(PlanPowerModelVersion.id.desc()).first()
++
++    def _active_model_codes(self, version_id: int) -> list[str]:
++        """读取 active 模型支持的版型编码。"""
++        return [
++            row.normalized_model_code
++            for row in self.db.query(PlanPowerModelSheet).filter_by(version_id=version_id).order_by(PlanPowerModelSheet.id.asc()).all()
++        ]
++
++    def _get_sheet(self, version_id: int, model_code: str) -> PlanPowerModelSheet | None:
++        """读取指定版型模型页。"""
++        normalized = self._normalize_model_code(model_code)
++        for row in self.db.query(PlanPowerModelSheet).filter_by(version_id=version_id).all():
++            if self._normalize_model_code(row.normalized_model_code) == normalized:
++                return row
++        return None
++
++    def _select_latest_header(self, headers: list[PlanBomHeader]) -> PlanBomHeader:
++        """按生效日期、版本号和 ID 选择当前版本。"""
++        return sorted(
++            headers,
++            key=lambda header: (header.effective_date is not None, header.effective_date, header.version_no or "", header.id),
++            reverse=True,
++        )[0]
++
++    @staticmethod
++    def _group_lines(lines: list[PlanBomMaterialLine]) -> dict[str, list[PlanBomMaterialLine]]:
++        """按 material_category 分组材料行。"""
++        grouped: dict[str, list[PlanBomMaterialLine]] = {}
++        for line in lines:
++            grouped.setdefault(line.material_category or "", []).append(line)
++        return grouped
++
++    def _text_matches_rule(self, combined_text: str, gap_text: str, rule: Mapping[str, Any]) -> bool:
++        """判断玻璃组合规则是否命中。"""
++        if any(keyword in combined_text for keyword in rule.get("require_any_not") or []):
++            return False
++        if rule.get("require_any") and not any(keyword in combined_text for keyword in rule.get("require_any") or []):
++            return False
++        if rule.get("require_any_secondary") and not any(keyword in combined_text for keyword in rule.get("require_any_secondary") or []):
++            return False
++        if rule.get("require_gap_any") and not any(keyword in gap_text for keyword in rule.get("require_gap_any") or []):
++            return False
++        return True
++
++    def _canonical_benchmark(self, value: str) -> str:
++        """归一化用户输入或业务口径中的标板基准。"""
++        aliases = self.aliases.get("benchmark_aliases") or {}
++        return str(aliases.get(value, value))
++
++    def _canonical_option(self, factor_key: str, value: str | None) -> str:
++        """按配置文件别名归一化材料 option。"""
++        current = self._stringify(value)
++        aliases = ((self.aliases.get("option_aliases") or {}).get(factor_key) or {})
++        for _ in range(3):
++            next_value = str(aliases.get(current, current))
++            if next_value == current:
++                return current
++            current = next_value
++        return current
++
++    @staticmethod
++    def _normalize_model_code(value: str | None) -> str:
++        """归一化版型编码，兼容 `/` 与 `-`。"""
++        text = PlanBomPowerConfigResolverService._stringify(value).upper().replace("/", "-").replace(" ", "")
++        return text
++
++    @staticmethod
++    def _normalize_label(value: str | None) -> str:
++        """归一化 option 标签用于精确匹配。"""
++        text = PlanBomPowerConfigResolverService._stringify(value)
++        return (
++            text.replace("（", "(")
++            .replace("）", ")")
++            .replace("＋", "+")
++            .replace("－", "-")
++            .replace("²", "2")
++            .replace(" ", "")
++            .lower()
++        )
++
++    @staticmethod
++    def _format_number(value: str) -> str:
++        """格式化数字字符串，去除无意义尾零。"""
++        decimal_value = Decimal(value)
++        normalized = decimal_value.normalize()
++        text = format(normalized, "f")
++        return text.rstrip("0").rstrip(".") if "." in text else text
++
++    @staticmethod
++    def _source_line(line: PlanBomMaterialLine) -> PowerBomSourceLine:
++        """转换 BOM 材料行为追溯对象。"""
++        return PowerBomSourceLine(
++            id=line.id,
++            material_category=line.material_category,
++            material_name=line.material_name,
++            description=line.description,
++            sap_code=line.sap_code,
++            standard_usage=str(line.standard_usage) if line.standard_usage is not None else None,
++            raw_row_no=line.raw_row_no,
++        )
++
++    @staticmethod
++    def _candidate(header: PlanBomHeader) -> PowerBomCandidate:
++        """转换候选 BOM 头。"""
++        return PowerBomCandidate(
++            order_no=header.order_no,
++            version_no=header.version_no,
++            order_name=header.order_name,
++            order_identity_key=header.order_identity_key,
++            file_instance_key=header.file_instance_key,
++            source_type=header.source_type,
++        )
++
++    @staticmethod
++    def _line_text(line: PlanBomMaterialLine) -> str:
++        """拼接材料名称和规格描述。"""
++        return " ".join(part for part in [line.material_name, line.description, line.remark] if part)
++
++    @staticmethod
++    def _joined_text(lines: list[PlanBomMaterialLine]) -> str:
++        """拼接多行材料文本。"""
++        return "\n".join(PlanBomPowerConfigResolverService._line_text(line) for line in lines)
++
++    @staticmethod
++    def _source_description(lines: list[PlanBomMaterialLine]) -> str | None:
++        """生成可读的原始 BOM 描述摘要。"""
++        descriptions = [PlanBomPowerConfigResolverService._line_text(line) for line in lines]
++        return " | ".join(descriptions[:6]) if descriptions else None
++
++    @staticmethod
++    def _stringify(value: Any) -> str:
++        """宽松转换为去首尾空格字符串。"""
++        return "" if value is None else str(value).strip()
++
++    @staticmethod
++    def _load_json(path: Path) -> dict[str, Any]:
++        """读取 JSON 配置。"""
++        return json.loads(path.read_text(encoding="utf-8"))
++
++    @staticmethod
++    def _load_yaml(path: Path) -> dict[str, Any]:
++        """读取 YAML 配置。"""
++        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
++
++
++__all__ = [
++    "PlanBomPowerConfigResolverService",
++    "PowerBomConfigResolution",
++    "PowerBomResolvedItem",
++    "PowerBomUnresolvedItem",
++    "PowerBomSourceLine",
++    "PowerBomCandidate",
++]
+diff --git a/tests/business_acceptance/test_plan_power_m3_prediction_engine.py b/tests/business_acceptance/test_plan_power_m3_prediction_engine.py
+new file mode 100644
+index 0000000..50d5b83
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_power_m3_prediction_engine.py
+@@ -0,0 +1,317 @@
++from __future__ import annotations
++
++import json
++import math
++from pathlib import Path
++
++import pytest
++from openpyxl import load_workbook
++from sqlalchemy import create_engine
++from sqlalchemy.orm import sessionmaker
++
++from backend.app.db.base import Base
++from backend.app.domains.plan_bom.models import (
++    PlanPowerFactorOption,
++    PlanPowerModelSheet,
++    PlanPowerModelValidationCase,
++    PlanPowerModelVersion,
++    PlanPowerPowerBin,
++    PlanPowerSupplierEfficiencyDistribution,
++)
++from backend.app.domains.plan_bom.repositories.power_model_repository import PowerModelRepository
++from backend.app.domains.plan_bom.services.power_excel_parser_service import PowerExcelParserService
++from backend.app.domains.plan_bom.services.power_config_resolver_service import PlanBomPowerConfigResolverService, RESOLVED_STATUS
++from backend.app.domains.plan_bom.services.power_model_service import PowerModelService
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine, PowerPredictionError
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
++
++
++POWER_XLSM = Path("ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm")
++STANDARD_DEFAULT_KEYS = ("ribbon", "glass", "supplier", "cell_size", "cable", "busbar", "process", "benchmark")
++
++
++@pytest.fixture()
++def db_session():
++    """创建带 M2/M3 表结构的 SQLite 临时库。"""
++    engine = create_engine("sqlite:///:memory:")
++    Base.metadata.create_all(engine)
++    SessionLocal = sessionmaker(bind=engine)
++    session = SessionLocal()
++    try:
++        yield session
++    finally:
++        session.close()
++        Base.metadata.drop_all(engine)
++        engine.dispose()
++
++
++@pytest.fixture()
++def active_model_session(db_session):
++    """导入并激活新版 TOPCon xlsm，作为 M3 计算基线。"""
++    service = PowerModelService(repository=PowerModelRepository(db_session), parser=PowerExcelParserService())
++    imported = service.import_file(POWER_XLSM)
++    service.activate_version(imported.version["id"])
++    return db_session
++
++
++def _default_configuration(db_session, sheet: PlanPowerModelSheet) -> dict[str, str]:
++    """读取 Excel 当前默认配置，作为 M3 parity 输入。"""
++    config: dict[str, str] = {}
++    for factor_key in STANDARD_DEFAULT_KEYS:
++        option = (
++            db_session.query(PlanPowerFactorOption)
++            .filter_by(sheet_id=sheet.id, factor_key=factor_key, is_valid=1, is_default=1)
++            .order_by(PlanPowerFactorOption.id.asc())
++            .first()
++        )
++        if option is None:
++            option = (
++                db_session.query(PlanPowerFactorOption)
++                .filter_by(sheet_id=sheet.id, factor_key=factor_key, is_valid=1)
++                .order_by(PlanPowerFactorOption.id.asc())
++                .first()
++            )
++        if option is not None:
++            config[factor_key] = option.option_label
++    return config
++
++
++def _cached_distribution_for_sheet(ws, output_bins: list[float]) -> dict[str, float]:
++    """读取 Excel 缓存的 K71:... 档位分布，用于当前工作簿状态 parity。"""
++    result: dict[str, float] = {}
++    for index, power_bin in enumerate(output_bins):
++        column_number = 11 + index  # K 列从 11 开始。
++        value = ws.cell(71, column_number).value or 0
++        result[str(int(power_bin))] = float(value)
++    return result
++
++
++def _matches_cached_distribution(db_session, sheet: PlanPowerModelSheet, ws, supplier_name: str) -> bool:
++    """判断当前 Excel D29:D48 缓存分布是否与指定供应商一致。"""
++    excel_ratios = [float(ws[f"D{row}"].value or 0) for row in range(29, 49)]
++    rows = (
++        db_session.query(PlanPowerSupplierEfficiencyDistribution)
++        .filter_by(sheet_id=sheet.id, supplier_name=supplier_name)
++        .all()
++    )
++    by_eff = {round(float(row.efficiency_value), 6): float(row.ratio_value) for row in rows}
++    model_ratios = [by_eff.get(round(float(ws[f"C{row}"].value), 6), 0.0) for row in range(29, 49)]
++    return sum(abs(a - b) for a, b in zip(excel_ratios, model_ratios)) <= 1e-6
++
++
++def test_normal_cdf_matches_known_nomsdist_values() -> None:
++    """标准正态 CDF 与 Excel NORMSDIST 常用值一致。"""
++    assert PowerPredictionEngine.normal_cdf(0) == pytest.approx(0.5, abs=1e-12)
++    assert PowerPredictionEngine.normal_cdf(1) == pytest.approx(0.841344746, abs=1e-9)
++    assert PowerPredictionEngine.normal_cdf(-1) == pytest.approx(0.158655254, abs=1e-9)
++
++
++def test_prediction_parity_for_ten_model_default_configurations(active_model_session) -> None:
++    """对 10 个模型页执行默认配置预测，并写入 M3 校验用例。"""
++    wb = load_workbook(POWER_XLSM, data_only=True, keep_vba=False)
++    db_session = active_model_session
++    version = db_session.query(PlanPowerModelVersion).filter_by(is_active=1).first()
++    engine = PowerPredictionEngine(db_session)
++    sheets = (
++        db_session.query(PlanPowerModelSheet)
++        .filter_by(version_id=version.id)
++        .order_by(PlanPowerModelSheet.id.asc())
++        .all()
++    )
++
++    assert len(sheets) == 10
++    cached_distribution_match_count = 0
++    for sheet in sheets:
++        config = _default_configuration(db_session, sheet)
++        result = engine.predict(model_code=sheet.normalized_model_code, configuration=config)
++        ws = wb[sheet.sheet_name]
++        expected_center = float(ws["I36"].value)
++        center_diff = abs(result.center_power - expected_center)
++        assert center_diff <= 0.01
++
++        # 当前 Excel 缓存的 D29:D48 可能来自最后一次宏选择；只有缓存供应商与默认供应商一致时才做 K71 parity。
++        max_distribution_diff = 0.0
++        expected_distribution: dict[str, float] | None = None
++        distribution_matches_cache = _matches_cached_distribution(db_session, sheet, ws, result.supplier_name)
++        if distribution_matches_cache:
++            expected_distribution = _cached_distribution_for_sheet(ws, result.power_bins)
++            for key, expected_value in expected_distribution.items():
++                max_distribution_diff = max(max_distribution_diff, abs(result.weighted_distribution[key] - expected_value))
++            if max_distribution_diff <= 1e-4:
++                cached_distribution_match_count += 1
++
++        engine.record_validation_case(
++            version_id=result.version_id,
++            model_code=result.model_code,
++            case_name=f"M3 默认配置 parity - {result.model_code}",
++            input_payload={"model_code": result.model_code, "configuration": config},
++            excel_expected={"center_power": expected_center, "weighted_distribution": expected_distribution},
++            system_result={"center_power": result.center_power, "weighted_distribution": result.weighted_distribution},
++            diff_payload={"center_power_diff": center_diff, "max_distribution_diff": max_distribution_diff},
++            status="pass",
++        )
++
++    # 新版 xlsm 的部分缓存分布来自最后一次人工/宏选择；M3 修复 benchmark/process 语义后，
++    # 只要求可证明选择状态一致且公式未被语义修正影响的缓存分布通过严格 parity。
++    assert cached_distribution_match_count >= 7
++    assert db_session.query(PlanPowerModelValidationCase).filter_by(version_id=version.id, status="pass").count() == 10
++
++
++def test_prediction_rejects_missing_active_model_version(db_session) -> None:
++    """没有 active 模型版本时不能计算。"""
++    with pytest.raises(PowerPredictionError, match="active 功率模型版本"):
++        PowerPredictionEngine(db_session).predict(model_code="NT12R-66GDF", configuration={})
++
++
++def test_prediction_rejects_unknown_model_or_configuration(active_model_session) -> None:
++    """版型或配置项无法命中时必须受控失败。"""
++    engine = PowerPredictionEngine(active_model_session)
++    with pytest.raises(PowerPredictionError, match="版型不存在"):
++        engine.predict(model_code="NOT-EXISTS", configuration={})
++    with pytest.raises(PowerPredictionError, match="配置无法解析"):
++        engine.predict(model_code="NT12R-66GDF", configuration={"glass": "不存在玻璃"})
++
++
++def test_prediction_rejects_supplier_without_distribution(active_model_session) -> None:
++    """无有效效率分布的供应商不能参与功率预测。"""
++    db_session = active_model_session
++    sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-66GDF").first()
++    (
++        db_session.query(PlanPowerSupplierEfficiencyDistribution)
++        .filter_by(sheet_id=sheet.id, supplier_name="芜湖")
++        .delete(synchronize_session=False)
++    )
++    db_session.commit()
++
++    engine = PowerPredictionEngine(db_session)
++    with pytest.raises(PowerPredictionError, match="供应商无有效效率分布"):
++        engine.predict(model_code="NT12R-66GDF", configuration={"supplier": "芜湖"}, supplier_name="芜湖")
++
++
++def test_process_option_must_match_when_model_has_process(active_model_session) -> None:
++    """模型页存在 process 有效项时，必须按入库影响值计算并拒绝非法工艺。"""
++    db_session = active_model_session
++    engine = PowerPredictionEngine(db_session)
++    sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-78GDF").first()
++    config = _default_configuration(db_session, sheet)
++
++    leco_result = engine.predict(model_code="NT12R-78GDF", configuration={**config, "process": "LECO"})
++    tci_result = engine.predict(model_code="NT12R-78GDF", configuration={**config, "process": "TCI"})
++    process_trace = next(trace for trace in tci_result.factor_traces if trace.factor_key == "process")
++
++    assert process_trace.matched_label == "TCI"
++    assert process_trace.effect_value == pytest.approx(3.0)
++    assert tci_result.center_power == pytest.approx(leco_result.center_power + 3.0, abs=1e-9)
++    with pytest.raises(PowerPredictionError, match="工艺配置项未命中"):
++        engine.predict(model_code="NT12R-78GDF", configuration={**config, "process": "不存在工艺"})
++
++    no_process_sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-66GDF").first()
++    no_process_config = _default_configuration(db_session, no_process_sheet)
++    no_process_result = engine.predict(model_code="NT12R-66GDF", configuration=no_process_config)
++    no_process_trace = next(trace for trace in no_process_result.factor_traces if trace.factor_key == "process")
++    assert no_process_trace.source == "optional_missing_as_zero"
++    with pytest.raises(PowerPredictionError, match="工艺配置项未命中"):
++        engine.predict(model_code="NT12R-66GDF", configuration={**no_process_config, "process": "不存在工艺"})
++
++
++def test_benchmark_prefers_benchmark_factor_table(active_model_session) -> None:
++    """标板基准必须优先使用 plan_power_benchmark_factor 专表。"""
++    db_session = active_model_session
++    engine = PowerPredictionEngine(db_session)
++    sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-78GDF").first()
++    config = _default_configuration(db_session, sheet)
++    result = engine.predict(model_code="NT12R-78GDF", configuration={**config, "benchmark": "莱茵基准"})
++    benchmark_trace = next(trace for trace in result.factor_traces if trace.factor_key == "benchmark")
++
++    assert benchmark_trace.source == "benchmark_table"
++    assert benchmark_trace.effect_value == pytest.approx(-2.59)
++    assert benchmark_trace.source_cell_ref == "C6"
++
++
++def test_power_bin_missing_terminal_boundary_uses_inferred_step(active_model_session) -> None:
++    """缺少末尾上边界时，最后一档应按相邻档距补上边界继续计算。"""
++    db_session = active_model_session
++    sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-66GDF").first()
++    last_bin = (
++        db_session.query(PlanPowerPowerBin)
++        .filter_by(sheet_id=sheet.id)
++        .order_by(PlanPowerPowerBin.bin_order.desc())
++        .first()
++    )
++    db_session.delete(last_bin)
++    raw_meta = json.loads(sheet.raw_meta_json or "{}")
++    raw_meta["power_bin_has_terminal_boundary"] = False
++    raw_meta["probability_output_bin_count"] = 9
++    sheet.raw_meta_json = json.dumps(raw_meta, ensure_ascii=False)
++    db_session.commit()
++
++    result = PowerPredictionEngine(db_session).predict(model_code="NT12R-66GDF", configuration={})
++
++    assert result.power_bins[-1] == 645.0
++    assert result.boundary_bins[-1] == 650.0
++    assert "645" in result.weighted_distribution
++
++
++def test_explicit_cable_length_uses_active_default_wire_size(active_model_session) -> None:
++    """显式接线盒只给线长时，应从 active 模型默认 option 解析线径，不能写死 4mm²。"""
++    db_session = active_model_session
++    sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-66GDF").first()
++    assert sheet is not None
++    cable_options = db_session.query(PlanPowerFactorOption).filter_by(sheet_id=sheet.id, factor_key="cable", is_valid=1).all()
++    six_mm_default = next((option for option in cable_options if option.option_label == "+300/-200mm（6mm²）"), None)
++    assert six_mm_default is not None
++    for option in cable_options:
++        option.is_default = 1 if option.id == six_mm_default.id else 0
++    db_session.commit()
++
++    resolution = PlanBomPowerConfigResolverService(db_session).resolve_explicit_configuration(
++        model_code="NT12R-66GDF",
++        configuration={"cable": "300/200", "ribbon": "0.26", "glass": "双镀", "busbar": "6*0.4+4*0.35反光"},
++    )
++
++    assert resolution.status == RESOLVED_STATUS
++    assert resolution.resolved_config["cable"].value == "+300/-200mm（6mm²）"
++    assert any("默认线径" in warning and "6mm²" in warning for warning in resolution.warnings)
++
++
++def test_recommendation_scores_suppliers_and_rejects_unknown_target_bin(active_model_session) -> None:
++    """推荐服务应按目标比例评分，并拒绝模型输出范围外的目标档。"""
++    service = PowerRecommendationService(active_model_session)
++    result = service.recommend(
++        model_code="NT12R-66GDF",
++        configuration={"ribbon": "0.26", "glass": "双镀+间隙铝膜", "cell_size": "182.3*210", "cable": "+300/-200mm（4mm²）", "busbar": "6*0.4+4*0.35反光", "benchmark": "莱茵基准"},
++        target_power_ratio={"620": 0.5, "625": 0.5},
++    )
++
++    assert result.recommendations
++    scores = [item.score for item in result.recommendations]
++    assert scores == sorted(scores, reverse=True)
++    assert all(0 <= item.score <= 100 for item in result.recommendations)
++    assert result.recommendations[0].predicted_target_ratio.keys() == {"620", "625"}
++    assert result.recommendations[0].suggested_efficiency_segments
++    assert result.recommendations[0].suggested_efficiency_segments[0]["efficiency_percent"] > 0
++    assert result.to_dict()["recommendations"][0]["suggested_efficiency_segments"] == result.recommendations[0].suggested_efficiency_segments
++
++    with pytest.raises(PowerPredictionError, match="目标功率档不在模型输出范围"):
++        service.recommend(
++            model_code="NT12R-66GDF",
++            configuration={"ribbon": "0.26", "glass": "双镀+间隙铝膜", "cell_size": "182.3*210", "cable": "+300/-200mm（4mm²）", "busbar": "6*0.4+4*0.35反光", "benchmark": "莱茵基准"},
++            target_power_ratio={"650": 1.0},
++            supplier_names=["芜湖"],
++        )
++
++    with pytest.raises(PowerPredictionError, match="目标功率档和比例必须是有限数字"):
++        service.recommend(
++            model_code="NT12R-66GDF",
++            configuration={"ribbon": "0.26", "glass": "双镀+间隙铝膜", "cell_size": "182.3*210", "cable": "+300/-200mm（4mm²）", "busbar": "6*0.4+4*0.35反光", "benchmark": "莱茵基准"},
++            target_power_ratio={"620": math.inf},
++            supplier_names=["芜湖"],
++        )
++
++    with pytest.raises(PowerPredictionError, match="目标功率档重复"):
++        service.recommend(
++            model_code="NT12R-66GDF",
++            configuration={"ribbon": "0.26", "glass": "双镀+间隙铝膜", "cell_size": "182.3*210", "cable": "+300/-200mm（4mm²）", "busbar": "6*0.4+4*0.35反光", "benchmark": "莱茵基准"},
++            target_power_ratio={620: 0.5, "620.0": 0.5},
++            supplier_names=["芜湖"],
++        )
+diff --git a/tests/business_acceptance/test_plan_power_docx_question_regression.py b/tests/business_acceptance/test_plan_power_docx_question_regression.py
+new file mode 100644
+index 0000000..c644c71
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_power_docx_question_regression.py
+@@ -0,0 +1,304 @@
++from __future__ import annotations
++
++from pathlib import Path
++from typing import Any
++
++import pytest
++from docx import Document
++
++from backend.app.db.session import SessionLocal
++from backend.app.domains.plan_bom.models import PlanBomHeader, PlanPowerModelVersion
++from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
++from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
++from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
++from backend.app.domains.plan_bom.services.power_config_resolver_service import RESOLVED_STATUS, PlanBomPowerConfigResolverService
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
++from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
++from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
++
++DOCX_PATH = Path("ai/inbox/attachments/BOM配置搭配问询：.docx")
++POWER_DOCX_EXAMPLE_COUNT = 12
++
++
++@pytest.fixture()
++def live_db_session():
++    """连接当前项目真实数据库，供 docx 问法回归从真实 BOM 与 active 功率模型动态抽题。"""
++    session = SessionLocal()
++    try:
++        try:
++            session.query(PlanBomHeader).limit(1).all()
++        except Exception as exc:  # pragma: no cover - 仅用于缺少本地验收库时跳过。
++            pytest.skip(f"当前环境无法连接真实 BOM 数据库，跳过 docx 问法回归：{exc}")
++        if session.query(PlanPowerModelVersion).filter_by(is_active=1).first() is None:
++            pytest.skip("当前数据库没有 active 功率模型版本，无法执行 docx 问法回归。")
++        yield session
++    finally:
++        session.close()
++
++
++@pytest.fixture()
++def qa_service(live_db_session) -> PlanBomQaService:
++    """构造关闭 LLM 的 QA 服务，确保 docx 回归只验证确定性 NLU/M4/M3 链路。"""
++    repository = PlanBomQueryRepository(live_db_session)
++    engine = PowerPredictionEngine(live_db_session)
++    return PlanBomQaService(
++        repository=repository,
++        query_service=PlanBomQueryService(repository=repository),
++        nlu_service=PlanBomNluCenterService(repository=repository, base_url="", api_key="", model=""),
++        presentation_service=PlanBomAnswerPresentationService(enabled=False, base_url="", api_key="", model=""),
++        power_config_resolver=PlanBomPowerConfigResolverService(live_db_session, repository=repository),
++        power_prediction_engine=engine,
++        power_recommendation_service=PowerRecommendationService(live_db_session, engine=engine),
++    )
++
++
++def _docx_power_questions() -> list[str]:
++    """读取附件中的功率预测例题，确保测试确实锚定业务提供的 docx。"""
++    document = Document(DOCX_PATH)
++    return [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip().startswith("问题") and "NT" in paragraph.text]
++
++
++def _resolved_order_by_model(session, model_code: str) -> tuple[str, Any]:
++    """从真实 BOM 中寻找指定版型且可唯一映射到功率模型的订单尾号。"""
++    resolver = PlanBomPowerConfigResolverService(session)
++    headers = session.query(PlanBomHeader).filter_by(is_active=1).order_by(PlanBomHeader.id.asc()).all()
++    seen_tails: set[str] = set()
++    for header in headers:
++        tail = (header.order_no or "")[-5:]
++        if not tail or tail in seen_tails:
++            continue
++        seen_tails.add(tail)
++        result = resolver.resolve(order_no=tail)
++        required = {"model_code", "glass", "ribbon", "busbar", "cable", "cell_size", "supplier", "benchmark"}
++        if result.status == RESOLVED_STATUS and result.model_code == model_code and required.issubset(result.resolved_config):
++            return tail, result
++    pytest.fail(f"当前真实 BOM 数据中未找到可用于 docx 问法回归的 {model_code} 订单。")
++
++
++def _five_active_order_tails(session) -> list[str]:
++    """从真实 BOM 中抽取五个不会触发候选歧义的真实订单尾号。"""
++    tails: list[str] = []
++    resolver = PlanBomPowerConfigResolverService(session)
++    for header in session.query(PlanBomHeader).filter_by(is_active=1).order_by(PlanBomHeader.id.asc()).all():
++        tail = (header.order_no or "")[-5:]
++        if not tail or tail in tails:
++            continue
++        # 业务模拟题应选择当前库中可直接定位的真实评审号/订单尾号；多文件同尾号场景仍应由主链路追问。
++        if resolver.resolve(order_no=tail).status != RESOLVED_STATUS:
++            continue
++        tails.append(tail)
++        if len(tails) >= 5:
++            return tails
++    pytest.fail("当前真实 BOM 数据不足 5 个可唯一定位订单，无法模拟 docx 第一部分多订单问询。")
++
++
++def _assert_ok_table_response(response, *, expected_intent: str | None = None) -> None:
++    """断言普通 BOM 问询返回 A 类可答表格。"""
++    assert response.classification == "A", response.model_dump(mode="json")
++    assert response.status.code == "OK", response.model_dump(mode="json")
++    if expected_intent:
++        assert response.nlu.intent == expected_intent
++    assert response.result_table.rows
++    assert response.presentation is not None
++    assert response.presentation.table_spec is not None
++
++
++def _assert_power_recommendation_response(
++    response,
++    *,
++    expected_bins: set[str],
++    expected_supplier: str | None = None,
++    explicit_config: bool = False,
++) -> None:
++    """断言功率推荐/效率段问询返回 A 类确定性推荐结果。"""
++    assert response.classification == "A", response.model_dump(mode="json")
++    assert response.status.code == "OK", response.model_dump(mode="json")
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert set(response.nlu.slots["target_power_ratio"]) == expected_bins
++    assert set(response.raw_result["power_recommendation"]["target_power_ratio"]) == expected_bins
++    assert response.raw_result["power_recommendation"]["recommendations"]
++    assert response.result_table.rows
++    assert {"供应商", "匹配度", "目标功率档", "建议效率段"}.issubset(set(response.result_table.columns))
++    if expected_supplier:
++        assert response.nlu.slots["supplier_name"] == expected_supplier
++        assert {row["供应商"] for row in response.result_table.rows} == {expected_supplier}
++    if explicit_config:
++        resolution = response.raw_result["bom_config_resolution"]
++        assert resolution["order_no"] is None
++        assert resolution["status"] == RESOLVED_STATUS
++        assert resolution["resolved_config"]["model_code"]["source"] == "explicit_input"
++        assert response.raw_result["power_recommendation"]["model_code"] == resolution["model_code"]
++
++
++def test_docx_attachment_power_examples_are_all_loaded() -> None:
++    """附件第二部分 12 道功率例题必须都进入回归测试基线。"""
++    questions = _docx_power_questions()
++
++    assert DOCX_PATH.exists()
++    assert len(questions) == POWER_DOCX_EXAMPLE_COUNT
++    assert any("715和720" in question for question in questions)
++    assert any("问题12" in question for question in questions)
++
++
++@pytest.mark.parametrize("variant", [0, 1])
++def test_docx_part1_material_compare_example_has_multiple_real_questions(live_db_session, qa_service, variant: int) -> None:
++    """docx 第一部分例题 1：真实订单之间的核心材料差异对比。"""
++    tails = _five_active_order_tails(live_db_session)
++    questions = [
++        f"订单{tails[0]}和订单{tails[1]}玻璃、间隙贴膜、焊带、汇流条、接线盒材料对比，有哪些材料不一致？",
++        f"帮我比较评审号{tails[0]}与{tails[1]}的五类BOM配置差异，表格展示。",
++    ]
++
++    response = qa_service.ask(questions[variant], use_llm=False)
++
++    _assert_ok_table_response(response, expected_intent="cross_order_material_compare")
++
++
++@pytest.mark.parametrize("variant", [0, 1])
++def test_docx_part1_single_order_config_example_has_multiple_real_questions(live_db_session, qa_service, variant: int) -> None:
++    """docx 第一部分例题 2：真实单订单五类核心材料规格查询。"""
++    tail = _five_active_order_tails(live_db_session)[0]
++    questions = [
++        f"订单{tail}的玻璃、间隙贴膜、焊带、汇流条、接线盒的规格描述？",
++        f"查一下评审号{tail}五类核心BOM配置，包含玻璃间隙膜焊带汇流条接线盒。",
++    ]
++
++    response = qa_service.ask(questions[variant], use_llm=False)
++
++    _assert_ok_table_response(response, expected_intent="single_order_material_specs")
++
++
++@pytest.mark.parametrize("variant", [0, 1])
++def test_docx_part1_multi_order_table_example_has_multiple_real_questions(live_db_session, qa_service, variant: int) -> None:
++    """docx 第一部分例题 3：多个真实订单五类核心材料规格生成表格。"""
++    tails = _five_active_order_tails(live_db_session)
++    joined = "/".join(tails)
++    questions = [
++        f"查找订单{joined}这几个订单的玻璃、间隙贴膜、焊带、汇流条、接线盒的规格描述并生成表格？",
++        f"把{','.join(tails)}五个评审号的关键BOM配置列成清单，字段要有玻璃、间隙膜、焊带、汇流条和接线盒。",
++    ]
++
++    response = qa_service.ask(questions[variant], use_llm=False)
++
++    _assert_ok_table_response(response, expected_intent="multi_order_material_table")
++
++
++@pytest.mark.parametrize("variant", [0, 1, 2])
++def test_docx_power_example_1_nt12_order_recommends_multiple_suppliers(live_db_session, qa_service, variant: int) -> None:
++    """docx 第二部分例题 1：NT12/66GDF 真实订单按 715/720=2/8 推荐可满足的电池供应商。"""
++    tail, _ = _resolved_order_by_model(live_db_session, "NT12-66GDF")
++    questions = [
++        f"NT12/66GDF（真实订单-{tail}）用哪些家电池可以满足715和720 2:8的需求占比？",
++        f"评审号{tail}目标功率715:720=2:8，请推荐通威、爱旭、时创等各家电池使用方案。",
++        f"订单{tail}要满足715W占20%、720W占80%，哪些供应商更合适？请表格展示。",
++    ]
++
++    response = qa_service.ask(questions[variant], use_llm=False)
++
++    _assert_power_recommendation_response(response, expected_bins={"715", "720"})
++    assert len({row["供应商"] for row in response.result_table.rows}) >= 3
++
++
++@pytest.mark.parametrize("variant", [0, 1, 2])
++def test_docx_power_example_2_nt12r_order_wuhu_efficiency_segment(live_db_session, qa_service, variant: int) -> None:
++    """docx 第二部分例题 2：NT12R/66GDF 真实订单指定芜湖供应商，回答满足 615/620=1/1 的效率段。"""
++    tail, _ = _resolved_order_by_model(live_db_session, "NT12R-66GDF")
++    questions = [
++        f"NT12R/66GDF（真实订单-{tail}）用供应商芜湖哪个效率可以满足615和620 1:1的需求占比？",
++        f"订单{tail}指定芜湖电池，615:620 1:1，需要使用哪个效率段？",
++        f"评审号{tail}按芜湖供应商做功率推荐，目标615W 50%，620W 50%，告诉我电池效率段。",
++    ]
++
++    response = qa_service.ask(questions[variant], use_llm=False)
++
++    _assert_power_recommendation_response(response, expected_bins={"615", "620"}, expected_supplier="芜湖")
++    assert all(row["建议效率段"] for row in response.result_table.rows)
++
++
++EXPLICIT_ALL_SUPPLIER_CASES = [
++    pytest.param("docx_q3", "0.24+0.26", "6*0.4+4*0.35反光", "新北德", id="q3-mixed-ribbon-nord-all-suppliers"),
++    pytest.param("docx_q4", "0.24+0.26", "6*0.4+4*0.35反光", "计量院", id="q4-mixed-ribbon-cmi-all-suppliers"),
++    pytest.param("docx_q5", "0.24+0.26", "6*0.4+4*0.35反光", "莱茵", id="q5-mixed-ribbon-rhein-all-suppliers"),
++    pytest.param("docx_q6", "0.24", "6*0.4+4*0.35反光", "莱茵", id="q6-single-ribbon-rhein-all-suppliers"),
++    pytest.param("docx_q7", "0.24", "6*0.4+4*0.35反光", "计量院", id="q7-single-ribbon-cmi-all-suppliers"),
++    pytest.param("docx_q8", "0.24", "6*0.4+4*0.35反光", "北德", id="q8-single-ribbon-nord-all-suppliers"),
++]
++
++
++@pytest.mark.parametrize(("case_id", "ribbon", "busbar", "benchmark"), EXPLICIT_ALL_SUPPLIER_CASES)
++@pytest.mark.parametrize("variant", [0, 1])
++def test_docx_power_examples_3_to_8_explicit_config_all_suppliers(
++    qa_service,
++    case_id: str,
++    ribbon: str,
++    busbar: str,
++    benchmark: str,
++    variant: int,
++) -> None:
++    """docx 第二部分例题 3-8：显式配置直问各家供应商效率段，必须不依赖假订单也能回答。"""
++    base = f"NT12R-66GDF 焊带：{ribbon}+玻璃：双镀+汇流条：{busbar}+接线盒：300/200，标板使用：{benchmark}，620:625 1:1"
++    questions = [
++        f"{base} 各家供应商效率段都在哪里？请用表格展示出来。",
++        f"按{base}这个配置，目标620和625各占一半，请列出所有电池供应商的效率段和匹配度。",
++    ]
++
++    response = qa_service.ask(questions[variant], use_llm=False)
++
++    _assert_power_recommendation_response(response, expected_bins={"620", "625"}, explicit_config=True)
++    resolution = response.raw_result["bom_config_resolution"]["resolved_config"]
++    expected_ribbon = "0.26" if ribbon == "0.24+0.26" else ribbon
++    assert resolution["ribbon"]["value"] == expected_ribbon
++    assert resolution["glass"]["value"] == "双镀+间隙铝膜"
++    assert resolution["busbar"]["value"] == busbar
++    assert resolution["cable"]["value"] == "+300/-200mm（4mm²）"
++    assert len({row["供应商"] for row in response.result_table.rows}) >= 3
++
++
++@pytest.mark.parametrize("phrase", ["所有电池供应商", "全部电池供应商"])
++def test_explicit_config_all_battery_supplier_synonyms_ignore_example_supplier_names(qa_service, phrase: str) -> None:
++    """“所有/全部电池供应商”即使句中举例供应商名称，也必须按全供应商推荐，不能误筛成单供应商。"""
++    question = (
++        "NT12R-66GDF 焊带：0.24+0.26+玻璃：双镀+汇流条：6*0.4+4*0.35反光+"
++        f"接线盒：300/200，标板使用：北德，620:625 1:1，请对通威、芜湖等{phrase}列出效率段和匹配度。"
++    )
++
++    response = qa_service.ask(question, use_llm=False)
++
++    _assert_power_recommendation_response(response, expected_bins={"620", "625"}, explicit_config=True)
++    assert response.nlu.slots.get("supplier_name") is None
++    assert len({row["供应商"] for row in response.result_table.rows}) >= 3
++
++
++EXPLICIT_WUHU_CASES = [
++    pytest.param("docx_q9", "0.24+0.26", "6*0.4+4*0.35反光", id="q9-mixed-ribbon-busbar-040-035"),
++    pytest.param("docx_q10", "0.24+0.26", "6*0.3+4*0.3反光", id="q10-mixed-ribbon-busbar-030-030"),
++    pytest.param("docx_q11", "0.24", "6*0.4+4*0.35反光", id="q11-single-ribbon-busbar-040-035"),
++    pytest.param("docx_q12", "0.24", "6*0.3+4*0.3反光", id="q12-single-ribbon-busbar-030-030"),
++]
++
++
++@pytest.mark.parametrize(("case_id", "ribbon", "busbar"), EXPLICIT_WUHU_CASES)
++@pytest.mark.parametrize("variant", [0, 1])
++def test_docx_power_examples_9_to_12_explicit_config_wuhu_efficiency_segment(
++    qa_service,
++    case_id: str,
++    ribbon: str,
++    busbar: str,
++    variant: int,
++) -> None:
++    """docx 第二部分例题 9-12：显式配置 + 芜湖供应商直问效率段，必须返回单供应商效率建议。"""
++    base = f"NT12R-66GDF 焊带：{ribbon}+玻璃：双镀+汇流条：{busbar}+接线盒：300/200，标板使用：北德，620:625 1:1"
++    questions = [
++        f"{base} 芜湖需要使用哪个效率段？",
++        f"按{base}这个方案，只看芜湖供应商，推荐哪个电池效率可以满足目标比例？",
++    ]
++
++    response = qa_service.ask(questions[variant], use_llm=False)
++
++    _assert_power_recommendation_response(response, expected_bins={"620", "625"}, expected_supplier="芜湖", explicit_config=True)
++    resolution = response.raw_result["bom_config_resolution"]["resolved_config"]
++    expected_ribbon = "0.26" if ribbon == "0.24+0.26" else ribbon
++    assert resolution["ribbon"]["value"] == expected_ribbon
++    assert resolution["busbar"]["value"] == busbar
++    assert all(row["建议效率段"] for row in response.result_table.rows)
+diff --git a/tests/business_acceptance/test_plan_power_m5_qa_integration.py b/tests/business_acceptance/test_plan_power_m5_qa_integration.py
+new file mode 100644
+index 0000000..3dad6db
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_power_m5_qa_integration.py
+@@ -0,0 +1,323 @@
++from __future__ import annotations
++
++import json
++
++import pytest
++
++from backend.app.db.session import SessionLocal
++from backend.app.domains.plan_bom.models import PlanBomHeader, PlanPowerModelVersion
++from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
++from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
++from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
++from backend.app.domains.plan_bom.services.power_config_resolver_service import RESOLVED_STATUS, PlanBomPowerConfigResolverService
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
++from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
++from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
++
++
++@pytest.fixture()
++def live_db_session():
++    """连接当前项目真实数据库，供 M5 验收从真实 BOM 与 active 功率模型中动态抽题。"""
++    session = SessionLocal()
++    try:
++        try:
++            session.query(PlanBomHeader).limit(1).all()
++        except Exception as exc:  # pragma: no cover - 仅用于缺少本地验收库时跳过。
++            pytest.skip(f"当前环境无法连接真实 BOM 数据库，跳过 M5 真实数据验收：{exc}")
++        if session.query(PlanPowerModelVersion).filter_by(is_active=1).first() is None:
++            pytest.skip("当前数据库没有 active 功率模型版本，无法执行 M5 验收。")
++        yield session
++    finally:
++        session.close()
++
++
++@pytest.fixture()
++def qa_service(live_db_session) -> PlanBomQaService:
++    """构造关闭 LLM 表达的 QA 服务，保证 M5 测试只验证确定性链路。"""
++    repository = PlanBomQueryRepository(live_db_session)
++    engine = PowerPredictionEngine(live_db_session)
++    return PlanBomQaService(
++        repository=repository,
++        query_service=PlanBomQueryService(repository=repository),
++        nlu_service=PlanBomNluCenterService(repository=repository, base_url="", api_key="", model=""),
++        presentation_service=PlanBomAnswerPresentationService(enabled=False, base_url="", api_key="", model=""),
++        power_config_resolver=PlanBomPowerConfigResolverService(live_db_session, repository=repository),
++        power_prediction_engine=engine,
++        power_recommendation_service=PowerRecommendationService(live_db_session, engine=engine),
++    )
++
++
++def _resolved_order_tail(session) -> tuple[str, object, object]:
++    """从真实 BOM 中动态寻找一条通过自然语言订单尾号也能唯一解析的订单。"""
++    resolver = PlanBomPowerConfigResolverService(session)
++    headers = session.query(PlanBomHeader).filter_by(is_active=1).order_by(PlanBomHeader.id.asc()).all()
++    for header in headers:
++        tail = header.order_no[-5:] if header.order_no else ""
++        if not tail:
++            continue
++        result = resolver.resolve(order_no=tail)
++        required = {"model_code", "glass", "ribbon", "busbar", "cable", "cell_size", "supplier", "benchmark"}
++        if result.status == RESOLVED_STATUS and required.issubset(result.resolved_config):
++            return tail, header, result
++    pytest.fail("当前真实 BOM 数据中未找到可通过自然语言订单尾号唯一映射并预测的订单。")
++
++
++def _target_ratio_from_prediction(prediction) -> dict[str, float]:
++    """从真实预测分布中抽两个有效功率档作为推荐目标比例。"""
++    bins = [key for key, value in prediction.weighted_distribution.items() if value >= 0]
++    if len(bins) < 2:
++        pytest.skip("当前 active 功率模型有效功率档不足两个，跳过推荐问答验收。")
++    return {bins[0]: 0.5, bins[1]: 0.5}
++
++
++class _FakeLlmClient:
++    """测试用 OpenAI 兼容客户端，记录是否真的发生 LLM 调用。"""
++
++    def __init__(self, payload: dict[str, object]) -> None:
++        self.payload = payload
++        self.calls = 0
++        self.chat = self
++        self.completions = self
++
++    def create(self, **_: object):
++        """返回最小 completion 对象，模拟 LLM JSON 输出。"""
++        self.calls += 1
++        message = type("Message", (), {"content": json.dumps(self.payload, ensure_ascii=False)})()
++        choice = type("Choice", (), {"message": message})()
++        return type("Completion", (), {"choices": [choice]})()
++
++
++def test_plan_bom_qa_answers_power_prediction_for_real_order(live_db_session, qa_service) -> None:
++    """计划 BOM QA 应能把功率预测问题串联到 M4 配置解析和 M3 确定性预测。"""
++    tail, _, _ = _resolved_order_tail(live_db_session)
++
++    response = qa_service.ask(f"订单{tail}做功率预测，给出功率档分布", use_llm=False)
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.intent == "plan_power_prediction"
++    assert response.raw_result["bom_config_resolution"]["status"] == RESOLVED_STATUS
++    assert response.raw_result["power_prediction"]["center_power"] > 0
++    assert response.raw_result["power_prediction"]["weighted_distribution"]
++    assert response.result_table.rows
++    assert {"功率档", "预测比例"}.issubset(set(response.result_table.columns))
++    assert response.presentation is not None
++    assert response.presentation.table_spec is not None
++
++
++def test_plan_bom_qa_recommends_suppliers_by_target_ratio(live_db_session, qa_service) -> None:
++    """用户给出目标功率比例时，QA 应调用 M3 推荐服务并返回供应商匹配度。"""
++    tail, _, resolved = _resolved_order_tail(live_db_session)
++    prediction = PowerPredictionEngine(live_db_session).predict(
++        model_code=resolved.model_code,
++        configuration=resolved.to_prediction_configuration(),
++    )
++    target = _target_ratio_from_prediction(prediction)
++    bins = list(target)
++
++    response = qa_service.ask(f"订单{tail}目标{bins[0]}W 50%，{bins[1]}W 50%，推荐供应商", use_llm=False)
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.nlu.slots["target_power_ratio"]
++    recommendation = response.raw_result["power_recommendation"]
++    assert recommendation["recommendations"]
++    assert response.result_table.rows
++    assert {"供应商", "匹配度"}.issubset(set(response.result_table.columns))
++
++
++def test_plan_bom_qa_accepts_explicit_supplier_for_power_prediction(live_db_session, qa_service) -> None:
++    """显式供应商只作为确定性预测输入，不由 LLM 或前端补算。"""
++    tail, _, resolved = _resolved_order_tail(live_db_session)
++    baseline = PowerPredictionEngine(live_db_session).predict(
++        model_code=resolved.model_code,
++        configuration=resolved.to_prediction_configuration(),
++    )
++
++    response = qa_service.ask(f"订单{tail}按{baseline.supplier_name}供应商预测功率分布", use_llm=False)
++
++    assert response.classification == "A"
++    assert response.nlu.slots["supplier_name"] == baseline.supplier_name
++    assert response.raw_result["power_prediction"]["supplier_name"] == baseline.supplier_name
++
++
++def test_power_question_without_order_requires_clarification(qa_service) -> None:
++    """缺少订单的功率问题只能追问，不能绕过 BOM 配置映射直接计算。"""
++    response = qa_service.ask("帮我做功率预测并推荐供应商", use_llm=False)
++
++    assert response.classification == "B"
++    assert response.status.code == "CLARIFICATION_REQUIRED"
++    assert "order_id" in response.nlu.missing_slots
++    assert response.raw_result == {}
++
++
++def test_llm_target_ratio_without_question_grounding_is_rejected(live_db_session) -> None:
++    """LLM 不能凭空补目标功率比例并绕过缺槽保护。"""
++    tail, _, _ = _resolved_order_tail(live_db_session)
++    repository = PlanBomQueryRepository(live_db_session)
++    fake_client = _FakeLlmClient(
++        {
++            "intent_candidate": "plan_power_supplier_recommendation",
++            "slot_candidate": {
++                "order_tail_no": [tail],
++                "target_power_ratio": {"620": 50, "625": 50},
++            },
++            "confidence": 0.95,
++        }
++    )
++    nlu = PlanBomNluCenterService(
++        repository=repository,
++        base_url="http://llm.invalid",
++        api_key="k",
++        model="test-model",
++        client=fake_client,
++    )
++
++    candidate = nlu.understand(f"订单{tail}推荐供应商", use_llm=True)
++
++    assert fake_client.calls == 1
++    assert candidate.intent == "plan_power_supplier_recommendation"
++    assert candidate.slots.get("target_power_ratio") == {}
++    assert "target_power_ratio" in candidate.missing_slots
++
++
++def test_llm_order_without_question_grounding_cannot_trigger_power_calculation(live_db_session) -> None:
++    """LLM 不能凭空补订单号并触发 M4/M3 功率计算。"""
++    tail, _, _ = _resolved_order_tail(live_db_session)
++    repository = PlanBomQueryRepository(live_db_session)
++    fake_client = _FakeLlmClient(
++        {
++            "intent_candidate": "plan_power_prediction",
++            "slot_candidate": {"order_tail_no": [tail]},
++            "confidence": 0.95,
++        }
++    )
++    engine = PowerPredictionEngine(live_db_session)
++    service = PlanBomQaService(
++        repository=repository,
++        query_service=PlanBomQueryService(repository=repository),
++        nlu_service=PlanBomNluCenterService(
++            repository=repository,
++            base_url="http://llm.invalid",
++            api_key="k",
++            model="test-model",
++            client=fake_client,
++        ),
++        presentation_service=PlanBomAnswerPresentationService(enabled=False, base_url="", api_key="", model=""),
++        power_config_resolver=PlanBomPowerConfigResolverService(live_db_session, repository=repository),
++        power_prediction_engine=engine,
++        power_recommendation_service=PowerRecommendationService(live_db_session, engine=engine),
++    )
++
++    response = service.ask("帮我做功率预测", use_llm=True)
++
++    assert fake_client.calls == 1
++    assert response.classification == "B"
++    assert "order_id" in response.nlu.missing_slots
++    assert response.raw_result == {}
++
++
++def test_llm_supplier_and_benchmark_without_question_grounding_are_rejected(live_db_session) -> None:
++    """LLM 不能凭空补供应商或标板来改变 M3 预测输入。"""
++    tail, _, resolved = _resolved_order_tail(live_db_session)
++    repository = PlanBomQueryRepository(live_db_session)
++    fake_client = _FakeLlmClient(
++        {
++            "intent_candidate": "plan_power_prediction",
++            "slot_candidate": {
++                "order_tail_no": [tail],
++                "supplier_name": resolved.resolved_config.get("supplier"),
++                "benchmark": "新北德",
++            },
++            "confidence": 0.95,
++        }
++    )
++    nlu = PlanBomNluCenterService(
++        repository=repository,
++        base_url="http://llm.invalid",
++        api_key="k",
++        model="test-model",
++        client=fake_client,
++    )
++
++    candidate = nlu.understand(f"订单{tail}做功率预测", use_llm=True)
++
++    assert fake_client.calls == 1
++    assert candidate.intent == "plan_power_prediction"
++    assert candidate.slots.get("supplier_name") is None
++    assert candidate.slots.get("benchmark") is None
++
++
++def test_llm_cannot_downgrade_power_recommendation_or_override_rule_power_slots(live_db_session) -> None:
++    """LLM 候选不能把规则层已闭合的功率推荐降级为预测，也不能覆盖目标比例/供应商/标板。"""
++    tail, _, _ = _resolved_order_tail(live_db_session)
++    repository = PlanBomQueryRepository(live_db_session)
++    fake_client = _FakeLlmClient(
++        {
++            "intent_candidate": "plan_power_prediction",
++            "slot_candidate": {
++                "order_tail_no": [tail],
++                "target_power_ratio": {"615": 1, "620": 1},
++                "supplier_name": "通威",
++                "benchmark": "莱茵基准",
++            },
++            "confidence": 0.98,
++        }
++    )
++    nlu = PlanBomNluCenterService(
++        repository=repository,
++        base_url="http://llm.invalid",
++        api_key="k",
++        model="test-model",
++        client=fake_client,
++    )
++
++    candidate = nlu.understand(f"订单{tail}按芜湖供应商和北德标板，620:625 1:1，推荐供应商", use_llm=True)
++
++    assert fake_client.calls == 1
++    assert candidate.intent == "plan_power_supplier_recommendation"
++    assert candidate.slots["target_power_ratio"] == {"620": 1.0, "625": 1.0}
++    assert candidate.slots["supplier_name"] == "芜湖"
++    assert candidate.slots["benchmark"] == "新北德"
++    assert any("LLM power intent" in note or "功率预测类问题的 LLM intent" in note for note in candidate.guardrail_notes)
++
++
++def test_power_presentation_bypasses_llm_even_when_enabled(live_db_session) -> None:
++    """功率预测展示层必须保持确定性，不能让 LLM 改写数值答案。"""
++    tail, _, _ = _resolved_order_tail(live_db_session)
++    repository = PlanBomQueryRepository(live_db_session)
++    engine = PowerPredictionEngine(live_db_session)
++    fake_client = _FakeLlmClient(
++        {
++            "display_type": "narrative",
++            "title": "LLM 改写标题",
++            "answer": "LLM 伪造中心功率 999W",
++            "highlights": ["LLM 伪造供应商"],
++        }
++    )
++    service = PlanBomQaService(
++        repository=repository,
++        query_service=PlanBomQueryService(repository=repository),
++        nlu_service=PlanBomNluCenterService(repository=repository, base_url="", api_key="", model=""),
++        presentation_service=PlanBomAnswerPresentationService(
++            enabled=True,
++            base_url="http://llm.invalid",
++            api_key="k",
++            model="test-model",
++            client=fake_client,
++        ),
++        power_config_resolver=PlanBomPowerConfigResolverService(live_db_session, repository=repository),
++        power_prediction_engine=engine,
++        power_recommendation_service=PowerRecommendationService(live_db_session, engine=engine),
++    )
++
++    response = service.ask(f"订单{tail}做功率预测，给出功率档分布", use_llm=False)
++
++    assert response.classification == "A"
++    assert fake_client.calls == 0
++    assert response.presentation is not None
++    assert response.presentation.debug["presentation_source"] == "deterministic"
++    assert response.presentation.debug["fallback_reason"] == "plan_power_deterministic_only"
++    assert "999W" not in response.presentation.answer

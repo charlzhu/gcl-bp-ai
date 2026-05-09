@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 PowerModelImportStatus = Literal["created", "existing"]
@@ -15,6 +15,9 @@ class PowerModelVersionSummary(BaseModel):
     - 只描述版本级状态；
     - 详情中的配置项、供应商、功率档和 issue 由详情接口返回。
     """
+
+    # 允许保留后端既有字段名 model_sheet_count，避免 Pydantic 将业务字段误判为内部 model_ 命名空间。
+    model_config = ConfigDict(protected_namespaces=())
 
     id: int
     file_name: str

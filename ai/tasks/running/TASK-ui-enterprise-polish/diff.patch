@@ -1,0 +1,1497 @@
+diff --git a/frontend/src/layouts/AppLayout.vue b/frontend/src/layouts/AppLayout.vue
+index 9555aa2..fbf7d39 100644
+--- a/frontend/src/layouts/AppLayout.vue
++++ b/frontend/src/layouts/AppLayout.vue
+@@ -4,6 +4,7 @@
+       <div class="brand" data-testid="app-brand">
+         <img :src="brandLogoUrl" alt="协鑫集成标识" class="brand-logo" />
+         <div class="brand-copy">
++          <div class="platform-eyebrow">生产运行台</div>
+           <div class="brand-title">协鑫集成</div>
+           <div class="brand-name">经营计划智能助手</div>
+         </div>
+@@ -16,6 +17,7 @@
+         data-testid="main-navigation"
+         @select="handleMenuSelect"
+       >
++        <div class="nav-section-label">智能中枢</div>
+         <el-sub-menu index="smart-chat" class="chat-submenu" data-testid="nav-smart-chat">
+           <template #title>
+             <el-icon><ChatDotRound /></el-icon>
+@@ -38,6 +40,7 @@
+             <span class="session-title" :title="session.title">{{ session.title }}</span>
+           </el-menu-item>
+         </el-sub-menu>
++        <div class="nav-section-label">数据治理</div>
+         <el-menu-item index="/bom-data" data-testid="nav-bom-data">
+           <el-icon><Files /></el-icon>
+           <span>BOM 数据管理</span>
+@@ -68,6 +71,17 @@
+       <el-header class="topbar" data-testid="app-topbar">
+         <div class="topbar-copy">
+           <div class="topbar-title">{{ headerMeta.title }}</div>
++          <div class="topbar-subtitle">{{ headerMeta.description }}</div>
++        </div>
++        <div class="topbar-metrics" aria-label="平台运行指标">
++          <span>
++            <strong>生产运行台</strong>
++            <em>小范围试运行</em>
++          </span>
++          <span>
++            <strong>数据治理</strong>
++            <em>BOM / 功率模型</em>
++          </span>
+         </div>
+         <div class="topbar-status">
+           <span class="status-dot" />
+@@ -130,18 +144,18 @@ const headerMeta = computed(() => {
+   if (activePath.value === '/bom-data') {
+     return {
+       title: 'BOM 数据管理',
+-      description: '',
++      description: '上传治理、版本追溯与模型生效管理',
+     }
+   }
+   if (activePath.value === '/trial-guide') {
+     return {
+       title: '试运行说明',
+-      description: '',
++      description: '试运行范围、验收口径与操作边界',
+     }
+   }
+   return {
+     title: '智能问答',
+-    description: '',
++    description: '经营计划、物流与计划 BOM 的统一问答入口',
+   }
+ })
+ 
+@@ -279,6 +293,14 @@ onBeforeUnmount(() => {
+   min-width: 0;
+ }
+ 
++.platform-eyebrow {
++  margin-bottom: 2px;
++  color: var(--enterprise-primary);
++  font-size: 10px;
++  font-weight: 700;
++  letter-spacing: 0.14em;
++}
++
+ .brand-title {
+   font-size: 12px;
+   color: #7a828c;
+@@ -301,6 +323,14 @@ onBeforeUnmount(() => {
+   overflow-x: hidden;
+ }
+ 
++.nav-section-label {
++  margin: 14px 10px 8px;
++  color: #8a94a3;
++  font-size: 11px;
++  font-weight: 700;
++  letter-spacing: 0.12em;
++}
++
+ :deep(.menu .el-menu-item) {
+   height: 40px;
+   border-radius: 10px;
+@@ -461,6 +491,43 @@ onBeforeUnmount(() => {
+   line-height: 1.35;
+ }
+ 
++.topbar-subtitle {
++  margin-top: 2px;
++  color: #6b7280;
++  font-size: 12px;
++}
++
++.topbar-metrics {
++  display: flex;
++  align-items: center;
++  gap: 10px;
++  margin-left: auto;
++  margin-right: 16px;
++}
++
++.topbar-metrics span {
++  display: grid;
++  gap: 2px;
++  min-width: 116px;
++  padding: 8px 12px;
++  border: 1px solid rgba(15, 23, 42, 0.06);
++  border-radius: 14px;
++  background: rgba(248, 250, 252, 0.92);
++  box-shadow: var(--enterprise-ring);
++}
++
++.topbar-metrics strong {
++  color: #111827;
++  font-size: 12px;
++  font-weight: 650;
++}
++
++.topbar-metrics em {
++  color: #6b7280;
++  font-size: 11px;
++  font-style: normal;
++}
++
+ .topbar-status {
+   display: inline-flex;
+   align-items: center;
+diff --git a/frontend/src/styles/index.css b/frontend/src/styles/index.css
+index 0fb488e..1b24197 100644
+--- a/frontend/src/styles/index.css
++++ b/frontend/src/styles/index.css
+@@ -12,6 +12,13 @@
+   --brand-green-bg: #f0f7f4;
+   --brand-green-border: rgba(47, 110, 66, 0.18);
+ 
++  /* -------- 企业级平台设计 token（简约、生产级、可复用）-------- */
++  --enterprise-primary: #245b3a;
++  --enterprise-primary-soft: rgba(36, 91, 58, 0.08);
++  --enterprise-ring: 0 0 0 1px rgba(15, 23, 42, 0.04);
++  --enterprise-card-shadow: 0 18px 48px rgba(15, 23, 42, 0.08);
++  --enterprise-muted-bg: #f6f8f7;
++
+   /* -------- 语义色 -------- */
+   --success: #2f6e42;
+   --success-bg: #ecfdf3;
+diff --git a/frontend/src/views/plan-bom/BomDataManagementPage.vue b/frontend/src/views/plan-bom/BomDataManagementPage.vue
+index a89c51d..682f4b8 100644
+--- a/frontend/src/views/plan-bom/BomDataManagementPage.vue
++++ b/frontend/src/views/plan-bom/BomDataManagementPage.vue
+@@ -1,58 +1,307 @@
+ <template>
+   <section class="bom-page">
+-    <div class="page-head">
+-      <h1>上传 BOM Excel</h1>
+-      <p>.xls / .xlsx / .xlsm</p>
+-    </div>
+-
+-    <div class="upload-card">
+-      <div class="upload-main">
+-        <input ref="fileInputRef" type="file" accept=".xls,.xlsx,.xlsm" @change="handleFileChange" />
+-        <div class="file-info">
+-          <strong>{{ selectedFile?.name || '请选择 BOM Excel 文件' }}</strong>
+-          <span>{{ selectedFile ? formatFileSize(selectedFile.size) : '上传后即可问答' }}</span>
++    <header class="page-head enterprise-hero">
++      <div class="hero-copy">
++        <div class="page-kicker">PLAN BOM OPERATIONS</div>
++        <h1>BOM 数据管理</h1>
++        <p>导入、版本、生效，一页完成</p>
++        <div class="hero-tags" aria-label="关键能力">
++          <span>文件隔离</span>
++          <span>VBA 不执行</span>
++          <span>版本追溯</span>
+         </div>
+       </div>
+-      <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadFile">上传并解析</el-button>
+-    </div>
+-
+-    <el-alert
+-      v-if="uploadError"
+-      :title="uploadError"
+-      type="error"
+-      show-icon
+-      :closable="false"
+-    />
+-
+-    <div v-if="uploadResult" class="result-card">
+-      <div class="result-title">{{ uploadResult.message || '上传处理完成' }}</div>
+-      <div class="summary-grid">
+-        <div>
+-          <span>解析订单数</span>
+-          <strong>{{ uploadResult.parsed_orders_count ?? 0 }}</strong>
++      <aside class="operation-guide compact-guide" aria-label="操作指引">
++        <span class="guide-label">操作指引</span>
++        <div class="guide-steps">
++          <span><b>01</b>BOM 导入</span>
++          <span><b>02</b>模型入库</span>
++          <span><b>03</b>历史验收</span>
+         </div>
+-        <div>
+-          <span>解析物料数</span>
+-          <strong>{{ uploadResult.parsed_materials_count ?? 0 }}</strong>
++      </aside>
++    </header>
++
++    <section class="hero-metric-strip ops-overview-grid" aria-label="运行概览">
++      <article v-for="item in uploadOverviewCards" :key="item.label" class="overview-card" :class="`overview-card--${item.tone}`">
++        <span>{{ item.label }}</span>
++        <strong>{{ item.value }}</strong>
++        <em>{{ item.description }}</em>
++      </article>
++    </section>
++
++    <section class="upload-zone-grid" aria-label="上传操作区">
++      <article class="upload-zone-card">
++        <div class="panel-head">
++          <div>
++            <span class="section-eyebrow">BOM 数据导入</span>
++            <h2>上传 BOM Excel</h2>
++            <p>.xls / .xlsx / .xlsm</p>
++          </div>
++          <span class="upload-type-badge">BOM</span>
+         </div>
+-        <div>
+-          <span>Warning</span>
+-          <strong>{{ uploadResult.warning_count ?? 0 }}</strong>
++        <div class="upload-card">
++          <div class="upload-main">
++            <input ref="fileInputRef" class="native-file-input" type="file" accept=".xls,.xlsx,.xlsm" @change="handleFileChange" />
++            <div class="file-info">
++              <strong>{{ selectedFile?.name || '请选择 BOM Excel 文件' }}</strong>
++              <span>{{ selectedFile ? formatFileSize(selectedFile.size) : '可用于问答' }}</span>
++            </div>
++          </div>
++          <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadFile">上传并解析</el-button>
++        </div>
++        <div v-if="uploading || bomUploadProgress > 0" class="upload-progress">
++          <span>BOM 上传进度：{{ bomUploadProgress }}%</span>
++          <el-progress :percentage="bomUploadProgress" />
++        </div>
++      </article>
++
++      <article class="upload-zone-card upload-zone-card--power">
++        <div class="panel-head">
++          <div>
++            <span class="section-eyebrow">功率模型版本</span>
++            <h2>上传功率模型</h2>
++            <p>GCL 功率测试基准 .xlsm</p>
++          </div>
++          <span class="upload-type-badge upload-type-badge--power">POWER</span>
++        </div>
++        <div class="upload-card upload-card--stacked">
++          <div class="upload-main">
++            <input
++              ref="powerModelFileInputRef"
++              class="native-file-input"
++              type="file"
++              accept=".xlsm"
++              @change="handlePowerModelFileChange"
++            />
++            <div class="file-info">
++              <strong>{{ powerModelSelectedFile?.name || '请选择功率模型 xlsm 文件' }}</strong>
++              <span>{{ powerModelSelectedFile ? formatFileSize(powerModelSelectedFile.size) : '生成模型版本' }}</span>
++            </div>
++          </div>
++          <el-button
++            type="success"
++            :disabled="!powerModelSelectedFile"
++            :loading="powerModelUploading"
++            @click="uploadPowerModelFile"
++          >上传功率模型</el-button>
++        </div>
++        <div v-if="powerModelUploading || powerModelUploadProgress > 0" class="upload-progress">
++          <span>功率模型上传进度：{{ powerModelUploadProgress }}%</span>
++          <el-progress :percentage="powerModelUploadProgress" />
++        </div>
++      </article>
++    </section>
++
++    <section v-if="hasUploadFeedback" class="feedback-stack" aria-label="上传反馈">
++      <el-alert
++        v-if="uploadSuccessMessage"
++        :title="uploadSuccessMessage"
++        type="success"
++        show-icon
++        :closable="false"
++      />
++
++      <el-alert
++        v-if="uploadError"
++        :title="uploadError"
++        type="error"
++        show-icon
++        :closable="false"
++      />
++
++      <el-alert
++        v-if="powerModelUploadSuccessMessage"
++        :title="powerModelUploadSuccessMessage"
++        type="success"
++        show-icon
++        :closable="false"
++      />
++
++      <el-alert
++        v-if="powerModelUploadError"
++        :title="powerModelUploadError"
++        type="error"
++        show-icon
++        :closable="false"
++      />
++
++      <div v-if="uploadResult" class="result-card">
++        <div class="result-title">{{ uploadResult.message || '上传处理完成' }}</div>
++        <div class="summary-grid">
++          <div>
++            <span>解析订单数</span>
++            <strong>{{ uploadResult.parsed_orders_count ?? 0 }}</strong>
++          </div>
++          <div>
++            <span>解析物料数</span>
++            <strong>{{ uploadResult.parsed_materials_count ?? 0 }}</strong>
++          </div>
++          <div>
++            <span>Warning</span>
++            <strong>{{ uploadResult.warning_count ?? 0 }}</strong>
++          </div>
++          <div>
++            <span>Error</span>
++            <strong>{{ uploadResult.error_count ?? 0 }}</strong>
++          </div>
++        </div>
++        <p class="next-action">{{ uploadResult.next_action || '上传完成，可进入智能问答' }}</p>
++      </div>
++
++      <div v-if="uploadPowerModelResult" class="result-card power-result-card">
++        <div class="result-title">{{ uploadPowerModelResult.message || '功率模型上传处理完成' }}</div>
++        <div class="summary-grid">
++          <div>
++            <span>版本 ID</span>
++            <strong>{{ uploadPowerModelResult.version?.id ?? '-' }}</strong>
++          </div>
++          <div>
++            <span>解析状态</span>
++            <strong>{{ uploadPowerModelResult.version?.parse_status || '-' }}</strong>
++          </div>
++          <div>
++            <span>是否生效</span>
++            <strong>{{ uploadPowerModelResult.version?.is_active ? '当前生效' : '未生效' }}</strong>
++          </div>
++          <div>
++            <span>Issue 数</span>
++            <strong>{{ uploadPowerModelResult.detail?.issues?.length ?? uploadPowerModelResult.version?.error_count ?? '-' }}</strong>
++          </div>
+         </div>
++        <p class="next-action">{{ powerModelResultNextAction }}</p>
++      </div>
++    </section>
++
++    <section class="history-panel">
++      <div class="panel-head history-head">
+         <div>
+-          <span>Error</span>
+-          <strong>{{ uploadResult.error_count ?? 0 }}</strong>
++          <span class="section-eyebrow">审计与回溯</span>
++          <h2>上传历史</h2>
++          <p>分页查看，保留审计线索</p>
+         </div>
++        <el-button :loading="historyLoading" @click="loadUploadHistory">刷新历史</el-button>
+       </div>
+-      <p class="next-action">{{ uploadResult.next_action || '上传完成后可进入智能问答继续查询。' }}</p>
+-    </div>
+ 
++      <el-alert
++        v-if="historyError"
++        :title="historyError"
++        type="error"
++        show-icon
++        :closable="false"
++      />
++
++      <el-tabs v-model="historyActiveTab" class="history-tabs">
++        <el-tab-pane label="BOM 上传历史" name="bom_upload_history">
++          <div class="history-toolbar">
++            <div>
++              <h3>BOM 上传历史</h3>
++              <p class="history-tip">共 {{ bomUploadHistory.length }} 批 · 时间倒序</p>
++            </div>
++          </div>
++          <el-table v-loading="historyLoading" :data="pagedBomUploadHistory" border stripe size="small" table-layout="auto">
++            <el-table-column prop="file_name" label="文件名" min-width="220" show-overflow-tooltip />
++            <el-table-column prop="status" label="状态" width="100">
++              <template #default="{ row }">
++                <el-tag :type="statusTagType(row.status)">{{ row.status }}</el-tag>
++              </template>
++            </el-table-column>
++            <el-table-column prop="total_headers" label="订单数" width="90" />
++            <el-table-column prop="total_lines" label="物料数" width="90" />
++            <el-table-column prop="source_tag" label="来源" min-width="120" show-overflow-tooltip />
++            <el-table-column prop="created_at" label="上传时间" min-width="170">
++              <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
++            </el-table-column>
++            <el-table-column prop="error_message" label="错误信息" min-width="180" show-overflow-tooltip />
++            <template #empty>暂无 BOM 上传历史</template>
++          </el-table>
++          <div class="history-pagination">
++            <el-pagination
++              v-if="bomUploadHistory.length > bomHistoryPageSize"
++              background
++              small
++              layout="total, prev, pager, next"
++              :current-page="bomHistoryPage"
++              :page-size="bomHistoryPageSize"
++              :total="bomUploadHistory.length"
++              @current-change="handleBomHistoryPageChange"
++            />
++          </div>
++        </el-tab-pane>
++
++        <el-tab-pane label="功率模型版本历史" name="power_model_versions">
++          <div class="history-toolbar">
++            <div>
++              <h3>功率模型版本历史</h3>
++              <p class="history-tip">生效：{{ formatPowerVersionLabel(activePowerModelVersion) }}</p>
++            </div>
++          </div>
++          <el-table v-loading="historyLoading" :data="pagedPowerModelVersions" border stripe size="small" table-layout="auto">
++            <el-table-column prop="id" label="版本 ID" width="90" />
++            <el-table-column prop="file_name" label="功率文件" min-width="240" show-overflow-tooltip />
++            <el-table-column prop="business_version_label" label="业务版本" min-width="140" show-overflow-tooltip />
++            <el-table-column prop="parse_status" label="解析状态" width="110">
++              <template #default="{ row }">
++                <el-tag :type="statusTagType(row.parse_status)">{{ row.parse_status }}</el-tag>
++              </template>
++            </el-table-column>
++            <el-table-column prop="is_active" label="生效状态" width="110">
++              <template #default="{ row }">
++                <el-tag v-if="row.is_active" type="success">当前生效</el-tag>
++                <el-tag v-else type="info">未生效</el-tag>
++              </template>
++            </el-table-column>
++            <el-table-column prop="warning_count" label="Warning" width="100" />
++            <el-table-column prop="error_count" label="Error" width="90" />
++            <el-table-column prop="created_at" label="上传时间" min-width="170">
++              <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
++            </el-table-column>
++            <el-table-column prop="file_hash" label="文件 Hash" min-width="140">
++              <template #default="{ row }">{{ formatShortHash(row.file_hash) }}</template>
++            </el-table-column>
++            <el-table-column label="操作" width="126" fixed="right">
++              <template #default="{ row }">
++                <el-button
++                  size="small"
++                  type="primary"
++                  :disabled="row.is_active || row.parse_status === 'failed'"
++                  :loading="powerModelActivationLoadingId === row.id"
++                  @click="activatePowerModelVersion(row.id)"
++                >设为生效</el-button>
++              </template>
++            </el-table-column>
++            <template #empty>暂无功率模型版本历史</template>
++          </el-table>
++          <div class="history-pagination">
++            <el-pagination
++              v-if="powerModelVersions.length > powerHistoryPageSize"
++              background
++              small
++              layout="total, prev, pager, next"
++              :current-page="powerHistoryPage"
++              :page-size="powerHistoryPageSize"
++              :total="powerModelVersions.length"
++              @current-change="handlePowerHistoryPageChange"
++            />
++          </div>
++        </el-tab-pane>
++      </el-tabs>
++    </section>
+   </section>
+ </template>
+ 
+ <script setup lang="ts">
+-import { ref } from 'vue'
+-import { uploadPlanBomExcel } from '@/api/planBom'
++import { computed, onMounted, ref } from 'vue'
++import {
++  activatePlanPowerModelVersion,
++  fetchPlanBomUploadHistory,
++  fetchPlanPowerModelVersions,
++  uploadPlanBomExcel,
++  uploadPlanPowerModel,
++  type PlanBomUploadHistoryItem,
++  type PlanBomUploadHistoryResponse,
++  type PlanPowerModelVersionListResponse,
++  type PlanPowerModelVersionSummary,
++} from '@/api/planBom'
+ 
+ interface UploadResult {
+   success?: boolean
+@@ -64,18 +313,114 @@ interface UploadResult {
+   next_action?: string
+ }
+ 
++interface PowerModelUploadResult {
++  success?: boolean
++  message?: string
++  version?: {
++    id?: number
++    parse_status?: string
++    is_active?: boolean
++    error_count?: number
++  }
++  detail?: {
++    sheet_count?: number
++    issues?: Array<Record<string, unknown>>
++  }
++}
++
+ const fileInputRef = ref<HTMLInputElement | null>(null)
+ const selectedFile = ref<File | null>(null)
+ const uploading = ref(false)
+ const uploadError = ref('')
++const uploadSuccessMessage = ref('')
+ const uploadResult = ref<UploadResult | null>(null)
++const bomUploadProgress = ref(0)
++
++const powerModelFileInputRef = ref<HTMLInputElement | null>(null)
++const powerModelSelectedFile = ref<File | null>(null)
++const powerModelUploading = ref(false)
++const powerModelUploadError = ref('')
++const powerModelUploadSuccessMessage = ref('')
++const uploadPowerModelResult = ref<PowerModelUploadResult | null>(null)
++const powerModelUploadProgress = ref(0)
++
++const historyLoading = ref(false)
++const historyError = ref('')
++const bomUploadHistory = ref<PlanBomUploadHistoryItem[]>([])
++const powerModelVersions = ref<PlanPowerModelVersionSummary[]>([])
++const powerModelActivationLoadingId = ref<number | null>(null)
++const historyActiveTab = ref<'bom_upload_history' | 'power_model_versions'>('bom_upload_history')
++const bomHistoryPage = ref(1)
++const powerHistoryPage = ref(1)
++const bomHistoryPageSize = 8
++const powerHistoryPageSize = 8
++
++const activePowerModelVersion = computed(() => powerModelVersions.value.find((item) => item.is_active) || null)
++
++const hasUploadFeedback = computed(
++  () => Boolean(uploadSuccessMessage.value || uploadError.value || powerModelUploadSuccessMessage.value || powerModelUploadError.value || uploadResult.value || uploadPowerModelResult.value),
++)
++
++/** 功率模型结果卡下一步提示，避免解析失败版本被误读为已生效。 */
++const powerModelResultNextAction = computed(() => {
++  const result = uploadPowerModelResult.value
++  if (!result) return ''
++  if (isPowerModelImportFailed(result)) return '已保留历史，未设为生效'
++  if (result.version?.is_active) return '已默认生效，可在历史中切换'
++  return '已入库，可在历史中设为生效'
++})
++
++/** 页面运行概览卡片，帮助业务人员快速判断数据、模型与风险状态。 */
++const uploadOverviewCards = computed(() => {
++  const powerIssueCount = powerModelVersions.value.reduce((sum, item) => sum + (item.warning_count || 0) + (item.error_count || 0), 0)
++  return [
++    {
++      label: 'BOM 上传批次',
++      value: String(bomUploadHistory.value.length),
++      description: '最近上传历史可分页查看',
++      tone: 'neutral',
++    },
++    {
++      label: '功率模型版本',
++      value: String(powerModelVersions.value.length),
++      description: '支持版本切换与追溯',
++      tone: 'power',
++    },
++    {
++      label: '当前生效模型',
++      value: activePowerModelVersion.value ? `#${activePowerModelVersion.value.id}` : '未设置',
++      description: activePowerModelVersion.value?.business_version_label || activePowerModelVersion.value?.file_name || '上传后默认生效可用版本',
++      tone: activePowerModelVersion.value ? 'success' : 'warning',
++    },
++    {
++      label: '解析提示',
++      value: String(powerIssueCount),
++      description: 'Warning / Error 汇总',
++      tone: powerIssueCount > 0 ? 'warning' : 'success',
++    },
++  ]
++})
++
++const pagedBomUploadHistory = computed(() => paginateHistory(bomUploadHistory.value, bomHistoryPage.value, bomHistoryPageSize))
++const pagedPowerModelVersions = computed(() => paginateHistory(powerModelVersions.value, powerHistoryPage.value, powerHistoryPageSize))
++
++onMounted(() => {
++  void loadUploadHistory()
++})
+ 
+ /** 记录用户选择的 BOM 文件，实际解析仍由后端上传接口完成。 */
+ function handleFileChange(event: Event) {
+   const input = event.target as HTMLInputElement
+   selectedFile.value = input.files?.[0] || null
+   uploadError.value = ''
++  uploadSuccessMessage.value = ''
+   uploadResult.value = null
++  bomUploadProgress.value = 0
++}
++
++/** 根据浏览器上报的百分比更新 BOM 上传进度，限制在 0-99，成功响应后再置 100。 */
++function handleBomUploadProgress(percentage: number) {
++  bomUploadProgress.value = Math.max(0, Math.min(99, percentage))
+ }
+ 
+ /** 上传 BOM Excel 到真实后端接口，不在前端伪造解析结果。 */
+@@ -83,67 +428,459 @@ async function uploadFile() {
+   if (!selectedFile.value || uploading.value) return
+   uploading.value = true
+   uploadError.value = ''
++  uploadSuccessMessage.value = ''
+   uploadResult.value = null
++  bomUploadProgress.value = 0
+   try {
+     const resp = await uploadPlanBomExcel(selectedFile.value, {
+       source: 'trial_run_ui',
+       overwrite: true,
+       remark: '业务试运行页面上传',
++      onUploadProgress: handleBomUploadProgress,
+     })
+-    uploadResult.value = ((resp as any).data || resp) as UploadResult
++    uploadResult.value = unwrapResponseData<UploadResult>(resp)
++    bomUploadProgress.value = 100
++    void loadUploadHistory()
+     if (uploadResult.value?.success === false) {
+-      uploadError.value = uploadResult.value.message || '上传未成功，请检查文件内容。'
++      uploadError.value = `BOM 上传失败：${uploadResult.value.message || '请检查文件内容。'}`
++      return
+     }
++    uploadSuccessMessage.value = `BOM Excel 上传成功：${uploadResult.value?.message || '已完成解析。'}`
+   } catch (error) {
+-    uploadError.value = error instanceof Error ? error.message : '上传失败，请稍后重试。'
++    uploadError.value = `BOM 上传失败：${extractUploadErrorMessage(error)}`
+   } finally {
+     uploading.value = false
+   }
+ }
+ 
++/** 记录用户选择的功率模型文件，并清空上一次上传结果。 */
++function handlePowerModelFileChange(event: Event) {
++  const input = event.target as HTMLInputElement
++  powerModelSelectedFile.value = input.files?.[0] || null
++  powerModelUploadError.value = ''
++  powerModelUploadSuccessMessage.value = ''
++  uploadPowerModelResult.value = null
++  powerModelUploadProgress.value = 0
++}
++
++/** 根据浏览器上报的百分比更新功率模型上传进度，限制在 0-99，成功响应后再置 100。 */
++function handlePowerModelUploadProgress(percentage: number) {
++  powerModelUploadProgress.value = Math.max(0, Math.min(99, percentage))
++}
++
++/** 上传功率模型 xlsm 到后端版本化导入接口；临时管理令牌已移除，权限后续由用户模块统一控制。 */
++async function uploadPowerModelFile() {
++  if (!powerModelSelectedFile.value || powerModelUploading.value) return
++  powerModelUploading.value = true
++  powerModelUploadError.value = ''
++  powerModelUploadSuccessMessage.value = ''
++  uploadPowerModelResult.value = null
++  powerModelUploadProgress.value = 0
++  try {
++    const resp = await uploadPlanPowerModel(powerModelSelectedFile.value, {
++      onUploadProgress: handlePowerModelUploadProgress,
++    })
++    uploadPowerModelResult.value = unwrapResponseData<PowerModelUploadResult>(resp)
++    if (isPowerModelImportFailed(uploadPowerModelResult.value)) {
++      powerModelUploadProgress.value = Math.max(powerModelUploadProgress.value, 99)
++      void loadUploadHistory()
++      powerModelUploadError.value = `功率模型解析失败：${uploadPowerModelResult.value.message || '该版本已保留历史，但不会设为生效版本。'}`
++      return
++    }
++    powerModelUploadProgress.value = 100
++    void loadUploadHistory()
++    powerModelUploadSuccessMessage.value = `功率模型上传成功：${uploadPowerModelResult.value?.message || '已完成版本化导入。'}`
++  } catch (error) {
++    powerModelUploadError.value = `功率模型上传失败：${extractUploadErrorMessage(error)}`
++  } finally {
++    powerModelUploading.value = false
++  }
++}
++
++/** 查询 BOM 文件上传历史和功率模型版本历史，用于页面“历史查看”。 */
++async function loadUploadHistory() {
++  historyLoading.value = true
++  historyError.value = ''
++  try {
++    const [bomResp, powerResp] = await Promise.all([
++      fetchPlanBomUploadHistory(50),
++      fetchPlanPowerModelVersions(),
++    ])
++    const bomPayload = unwrapResponseData<PlanBomUploadHistoryResponse>(bomResp)
++    const powerPayload = unwrapResponseData<PlanPowerModelVersionListResponse>(powerResp)
++    bomUploadHistory.value = bomPayload.items || []
++    powerModelVersions.value = powerPayload.items || []
++    bomHistoryPage.value = normalizeCurrentPage(bomUploadHistory.value.length, bomHistoryPage.value, bomHistoryPageSize)
++    powerHistoryPage.value = normalizeCurrentPage(powerModelVersions.value.length, powerHistoryPage.value, powerHistoryPageSize)
++  } catch {
++    historyError.value = '上传历史加载失败：请稍后重试或检查服务状态'
++  } finally {
++    historyLoading.value = false
++  }
++}
++
++/** 手动设置某个功率模型版本生效，失败版本由后端拒绝，前端也做禁用提示。 */
++async function activatePowerModelVersion(versionId: number) {
++  if (powerModelActivationLoadingId.value !== null) return
++  powerModelActivationLoadingId.value = versionId
++  historyError.value = ''
++  try {
++    const activatedVersion = unwrapResponseData<PlanPowerModelVersionSummary>(await activatePlanPowerModelVersion(versionId))
++    powerModelUploadSuccessMessage.value = `功率模型版本 ${activatedVersion.id || versionId} 已设为当前生效。`
++    await loadUploadHistory()
++  } catch (error) {
++    historyError.value = `功率模型版本生效失败：${extractUploadErrorMessage(error)}`
++  } finally {
++    powerModelActivationLoadingId.value = null
++  }
++}
++
++/** 兼容后端 ApiResponse 包装和直接 payload 两种返回。 */
++function unwrapResponseData<T>(response: unknown): T {
++  const maybeResponse = response as any
++  if (maybeResponse?.code !== undefined && maybeResponse.code !== 0) {
++    throw new Error(maybeResponse?.message || '后端接口返回失败。')
++  }
++  if (maybeResponse?.success === false) {
++    throw new Error(maybeResponse?.message || '后端接口返回失败。')
++  }
++  if (maybeResponse?.data === null) {
++    throw new Error(maybeResponse?.message || '后端接口未返回有效数据。')
++  }
++  return (maybeResponse?.data || maybeResponse) as T
++}
++
++/** 判断功率模型导入是否为业务失败，防止解析失败版本被误提示为成功。 */
++function isPowerModelImportFailed(result: PowerModelUploadResult | null) {
++  const version = result?.version
++  return result?.success === false || version?.parse_status === 'failed' || Boolean(version?.error_count)
++}
++
++/** 提取上传失败提示，优先展示后端返回的业务 message/detail。 */
++function extractUploadErrorMessage(error: unknown) {
++  const maybeError = error as any
++  return (
++    maybeError?.response?.data?.message ||
++    maybeError?.response?.data?.detail ||
++    maybeError?.message ||
++    '上传失败，请稍后重试。'
++  )
++}
++
+ function formatFileSize(size: number) {
+   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+   return `${(size / 1024 / 1024).toFixed(1)} MB`
+ }
++
++/** 格式化历史记录时间，保证空值或非法值不会打断页面展示。 */
++function formatDate(value?: string | null) {
++  if (!value) return '-'
++  const date = new Date(value)
++  if (Number.isNaN(date.getTime())) return value
++  return date.toLocaleString('zh-CN', { hour12: false })
++}
++
++/** 展示短 hash，既能追溯也避免表格过宽。 */
++function formatShortHash(value?: string | null) {
++  if (!value) return '-'
++  return value.length > 12 ? `${value.slice(0, 12)}...` : value
++}
++
++/** 根据后端状态选择 Element Plus 标签色。 */
++function statusTagType(status?: string) {
++  if (status === 'success') return 'success'
++  if (status === 'warning') return 'warning'
++  if (status === 'failed' || status === 'error') return 'danger'
++  return 'info'
++}
++
++/** 格式化当前生效功率模型标签。 */
++function formatPowerVersionLabel(version?: PlanPowerModelVersionSummary | null) {
++  if (!version) return '暂无生效版本'
++  return `#${version.id} ${version.business_version_label || version.file_name}`
++}
++
++/** 对历史数组做前端分页，后端仍保留真实历史接口作为事实来源。 */
++function paginateHistory<T>(items: T[], page: number, pageSize: number) {
++  const start = (page - 1) * pageSize
++  return items.slice(start, start + pageSize)
++}
++
++/** 历史记录刷新后矫正当前页，避免删除或过滤后停留在空页。 */
++function normalizeCurrentPage(total: number, currentPage: number, pageSize: number) {
++  const maxPage = Math.max(1, Math.ceil(total / pageSize))
++  return Math.min(Math.max(1, currentPage), maxPage)
++}
++
++/** 切换 BOM 上传历史分页。 */
++function handleBomHistoryPageChange(page: number) {
++  bomHistoryPage.value = page
++}
++
++/** 切换功率模型版本历史分页。 */
++function handlePowerHistoryPageChange(page: number) {
++  powerHistoryPage.value = page
++}
+ </script>
+ 
+ <style scoped>
+ .bom-page {
+-  width: min(880px, calc(100vw - 360px));
+-  margin: 48px auto 0;
++  width: 100%;
++  max-width: 1180px;
++  height: calc(100vh - 64px);
++  margin: 0 auto;
++  padding: 32px;
+   display: grid;
+-  gap: 16px;
++  grid-template-columns: minmax(0, 1fr);
++  gap: 18px;
++  overflow-y: auto;
++  overflow-x: hidden;
+   font-size: 14px;
++  color: var(--text-main);
+ }
+ 
+ .page-head,
+-.upload-card,
+-.result-card {
+-  border: 1px solid #e5e7eb;
+-  border-radius: 16px;
+-  background: #ffffff;
+-  padding: 18px 20px;
++.upload-zone-card,
++.history-panel,
++.result-card,
++.overview-card {
++  min-width: 0;
++  border: 1px solid rgba(15, 23, 42, 0.08);
++  border-radius: 20px;
++  background: rgba(255, 255, 255, 0.94);
++  box-shadow: var(--enterprise-ring), var(--enterprise-card-shadow);
++}
++
++.enterprise-hero {
++  display: grid;
++  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
++  gap: 24px;
++  padding: 34px;
++  background:
++    radial-gradient(circle at 8% 0%, rgba(47, 110, 66, 0.12), transparent 26%),
++    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(248, 250, 252, 0.94));
+ }
+ 
+-h1,
+-h2 {
++.page-kicker,
++.section-eyebrow,
++.guide-label {
++  display: inline-flex;
++  align-items: center;
++  color: var(--enterprise-primary);
++  font-size: 12px;
++  font-weight: 700;
++  letter-spacing: 0.12em;
++  text-transform: uppercase;
++}
++
++.hero-copy h1,
++.panel-head h2,
++.history-head h2,
++.history-toolbar h3 {
+   margin: 0;
+-  color: #111827;
++  color: #0f172a;
++}
++
++.hero-copy h1 {
++  margin-top: 8px;
++  font-size: clamp(28px, 3vw, 40px);
++  font-weight: 650;
++  letter-spacing: -0.04em;
++  line-height: 1.12;
++}
++
++.hero-copy p,
++.panel-head p,
++.history-head p,
++.history-tip,
++.guide-steps span,
++.overview-card em,
++.file-info span,
++.next-action {
++  color: #64748b;
++  line-height: 1.55;
++}
++
++.hero-copy p {
++  max-width: 520px;
++  margin: 14px 0 0;
++  font-size: 16px;
++}
++
++.hero-tags {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 10px;
++  margin-top: 18px;
++}
++
++.hero-tags span,
++.upload-type-badge {
++  display: inline-flex;
++  align-items: center;
++  height: 28px;
++  padding: 0 10px;
++  border-radius: 999px;
++  background: rgba(47, 110, 66, 0.08);
++  color: var(--enterprise-primary);
++  font-size: 12px;
++  font-weight: 600;
++}
++
++.operation-guide {
++  border-radius: 16px;
++  border: 1px solid rgba(47, 110, 66, 0.16);
++  background: rgba(240, 247, 244, 0.72);
++  padding: 16px;
+ }
+ 
+-h1 {
+-  font-size: 24px;
++.compact-guide {
++  display: grid;
++  align-self: stretch;
++  gap: 14px;
++}
++
++.guide-steps {
++  display: grid;
++  gap: 8px;
++}
++
++.guide-steps span {
++  display: flex;
++  align-items: center;
++  justify-content: space-between;
++  gap: 12px;
++  min-height: 34px;
++  border-radius: 12px;
++  background: rgba(255, 255, 255, 0.66);
++  padding: 0 12px;
++  color: #0f172a;
+   font-weight: 600;
+ }
+ 
+-h2 {
+-  font-size: 18px;
++.guide-steps b {
++  color: var(--enterprise-primary);
++  font-size: 11px;
++  letter-spacing: 0.08em;
++}
++
++.ops-overview-grid {
++  display: grid;
++  min-width: 0;
++  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
++  gap: 14px;
++}
++
++.hero-metric-strip {
++  gap: 12px;
++}
++
++.overview-card {
++  position: relative;
++  overflow: hidden;
++  padding: 16px 18px;
++}
++
++.overview-card::before {
++  content: '';
++  position: absolute;
++  inset: 0 auto 0 0;
++  width: 4px;
++  background: #cbd5e1;
+ }
+ 
+-p {
++.overview-card--success::before,
++.overview-card--power::before {
++  background: var(--enterprise-primary);
++}
++
++.overview-card--warning::before {
++  background: #d97706;
++}
++
++.overview-card span,
++.summary-grid span {
++  display: block;
++  color: #64748b;
++  font-size: 12px;
++}
++
++.overview-card strong {
++  display: block;
++  margin-top: 8px;
++  color: #0f172a;
++  font-size: 26px;
++  font-weight: 650;
++  letter-spacing: -0.04em;
++}
++
++.overview-card em {
++  display: block;
++  margin-top: 4px;
++  overflow: hidden;
++  text-overflow: ellipsis;
++  white-space: nowrap;
++  font-style: normal;
++  font-size: 12px;
++}
++
++.hero-metric-strip .overview-card em {
++  display: none;
++}
++
++.upload-zone-grid {
++  display: grid;
++  min-width: 0;
++  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
++  gap: 18px;
++}
++
++.upload-zone-card {
++  padding: 22px;
++}
++
++.upload-zone-card--power {
++  background:
++    linear-gradient(180deg, rgba(251, 255, 252, 0.98), rgba(255, 255, 255, 0.96));
++}
++
++.panel-head,
++.history-head,
++.history-toolbar {
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: 16px;
++}
++
++.panel-head {
++  margin-bottom: 18px;
++}
++
++.panel-head h2,
++.history-head h2 {
++  margin-top: 4px;
++  font-size: 20px;
++  font-weight: 650;
++  letter-spacing: -0.02em;
++}
++
++.panel-head p,
++.history-head p,
++.history-tip {
+   margin: 6px 0 0;
+-  color: #6b7280;
+-  line-height: 1.7;
++  font-size: 13px;
++}
++
++.upload-type-badge {
++  flex: 0 0 auto;
++  background: #f1f5f9;
++  color: #334155;
++}
++
++.upload-type-badge--power {
++  background: rgba(47, 110, 66, 0.1);
++  color: var(--enterprise-primary);
+ }
+ 
+ .upload-card {
+@@ -153,15 +890,26 @@ p {
+   gap: 16px;
+ }
+ 
++.upload-card--stacked {
++  align-items: stretch;
++  flex-direction: column;
++}
++
+ .upload-main {
+   display: flex;
+   align-items: center;
+   gap: 14px;
+   min-width: 0;
++  border-radius: 14px;
++  border: 1px dashed rgba(100, 116, 139, 0.32);
++  background: #f8fafc;
++  padding: 14px;
+ }
+ 
+-input {
+-  width: 240px;
++.native-file-input {
++  width: 250px;
++  max-width: 45%;
++  color: #475569;
+   font-size: 13px;
+ }
+ 
+@@ -172,17 +920,33 @@ input {
+ }
+ 
+ .file-info strong {
+-  color: #111827;
++  overflow: hidden;
++  color: #0f172a;
++  text-overflow: ellipsis;
++  white-space: nowrap;
+ }
+ 
+-.file-info span {
+-  color: #6c7e89;
+-  font-size: 12px;
++.upload-progress {
++  display: grid;
++  gap: 8px;
++  margin-top: 14px;
++  color: #475569;
++  font-size: 13px;
++}
++
++.feedback-stack {
++  display: grid;
++  min-width: 0;
++  gap: 12px;
++}
++
++.result-card {
++  padding: 20px;
+ }
+ 
+ .result-title {
+-  color: #111827;
+-  font-weight: 600;
++  color: #0f172a;
++  font-weight: 650;
+ }
+ 
+ .summary-grid {
+@@ -193,44 +957,110 @@ input {
+ }
+ 
+ .summary-grid div {
+-  border: 1px solid #eef0f3;
+-  border-radius: 12px;
++  border: 1px solid #eef2f7;
++  border-radius: 14px;
+   padding: 12px;
+-  background: #fbfcfd;
+-}
+-
+-.summary-grid span {
+-  display: block;
+-  color: #6d7d88;
+-  font-size: 12px;
++  background: #f8fafc;
+ }
+ 
+ .summary-grid strong {
+   display: block;
+   margin-top: 6px;
+-  color: #111827;
++  color: #0f172a;
+   font-size: 22px;
++  font-weight: 650;
+ }
+ 
+ .next-action {
+-  color: #3f7b50;
++  margin: 12px 0 0;
++  color: var(--enterprise-primary);
+ }
+ 
+-@media (max-width: 1100px) {
++.power-result-card {
++  border-color: rgba(47, 110, 66, 0.2);
++  background: #fbfffc;
++}
++
++.history-panel {
++  display: grid;
++  gap: 16px;
++  padding: 22px;
++}
++
++.history-tabs {
++  min-width: 0;
++  --el-color-primary: var(--enterprise-primary);
++}
++
++:deep(.el-tab-pane) {
++  min-width: 0;
++  overflow-x: auto;
++}
++
++.history-toolbar {
++  margin-bottom: 12px;
++}
++
++.history-pagination {
++  display: flex;
++  justify-content: flex-end;
++  min-height: 32px;
++  margin-top: 14px;
++}
++
++:deep(.el-table) {
++  border-radius: 14px;
++  overflow: hidden;
++}
++
++:deep(.el-table th.el-table__cell) {
++  background: #f8fafc;
++  color: #475569;
++  font-weight: 650;
++}
++
++:deep(.el-tabs__item) {
++  font-weight: 600;
++}
++
++@media (max-width: 1180px) {
+   .bom-page {
+-    width: calc(100vw - 32px);
+-    margin-top: 24px;
++    max-width: none;
++  }
++}
++
++@media (max-width: 980px) {
++  .enterprise-hero,
++  .upload-zone-grid,
++  .ops-overview-grid {
++    grid-template-columns: 1fr;
++  }
++
++  .summary-grid {
++    grid-template-columns: repeat(2, minmax(0, 1fr));
+   }
+ }
+ 
+-@media (max-width: 900px) {
++@media (max-width: 720px) {
++  .bom-page {
++    padding: 20px 16px 28px;
++  }
++
++  .panel-head,
++  .history-head,
++  .history-toolbar,
+   .upload-card {
+     align-items: flex-start;
+     flex-direction: column;
+   }
+ 
++  .native-file-input {
++    width: 100%;
++    max-width: 100%;
++  }
++
+   .summary-grid {
+-    grid-template-columns: repeat(2, minmax(0, 1fr));
++    grid-template-columns: 1fr;
+   }
+ }
+ </style>
+diff --git a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+new file mode 100644
+index 0000000..a8a29ba
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+@@ -0,0 +1,186 @@
++from __future__ import annotations
++
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[2]
++FRONTEND = ROOT / "frontend" / "src"
++BACKEND = ROOT / "backend" / "app"
++
++
++def test_bom_data_management_exposes_separate_power_model_upload_entry_without_token() -> None:
++    """BOM 数据管理页必须保留独立功率模型上传入口，并移除临时管理 token 输入。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "上传 BOM Excel" in page
++    assert "上传功率模型" in page
++    assert "请选择功率模型 xlsm 文件" in page
++    assert "uploadPowerModelFile" in page
++    assert "uploadPowerModelResult" in page
++    assert "powerModelSelectedFile" in page
++    assert "show-password" not in page
++    assert "powerModelAdminToken" not in page
++    assert "admin-token-row" not in page
++    assert "功率模型管理 Token" not in page
++    assert "bomUploadProgress" in page
++    assert "powerModelUploadProgress" in page
++    assert "<el-progress" in page
++    assert "uploadSuccessMessage" in page
++    assert "powerModelUploadSuccessMessage" in page
++    assert "上传成功" in page
++    assert "上传失败" in page
++
++
++def test_bom_data_management_progress_and_status_are_isolated_per_upload_type() -> None:
++    """BOM 和功率模型上传必须分别维护进度与提示，避免两个入口状态串扰。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "handleBomUploadProgress" in page
++    assert "handlePowerModelUploadProgress" in page
++    assert "bomUploadProgress.value = 0" in page
++    assert "powerModelUploadProgress.value = 0" in page
++    assert "bomUploadProgress.value = 100" in page
++    assert "powerModelUploadProgress.value = 100" in page
++    assert "uploadSuccessMessage.value" in page
++    assert "powerModelUploadSuccessMessage.value" in page
++    assert "uploadError.value" in page
++    assert "powerModelUploadError.value" in page
++
++
++def test_bom_data_management_exposes_upload_history_and_power_activation_controls() -> None:
++    """BOM 数据管理页应能查看 BOM/功率模型历史，并对功率模型版本执行生效切换。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "上传历史" in page
++    assert "BOM 上传历史" in page
++    assert "功率模型版本历史" in page
++    assert "loadUploadHistory" in page
++    assert "bomUploadHistory" in page
++    assert "powerModelVersions" in page
++    assert "activatePowerModelVersion" in page
++    assert "设为生效" in page
++    assert "当前生效" in page
++    assert "已默认生效" in page
++    assert "<el-table" in page
++
++
++def test_frontend_api_wraps_upload_history_and_power_version_endpoints_without_token() -> None:
++    """前端 API 应封装历史与版本生效接口，且不再透传功率模型管理 token 请求头。"""
++    api = (FRONTEND / "api" / "planBom.ts").read_text(encoding="utf-8")
++
++    assert "uploadPlanPowerModel" in api
++    assert "fetchPlanBomUploadHistory" in api
++    assert "fetchPlanPowerModelVersions" in api
++    assert "activatePlanPowerModelVersion" in api
++    assert "'/plan-bom/power-model/import'" in api
++    assert "'/plan-bom/upload/history'" in api
++    assert "'/plan-bom/power-model/versions'" in api
++    assert "`/plan-bom/power-model/versions/${versionId}/activate`" in api
++    assert "X-Plan-Power-Admin-Token" not in api
++    assert "adminToken" not in api
++    assert "multipart/form-data" in api
++    assert "onUploadProgress" in api
++    assert "Math.round" in api
++    assert "options.onUploadProgress" in api
++
++
++def test_power_model_upload_and_activation_reject_nonzero_or_failed_domain_responses() -> None:
++    """功率模型上传/激活不能把 ApiResponse 失败包或解析失败版本误提示为成功。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "maybeResponse?.code !== undefined && maybeResponse.code !== 0" in page
++    assert "maybeResponse?.data === null" in page
++    assert "throw new Error" in page
++    assert "isPowerModelImportFailed" in page
++    assert "version?.parse_status === 'failed'" in page
++    assert "version?.error_count" in page
++    assert "功率模型解析失败" in page
++    assert "const activatedVersion = unwrapResponseData" in page
++    assert "powerModelUploadProgress.value = 100" in page
++    assert "powerModelUploadProgress.value = Math.max" in page
++    assert "uploadPowerModelResult.version?.parse_status" in page
++    assert "powerModelResultNextAction" in page
++    assert "已保留历史，未设为生效" in page
++    assert "uploadPowerModelResult.import_status" not in page
++    assert "uploadPowerModelResult.detail?.issues?.length" in page
++
++
++def test_bom_data_management_page_defines_own_vertical_scroll_container() -> None:
++    """BOM 数据管理内容超过视口时，应在页面内提供垂直滚动条。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "height: calc(100vh - 64px);" in page
++    assert "overflow-y: auto;" in page
++    assert "overflow-x: hidden;" in page
++    assert "padding: 32px" in page
++    assert "margin: 0 auto;" in page
++
++
++def test_bom_data_management_history_uses_tabs_and_pagination_for_dense_tables() -> None:
++    """BOM 上传历史与功率模型版本历史应拆成 tab，并提供分页以承载企业级历史数据量。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "<el-tabs" in page
++    assert "historyActiveTab" in page
++    assert "name=\"bom_upload_history\"" in page
++    assert "name=\"power_model_versions\"" in page
++    assert "pagedBomUploadHistory" in page
++    assert "pagedPowerModelVersions" in page
++    assert "<el-pagination" in page
++    assert "handleBomHistoryPageChange" in page
++    assert "handlePowerHistoryPageChange" in page
++
++
++def test_bom_data_management_page_adds_enterprise_overview_and_operational_guidance() -> None:
++    """页面顶部应有企业级概览卡和操作说明，帮助业务人员区分文件、状态与风险。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "ops-overview-grid" in page
++    assert "upload-zone-card" in page
++    assert "BOM 数据导入" in page
++    assert "功率模型版本" in page
++    assert "文件隔离" in page
++    assert "VBA 不执行" in page
++    assert "版本追溯" in page
++    assert "操作指引" in page
++
++
++def test_bom_data_management_copy_stays_minimal_and_hierarchy_first() -> None:
++    """BOM 数据管理页应减少说明文字，用指标、短标签和视觉层次突出重点。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++    template = page.split("<script setup", 1)[0]
++
++    assert "hero-metric-strip" in page
++    assert "compact-guide" in page
++    assert "<ol>" not in template
++    assert "统一管理计划 BOM 数据导入与功率模型版本" not in template
++    assert "普通 BOM Excel 用于明细查询和智能问答。" not in template
++    assert "BOM 上传历史与功率模型版本历史采用 tab 页分区展示" not in template
++    assert "当前表格按上传时间倒序展示" not in template
++    assert template.count("。") <= 8
++
++
++def test_app_layout_exposes_enterprise_platform_chrome() -> None:
++    """全局壳层应有生产级平台导航、状态与设计 token，而不是普通演示页视觉。"""
++    layout = (FRONTEND / "layouts" / "AppLayout.vue").read_text(encoding="utf-8")
++    styles = (FRONTEND / "styles" / "index.css").read_text(encoding="utf-8")
++
++    assert "platform-eyebrow" in layout
++    assert "topbar-metrics" in layout
++    assert "nav-section-label" in layout
++    assert "生产运行台" in layout
++    assert "数据治理" in layout
++    assert "--enterprise-primary" in styles
++    assert "--enterprise-ring" in styles
++
++
++def test_power_model_token_dependency_removed_from_current_backend_sources() -> None:
++    """临时功率模型 token 功能应从当前后端源码移除，后续改由用户权限模块接管。"""
++    deps = (BACKEND / "api" / "deps.py").read_text(encoding="utf-8")
++    settings = (BACKEND / "core" / "config.py").read_text(encoding="utf-8")
++    power_api = (BACKEND / "domains" / "plan_bom" / "api" / "endpoints" / "power_model.py").read_text(encoding="utf-8")
++
++    assert "require_plan_power_admin" not in deps
++    assert "plan_power_admin_token" not in settings
++    assert "X-Plan-Power-Admin-Token" not in power_api
++    assert "require_plan_power_admin" not in power_api

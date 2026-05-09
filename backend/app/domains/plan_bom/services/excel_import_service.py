@@ -123,6 +123,18 @@ class PlanBomExcelImportService:
     def __init__(self, repository: PlanBomImportRepository) -> None:
         self.repository = repository
 
+    def list_upload_history(self, *, limit: int = 50) -> list[dict[str, Any]]:
+        """查询 BOM Excel 上传历史。
+
+        参数：
+            limit: 最多返回的历史批次数量。
+
+        返回：
+            批次摘要字典列表，按上传时间倒序排列。
+        """
+        safe_limit = max(1, min(limit, 200))
+        return self.repository.list_batches(limit=safe_limit)
+
     async def import_upload(self, file: UploadFile, *, batch_id: str | None = None) -> PlanBomImportReport:
         """导入 FastAPI 上传的 Excel 文件。
 

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
 
 from backend.app.api.deps import get_plan_bom_import_service
+from backend.app.domains.plan_bom.schemas.import_excel import PlanBomUploadHistoryResponse
 from backend.app.domains.plan_bom.services.excel_import_service import PlanBomExcelImportService
 from backend.app.schemas.common import ApiResponse
 
@@ -64,6 +65,26 @@ async def import_plan_bom_excel(
     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
     report = await service.import_upload(file)
     return ApiResponse.success(report.model_dump(), trace_id=trace_id)
+
+
+@router.get("/upload/history", response_model=ApiResponse)
+def list_plan_bom_upload_history(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200, description="最多返回历史批次数量"),
+    service: PlanBomExcelImportService = Depends(get_plan_bom_import_service),
+) -> ApiResponse:
+    """查询计划 BOM Excel 上传历史。
+
+    参数：
+        limit: 最多返回的历史批次数量。
+
+    返回：
+        历史上传文件批次、解析状态和统计摘要，用于 BOM 数据管理页查看以往上传记录。
+    """
+    trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
+    items = service.list_upload_history(limit=limit)
+    payload = PlanBomUploadHistoryResponse(items=items, total=len(items))
+    return ApiResponse.success(payload.model_dump(mode="json"), trace_id=trace_id)
 
 
 @router.post("/upload", response_model=ApiResponse)

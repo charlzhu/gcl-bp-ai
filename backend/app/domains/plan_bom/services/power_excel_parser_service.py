@@ -390,6 +390,7 @@ class PowerExcelParserService:
         返回：
             ParsedPowerModelSheet，包含配置选项、功率档和供应商效率分布。
         """
+        power_bin_meta = self._power_bin_meta(formula_ws)
         model_sheet = ParsedPowerModelSheet(
             sheet_name=formula_ws.title,
             normalized_model_code=self._normalize_model_code(formula_ws.title),
@@ -404,6 +405,13 @@ class PowerExcelParserService:
                 "max_column": formula_ws.max_column,
                 "base_power_formula": self._cell_raw_value(formula_ws["J1"].value),
                 "center_power_cached": self._cell_raw_value(cached_ws["I36"].value),
+                "efficiency_start": self._cell_raw_value(cached_ws["C29"].value),
+                "center_efficiency": self._cell_raw_value(cached_ws["C36"].value),
+                "efficiency_end": self._cell_raw_value(cached_ws["C48"].value),
+                "efficiency_step": 0.001,
+                "center_row_number": 36,
+                "efficiency_first_row_number": 29,
+                **power_bin_meta,
                 "has_tail_space": formula_ws.title != formula_ws.title.strip(),
             },
         )
@@ -483,6 +491,29 @@ class PowerExcelParserService:
                 )
             )
         return bins
+
+    def _power_bin_meta(self, formula_ws: Worksheet) -> dict[str, Any]:
+        """解析功率档概率输出列元数据。
+
+        参数：
+            formula_ws: 模型页 worksheet。
+
+        返回：
+            包含数字表头数、概率公式输出列数、是否存在末尾上边界的元数据。
+        """
+        numeric_columns: list[int] = []
+        probability_columns: list[int] = []
+        for col_no in range(11, 21):
+            if self._to_decimal(formula_ws.cell(28, col_no).value) is not None:
+                numeric_columns.append(col_no)
+                formula_value = formula_ws.cell(29, col_no).value
+                if isinstance(formula_value, str) and formula_value.startswith("="):
+                    probability_columns.append(col_no)
+        return {
+            "power_bin_count": len(numeric_columns),
+            "probability_output_bin_count": len(probability_columns),
+            "power_bin_has_terminal_boundary": len(numeric_columns) > len(probability_columns),
+        }
 
     def _parse_supplier_distributions(self, formula_ws: Worksheet, cached_ws: Worksheet) -> list[ParsedSupplierDistribution]:
         """解析供应商效率分布区 C77:Y96。

@@ -1,0 +1,23 @@
+# TASK-backend-startup-scroll-fix 静态扫描
+
+扫描对象：`/tmp/startup_scroll_scope.diff`，包含本轮启动提示、Pydantic warning、BOM 页面滚动条和功率模型生产写门禁相关改动。
+
+```text
+## hardcoded secrets
+无发现
+## legacy admin token reintroduced
+仅发现测试中的否定断言：
+- assert "X-Plan-Power-Admin-Token" not in endpoint_source
+- assert "plan_power_admin_token" not in endpoint_source
+运行时代码未恢复旧 token/header/dependency。
+## shell injection
+无发现
+## dangerous eval/exec
+无发现
+## unsafe deserialization
+无发现
+## SQL injection formatting
+无发现
+```
+
+`git diff --check`：通过。

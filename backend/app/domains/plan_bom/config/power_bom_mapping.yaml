@@ -1,0 +1,118 @@
+version: 1
+
+# M4 仅做 BOM -> 功率模型配置映射，不做功率数值计算。
+# 规则命中后还必须二次校验是否存在于当前 active 功率模型 option 中。
+model_code:
+  regex: '(NT\d+R?)/(\d+GDF)'
+  replacement: '\1-\2'
+
+required_categories:
+  - glass
+  - interconnect_bar
+  - busbar
+  - junction_box
+
+factor_mappings:
+  glass:
+    factor_key: glass
+    source_categories: [glass, gap_film]
+    unresolved_strategy: ask_confirmation
+    rules:
+      - id: ultra_high_gap_aluminum
+        value: 超高透+间隙铝膜
+        require_any: ['超高透']
+        require_gap_any: ['铝膜', '间隙贴膜', '间隙膜']
+        confidence: 0.93
+      - id: double_gap_aluminum
+        value: 双镀+间隙铝膜
+        require_any: ['双镀膜', '双镀']
+        require_gap_any: ['铝膜', '间隙贴膜', '间隙膜']
+        confidence: 0.92
+      - id: single_gap_aluminum
+        value: 单镀+间隙铝膜
+        require_any: ['单镀']
+        require_gap_any: ['铝膜', '间隙贴膜', '间隙膜']
+        confidence: 0.88
+      - id: ultra_high_glazed
+        value: 超高透+镀釉
+        require_any: ['超高透']
+        require_any_not: ['无涂釉', '非镀釉', '非镀膜']
+        require_any_secondary: ['涂釉', '镀釉']
+        confidence: 0.86
+      - id: double_glazed
+        value: 双镀+镀釉
+        require_any: ['双镀膜', '双镀']
+        require_any_not: ['无涂釉', '非镀釉', '非镀膜']
+        require_any_secondary: ['涂釉', '镀釉']
+        confidence: 0.86
+      - id: single_glazed
+        value: 单镀+镀釉
+        require_any: ['单镀']
+        require_any_not: ['无涂釉', '非镀釉', '非镀膜']
+        require_any_secondary: ['涂釉', '镀釉']
+        confidence: 0.84
+      - id: double_non_glazed
+        value: 双镀+非镀釉
+        require_any: ['双镀膜', '双镀']
+        require_any_secondary: ['无涂釉', '非镀釉', '非镀膜']
+        confidence: 0.78
+      - id: single_non_glazed
+        value: 单镀+非镀釉
+        require_any: ['单镀']
+        require_any_secondary: ['无涂釉', '非镀釉', '非镀膜']
+        confidence: 0.72
+
+  ribbon:
+    factor_key: ribbon
+    source_categories: [interconnect_bar]
+    diameter_regex: 'φ\s*([0-9]+(?:\.[0-9]+)?)\s*mm'
+    strategy: dominant_usage
+    confidence_single: 0.94
+    confidence_multiple: 0.82
+    unresolved_strategy: ask_confirmation
+
+  busbar:
+    factor_key: busbar
+    source_categories: [busbar]
+    size_regex: '([0-9]+(?:\.[0-9]+)?)\s*\*\s*([0-9]+(?:\.[0-9]+)?)\s*mm'
+    strategy: dominant_thickness_by_width
+    width_order: ['6', '4']
+    suffix_when_reflective: 反光
+    confidence_complete: 0.9
+    confidence_partial: 0.72
+    unresolved_strategy: ask_confirmation
+
+  cable:
+    factor_key: cable
+    source_categories: [junction_box]
+    length_patterns:
+      - pattern: '\+\s*300\s*/\s*-\s*200\s*mm'
+        normalized: '+300/-200mm'
+      - pattern: '\+\s*400\s*/\s*-\s*200\s*mm'
+        normalized: '+400/-200mm'
+      - pattern: '\+\s*1200\s*/\s*-\s*1200\s*mm|1200\s*mm'
+        normalized: '+1200/-1200mm'
+      - pattern: '\+\s*1400\s*/\s*-\s*1400\s*mm|1400\s*mm'
+        normalized: '+1400/-1400mm'
+    wire_size_patterns:
+      - pattern: '6\s*mm[²2]'
+        normalized: '6mm²'
+      - pattern: '4\s*mm[²2]'
+        normalized: '4mm²'
+    option_template: '{length}（{wire_size}）'
+    confidence: 0.9
+    unresolved_strategy: ask_confirmation
+
+model_defaults:
+  cell_size:
+    factor_key: cell_size
+    source: model_default
+    confidence: 0.99
+  supplier:
+    factor_key: supplier
+    source: model_default
+    confidence: 0.85
+  benchmark:
+    factor_key: benchmark
+    source: model_default
+    confidence: 0.85

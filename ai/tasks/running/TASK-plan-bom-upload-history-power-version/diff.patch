@@ -1,0 +1,1452 @@
+diff --git a/backend/app/api/deps.py b/backend/app/api/deps.py
+index 0361ae9..052e8b4 100644
+--- a/backend/app/api/deps.py
++++ b/backend/app/api/deps.py
+@@ -1,6 +1,6 @@
+ from functools import lru_cache
+ 
+-from fastapi import Depends, Header, HTTPException, status
++from fastapi import Depends
+ from sqlalchemy.orm import Session
+ 
+ from backend.app.core.config import Settings, get_settings
+@@ -19,6 +19,9 @@ from backend.app.domains.plan_bom.services.answer_presentation_service import Pl
+ from backend.app.domains.plan_bom.services.excel_import_service import PlanBomExcelImportService
+ from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
+ from backend.app.domains.plan_bom.services.power_model_service import PowerModelService
++from backend.app.domains.plan_bom.services.power_config_resolver_service import PlanBomPowerConfigResolverService
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
+ from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
+ from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
+ from backend.app.repositories.logistics_query_repo import InMemoryLogisticsQueryRepository
+@@ -170,35 +173,6 @@ def get_plan_bom_query_service(
+     return PlanBomQueryService(repository=PlanBomQueryRepository(db))
+ 
+ 
+-def require_plan_power_admin(
+-    x_plan_power_admin_token: str | None = Header(default=None, alias="X-Plan-Power-Admin-Token"),
+-    settings: Settings = Depends(get_settings),
+-) -> None:
+-    """校验功率模型管理写接口的管理员令牌。
+-
+-    参数：
+-        x_plan_power_admin_token: 请求头里的管理令牌；
+-        settings: 应用配置，读取 `plan_power_admin_token`。
+-
+-    返回：
+-        校验通过时返回 None。
+-
+-    关键业务逻辑：
+-        M2 的模型导入和激活会改变后续功率模型版本状态，属于管理写操作。
+-        本地 / 测试环境若未配置令牌则允许联调；dev/prod 环境必须配置并匹配令牌。
+-    """
+-    expected_token = settings.plan_power_admin_token.strip()
+-    if not expected_token:
+-        if settings.app_env in {"local", "test"}:
+-            return None
+-        raise HTTPException(
+-            status_code=status.HTTP_403_FORBIDDEN,
+-            detail="未配置功率模型管理令牌，拒绝执行管理写操作。",
+-        )
+-    if x_plan_power_admin_token != expected_token:
+-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="功率模型管理令牌无效。")
+-    return None
+-
+ 
+ def get_plan_power_model_service(
+     db: Session = Depends(get_db),
+@@ -220,9 +194,13 @@ def get_plan_bom_qa_service(
+     不复用物流 query_key，也不让 LLM 直接生成事实性答案。
+     """
+     repository = PlanBomQueryRepository(db)
++    engine = PowerPredictionEngine(db)
+     return PlanBomQaService(
+         repository=repository,
+         query_service=PlanBomQueryService(repository=repository),
+         nlu_service=PlanBomNluCenterService(repository=repository),
+         presentation_service=PlanBomAnswerPresentationService(),
++        power_config_resolver=PlanBomPowerConfigResolverService(db, repository=repository),
++        power_prediction_engine=engine,
++        power_recommendation_service=PowerRecommendationService(db, engine=engine),
+     )
+diff --git a/backend/app/core/config.py b/backend/app/core/config.py
+index 730e4ca..20459f0 100644
+--- a/backend/app/core/config.py
++++ b/backend/app/core/config.py
+@@ -23,7 +23,6 @@ class Settings(BaseSettings):
+     log_root: Path = Path("data/logs")
+     demo_mode: bool = True
+     max_upload_size_mb: int = 20
+-    plan_power_admin_token: str = ""
+     allowed_origins: list[str] = Field(default_factory=lambda: ["*"])
+     mysql_host: str = "127.0.0.1"
+     mysql_port: int = 3306
+diff --git a/backend/app/domains/plan_bom/api/endpoints/import_excel.py b/backend/app/domains/plan_bom/api/endpoints/import_excel.py
+index 4b87e88..e82c0f3 100644
+--- a/backend/app/domains/plan_bom/api/endpoints/import_excel.py
++++ b/backend/app/domains/plan_bom/api/endpoints/import_excel.py
+@@ -2,9 +2,10 @@ from __future__ import annotations
+ 
+ from pathlib import Path
+ 
+-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
++from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+ 
+ from backend.app.api.deps import get_plan_bom_import_service
++from backend.app.domains.plan_bom.schemas.import_excel import PlanBomUploadHistoryResponse
+ from backend.app.domains.plan_bom.services.excel_import_service import PlanBomExcelImportService
+ from backend.app.schemas.common import ApiResponse
+ 
+@@ -66,6 +67,26 @@ async def import_plan_bom_excel(
+     return ApiResponse.success(report.model_dump(), trace_id=trace_id)
+ 
+ 
++@router.get("/upload/history", response_model=ApiResponse)
++def list_plan_bom_upload_history(
++    request: Request,
++    limit: int = Query(default=50, ge=1, le=200, description="最多返回历史批次数量"),
++    service: PlanBomExcelImportService = Depends(get_plan_bom_import_service),
++) -> ApiResponse:
++    """查询计划 BOM Excel 上传历史。
++
++    参数：
++        limit: 最多返回的历史批次数量。
++
++    返回：
++        历史上传文件批次、解析状态和统计摘要，用于 BOM 数据管理页查看以往上传记录。
++    """
++    trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
++    items = service.list_upload_history(limit=limit)
++    payload = PlanBomUploadHistoryResponse(items=items, total=len(items))
++    return ApiResponse.success(payload.model_dump(mode="json"), trace_id=trace_id)
++
++
+ @router.post("/upload", response_model=ApiResponse)
+ async def upload_plan_bom_excel(
+     request: Request,
+diff --git a/backend/app/domains/plan_bom/api/endpoints/power_model.py b/backend/app/domains/plan_bom/api/endpoints/power_model.py
+index c15136e..695c3fe 100644
+--- a/backend/app/domains/plan_bom/api/endpoints/power_model.py
++++ b/backend/app/domains/plan_bom/api/endpoints/power_model.py
+@@ -2,7 +2,7 @@ from __future__ import annotations
+ 
+ from fastapi import APIRouter, Depends, File, Path, Request, UploadFile
+ 
+-from backend.app.api.deps import get_plan_power_model_service, require_plan_power_admin
++from backend.app.api.deps import get_plan_power_model_service
+ from backend.app.domains.plan_bom.schemas.power_model import (
+     PowerModelImportResponse,
+     PowerModelVersionDetailResponse,
+@@ -18,7 +18,6 @@ router = APIRouter()
+ async def import_power_model(
+     request: Request,
+     file: UploadFile = File(...),
+-    _: None = Depends(require_plan_power_admin),
+     service: PowerModelService = Depends(get_plan_power_model_service),
+ ) -> ApiResponse:
+     """导入计划 BOM 功率模型 xlsm。
+@@ -28,6 +27,9 @@ async def import_power_model(
+ 
+     返回：
+         统一 ApiResponse，data 中包含 import_status、version 和详情摘要。
++
++    权限说明：
++        本轮按用户要求移除临时管理令牌，后续由正式用户/权限模块统一接管上传权限。
+     """
+     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
+     if not (file.filename or "").lower().endswith(".xlsm"):
+@@ -83,7 +85,6 @@ def get_power_model_version_detail(
+ def activate_power_model_version(
+     request: Request,
+     version_id: int = Path(..., ge=1, description="功率模型版本 ID"),
+-    _: None = Depends(require_plan_power_admin),
+     service: PowerModelService = Depends(get_plan_power_model_service),
+ ) -> ApiResponse:
+     """激活功率模型版本。
+@@ -93,6 +94,9 @@ def activate_power_model_version(
+ 
+     返回：
+         激活后的版本摘要。仓储层保证最多一个 active 版本。
++
++    权限说明：
++        本轮按用户要求移除临时管理令牌，后续由正式用户/权限模块统一接管生效切换权限。
+     """
+     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
+     try:
+diff --git a/backend/app/domains/plan_bom/repositories/import_repository.py b/backend/app/domains/plan_bom/repositories/import_repository.py
+index 68d9dd9..f6a3821 100644
+--- a/backend/app/domains/plan_bom/repositories/import_repository.py
++++ b/backend/app/domains/plan_bom/repositories/import_repository.py
+@@ -83,6 +83,47 @@ class PlanBomImportRepository:
+             self.db.rollback()
+             raise
+ 
++    def list_batches(self, *, limit: int = 50) -> list[dict]:
++        """查询 BOM Excel 上传批次历史。
++
++        参数：
++            limit: 最多返回的批次数量，接口层已限制范围。
++
++        返回值：
++            按创建时间倒序排列的批次摘要列表。
++        """
++        rows = (
++            self.db.query(PlanBomImportBatch)
++            .order_by(PlanBomImportBatch.created_at.desc(), PlanBomImportBatch.batch_id.desc())
++            .limit(limit)
++            .all()
++        )
++        return [self.batch_to_dict(row) for row in rows]
++
++    def batch_to_dict(self, batch: PlanBomImportBatch) -> dict:
++        """将导入批次 ORM 转为接口摘要字典。
++
++        参数：
++            batch: 计划 BOM 导入批次对象。
++
++        返回值：
++            前端历史列表可直接展示的字典。
++        """
++        return {
++            "batch_id": batch.batch_id,
++            "source_type": batch.source_type,
++            "source_tag": batch.source_tag,
++            "file_name": batch.file_name,
++            "file_hash": batch.file_hash,
++            "status": batch.status,
++            "total_files": batch.total_files,
++            "total_headers": batch.total_headers,
++            "total_lines": batch.total_lines,
++            "error_message": batch.error_message,
++            "created_at": batch.created_at.isoformat() if batch.created_at else None,
++            "finished_at": batch.finished_at.isoformat() if batch.finished_at else None,
++        }
++
+     def _delete_existing_versions(self, headers: list[PlanBomHeader]) -> None:
+         """删除本批次覆盖的旧 BOM 版本数据。
+ 
+diff --git a/backend/app/domains/plan_bom/schemas/import_excel.py b/backend/app/domains/plan_bom/schemas/import_excel.py
+index 183f92f..1e0a7d7 100644
+--- a/backend/app/domains/plan_bom/schemas/import_excel.py
++++ b/backend/app/domains/plan_bom/schemas/import_excel.py
+@@ -57,4 +57,34 @@ class PlanBomImportReport(BaseModel):
+     warnings: list[PlanBomImportIssue] = Field(default_factory=list)
+ 
+ 
+-__all__ = ["PlanBomImportIssue", "PlanBomImportReport", "PlanBomImportStatus"]
++class PlanBomUploadHistoryItem(BaseModel):
++    """计划 BOM 上传历史摘要。"""
++
++    batch_id: str
++    source_type: str
++    source_tag: str
++    file_name: str
++    file_hash: str | None = None
++    status: str
++    total_files: int = 0
++    total_headers: int = 0
++    total_lines: int = 0
++    error_message: str | None = None
++    created_at: str | None = None
++    finished_at: str | None = None
++
++
++class PlanBomUploadHistoryResponse(BaseModel):
++    """计划 BOM 上传历史响应。"""
++
++    items: list[PlanBomUploadHistoryItem]
++    total: int
++
++
++__all__ = [
++    "PlanBomImportIssue",
++    "PlanBomImportReport",
++    "PlanBomImportStatus",
++    "PlanBomUploadHistoryItem",
++    "PlanBomUploadHistoryResponse",
++]
+diff --git a/backend/app/domains/plan_bom/services/excel_import_service.py b/backend/app/domains/plan_bom/services/excel_import_service.py
+index 00e4987..9736675 100644
+--- a/backend/app/domains/plan_bom/services/excel_import_service.py
++++ b/backend/app/domains/plan_bom/services/excel_import_service.py
+@@ -123,6 +123,18 @@ class PlanBomExcelImportService:
+     def __init__(self, repository: PlanBomImportRepository) -> None:
+         self.repository = repository
+ 
++    def list_upload_history(self, *, limit: int = 50) -> list[dict[str, Any]]:
++        """查询 BOM Excel 上传历史。
++
++        参数：
++            limit: 最多返回的历史批次数量。
++
++        返回：
++            批次摘要字典列表，按上传时间倒序排列。
++        """
++        safe_limit = max(1, min(limit, 200))
++        return self.repository.list_batches(limit=safe_limit)
++
+     async def import_upload(self, file: UploadFile, *, batch_id: str | None = None) -> PlanBomImportReport:
+         """导入 FastAPI 上传的 Excel 文件。
+ 
+diff --git a/backend/app/domains/plan_bom/services/power_model_service.py b/backend/app/domains/plan_bom/services/power_model_service.py
+index e87308d..27b864e 100644
+--- a/backend/app/domains/plan_bom/services/power_model_service.py
++++ b/backend/app/domains/plan_bom/services/power_model_service.py
+@@ -87,11 +87,7 @@ class PowerModelService:
+         file_hash = hashlib.sha256(content).hexdigest()
+         existing = self.repository.get_by_file_hash(file_hash)
+         if existing is not None:
+-            return PowerModelImportResult(
+-                import_status="existing",
+-                version=self.repository.version_to_dict(existing),
+-                detail=self.repository.get_detail_payload(existing.id),
+-            )
++            return self._activate_imported_version(import_status="existing", version_id=existing.id)
+ 
+         try:
+             parsed = self.parser.parse_bytes(content, file_name=file_name, file_hash=file_hash)
+@@ -102,16 +98,39 @@ class PowerModelService:
+         except IntegrityError:
+             existing_after_race = self.repository.get_by_file_hash(file_hash)
+             if existing_after_race is not None:
+-                return PowerModelImportResult(
+-                    import_status="existing",
+-                    version=self.repository.version_to_dict(existing_after_race),
+-                    detail=self.repository.get_detail_payload(existing_after_race.id),
+-                )
++                return self._activate_imported_version(import_status="existing", version_id=existing_after_race.id)
+             raise
++        return self._activate_imported_version(import_status="created", version_id=version.id)
++
++    def _activate_imported_version(self, *, import_status: str, version_id: int) -> PowerModelImportResult:
++        """将本次上传对应的功率模型版本设为生效并组装导入结果。
++
++        参数：
++            import_status: created / existing，保留幂等导入语义；
++            version_id: 本次上传对应的版本 ID。
++
++        返回：
++            含 active 状态的导入结果。
++
++        关键业务逻辑：
++            业务要求“默认生效最新上传版本”。因此本次上传若解析成功或仅有 warning，
++            就把该上传对应版本切为 active，保证后续功率预测链路读取到用户最后上传的有效版本。
++            若解析失败，则只保留失败版本历史，不覆盖当前可用 active 版本。
++        """
++        version = self.repository.get_version(version_id)
++        if version is None:
++            raise ValueError(f"功率模型版本不存在：{version_id}")
++        if version.parse_status == "failed" or version.error_count:
++            return PowerModelImportResult(
++                import_status=import_status,
++                version=self.repository.version_to_dict(version),
++                detail=self.repository.get_detail_payload(version_id),
++            )
++        activated = self.repository.activate_version(version_id)
+         return PowerModelImportResult(
+-            import_status="created",
+-            version=self.repository.version_to_dict(version),
+-            detail=self.repository.get_detail_payload(version.id),
++            import_status=import_status,
++            version=self.repository.version_to_dict(activated),
++            detail=self.repository.get_detail_payload(version_id),
+         )
+ 
+     def list_versions(self) -> list[dict[str, Any]]:
+diff --git a/frontend/src/api/planBom.ts b/frontend/src/api/planBom.ts
+index 49a3402..b2c1f8e 100644
+--- a/frontend/src/api/planBom.ts
++++ b/frontend/src/api/planBom.ts
+@@ -152,6 +152,10 @@ export interface PlanBomQaResponse {
+     caveats?: string[]
+     debug?: Record<string, any>
+   } | null
++  nlu?: Record<string, any>
++  raw_result?: Record<string, any>
++  warnings?: string[]
++  trace_events?: Array<Record<string, any>>
+ }
+ 
+ /**
+@@ -170,6 +174,34 @@ export interface PlanBomUploadOptions {
+   source?: string
+   overwrite?: boolean
+   remark?: string
++  onUploadProgress?: (percentage: number) => void
++}
++
++/**
++ * 上传进度事件的最小结构。
++ */
++interface UploadProgressEventLike {
++  loaded: number
++  total?: number
++}
++
++/**
++ * 把浏览器上传进度事件转换为 0-99 的百分比。
++ * 说明：
++ * 1. 请求真正完成后由页面置为 100；
++ * 2. total 缺失时给出中间态，避免界面完全没有反馈；
++ * 3. 不在这里读取或记录任何文件内容。
++ */
++function emitUploadProgress(event: UploadProgressEventLike, callback?: (percentage: number) => void) {
++  if (!callback) return
++  if (event.total && event.total > 0) {
++    const percentage = Math.round((event.loaded / event.total) * 100)
++    callback(Math.max(0, Math.min(99, percentage)))
++    return
++  }
++  if (event.loaded > 0) {
++    callback(50)
++  }
+ }
+ 
+ /**
+@@ -190,6 +222,110 @@ export async function uploadPlanBomExcel(file: File, options: PlanBomUploadOptio
+   }
+   const resp = await http.post('/plan-bom/upload', formData, {
+     headers: { 'Content-Type': 'multipart/form-data' },
++    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
+   })
+   return resp.data
+ }
++
++/**
++ * 功率模型导入选项。
++ */
++export interface PlanPowerModelUploadOptions {
++  onUploadProgress?: (percentage: number) => void
++}
++
++/**
++ * BOM 上传历史摘要。
++ */
++export interface PlanBomUploadHistoryItem {
++  batch_id: string
++  source_type: string
++  source_tag: string
++  file_name: string
++  file_hash?: string | null
++  status: string
++  total_files: number
++  total_headers: number
++  total_lines: number
++  error_message?: string | null
++  created_at?: string | null
++  finished_at?: string | null
++}
++
++/**
++ * BOM 上传历史响应。
++ */
++export interface PlanBomUploadHistoryResponse {
++  items: PlanBomUploadHistoryItem[]
++  total: number
++}
++
++/**
++ * 功率模型版本摘要。
++ */
++export interface PlanPowerModelVersionSummary {
++  id: number
++  file_name: string
++  file_hash: string
++  source_type: string
++  business_version_label?: string | null
++  formula_policy: string
++  vba_project_sha256?: string | null
++  is_active: boolean
++  parse_status: string
++  sheet_count: number
++  model_sheet_count: number
++  warning_count: number
++  error_count: number
++  created_at?: string | null
++  activated_at?: string | null
++}
++
++/**
++ * 功率模型版本列表响应。
++ */
++export interface PlanPowerModelVersionListResponse {
++  items: PlanPowerModelVersionSummary[]
++  total: number
++}
++
++/**
++ * 上传计划 BOM 功率模型 xlsm 文件。
++ * 说明：
++ * 1. 该接口对应后端 /plan-bom/power-model/import，与普通 BOM Excel 上传隔离；
++ * 2. 临时管理令牌已移除，后续由用户权限模块统一控制上传权限；
++ * 3. 前端不解析、不中转计算 Excel 内容，解析和版本化仍由后端确定性服务完成。
++ */
++export async function uploadPlanPowerModel(file: File, options: PlanPowerModelUploadOptions = {}) {
++  const formData = new FormData()
++  formData.append('file', file)
++  const resp = await http.post('/plan-bom/power-model/import', formData, {
++    headers: { 'Content-Type': 'multipart/form-data' },
++    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
++  })
++  return resp.data
++}
++
++/**
++ * 查询 BOM Excel 上传历史。
++ */
++export async function fetchPlanBomUploadHistory(limit = 50) {
++  const resp = await http.get('/plan-bom/upload/history', { params: { limit } })
++  return resp.data as { data?: PlanBomUploadHistoryResponse } | PlanBomUploadHistoryResponse
++}
++
++/**
++ * 查询功率模型版本历史。
++ */
++export async function fetchPlanPowerModelVersions() {
++  const resp = await http.get('/plan-bom/power-model/versions')
++  return resp.data as { data?: PlanPowerModelVersionListResponse } | PlanPowerModelVersionListResponse
++}
++
++/**
++ * 手动切换功率模型生效版本。
++ */
++export async function activatePlanPowerModelVersion(versionId: number) {
++  const resp = await http.post(`/plan-bom/power-model/versions/${versionId}/activate`)
++  return resp.data as { data?: PlanPowerModelVersionSummary } | PlanPowerModelVersionSummary
++}
+diff --git a/frontend/src/views/plan-bom/BomDataManagementPage.vue b/frontend/src/views/plan-bom/BomDataManagementPage.vue
+index a89c51d..aac2bc4 100644
+--- a/frontend/src/views/plan-bom/BomDataManagementPage.vue
++++ b/frontend/src/views/plan-bom/BomDataManagementPage.vue
+@@ -1,21 +1,39 @@
+ <template>
+   <section class="bom-page">
+     <div class="page-head">
+-      <h1>上传 BOM Excel</h1>
+-      <p>.xls / .xlsx / .xlsm</p>
++      <h1>BOM 数据管理</h1>
++      <p>普通 BOM Excel 与功率模型 xlsm 分开上传，避免把两类文件混用。</p>
+     </div>
+ 
+-    <div class="upload-card">
+-      <div class="upload-main">
+-        <input ref="fileInputRef" type="file" accept=".xls,.xlsx,.xlsm" @change="handleFileChange" />
+-        <div class="file-info">
+-          <strong>{{ selectedFile?.name || '请选择 BOM Excel 文件' }}</strong>
+-          <span>{{ selectedFile ? formatFileSize(selectedFile.size) : '上传后即可问答' }}</span>
++    <div class="upload-panel">
++      <div class="panel-head">
++        <h2>上传 BOM Excel</h2>
++        <p>.xls / .xlsx / .xlsm，上传后用于计划 BOM 明细查询和智能问答。</p>
++      </div>
++      <div class="upload-card">
++        <div class="upload-main">
++          <input ref="fileInputRef" type="file" accept=".xls,.xlsx,.xlsm" @change="handleFileChange" />
++          <div class="file-info">
++            <strong>{{ selectedFile?.name || '请选择 BOM Excel 文件' }}</strong>
++            <span>{{ selectedFile ? formatFileSize(selectedFile.size) : '上传后即可问答' }}</span>
++          </div>
+         </div>
++        <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadFile">上传并解析</el-button>
++      </div>
++      <div v-if="uploading || bomUploadProgress > 0" class="upload-progress">
++        <span>BOM 上传进度：{{ bomUploadProgress }}%</span>
++        <el-progress :percentage="bomUploadProgress" />
+       </div>
+-      <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadFile">上传并解析</el-button>
+     </div>
+ 
++    <el-alert
++      v-if="uploadSuccessMessage"
++      :title="uploadSuccessMessage"
++      type="success"
++      show-icon
++      :closable="false"
++    />
++
+     <el-alert
+       v-if="uploadError"
+       :title="uploadError"
+@@ -47,12 +65,171 @@
+       <p class="next-action">{{ uploadResult.next_action || '上传完成后可进入智能问答继续查询。' }}</p>
+     </div>
+ 
++    <div class="upload-panel power-panel">
++      <div class="panel-head">
++        <h2>上传功率模型</h2>
++        <p>仅支持 GCL 功率测试基准 .xlsm，用于功率预测模型版本化入库；不会执行 VBA / 宏。</p>
++      </div>
++      <div class="upload-card upload-card--stacked">
++        <div class="upload-main">
++          <input
++            ref="powerModelFileInputRef"
++            type="file"
++            accept=".xlsm"
++            @change="handlePowerModelFileChange"
++          />
++          <div class="file-info">
++            <strong>{{ powerModelSelectedFile?.name || '请选择功率模型 xlsm 文件' }}</strong>
++            <span>{{ powerModelSelectedFile ? formatFileSize(powerModelSelectedFile.size) : '上传后生成可追溯功率模型版本' }}</span>
++          </div>
++        </div>
++        <el-button
++          type="success"
++          :disabled="!powerModelSelectedFile"
++          :loading="powerModelUploading"
++          @click="uploadPowerModelFile"
++        >上传功率模型</el-button>
++        <div v-if="powerModelUploading || powerModelUploadProgress > 0" class="upload-progress">
++          <span>功率模型上传进度：{{ powerModelUploadProgress }}%</span>
++          <el-progress :percentage="powerModelUploadProgress" />
++        </div>
++      </div>
++    </div>
++
++    <el-alert
++      v-if="powerModelUploadSuccessMessage"
++      :title="powerModelUploadSuccessMessage"
++      type="success"
++      show-icon
++      :closable="false"
++    />
++
++    <el-alert
++      v-if="powerModelUploadError"
++      :title="powerModelUploadError"
++      type="error"
++      show-icon
++      :closable="false"
++    />
++
++    <div v-if="uploadPowerModelResult" class="result-card power-result-card">
++      <div class="result-title">{{ uploadPowerModelResult.message || '功率模型上传处理完成' }}</div>
++      <div class="summary-grid">
++        <div>
++          <span>版本 ID</span>
++          <strong>{{ uploadPowerModelResult.version?.id ?? '-' }}</strong>
++        </div>
++        <div>
++          <span>解析状态</span>
++          <strong>{{ uploadPowerModelResult.version?.parse_status || '-' }}</strong>
++        </div>
++        <div>
++          <span>是否生效</span>
++          <strong>{{ uploadPowerModelResult.version?.is_active ? '当前生效' : '未生效' }}</strong>
++        </div>
++        <div>
++          <span>Issue 数</span>
++          <strong>{{ uploadPowerModelResult.detail?.issues?.length ?? uploadPowerModelResult.version?.error_count ?? '-' }}</strong>
++        </div>
++      </div>
++      <p class="next-action">功率模型上传后默认生效最新上传版本；也可在下方历史中手动选择生效版本。</p>
++    </div>
++
++    <div class="history-panel">
++      <div class="panel-head history-head">
++        <div>
++          <h2>上传历史</h2>
++          <p>BOM 上传历史与功率模型版本历史集中展示；GCL功率测试基准 .xlsm 默认生效最新上传版本。</p>
++        </div>
++        <el-button :loading="historyLoading" @click="loadUploadHistory">刷新历史</el-button>
++      </div>
++
++      <el-alert
++        v-if="historyError"
++        :title="historyError"
++        type="error"
++        show-icon
++        :closable="false"
++      />
++
++      <div class="history-section">
++        <h3>BOM 上传历史</h3>
++        <el-table v-loading="historyLoading" :data="bomUploadHistory" border stripe size="small">
++          <el-table-column prop="file_name" label="文件名" min-width="180" />
++          <el-table-column prop="status" label="状态" width="100">
++            <template #default="{ row }">
++              <el-tag :type="statusTagType(row.status)">{{ row.status }}</el-tag>
++            </template>
++          </el-table-column>
++          <el-table-column prop="total_headers" label="订单数" width="90" />
++          <el-table-column prop="total_lines" label="物料数" width="90" />
++          <el-table-column prop="created_at" label="上传时间" min-width="150">
++            <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
++          </el-table-column>
++          <el-table-column prop="error_message" label="错误信息" min-width="160" show-overflow-tooltip />
++          <template #empty>暂无 BOM 上传历史</template>
++        </el-table>
++      </div>
++
++      <div class="history-section">
++        <div class="history-title-row">
++          <div>
++            <h3>功率模型版本历史</h3>
++            <p class="history-tip">当前生效：{{ formatPowerVersionLabel(activePowerModelVersion) }}；可选择历史版本设为生效。</p>
++          </div>
++        </div>
++        <el-table v-loading="historyLoading" :data="powerModelVersions" border stripe size="small">
++          <el-table-column prop="id" label="版本 ID" width="90" />
++          <el-table-column prop="file_name" label="功率文件" min-width="200" />
++          <el-table-column prop="business_version_label" label="业务版本" min-width="120" />
++          <el-table-column prop="parse_status" label="解析状态" width="110">
++            <template #default="{ row }">
++              <el-tag :type="statusTagType(row.parse_status)">{{ row.parse_status }}</el-tag>
++            </template>
++          </el-table-column>
++          <el-table-column prop="is_active" label="生效状态" width="110">
++            <template #default="{ row }">
++              <el-tag v-if="row.is_active" type="success">当前生效</el-tag>
++              <el-tag v-else type="info">未生效</el-tag>
++            </template>
++          </el-table-column>
++          <el-table-column prop="created_at" label="上传时间" min-width="150">
++            <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
++          </el-table-column>
++          <el-table-column prop="file_hash" label="文件 Hash" min-width="120">
++            <template #default="{ row }">{{ formatShortHash(row.file_hash) }}</template>
++          </el-table-column>
++          <el-table-column label="操作" width="120" fixed="right">
++            <template #default="{ row }">
++              <el-button
++                size="small"
++                type="primary"
++                :disabled="row.is_active || row.parse_status === 'failed'"
++                :loading="powerModelActivationLoadingId === row.id"
++                @click="activatePowerModelVersion(row.id)"
++              >设为生效</el-button>
++            </template>
++          </el-table-column>
++          <template #empty>暂无功率模型版本历史</template>
++        </el-table>
++      </div>
++    </div>
+   </section>
+ </template>
+ 
+ <script setup lang="ts">
+-import { ref } from 'vue'
+-import { uploadPlanBomExcel } from '@/api/planBom'
++import { computed, onMounted, ref } from 'vue'
++import {
++  activatePlanPowerModelVersion,
++  fetchPlanBomUploadHistory,
++  fetchPlanPowerModelVersions,
++  uploadPlanBomExcel,
++  uploadPlanPowerModel,
++  type PlanBomUploadHistoryItem,
++  type PlanBomUploadHistoryResponse,
++  type PlanPowerModelVersionListResponse,
++  type PlanPowerModelVersionSummary,
++} from '@/api/planBom'
+ 
+ interface UploadResult {
+   success?: boolean
+@@ -64,18 +241,63 @@ interface UploadResult {
+   next_action?: string
+ }
+ 
++interface PowerModelUploadResult {
++  success?: boolean
++  message?: string
++  import_status?: string
++  version?: {
++    id?: number
++    parse_status?: string
++    is_active?: boolean
++    error_count?: number
++  }
++  detail?: {
++    sheet_count?: number
++    issues?: Array<Record<string, unknown>>
++  }
++}
++
+ const fileInputRef = ref<HTMLInputElement | null>(null)
+ const selectedFile = ref<File | null>(null)
+ const uploading = ref(false)
+ const uploadError = ref('')
++const uploadSuccessMessage = ref('')
+ const uploadResult = ref<UploadResult | null>(null)
++const bomUploadProgress = ref(0)
++
++const powerModelFileInputRef = ref<HTMLInputElement | null>(null)
++const powerModelSelectedFile = ref<File | null>(null)
++const powerModelUploading = ref(false)
++const powerModelUploadError = ref('')
++const powerModelUploadSuccessMessage = ref('')
++const uploadPowerModelResult = ref<PowerModelUploadResult | null>(null)
++const powerModelUploadProgress = ref(0)
++
++const historyLoading = ref(false)
++const historyError = ref('')
++const bomUploadHistory = ref<PlanBomUploadHistoryItem[]>([])
++const powerModelVersions = ref<PlanPowerModelVersionSummary[]>([])
++const powerModelActivationLoadingId = ref<number | null>(null)
++
++const activePowerModelVersion = computed(() => powerModelVersions.value.find((item) => item.is_active) || null)
++
++onMounted(() => {
++  void loadUploadHistory()
++})
+ 
+ /** 记录用户选择的 BOM 文件，实际解析仍由后端上传接口完成。 */
+ function handleFileChange(event: Event) {
+   const input = event.target as HTMLInputElement
+   selectedFile.value = input.files?.[0] || null
+   uploadError.value = ''
++  uploadSuccessMessage.value = ''
+   uploadResult.value = null
++  bomUploadProgress.value = 0
++}
++
++/** 根据浏览器上报的百分比更新 BOM 上传进度，限制在 0-99，成功响应后再置 100。 */
++function handleBomUploadProgress(percentage: number) {
++  bomUploadProgress.value = Math.max(0, Math.min(99, percentage))
+ }
+ 
+ /** 上传 BOM Excel 到真实后端接口，不在前端伪造解析结果。 */
+@@ -83,33 +305,180 @@ async function uploadFile() {
+   if (!selectedFile.value || uploading.value) return
+   uploading.value = true
+   uploadError.value = ''
++  uploadSuccessMessage.value = ''
+   uploadResult.value = null
++  bomUploadProgress.value = 0
+   try {
+     const resp = await uploadPlanBomExcel(selectedFile.value, {
+       source: 'trial_run_ui',
+       overwrite: true,
+       remark: '业务试运行页面上传',
++      onUploadProgress: handleBomUploadProgress,
+     })
+-    uploadResult.value = ((resp as any).data || resp) as UploadResult
++    uploadResult.value = unwrapResponseData<UploadResult>(resp)
++    bomUploadProgress.value = 100
++    void loadUploadHistory()
+     if (uploadResult.value?.success === false) {
+-      uploadError.value = uploadResult.value.message || '上传未成功，请检查文件内容。'
++      uploadError.value = `BOM 上传失败：${uploadResult.value.message || '请检查文件内容。'}`
++      return
+     }
++    uploadSuccessMessage.value = `BOM Excel 上传成功：${uploadResult.value?.message || '已完成解析。'}`
+   } catch (error) {
+-    uploadError.value = error instanceof Error ? error.message : '上传失败，请稍后重试。'
++    uploadError.value = `BOM 上传失败：${extractUploadErrorMessage(error)}`
+   } finally {
+     uploading.value = false
+   }
+ }
+ 
++/** 记录用户选择的功率模型文件，并清空上一次上传结果。 */
++function handlePowerModelFileChange(event: Event) {
++  const input = event.target as HTMLInputElement
++  powerModelSelectedFile.value = input.files?.[0] || null
++  powerModelUploadError.value = ''
++  powerModelUploadSuccessMessage.value = ''
++  uploadPowerModelResult.value = null
++  powerModelUploadProgress.value = 0
++}
++
++/** 根据浏览器上报的百分比更新功率模型上传进度，限制在 0-99，成功响应后再置 100。 */
++function handlePowerModelUploadProgress(percentage: number) {
++  powerModelUploadProgress.value = Math.max(0, Math.min(99, percentage))
++}
++
++/** 上传功率模型 xlsm 到后端版本化导入接口；临时管理令牌已移除，权限后续由用户模块统一控制。 */
++async function uploadPowerModelFile() {
++  if (!powerModelSelectedFile.value || powerModelUploading.value) return
++  powerModelUploading.value = true
++  powerModelUploadError.value = ''
++  powerModelUploadSuccessMessage.value = ''
++  uploadPowerModelResult.value = null
++  powerModelUploadProgress.value = 0
++  try {
++    const resp = await uploadPlanPowerModel(powerModelSelectedFile.value, {
++      onUploadProgress: handlePowerModelUploadProgress,
++    })
++    uploadPowerModelResult.value = unwrapResponseData<PowerModelUploadResult>(resp)
++    if (isPowerModelImportFailed(uploadPowerModelResult.value)) {
++      powerModelUploadProgress.value = Math.max(powerModelUploadProgress.value, 99)
++      void loadUploadHistory()
++      powerModelUploadError.value = `功率模型解析失败：${uploadPowerModelResult.value.message || '该版本已保留历史，但不会设为生效版本。'}`
++      return
++    }
++    powerModelUploadProgress.value = 100
++    void loadUploadHistory()
++    powerModelUploadSuccessMessage.value = `功率模型上传成功：${uploadPowerModelResult.value?.message || '已完成版本化导入。'}`
++  } catch (error) {
++    powerModelUploadError.value = `功率模型上传失败：${extractUploadErrorMessage(error)}`
++  } finally {
++    powerModelUploading.value = false
++  }
++}
++
++/** 查询 BOM 文件上传历史和功率模型版本历史，用于页面“历史查看”。 */
++async function loadUploadHistory() {
++  historyLoading.value = true
++  historyError.value = ''
++  try {
++    const [bomResp, powerResp] = await Promise.all([
++      fetchPlanBomUploadHistory(50),
++      fetchPlanPowerModelVersions(),
++    ])
++    const bomPayload = unwrapResponseData<PlanBomUploadHistoryResponse>(bomResp)
++    const powerPayload = unwrapResponseData<PlanPowerModelVersionListResponse>(powerResp)
++    bomUploadHistory.value = bomPayload.items || []
++    powerModelVersions.value = powerPayload.items || []
++  } catch (error) {
++    historyError.value = `上传历史加载失败：${extractUploadErrorMessage(error)}`
++  } finally {
++    historyLoading.value = false
++  }
++}
++
++/** 手动设置某个功率模型版本生效，失败版本由后端拒绝，前端也做禁用提示。 */
++async function activatePowerModelVersion(versionId: number) {
++  if (powerModelActivationLoadingId.value !== null) return
++  powerModelActivationLoadingId.value = versionId
++  historyError.value = ''
++  try {
++    const activatedVersion = unwrapResponseData<PlanPowerModelVersionSummary>(await activatePlanPowerModelVersion(versionId))
++    powerModelUploadSuccessMessage.value = `功率模型版本 ${activatedVersion.id || versionId} 已设为当前生效。`
++    await loadUploadHistory()
++  } catch (error) {
++    historyError.value = `功率模型版本生效失败：${extractUploadErrorMessage(error)}`
++  } finally {
++    powerModelActivationLoadingId.value = null
++  }
++}
++
++/** 兼容后端 ApiResponse 包装和直接 payload 两种返回。 */
++function unwrapResponseData<T>(response: unknown): T {
++  const maybeResponse = response as any
++  if (maybeResponse?.code !== undefined && maybeResponse.code !== 0) {
++    throw new Error(maybeResponse?.message || '后端接口返回失败。')
++  }
++  if (maybeResponse?.success === false) {
++    throw new Error(maybeResponse?.message || '后端接口返回失败。')
++  }
++  if (maybeResponse?.data === null) {
++    throw new Error(maybeResponse?.message || '后端接口未返回有效数据。')
++  }
++  return (maybeResponse?.data || maybeResponse) as T
++}
++
++/** 判断功率模型导入是否为业务失败，防止解析失败版本被误提示为成功。 */
++function isPowerModelImportFailed(result: PowerModelUploadResult | null) {
++  const version = result?.version
++  return result?.success === false || version?.parse_status === 'failed' || Boolean(version?.error_count)
++}
++
++/** 提取上传失败提示，优先展示后端返回的业务 message/detail。 */
++function extractUploadErrorMessage(error: unknown) {
++  const maybeError = error as any
++  return (
++    maybeError?.response?.data?.message ||
++    maybeError?.response?.data?.detail ||
++    maybeError?.message ||
++    '上传失败，请稍后重试。'
++  )
++}
++
+ function formatFileSize(size: number) {
+   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+   return `${(size / 1024 / 1024).toFixed(1)} MB`
+ }
++
++/** 格式化历史记录时间，保证空值或非法值不会打断页面展示。 */
++function formatDate(value?: string | null) {
++  if (!value) return '-'
++  const date = new Date(value)
++  if (Number.isNaN(date.getTime())) return value
++  return date.toLocaleString('zh-CN', { hour12: false })
++}
++
++/** 展示短 hash，既能追溯也避免表格过宽。 */
++function formatShortHash(value?: string | null) {
++  if (!value) return '-'
++  return value.length > 12 ? `${value.slice(0, 12)}...` : value
++}
++
++/** 根据后端状态选择 Element Plus 标签色。 */
++function statusTagType(status?: string) {
++  if (status === 'success') return 'success'
++  if (status === 'warning') return 'warning'
++  if (status === 'failed' || status === 'error') return 'danger'
++  return 'info'
++}
++
++/** 格式化当前生效功率模型标签。 */
++function formatPowerVersionLabel(version?: PlanPowerModelVersionSummary | null) {
++  if (!version) return '暂无生效版本'
++  return `#${version.id} ${version.business_version_label || version.file_name}`
++}
+ </script>
+ 
+ <style scoped>
+ .bom-page {
+-  width: min(880px, calc(100vw - 360px));
++  width: min(980px, calc(100vw - 320px));
+   margin: 48px auto 0;
+   display: grid;
+   gap: 16px;
+@@ -117,7 +486,8 @@ function formatFileSize(size: number) {
+ }
+ 
+ .page-head,
+-.upload-card,
++.upload-panel,
++.history-panel,
+ .result-card {
+   border: 1px solid #e5e7eb;
+   border-radius: 16px;
+@@ -126,7 +496,8 @@ function formatFileSize(size: number) {
+ }
+ 
+ h1,
+-h2 {
++h2,
++h3 {
+   margin: 0;
+   color: #111827;
+ }
+@@ -140,12 +511,28 @@ h2 {
+   font-size: 18px;
+ }
+ 
++h3 {
++  font-size: 15px;
++}
++
+ p {
+   margin: 6px 0 0;
+   color: #6b7280;
+   line-height: 1.7;
+ }
+ 
++.panel-head {
++  margin-bottom: 14px;
++}
++
++.history-head,
++.history-title-row {
++  display: flex;
++  align-items: flex-start;
++  justify-content: space-between;
++  gap: 12px;
++}
++
+ .upload-card {
+   display: flex;
+   align-items: center;
+@@ -153,6 +540,11 @@ p {
+   gap: 16px;
+ }
+ 
++.upload-card--stacked {
++  align-items: stretch;
++  flex-direction: column;
++}
++
+ .upload-main {
+   display: flex;
+   align-items: center;
+@@ -160,6 +552,29 @@ p {
+   min-width: 0;
+ }
+ 
++.upload-progress {
++  display: grid;
++  gap: 8px;
++  margin-top: 14px;
++  color: #4b5563;
++  font-size: 13px;
++}
++
++.history-panel {
++  display: grid;
++  gap: 16px;
++}
++
++.history-section {
++  display: grid;
++  gap: 10px;
++}
++
++.history-tip {
++  margin-top: 4px;
++  font-size: 12px;
++}
++
+ input {
+   width: 240px;
+   font-size: 13px;
+@@ -216,6 +631,12 @@ input {
+   color: #3f7b50;
+ }
+ 
++.power-panel,
++.power-result-card {
++  border-color: #cdebd6;
++  background: #fbfffc;
++}
++
+ @media (max-width: 1100px) {
+   .bom-page {
+     width: calc(100vw - 32px);
+@@ -224,7 +645,9 @@ input {
+ }
+ 
+ @media (max-width: 900px) {
+-  .upload-card {
++  .upload-card,
++  .history-head,
++  .history-title-row {
+     align-items: flex-start;
+     flex-direction: column;
+   }
+diff --git a/tests/business_acceptance/test_plan_power_m2_model_versioning.py b/tests/business_acceptance/test_plan_power_m2_model_versioning.py
+index e7dabb3..38574f4 100644
+--- a/tests/business_acceptance/test_plan_power_m2_model_versioning.py
++++ b/tests/business_acceptance/test_plan_power_m2_model_versioning.py
+@@ -5,13 +5,10 @@ from types import SimpleNamespace
+ from zipfile import ZipFile
+ 
+ import pytest
+-from fastapi import HTTPException
+ from sqlalchemy import create_engine
+ from sqlalchemy.exc import IntegrityError
+ from sqlalchemy.orm import sessionmaker
+ 
+-from backend.app.api.deps import require_plan_power_admin
+-from backend.app.core.config import Settings
+ from backend.app.db.base import Base
+ from backend.app.domains.plan_bom.models import (
+     PlanPowerBenchmarkFactor,
+@@ -202,16 +199,6 @@ def test_activate_failed_version_is_rejected(db_session) -> None:
+         service.activate_version(failed.id)
+ 
+ 
+-def test_admin_dependency_requires_token_outside_local() -> None:
+-    """dev/prod 环境的功率模型写接口必须携带管理令牌。"""
+-    local_settings = Settings(app_env="local", plan_power_admin_token="")
+-    require_plan_power_admin(x_plan_power_admin_token=None, settings=local_settings)
+-
+-    prod_settings = Settings(app_env="prod", plan_power_admin_token="ok")
+-    with pytest.raises(HTTPException):
+-        require_plan_power_admin(x_plan_power_admin_token="bad", settings=prod_settings)
+-    require_plan_power_admin(x_plan_power_admin_token="ok", settings=prod_settings)
+-
+ 
+ def test_import_integrity_conflict_returns_existing_version() -> None:
+     """并发同 hash 导入触发唯一键冲突时应回查已有版本并返回 existing。"""
+@@ -219,7 +206,7 @@ def test_import_integrity_conflict_returns_existing_version() -> None:
+     class FakeRepository:
+         def __init__(self) -> None:
+             self.calls = 0
+-            self.existing = SimpleNamespace(id=7)
++            self.existing = SimpleNamespace(id=7, parse_status="success", error_count=0)
+ 
+         def get_by_file_hash(self, file_hash: str):
+             self.calls += 1
+@@ -228,6 +215,13 @@ def test_import_integrity_conflict_returns_existing_version() -> None:
+         def create_from_parsed(self, parsed):
+             raise IntegrityError("insert plan_power_model_version", {}, Exception("duplicate"))
+ 
++        def get_version(self, version_id: int):
++            return self.existing if version_id == self.existing.id else None
++
++        def activate_version(self, version_id: int):
++            self.existing.is_active = 1
++            return self.existing
++
+         def version_to_dict(self, version):
+             return {"id": version.id, "file_hash": "race-hash"}
+ 
+diff --git a/tests/business_acceptance/test_plan_bom_upload_history_power_activation.py b/tests/business_acceptance/test_plan_bom_upload_history_power_activation.py
+new file mode 100644
+index 0000000..53d09ef
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_bom_upload_history_power_activation.py
+@@ -0,0 +1,159 @@
++from __future__ import annotations
++
++from datetime import datetime
++from types import SimpleNamespace
++
++import pytest
++from sqlalchemy import create_engine
++from sqlalchemy.orm import sessionmaker
++
++from backend.app.db.base import Base
++from backend.app.domains.plan_bom.models import PlanBomImportBatch, PlanPowerModelVersion
++from backend.app.domains.plan_bom.repositories.import_repository import PlanBomImportRepository
++from backend.app.domains.plan_bom.repositories.power_model_repository import PowerModelRepository
++from backend.app.domains.plan_bom.services.power_excel_parser_service import FORMULA_POLICY
++from backend.app.domains.plan_bom.services.power_model_service import PowerModelService
++
++
++@pytest.fixture()
++def db_session():
++    """创建 SQLite 临时数据库会话，避免依赖本地 MySQL。"""
++    engine = create_engine("sqlite:///:memory:")
++    Base.metadata.create_all(engine)
++    SessionLocal = sessionmaker(bind=engine)
++    session = SessionLocal()
++    try:
++        yield session
++    finally:
++        session.close()
++        Base.metadata.drop_all(engine)
++        engine.dispose()
++
++
++class FakePowerParser:
++    """构造最小可落库的功率模型解析结果，用于验证版本生效逻辑。"""
++
++    def parse_bytes(self, content: bytes, *, file_name: str, file_hash: str | None = None):
++        return SimpleNamespace(
++            file_name=file_name,
++            file_hash=file_hash,
++            business_version_label=file_name.removesuffix(".xlsm"),
++            formula_policy=FORMULA_POLICY,
++            vba_project_sha256=None,
++            sheet_count=0,
++            model_sheet_count=0,
++            warning_count=0,
++            error_count=0,
++            parse_summary={"fake_content_size": len(content)},
++            issues=[],
++            sheets=[],
++            benchmark_factors=[],
++            change_histories=[],
++        )
++
++
++class FailedPowerParser(FakePowerParser):
++    """构造解析失败版本，用于验证失败模型不会覆盖当前生效版本。"""
++
++    def parse_bytes(self, content: bytes, *, file_name: str, file_hash: str | None = None):
++        parsed = super().parse_bytes(content, file_name=file_name, file_hash=file_hash)
++        parsed.error_count = 1
++        parsed.parse_summary = {"fake_content_size": len(content), "forced_status": "failed"}
++        return parsed
++
++
++def test_bom_upload_history_repository_lists_previous_uploads_newest_first(db_session) -> None:
++    """BOM 上传历史应按创建时间倒序返回以往上传文件和解析统计。"""
++    db_session.add_all(
++        [
++            PlanBomImportBatch(
++                batch_id="BATCH-old",
++                source_type="EXCEL",
++                source_tag="manual_upload",
++                file_name="old-bom.xlsx",
++                file_hash="old-hash",
++                status="success",
++                total_files=1,
++                total_headers=2,
++                total_lines=20,
++                error_message=None,
++                created_at=datetime(2026, 5, 1, 9, 0, 0),
++                finished_at=datetime(2026, 5, 1, 9, 1, 0),
++            ),
++            PlanBomImportBatch(
++                batch_id="BATCH-new",
++                source_type="EXCEL",
++                source_tag="manual_upload",
++                file_name="new-bom.xlsx",
++                file_hash="new-hash",
++                status="failed",
++                total_files=1,
++                total_headers=0,
++                total_lines=0,
++                error_message="模板不匹配",
++                created_at=datetime(2026, 5, 2, 9, 0, 0),
++                finished_at=datetime(2026, 5, 2, 9, 1, 0),
++            ),
++        ]
++    )
++    db_session.commit()
++
++    items = PlanBomImportRepository(db_session).list_batches(limit=10)
++
++    assert [item["batch_id"] for item in items] == ["BATCH-new", "BATCH-old"]
++    assert items[0]["file_name"] == "new-bom.xlsx"
++    assert items[0]["status"] == "failed"
++    assert items[0]["total_headers"] == 0
++    assert items[0]["total_lines"] == 0
++    assert items[0]["error_message"] == "模板不匹配"
++    assert items[1]["file_hash"] == "old-hash"
++    assert items[1]["created_at"].startswith("2026-05-01T09:00:00")
++
++
++def test_power_model_import_defaults_latest_uploaded_version_active(db_session) -> None:
++    """功率模型上传后应默认让最新上传版本生效，且始终最多一个 active 版本。"""
++    service = PowerModelService(repository=PowerModelRepository(db_session), parser=FakePowerParser())
++
++    first = service.import_bytes(b"power-model-v1", file_name="GCL功率测试基准-v1.xlsm")
++    second = service.import_bytes(b"power-model-v2", file_name="GCL功率测试基准-v2.xlsm")
++
++    assert first.import_status == "created"
++    assert second.import_status == "created"
++    assert first.version["is_active"] is True
++    assert second.version["is_active"] is True
++    assert PowerModelRepository(db_session).count_active_versions() == 1
++    assert db_session.get(PlanPowerModelVersion, first.version["id"]).is_active == 0
++    assert db_session.get(PlanPowerModelVersion, second.version["id"]).is_active == 1
++
++
++def test_power_model_existing_reupload_can_become_active_again(db_session) -> None:
++    """重复上传已有 hash 时不新增版本，但该上传对应的已有版本应可重新成为生效版本。"""
++    service = PowerModelService(repository=PowerModelRepository(db_session), parser=FakePowerParser())
++
++    first = service.import_bytes(b"power-model-v1", file_name="GCL功率测试基准-v1.xlsm")
++    second = service.import_bytes(b"power-model-v2", file_name="GCL功率测试基准-v2.xlsm")
++    existing = service.import_bytes(b"power-model-v1", file_name="GCL功率测试基准-v1.xlsm")
++
++    assert existing.import_status == "existing"
++    assert existing.version["id"] == first.version["id"]
++    assert existing.version["is_active"] is True
++    assert PowerModelRepository(db_session).count_active_versions() == 1
++    assert db_session.get(PlanPowerModelVersion, first.version["id"]).is_active == 1
++    assert db_session.get(PlanPowerModelVersion, second.version["id"]).is_active == 0
++
++
++def test_power_model_failed_upload_does_not_replace_current_active_version(db_session) -> None:
++    """解析失败的功率模型应保留历史记录，但不能覆盖当前生效版本。"""
++    repository = PowerModelRepository(db_session)
++    valid_service = PowerModelService(repository=repository, parser=FakePowerParser())
++    failed_service = PowerModelService(repository=repository, parser=FailedPowerParser())
++
++    active = valid_service.import_bytes(b"power-model-valid", file_name="GCL功率测试基准-valid.xlsm")
++    failed = failed_service.import_bytes(b"power-model-failed", file_name="GCL功率测试基准-failed.xlsm")
++
++    assert failed.import_status == "created"
++    assert failed.version["parse_status"] == "failed"
++    assert failed.version["is_active"] is False
++    assert PowerModelRepository(db_session).count_active_versions() == 1
++    assert db_session.get(PlanPowerModelVersion, active.version["id"]).is_active == 1
++    assert db_session.get(PlanPowerModelVersion, failed.version["id"]).is_active == 0
+diff --git a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+new file mode 100644
+index 0000000..d97e817
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+@@ -0,0 +1,115 @@
++from __future__ import annotations
++
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[2]
++FRONTEND = ROOT / "frontend" / "src"
++BACKEND = ROOT / "backend" / "app"
++
++
++def test_bom_data_management_exposes_separate_power_model_upload_entry_without_token() -> None:
++    """BOM 数据管理页必须保留独立功率模型上传入口，并移除临时管理 token 输入。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "上传 BOM Excel" in page
++    assert "上传功率模型" in page
++    assert "请选择功率模型 xlsm 文件" in page
++    assert "uploadPowerModelFile" in page
++    assert "uploadPowerModelResult" in page
++    assert "powerModelSelectedFile" in page
++    assert "show-password" not in page
++    assert "powerModelAdminToken" not in page
++    assert "admin-token-row" not in page
++    assert "功率模型管理 Token" not in page
++    assert "bomUploadProgress" in page
++    assert "powerModelUploadProgress" in page
++    assert "<el-progress" in page
++    assert "uploadSuccessMessage" in page
++    assert "powerModelUploadSuccessMessage" in page
++    assert "上传成功" in page
++    assert "上传失败" in page
++
++
++def test_bom_data_management_progress_and_status_are_isolated_per_upload_type() -> None:
++    """BOM 和功率模型上传必须分别维护进度与提示，避免两个入口状态串扰。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "handleBomUploadProgress" in page
++    assert "handlePowerModelUploadProgress" in page
++    assert "bomUploadProgress.value = 0" in page
++    assert "powerModelUploadProgress.value = 0" in page
++    assert "bomUploadProgress.value = 100" in page
++    assert "powerModelUploadProgress.value = 100" in page
++    assert "uploadSuccessMessage.value" in page
++    assert "powerModelUploadSuccessMessage.value" in page
++    assert "uploadError.value" in page
++    assert "powerModelUploadError.value" in page
++
++
++def test_bom_data_management_exposes_upload_history_and_power_activation_controls() -> None:
++    """BOM 数据管理页应能查看 BOM/功率模型历史，并对功率模型版本执行生效切换。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "上传历史" in page
++    assert "BOM 上传历史" in page
++    assert "功率模型版本历史" in page
++    assert "loadUploadHistory" in page
++    assert "bomUploadHistory" in page
++    assert "powerModelVersions" in page
++    assert "activatePowerModelVersion" in page
++    assert "设为生效" in page
++    assert "当前生效" in page
++    assert "默认生效最新上传版本" in page
++    assert "<el-table" in page
++
++
++def test_frontend_api_wraps_upload_history_and_power_version_endpoints_without_token() -> None:
++    """前端 API 应封装历史与版本生效接口，且不再透传功率模型管理 token 请求头。"""
++    api = (FRONTEND / "api" / "planBom.ts").read_text(encoding="utf-8")
++
++    assert "uploadPlanPowerModel" in api
++    assert "fetchPlanBomUploadHistory" in api
++    assert "fetchPlanPowerModelVersions" in api
++    assert "activatePlanPowerModelVersion" in api
++    assert "'/plan-bom/power-model/import'" in api
++    assert "'/plan-bom/upload/history'" in api
++    assert "'/plan-bom/power-model/versions'" in api
++    assert "`/plan-bom/power-model/versions/${versionId}/activate`" in api
++    assert "X-Plan-Power-Admin-Token" not in api
++    assert "adminToken" not in api
++    assert "multipart/form-data" in api
++    assert "onUploadProgress" in api
++    assert "Math.round" in api
++    assert "options.onUploadProgress" in api
++
++
++def test_power_model_upload_and_activation_reject_nonzero_or_failed_domain_responses() -> None:
++    """功率模型上传/激活不能把 ApiResponse 失败包或解析失败版本误提示为成功。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "maybeResponse?.code !== undefined && maybeResponse.code !== 0" in page
++    assert "maybeResponse?.data === null" in page
++    assert "throw new Error" in page
++    assert "isPowerModelImportFailed" in page
++    assert "version?.parse_status === 'failed'" in page
++    assert "version?.error_count" in page
++    assert "功率模型解析失败" in page
++    assert "const activatedVersion = unwrapResponseData" in page
++    assert "powerModelUploadProgress.value = 100" in page
++    assert "powerModelUploadProgress.value = Math.max" in page
++    assert "uploadPowerModelResult.version?.parse_status" in page
++    assert "uploadPowerModelResult.import_status" not in page
++    assert "uploadPowerModelResult.detail?.issues?.length" in page
++
++
++def test_power_model_token_dependency_removed_from_current_backend_sources() -> None:
++    """临时功率模型 token 功能应从当前后端源码移除，后续改由用户权限模块接管。"""
++    deps = (BACKEND / "api" / "deps.py").read_text(encoding="utf-8")
++    settings = (BACKEND / "core" / "config.py").read_text(encoding="utf-8")
++    power_api = (BACKEND / "domains" / "plan_bom" / "api" / "endpoints" / "power_model.py").read_text(encoding="utf-8")
++
++    assert "require_plan_power_admin" not in deps
++    assert "plan_power_admin_token" not in settings
++    assert "X-Plan-Power-Admin-Token" not in power_api
++    assert "require_plan_power_admin" not in power_api

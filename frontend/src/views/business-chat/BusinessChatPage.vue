@@ -395,6 +395,8 @@ const examples = [
   { domain: '物流', mode: 'logistics' as BusinessChatDomain, text: '2024年江苏省各城市总费用排名前五？' },
   { domain: '物流', mode: 'logistics' as BusinessChatDomain, text: '查询下个月物流费用预测需要哪些条件？' },
   { domain: 'BOM', mode: 'plan_bom' as BusinessChatDomain, text: '订单00104的玻璃、间隙贴膜、焊带、汇流条、接线盒规格描述？' },
+  { domain: 'BOM', mode: 'plan_bom' as BusinessChatDomain, text: '订单00104做功率预测，给出功率档分布。' },
+  { domain: 'BOM', mode: 'plan_bom' as BusinessChatDomain, text: '订单00104目标620W 50%，625W 50%，推荐供应商。' },
   { domain: 'BOM', mode: 'plan_bom' as BusinessChatDomain, text: '哪些订单的接线盒规格不一样，按订单列出来。' },
 ]
 
@@ -449,6 +451,18 @@ function inferDomain(text: string): Exclude<BusinessChatDomain, 'auto'> | null {
     '接线盒',
     '线盒',
     '间隙贴膜',
+    '功率预测',
+    '功率档',
+    '功率分布',
+    '目标功率',
+    '目标比例',
+    '供应商推荐',
+    '推荐供应商',
+    '电池效率',
+    '标板',
+    '北德',
+    '计量院',
+    '莱茵',
     '版本',
     '电池片',
     'nt10',
@@ -1206,6 +1220,9 @@ function normalizeBusinessText(text: string) {
 
 const followUpTextMap: Record<string, string> = {
   material_category: '请补充要查询或对比的材料类别，例如玻璃、焊带、汇流条、接线盒。',
+  target_power_ratio: '请补充目标功率档比例，例如：620W 50%，625W 50%。',
+  power_configuration: 'BOM 中有功率预测配置未确认，请补充玻璃、线缆、标板或供应商等配置。',
+  candidate: '当前条件命中多个 BOM 候选，请补充更完整订单号或确认文件实例。',
   order_id: '请补充订单号或订单尾号。',
   order_tail_no: '请补充订单尾号。',
   compare_orders: '请补充需要对比的订单。',

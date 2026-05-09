@@ -14,6 +14,16 @@ from backend.app.domains.plan_bom.schemas.query import (
 )
 from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
 from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
+from backend.app.domains.plan_bom.services.power_config_resolver_service import (
+    CANDIDATE_REQUIRED_STATUS,
+    NO_ACTIVE_MODEL_STATUS,
+    NOT_FOUND_STATUS,
+    PARTIAL_STATUS,
+    RESOLVED_STATUS,
+    PlanBomPowerConfigResolverService,
+)
+from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine, PowerPredictionError, PowerPredictionResult
+from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService, PowerRecommendationResult
 from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
 from backend.app.services.qa_trace import QaTraceRecorder
 
@@ -38,6 +48,9 @@ class PlanBomQaService:
         query_service: PlanBomQueryService,
         nlu_service: PlanBomNluCenterService,
         presentation_service: PlanBomAnswerPresentationService,
+        power_config_resolver: PlanBomPowerConfigResolverService | None = None,
+        power_prediction_engine: PowerPredictionEngine | None = None,
+        power_recommendation_service: PowerRecommendationService | None = None,
     ) -> None:
         """初始化 BOM QA 服务。
 
@@ -46,6 +59,9 @@ class PlanBomQaService:
             query_service: 已有 detail / compare 查询服务；
             nlu_service: BOM NLU Center；
             presentation_service: BOM 答案表达层。
+            power_config_resolver: M4 BOM 配置自动映射服务，未注入时按 repository 所在 DB 懒创建。
+            power_prediction_engine: M3 单供应商功率预测引擎，未注入时懒创建。
+            power_recommendation_service: M3 供应商推荐服务，未注入时懒创建。
 
         返回：
             无返回值。
@@ -55,6 +71,12 @@ class PlanBomQaService:
         self.query_service = query_service
         self.nlu_service = nlu_service
         self.presentation_service = presentation_service
+        self.power_config_resolver = power_config_resolver or PlanBomPowerConfigResolverService(repository.db, repository=repository)
+        self.power_prediction_engine = power_prediction_engine or PowerPredictionEngine(repository.db)
+        self.power_recommendation_service = power_recommendation_service or PowerRecommendationService(
+            repository.db,
+            engine=self.power_prediction_engine,
+        )
 
     def ask(self, question: str, *, use_llm: bool = True, trace_id: str | None = None) -> PlanBomQaResponse:
         """回答计划 BOM 自然语言问题。
@@ -119,6 +141,13 @@ class PlanBomQaService:
                 {"missing_slots": nlu.missing_slots},
             )
             response = self._clarification_response(question=question, nlu=nlu)
+        elif nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
+            trace_recorder.add(
+                "branch_selected",
+                "问题进入计划 BOM 功率预测 / 供应商推荐分支。",
+                {"intent": nlu.intent, "slots": nlu.slots},
+            )
+            response = self._power_response(question=question, nlu=nlu)
         elif nlu.intent in {"single_order_material_specs", "specific_material_query"}:
             trace_recorder.add(
                 "branch_selected",
@@ -325,6 +354,271 @@ class PlanBomQaService:
                 raw_result={"checked_orders": len(headers), "matched_rows": len(rows)},
             )
         )
+
+    def _power_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:
+        """处理计划 BOM 功率预测 / 供应商推荐问答。
+
+        参数：
+            question: 原始问题；
+            nlu: 已完成规则和可选 LLM guardrail 的 NLU 候选。
+
+        返回：
+            QA 响应。所有配置解析来自 M4，所有数值计算来自 M3，LLM 不参与计算。
+        """
+
+        tail = (nlu.slots.get("order_tail_no") or [None])[0]
+        benchmark = nlu.slots.get("benchmark")
+        explicit_configuration = dict(nlu.slots.get("explicit_power_configuration") or {})
+        if benchmark and "benchmark" not in explicit_configuration:
+            explicit_configuration["benchmark"] = benchmark
+        if nlu.slots.get("supplier_name") and "supplier" not in explicit_configuration:
+            explicit_configuration["supplier"] = nlu.slots.get("supplier_name")
+        if tail:
+            resolution = self.power_config_resolver.resolve(order_no=tail, benchmark=benchmark)
+        else:
+            resolution = self.power_config_resolver.resolve_explicit_configuration(
+                model_code=nlu.slots.get("model"),
+                configuration=explicit_configuration,
+            )
+        resolution_payload = resolution.to_dict()
+        if resolution.status in {CANDIDATE_REQUIRED_STATUS, PARTIAL_STATUS}:
+            slot_name = "candidate" if resolution.status == CANDIDATE_REQUIRED_STATUS else "power_configuration"
+            nlu.missing_slots = sorted(set([*(nlu.missing_slots or []), slot_name]))
+            return self._with_presentation(
+                PlanBomQaResponse(
+                    question=question,
+                    classification="B",
+                    status=PlanBomQaStatus(
+                        code="CLARIFICATION_REQUIRED",
+                        message="功率预测配置仍需确认",
+                        severity="warning",
+                    ),
+                    nlu=nlu,
+                    answer_summary=self._power_resolution_clarification_summary(resolution_payload),
+                    raw_result={"bom_config_resolution": resolution_payload},
+                    warnings=["M4 配置解析未完全 resolved，已停止调用 M3 计算，避免编造功率预测。"],
+                )
+            )
+        if resolution.status in {NOT_FOUND_STATUS, NO_ACTIVE_MODEL_STATUS} or resolution.model_code is None:
+            return self._empty_response(
+                question=question,
+                nlu=nlu,
+                reason=resolution.message,
+                raw={"bom_config_resolution": resolution_payload},
+            )
+        if resolution.status != RESOLVED_STATUS:
+            return self._empty_response(
+                question=question,
+                nlu=nlu,
+                reason=f"BOM 配置映射状态不可用于功率预测：{resolution.status}",
+                raw={"bom_config_resolution": resolution_payload},
+            )
+
+        configuration = resolution.to_prediction_configuration()
+        supplier_name = nlu.slots.get("supplier_name")
+        if supplier_name:
+            configuration["supplier"] = supplier_name
+        try:
+            if nlu.intent == "plan_power_supplier_recommendation":
+                recommendation = self.power_recommendation_service.recommend(
+                    model_code=resolution.model_code,
+                    configuration=configuration,
+                    target_power_ratio=nlu.slots.get("target_power_ratio"),
+                    supplier_names=[supplier_name] if supplier_name else None,
+                )
+                return self._power_recommendation_response(
+                    question=question,
+                    nlu=nlu,
+                    resolution_payload=resolution_payload,
+                    recommendation=recommendation,
+                )
+            prediction = self.power_prediction_engine.predict(
+                model_code=resolution.model_code,
+                configuration=configuration,
+                supplier_name=supplier_name,
+            )
+            return self._power_prediction_response(
+                question=question,
+                nlu=nlu,
+                resolution_payload=resolution_payload,
+                prediction=prediction,
+            )
+        except PowerPredictionError as exc:
+            return self._empty_response(
+                question=question,
+                nlu=nlu,
+                reason=str(exc),
+                raw={"bom_config_resolution": resolution_payload, "power_error": str(exc)},
+            )
+
+    def _power_prediction_response(
+        self,
+        *,
+        question: str,
+        nlu: PlanBomNluCandidate,
+        resolution_payload: dict[str, Any],
+        prediction: PowerPredictionResult,
+    ) -> PlanBomQaResponse:
+        """构造单供应商功率预测 QA 响应。
+
+        参数：
+            question: 原始问题；
+            nlu: NLU 候选；
+            resolution_payload: M4 配置映射追溯；
+            prediction: M3 确定性预测结果。
+
+        返回：
+            A 类预测响应。
+        """
+
+        rows = self._power_distribution_rows(prediction)
+        configuration_text = self._power_configuration_text(resolution_payload)
+        answer = (
+            f"已完成订单 {resolution_payload.get('order_no')} 的功率预测：版型 {prediction.model_code}，"
+            f"供应商 {prediction.supplier_name}，中心功率 {round(prediction.center_power, 4)}W。"
+            f"配置来源：{configuration_text}。"
+        )
+        warnings = list(resolution_payload.get("warnings") or []) + list(prediction.warnings)
+        return self._with_presentation(
+            PlanBomQaResponse(
+                question=question,
+                classification="A",
+                status=PlanBomQaStatus(code="OK", message="功率预测成功"),
+                nlu=nlu,
+                answer_summary=answer,
+                result_table=PlanBomTableSpec(columns=["功率档", "预测比例", "累计比例", "中心功率", "供应商"], rows=rows),
+                raw_result={
+                    "bom_config_resolution": resolution_payload,
+                    "power_prediction": prediction.to_dict(),
+                },
+                warnings=warnings,
+            )
+        )
+
+    def _power_recommendation_response(
+        self,
+        *,
+        question: str,
+        nlu: PlanBomNluCandidate,
+        resolution_payload: dict[str, Any],
+        recommendation: PowerRecommendationResult,
+    ) -> PlanBomQaResponse:
+        """构造目标功率比例下的供应商推荐 QA 响应。
+
+        参数：
+            question: 原始问题；
+            nlu: NLU 候选；
+            resolution_payload: M4 配置映射追溯；
+            recommendation: M3 推荐服务输出。
+
+        返回：
+            A 类推荐响应。
+        """
+
+        rows = self._power_recommendation_rows(recommendation)
+        top_supplier = recommendation.recommendations[0].supplier_name if recommendation.recommendations else "无"
+        source_label = f"订单 {resolution_payload.get('order_no')} 的 BOM 配置" if resolution_payload.get("order_no") else "显式输入配置"
+        answer = (
+            f"已按{source_label}和目标功率比例完成供应商推荐，"
+            f"当前最高匹配供应商为 {top_supplier}。"
+        )
+        warnings = list(resolution_payload.get("warnings") or []) + list(recommendation.warnings)
+        return self._with_presentation(
+            PlanBomQaResponse(
+                question=question,
+                classification="A",
+                status=PlanBomQaStatus(code="OK", message="供应商功率推荐成功"),
+                nlu=nlu,
+                answer_summary=answer,
+                result_table=PlanBomTableSpec(
+                    columns=["供应商", "匹配度", "目标功率档", "目标比例", "预测比例", "差异", "中心功率", "建议效率段"],
+                    rows=rows,
+                ),
+                raw_result={
+                    "bom_config_resolution": resolution_payload,
+                    "power_recommendation": recommendation.to_dict(),
+                },
+                warnings=warnings,
+            )
+        )
+
+    @staticmethod
+    def _power_distribution_rows(prediction: PowerPredictionResult) -> list[dict[str, Any]]:
+        """转换 M3 功率档分布为 QA 表格行。"""
+        rows: list[dict[str, Any]] = []
+        cumulative = 0.0
+        for power_bin, ratio in prediction.weighted_distribution.items():
+            cumulative += float(ratio)
+            rows.append(
+                {
+                    "功率档": f"{power_bin}W",
+                    "预测比例": round(float(ratio) * 100.0, 4),
+                    "累计比例": round(cumulative * 100.0, 4),
+                    "中心功率": round(prediction.center_power, 4),
+                    "供应商": prediction.supplier_name,
+                }
+            )
+        return rows
+
+    @staticmethod
+    def _power_recommendation_rows(recommendation: PowerRecommendationResult) -> list[dict[str, Any]]:
+        """转换 M3 推荐结果为 QA 表格行。"""
+        rows: list[dict[str, Any]] = []
+        for item in recommendation.recommendations:
+            efficiency_label = PlanBomQaService._format_suggested_efficiency_segments(item.suggested_efficiency_segments)
+            for power_bin, target_ratio in recommendation.target_power_ratio.items():
+                rows.append(
+                    {
+                        "供应商": item.supplier_name,
+                        "匹配度": round(item.score, 4),
+                        "目标功率档": f"{power_bin}W",
+                        "目标比例": round(float(target_ratio) * 100.0, 4),
+                        "预测比例": round(float(item.predicted_target_ratio.get(power_bin, 0.0)) * 100.0, 4),
+                        "差异": round(float(item.target_diff.get(power_bin, 0.0)) * 100.0, 4),
+                        "中心功率": round(item.prediction.center_power, 4),
+                        "建议效率段": efficiency_label,
+                    }
+                )
+        return rows
+
+    @staticmethod
+    def _format_suggested_efficiency_segments(segments: list[dict[str, Any]]) -> str:
+        """格式化 M3 推荐结果中的建议效率段。
+
+        参数：
+            segments: M3 `PowerRecommendationItem.suggested_efficiency_segments` 输出。
+
+        返回：
+            用于 QA 表格展示的效率段文本；无建议时返回空字符串。
+        """
+        labels: list[str] = []
+        for segment in segments[:3]:
+            percent = segment.get("efficiency_percent")
+            if percent is None:
+                continue
+            labels.append(f"{round(float(percent), 3)}%")
+        return "、".join(labels)
+
+    @staticmethod
+    def _power_configuration_text(resolution_payload: dict[str, Any]) -> str:
+        """汇总 M4 已解析配置，供 answer_summary 使用。"""
+        resolved_config = resolution_payload.get("resolved_config") or {}
+        pairs = []
+        for key in ["glass", "ribbon", "busbar", "cable", "cell_size", "benchmark"]:
+            item = resolved_config.get(key) or {}
+            if item.get("value"):
+                pairs.append(f"{key}={item['value']}")
+        return "；".join(pairs) if pairs else "无可展示配置"
+
+    @staticmethod
+    def _power_resolution_clarification_summary(resolution_payload: dict[str, Any]) -> str:
+        """为 M4 candidate / partial 状态生成追问摘要。"""
+        if resolution_payload.get("status") == CANDIDATE_REQUIRED_STATUS:
+            count = resolution_payload.get("candidate_total_count") or len(resolution_payload.get("candidates") or [])
+            return f"当前订单条件命中 {count} 个 BOM 候选，请先确认订单或文件实例后再做功率预测。"
+        unresolved = resolution_payload.get("unresolved_items") or []
+        labels = [str(item.get("factor_key")) for item in unresolved if item.get("factor_key")]
+        return f"当前 BOM 配置仍有未确认项：{', '.join(labels) if labels else '未知配置'}。请确认后再执行功率预测。"
 
     def _resolve_core_material_categories(
         self,

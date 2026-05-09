@@ -351,6 +351,83 @@ def test_clarification_audit_driver_id_phone_consistency_is_supported() -> None:
 
 
 
+def test_remark_keyword_fee_ratio_is_supported_before_complex_report_guard() -> None:
+    """验证备注关键词费用占比题不被复杂报表兜底误拦截。
+
+    参数：无。
+    返回值：无；通过断言验证 planner 与 service 进入既有确定性关键词占比计算链路。
+    业务逻辑：题目只要求“倒运/中转”备注关键词费用占历史总费用比例，
+    后端已有 remark 字段与 total_fee 确定性计算方法，不需要生成宽表或透视报表。
+    """
+
+    question = "备注中包含“倒运”或“中转”的记录,其总费用占历史物流总费用的比例是多少?"
+    plan = LogisticsDataQaPlanner().build_plan(question)
+
+    assert plan.query_key == "hist_remark_keyword_fee_ratio"
+    assert not plan.needs_clarification
+    assert plan.filters == {"keywords": ["倒运", "中转"], "default_history_scope": "2023-2025"}
+
+    with SessionLocal() as db:
+        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question))
+
+    assert not result.needs_clarification
+    assert "备注包含倒运/中转" in result.answer_summary
+    assert "占历史总费用" in result.answer_summary
+    assert result.result_table is not None
+    assert {"keywords", "keyword_total_fee", "total_fee", "fee_share_pct"}.issubset(
+        set(result.result_table.columns)
+    )
+
+
+def test_remark_multi_keyword_year_amount_summary_is_supported() -> None:
+    """验证年度备注多关键词记录数和费用金额可确定性汇总。
+
+    参数：无。
+    返回值：无；通过断言验证明确年份、关键词、记录数量和费用金额的问题不再被复杂报表兜底。
+    业务逻辑：历史台账已有 remark 与 total_fee 字段，年度关键词命中记录数和费用金额可直接计算；
+    但该支持仅限汇总，不自动扩展到明细清单或区域/年份交叉报表。
+    """
+
+    question = "请统计2023年备注中包含倒运、中转、换车、压车、放空的记录数量和费用金额？"
+    plan = LogisticsDataQaPlanner().build_plan(question)
+
+    assert plan.query_key == "hist_remark_keyword_amount_summary"
+    assert not plan.needs_clarification
+    assert plan.filters == {
+        "year": 2023,
+        "keywords": ["倒运", "中转", "换车", "压车", "放空"],
+    }
+
+    with SessionLocal() as db:
+        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question))
+
+    assert not result.needs_clarification
+    assert "2023年" in result.answer_summary
+    assert "备注包含倒运/中转/换车/压车/放空" in result.answer_summary
+    assert result.result_table is not None
+    assert {"year", "keywords", "keyword_record_count", "keyword_total_fee"}.issubset(
+        set(result.result_table.columns)
+    )
+
+
+def test_remark_keyword_detail_list_still_requires_clarification() -> None:
+    """验证备注关键词明细清单仍保持澄清边界。
+
+    参数：无。
+    返回值：无；通过断言验证明细字段、线路口径和 TopN 输出未被年度汇总规则误放行。
+    业务逻辑：年度汇总只回答记录数和费用金额；如果用户要求前 50 条明细及线路字段，
+    当前仍需确认明细模板和线路展示口径，不能用汇总结果冒充明细。
+    """
+
+    plan = LogisticsDataQaPlanner().build_plan(
+        "请列出备注中包含“倒运”的前50条明细，包含客户、合同编号、线路、车型、物流公司和费用？"
+    )
+
+    assert plan.needs_clarification
+    assert plan.query_key is None
+    assert "报表模板" in plan.clarification_missing_slots
+
+
 def test_multi_year_monthly_multi_metric_report_requires_clarification() -> None:
     """验证 Q0876 题型进入复杂报表追问边界。
 

@@ -1,0 +1,448 @@
+diff --git a/frontend/src/api/planBom.ts b/frontend/src/api/planBom.ts
+index 49a3402..0051756 100644
+--- a/frontend/src/api/planBom.ts
++++ b/frontend/src/api/planBom.ts
+@@ -152,6 +152,10 @@ export interface PlanBomQaResponse {
+     caveats?: string[]
+     debug?: Record<string, any>
+   } | null
++  nlu?: Record<string, any>
++  raw_result?: Record<string, any>
++  warnings?: string[]
++  trace_events?: Array<Record<string, any>>
+ }
+ 
+ /**
+@@ -170,6 +174,34 @@ export interface PlanBomUploadOptions {
+   source?: string
+   overwrite?: boolean
+   remark?: string
++  onUploadProgress?: (percentage: number) => void
++}
++
++/**
++ * 上传进度事件的最小结构。
++ */
++interface UploadProgressEventLike {
++  loaded: number
++  total?: number
++}
++
++/**
++ * 把浏览器上传进度事件转换为 0-99 的百分比。
++ * 说明：
++ * 1. 请求真正完成后由页面置为 100；
++ * 2. total 缺失时给出中间态，避免界面完全没有反馈；
++ * 3. 不在这里读取或记录任何文件内容。
++ */
++function emitUploadProgress(event: UploadProgressEventLike, callback?: (percentage: number) => void) {
++  if (!callback) return
++  if (event.total && event.total > 0) {
++    const percentage = Math.round((event.loaded / event.total) * 100)
++    callback(Math.max(0, Math.min(99, percentage)))
++    return
++  }
++  if (event.loaded > 0) {
++    callback(50)
++  }
+ }
+ 
+ /**
+@@ -190,6 +222,36 @@ export async function uploadPlanBomExcel(file: File, options: PlanBomUploadOptio
+   }
+   const resp = await http.post('/plan-bom/upload', formData, {
+     headers: { 'Content-Type': 'multipart/form-data' },
++    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
++  })
++  return resp.data
++}
++
++/**
++ * 功率模型导入选项。
++ */
++export interface PlanPowerModelUploadOptions {
++  adminToken?: string
++  onUploadProgress?: (percentage: number) => void
++}
++
++/**
++ * 上传计划 BOM 功率模型 xlsm 文件。
++ * 说明：
++ * 1. 该接口对应后端 /plan-bom/power-model/import，与普通 BOM Excel 上传隔离；
++ * 2. 管理 token 只作为本次请求头透传，不在前端持久化；
++ * 3. 前端不解析、不中转计算 Excel 内容，解析和版本化仍由后端确定性服务完成。
++ */
++export async function uploadPlanPowerModel(file: File, options: PlanPowerModelUploadOptions = {}) {
++  const formData = new FormData()
++  formData.append('file', file)
++  const headers: Record<string, string> = { 'Content-Type': 'multipart/form-data' }
++  if (options.adminToken?.trim()) {
++    headers['X-Plan-Power-Admin-Token'] = options.adminToken.trim()
++  }
++  const resp = await http.post('/plan-bom/power-model/import', formData, {
++    headers,
++    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
+   })
+   return resp.data
+ }
+diff --git a/frontend/src/views/plan-bom/BomDataManagementPage.vue b/frontend/src/views/plan-bom/BomDataManagementPage.vue
+index a89c51d..be8c032 100644
+--- a/frontend/src/views/plan-bom/BomDataManagementPage.vue
++++ b/frontend/src/views/plan-bom/BomDataManagementPage.vue
+@@ -1,21 +1,39 @@
+ <template>
+   <section class="bom-page">
+     <div class="page-head">
+-      <h1>上传 BOM Excel</h1>
+-      <p>.xls / .xlsx / .xlsm</p>
++      <h1>BOM 数据管理</h1>
++      <p>普通 BOM Excel 与功率模型 xlsm 分开上传，避免把两类文件混用。</p>
+     </div>
+ 
+-    <div class="upload-card">
+-      <div class="upload-main">
+-        <input ref="fileInputRef" type="file" accept=".xls,.xlsx,.xlsm" @change="handleFileChange" />
+-        <div class="file-info">
+-          <strong>{{ selectedFile?.name || '请选择 BOM Excel 文件' }}</strong>
+-          <span>{{ selectedFile ? formatFileSize(selectedFile.size) : '上传后即可问答' }}</span>
++    <div class="upload-panel">
++      <div class="panel-head">
++        <h2>上传 BOM Excel</h2>
++        <p>.xls / .xlsx / .xlsm，上传后用于计划 BOM 明细查询和智能问答。</p>
++      </div>
++      <div class="upload-card">
++        <div class="upload-main">
++          <input ref="fileInputRef" type="file" accept=".xls,.xlsx,.xlsm" @change="handleFileChange" />
++          <div class="file-info">
++            <strong>{{ selectedFile?.name || '请选择 BOM Excel 文件' }}</strong>
++            <span>{{ selectedFile ? formatFileSize(selectedFile.size) : '上传后即可问答' }}</span>
++          </div>
+         </div>
++        <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadFile">上传并解析</el-button>
++      </div>
++      <div v-if="uploading || bomUploadProgress > 0" class="upload-progress">
++        <span>BOM 上传进度：{{ bomUploadProgress }}%</span>
++        <el-progress :percentage="bomUploadProgress" />
+       </div>
+-      <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadFile">上传并解析</el-button>
+     </div>
+ 
++    <el-alert
++      v-if="uploadSuccessMessage"
++      :title="uploadSuccessMessage"
++      type="success"
++      show-icon
++      :closable="false"
++    />
++
+     <el-alert
+       v-if="uploadError"
+       :title="uploadError"
+@@ -47,12 +65,89 @@
+       <p class="next-action">{{ uploadResult.next_action || '上传完成后可进入智能问答继续查询。' }}</p>
+     </div>
+ 
++    <div class="upload-panel power-panel">
++      <div class="panel-head">
++        <h2>上传功率模型</h2>
++        <p>仅支持 GCL 功率测试基准 .xlsm，用于功率预测模型版本化入库；不会执行 VBA / 宏。</p>
++      </div>
++      <div class="upload-card upload-card--stacked">
++        <div class="upload-main">
++          <input
++            ref="powerModelFileInputRef"
++            type="file"
++            accept=".xlsm"
++            @change="handlePowerModelFileChange"
++          />
++          <div class="file-info">
++            <strong>{{ powerModelSelectedFile?.name || '请选择功率模型 xlsm 文件' }}</strong>
++            <span>{{ powerModelSelectedFile ? formatFileSize(powerModelSelectedFile.size) : '上传后生成可追溯功率模型版本' }}</span>
++          </div>
++        </div>
++        <div class="admin-token-row">
++          <el-input
++            v-model="powerModelAdminToken"
++            type="password"
++            clearable
++            placeholder="可选：功率模型管理 Token，仅本次请求使用"
++          />
++          <el-button
++            type="success"
++            :disabled="!powerModelSelectedFile"
++            :loading="powerModelUploading"
++            @click="uploadPowerModelFile"
++          >上传功率模型</el-button>
++        </div>
++        <div v-if="powerModelUploading || powerModelUploadProgress > 0" class="upload-progress">
++          <span>功率模型上传进度：{{ powerModelUploadProgress }}%</span>
++          <el-progress :percentage="powerModelUploadProgress" />
++        </div>
++      </div>
++    </div>
++
++    <el-alert
++      v-if="powerModelUploadSuccessMessage"
++      :title="powerModelUploadSuccessMessage"
++      type="success"
++      show-icon
++      :closable="false"
++    />
++
++    <el-alert
++      v-if="powerModelUploadError"
++      :title="powerModelUploadError"
++      type="error"
++      show-icon
++      :closable="false"
++    />
++
++    <div v-if="uploadPowerModelResult" class="result-card power-result-card">
++      <div class="result-title">{{ uploadPowerModelResult.message || '功率模型上传处理完成' }}</div>
++      <div class="summary-grid">
++        <div>
++          <span>版本 ID</span>
++          <strong>{{ uploadPowerModelResult.version?.id ?? '-' }}</strong>
++        </div>
++        <div>
++          <span>解析状态</span>
++          <strong>{{ uploadPowerModelResult.import_status || uploadPowerModelResult.version?.parse_status || '-' }}</strong>
++        </div>
++        <div>
++          <span>Sheet 数</span>
++          <strong>{{ uploadPowerModelResult.detail?.sheet_count ?? '-' }}</strong>
++        </div>
++        <div>
++          <span>Issue 数</span>
++          <strong>{{ uploadPowerModelResult.detail?.issue_count ?? '-' }}</strong>
++        </div>
++      </div>
++      <p class="next-action">功率模型上传后，可由后端激活版本并供计划 BOM 功率预测链路使用。</p>
++    </div>
+   </section>
+ </template>
+ 
+ <script setup lang="ts">
+ import { ref } from 'vue'
+-import { uploadPlanBomExcel } from '@/api/planBom'
++import { uploadPlanBomExcel, uploadPlanPowerModel } from '@/api/planBom'
+ 
+ interface UploadResult {
+   success?: boolean
+@@ -64,18 +159,51 @@ interface UploadResult {
+   next_action?: string
+ }
+ 
++interface PowerModelUploadResult {
++  success?: boolean
++  message?: string
++  import_status?: string
++  version?: {
++    id?: number
++    parse_status?: string
++    is_active?: boolean
++  }
++  detail?: {
++    sheet_count?: number
++    issue_count?: number
++  }
++}
++
+ const fileInputRef = ref<HTMLInputElement | null>(null)
+ const selectedFile = ref<File | null>(null)
+ const uploading = ref(false)
+ const uploadError = ref('')
++const uploadSuccessMessage = ref('')
+ const uploadResult = ref<UploadResult | null>(null)
++const bomUploadProgress = ref(0)
++
++const powerModelFileInputRef = ref<HTMLInputElement | null>(null)
++const powerModelSelectedFile = ref<File | null>(null)
++const powerModelUploading = ref(false)
++const powerModelUploadError = ref('')
++const powerModelUploadSuccessMessage = ref('')
++const uploadPowerModelResult = ref<PowerModelUploadResult | null>(null)
++const powerModelUploadProgress = ref(0)
++const powerModelAdminToken = ref('')
+ 
+ /** 记录用户选择的 BOM 文件，实际解析仍由后端上传接口完成。 */
+ function handleFileChange(event: Event) {
+   const input = event.target as HTMLInputElement
+   selectedFile.value = input.files?.[0] || null
+   uploadError.value = ''
++  uploadSuccessMessage.value = ''
+   uploadResult.value = null
++  bomUploadProgress.value = 0
++}
++
++/** 根据浏览器上报的百分比更新 BOM 上传进度，限制在 0-99，成功响应后再置 100。 */
++function handleBomUploadProgress(percentage: number) {
++  bomUploadProgress.value = Math.max(0, Math.min(99, percentage))
+ }
+ 
+ /** 上传 BOM Excel 到真实后端接口，不在前端伪造解析结果。 */
+@@ -83,24 +211,84 @@ async function uploadFile() {
+   if (!selectedFile.value || uploading.value) return
+   uploading.value = true
+   uploadError.value = ''
++  uploadSuccessMessage.value = ''
+   uploadResult.value = null
++  bomUploadProgress.value = 0
+   try {
+     const resp = await uploadPlanBomExcel(selectedFile.value, {
+       source: 'trial_run_ui',
+       overwrite: true,
+       remark: '业务试运行页面上传',
++      onUploadProgress: handleBomUploadProgress,
+     })
+     uploadResult.value = ((resp as any).data || resp) as UploadResult
++    bomUploadProgress.value = 100
+     if (uploadResult.value?.success === false) {
+-      uploadError.value = uploadResult.value.message || '上传未成功，请检查文件内容。'
++      uploadError.value = `BOM 上传失败：${uploadResult.value.message || '请检查文件内容。'}`
++      return
+     }
++    uploadSuccessMessage.value = `BOM Excel 上传成功：${uploadResult.value?.message || '已完成解析。'}`
+   } catch (error) {
+-    uploadError.value = error instanceof Error ? error.message : '上传失败，请稍后重试。'
++    uploadError.value = `BOM 上传失败：${extractUploadErrorMessage(error)}`
+   } finally {
+     uploading.value = false
+   }
+ }
+ 
++/** 记录用户选择的功率模型文件，并清空上一次上传结果。 */
++function handlePowerModelFileChange(event: Event) {
++  const input = event.target as HTMLInputElement
++  powerModelSelectedFile.value = input.files?.[0] || null
++  powerModelUploadError.value = ''
++  powerModelUploadSuccessMessage.value = ''
++  uploadPowerModelResult.value = null
++  powerModelUploadProgress.value = 0
++}
++
++/** 根据浏览器上报的百分比更新功率模型上传进度，限制在 0-99，成功响应后再置 100。 */
++function handlePowerModelUploadProgress(percentage: number) {
++  powerModelUploadProgress.value = Math.max(0, Math.min(99, percentage))
++}
++
++/** 上传功率模型 xlsm 到后端版本化导入接口；管理 token 只作为本次请求头使用。 */
++async function uploadPowerModelFile() {
++  if (!powerModelSelectedFile.value || powerModelUploading.value) return
++  powerModelUploading.value = true
++  powerModelUploadError.value = ''
++  powerModelUploadSuccessMessage.value = ''
++  uploadPowerModelResult.value = null
++  powerModelUploadProgress.value = 0
++  try {
++    const resp = await uploadPlanPowerModel(powerModelSelectedFile.value, {
++      adminToken: powerModelAdminToken.value,
++      onUploadProgress: handlePowerModelUploadProgress,
++    })
++    uploadPowerModelResult.value = ((resp as any).data || resp) as PowerModelUploadResult
++    powerModelUploadProgress.value = 100
++    if (uploadPowerModelResult.value?.success === false) {
++      powerModelUploadError.value = `功率模型上传失败：${uploadPowerModelResult.value.message || '请检查文件内容。'}`
++      return
++    }
++    powerModelUploadSuccessMessage.value = `功率模型上传成功：${uploadPowerModelResult.value?.message || '已完成版本化导入。'}`
++  } catch (error) {
++    powerModelUploadError.value = `功率模型上传失败：${extractUploadErrorMessage(error)}`
++  } finally {
++    powerModelUploading.value = false
++    powerModelAdminToken.value = ''
++  }
++}
++
++/** 提取上传失败提示，优先展示后端返回的业务 message/detail。 */
++function extractUploadErrorMessage(error: unknown) {
++  const maybeError = error as any
++  return (
++    maybeError?.response?.data?.message ||
++    maybeError?.response?.data?.detail ||
++    maybeError?.message ||
++    '上传失败，请稍后重试。'
++  )
++}
++
+ function formatFileSize(size: number) {
+   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+   return `${(size / 1024 / 1024).toFixed(1)} MB`
+@@ -117,7 +305,7 @@ function formatFileSize(size: number) {
+ }
+ 
+ .page-head,
+-.upload-card,
++.upload-panel,
+ .result-card {
+   border: 1px solid #e5e7eb;
+   border-radius: 16px;
+@@ -146,6 +334,10 @@ p {
+   line-height: 1.7;
+ }
+ 
++.panel-head {
++  margin-bottom: 14px;
++}
++
+ .upload-card {
+   display: flex;
+   align-items: center;
+@@ -153,6 +345,11 @@ p {
+   gap: 16px;
+ }
+ 
++.upload-card--stacked {
++  align-items: stretch;
++  flex-direction: column;
++}
++
+ .upload-main {
+   display: flex;
+   align-items: center;
+@@ -160,6 +357,20 @@ p {
+   min-width: 0;
+ }
+ 
++.upload-progress {
++  display: grid;
++  gap: 8px;
++  margin-top: 14px;
++  color: #4b5563;
++  font-size: 13px;
++}
++
++.admin-token-row {
++  display: grid;
++  grid-template-columns: minmax(280px, 1fr) auto;
++  gap: 12px;
++}
++
+ input {
+   width: 240px;
+   font-size: 13px;
+@@ -216,6 +427,12 @@ input {
+   color: #3f7b50;
+ }
+ 
++.power-panel,
++.power-result-card {
++  border-color: #cdebd6;
++  background: #fbfffc;
++}
++
+ @media (max-width: 1100px) {
+   .bom-page {
+     width: calc(100vw - 32px);
+@@ -229,6 +446,11 @@ input {
+     flex-direction: column;
+   }
+ 
++  .admin-token-row {
++    width: 100%;
++    grid-template-columns: 1fr;
++  }
++
+   .summary-grid {
+     grid-template-columns: repeat(2, minmax(0, 1fr));
+   }

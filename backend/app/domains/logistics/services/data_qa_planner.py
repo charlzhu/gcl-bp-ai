@@ -223,6 +223,25 @@ class LogisticsDataQaPlanner:
                 sort=[{"field": "total_fee", "direction": "desc"}],
             )
 
+        remark_amount_keywords = [keyword for keyword in ("倒运", "中转", "换车", "压车", "放空") if keyword in compact]
+        if (
+            pre_year in {2023, 2024, 2025}
+            and "备注中包含" in compact
+            and remark_amount_keywords
+            and any(keyword in compact for keyword in ("记录数量", "记录数"))
+            and any(keyword in compact for keyword in ("费用金额", "总费用", "费用"))
+            and not any(keyword in compact for keyword in ("按年份拆分", "涉及区域", "前50", "前五十", "明细", "线路"))
+        ):
+            # 年度 remark 多关键词记录数/费用金额是历史台账字段可直接计算的窄汇总；
+            # 明细清单、区域分布和跨年拆分仍交给复杂报表保护规则，避免扩大支持范围。
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="hist_remark_keyword_amount_summary",
+                metrics=["record_count", "total_fee"],
+                dimensions=[],
+                filters={"year": pre_year, "keywords": remark_amount_keywords},
+            )
+
         if self._is_complex_report_question(compact):
             # 宽表、透视表、同比变化和多指标经营汇总属于报表模板能力；
             # 当前不能用单指标 query_key 返回局部数据冒充完整报表。
@@ -2417,6 +2436,16 @@ class LogisticsDataQaPlanner:
         ):
             # 异常费口径涉及费用类型、审核状态和费用率分母，当前必须先追问确认。
             return True
+        if (
+            "备注中包含" in question
+            and "倒运" in question
+            and "中转" in question
+            and any(keyword in question for keyword in ("总费用占", "总运费占", "比例", "占比"))
+            and not any(keyword in question for keyword in ("按年份拆分", "涉及区域", "前50条明细", "明细", "换车", "压车", "放空"))
+        ):
+            # 备注“倒运/中转”费用占历史总费用比例已有专用确定性 query_key；
+            # 不能被宽表/明细类备注关键词保护规则误判为复杂报表。
+            return False
         if (
             "备注中包含" in question
             and any(keyword in question for keyword in ("倒运", "中转", "换车", "压车", "放空"))

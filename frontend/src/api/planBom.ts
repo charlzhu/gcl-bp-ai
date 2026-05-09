@@ -152,6 +152,10 @@ export interface PlanBomQaResponse {
     caveats?: string[]
     debug?: Record<string, any>
   } | null
+  nlu?: Record<string, any>
+  raw_result?: Record<string, any>
+  warnings?: string[]
+  trace_events?: Array<Record<string, any>>
 }
 
 /**
@@ -170,6 +174,34 @@ export interface PlanBomUploadOptions {
   source?: string
   overwrite?: boolean
   remark?: string
+  onUploadProgress?: (percentage: number) => void
+}
+
+/**
+ * 上传进度事件的最小结构。
+ */
+interface UploadProgressEventLike {
+  loaded: number
+  total?: number
+}
+
+/**
+ * 把浏览器上传进度事件转换为 0-99 的百分比。
+ * 说明：
+ * 1. 请求真正完成后由页面置为 100；
+ * 2. total 缺失时给出中间态，避免界面完全没有反馈；
+ * 3. 不在这里读取或记录任何文件内容。
+ */
+function emitUploadProgress(event: UploadProgressEventLike, callback?: (percentage: number) => void) {
+  if (!callback) return
+  if (event.total && event.total > 0) {
+    const percentage = Math.round((event.loaded / event.total) * 100)
+    callback(Math.max(0, Math.min(99, percentage)))
+    return
+  }
+  if (event.loaded > 0) {
+    callback(50)
+  }
 }
 
 /**
@@ -190,6 +222,110 @@ export async function uploadPlanBomExcel(file: File, options: PlanBomUploadOptio
   }
   const resp = await http.post('/plan-bom/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
   })
   return resp.data
+}
+
+/**
+ * 功率模型导入选项。
+ */
+export interface PlanPowerModelUploadOptions {
+  onUploadProgress?: (percentage: number) => void
+}
+
+/**
+ * BOM 上传历史摘要。
+ */
+export interface PlanBomUploadHistoryItem {
+  batch_id: string
+  source_type: string
+  source_tag: string
+  file_name: string
+  file_hash?: string | null
+  status: string
+  total_files: number
+  total_headers: number
+  total_lines: number
+  error_message?: string | null
+  created_at?: string | null
+  finished_at?: string | null
+}
+
+/**
+ * BOM 上传历史响应。
+ */
+export interface PlanBomUploadHistoryResponse {
+  items: PlanBomUploadHistoryItem[]
+  total: number
+}
+
+/**
+ * 功率模型版本摘要。
+ */
+export interface PlanPowerModelVersionSummary {
+  id: number
+  file_name: string
+  file_hash: string
+  source_type: string
+  business_version_label?: string | null
+  formula_policy: string
+  vba_project_sha256?: string | null
+  is_active: boolean
+  parse_status: string
+  sheet_count: number
+  model_sheet_count: number
+  warning_count: number
+  error_count: number
+  created_at?: string | null
+  activated_at?: string | null
+}
+
+/**
+ * 功率模型版本列表响应。
+ */
+export interface PlanPowerModelVersionListResponse {
+  items: PlanPowerModelVersionSummary[]
+  total: number
+}
+
+/**
+ * 上传计划 BOM 功率模型 xlsm 文件。
+ * 说明：
+ * 1. 该接口对应后端 /plan-bom/power-model/import，与普通 BOM Excel 上传隔离；
+ * 2. 临时管理令牌已移除，后续由用户权限模块统一控制上传权限；
+ * 3. 前端不解析、不中转计算 Excel 内容，解析和版本化仍由后端确定性服务完成。
+ */
+export async function uploadPlanPowerModel(file: File, options: PlanPowerModelUploadOptions = {}) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const resp = await http.post('/plan-bom/power-model/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
+  })
+  return resp.data
+}
+
+/**
+ * 查询 BOM Excel 上传历史。
+ */
+export async function fetchPlanBomUploadHistory(limit = 50) {
+  const resp = await http.get('/plan-bom/upload/history', { params: { limit } })
+  return resp.data as { data?: PlanBomUploadHistoryResponse } | PlanBomUploadHistoryResponse
+}
+
+/**
+ * 查询功率模型版本历史。
+ */
+export async function fetchPlanPowerModelVersions() {
+  const resp = await http.get('/plan-bom/power-model/versions')
+  return resp.data as { data?: PlanPowerModelVersionListResponse } | PlanPowerModelVersionListResponse
+}
+
+/**
+ * 手动切换功率模型生效版本。
+ */
+export async function activatePlanPowerModelVersion(versionId: number) {
+  const resp = await http.post(`/plan-bom/power-model/versions/${versionId}/activate`)
+  return resp.data as { data?: PlanPowerModelVersionSummary } | PlanPowerModelVersionSummary
 }

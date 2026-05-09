@@ -1,11 +1,11 @@
 <template>
-  <el-container class="app-shell" data-testid="app-layout">
-    <el-aside class="aside" data-testid="app-sidebar">
-      <div class="brand" data-testid="app-brand">
+  <el-container class="app-shell chatgpt-like-shell" data-testid="app-layout">
+    <el-aside class="aside chatgpt-sidebar" data-testid="app-sidebar">
+      <div class="brand workspace-switcher" data-testid="app-brand">
         <img :src="brandLogoUrl" alt="协鑫集成标识" class="brand-logo" />
         <div class="brand-copy">
-          <div class="brand-title">协鑫集成</div>
-          <div class="brand-name">经营计划智能助手</div>
+          <div class="brand-title">经营计划智能助手</div>
+          <div class="brand-name">协鑫集成 · 生产试运行</div>
         </div>
       </div>
 
@@ -16,6 +16,7 @@
         data-testid="main-navigation"
         @select="handleMenuSelect"
       >
+        <div class="nav-section-label">智能中枢</div>
         <el-sub-menu index="smart-chat" class="chat-submenu" data-testid="nav-smart-chat">
           <template #title>
             <el-icon><ChatDotRound /></el-icon>
@@ -38,6 +39,7 @@
             <span class="session-title" :title="session.title">{{ session.title }}</span>
           </el-menu-item>
         </el-sub-menu>
+        <div class="nav-section-label">数据治理</div>
         <el-menu-item index="/bom-data" data-testid="nav-bom-data">
           <el-icon><Files /></el-icon>
           <span>BOM 数据管理</span>
@@ -64,10 +66,11 @@
       </div>
     </el-aside>
 
-    <el-container class="content-shell">
+    <el-container class="content-shell chatgpt-canvas">
       <el-header class="topbar" data-testid="app-topbar">
         <div class="topbar-copy">
           <div class="topbar-title">{{ headerMeta.title }}</div>
+          <div class="topbar-subtitle">{{ headerMeta.description }}</div>
         </div>
         <div class="topbar-status">
           <span class="status-dot" />
@@ -130,18 +133,18 @@ const headerMeta = computed(() => {
   if (activePath.value === '/bom-data') {
     return {
       title: 'BOM 数据管理',
-      description: '',
+      description: '上传治理、版本追溯与模型生效管理',
     }
   }
   if (activePath.value === '/trial-guide') {
     return {
       title: '试运行说明',
-      description: '',
+      description: '试运行范围、验收口径与操作边界',
     }
   }
   return {
     title: '智能问答',
-    description: '',
+    description: '经营计划、物流与计划 BOM 的统一问答入口',
   }
 })
 
@@ -245,28 +248,44 @@ onBeforeUnmount(() => {
 .app-shell {
   height: 100vh;
   box-sizing: border-box;
-  background: #ffffff;
+  background: var(--chatgpt-bg);
   color: #1f2933;
   overflow: hidden;
 }
 
+.chatgpt-like-shell {
+  --el-color-primary: var(--accent-blue);
+  background: var(--chatgpt-bg);
+}
+
 .aside {
-  width: 284px;
+  width: 282px;
   height: 100vh;
-  border-right: 1px solid #eceff3;
-  background: #f7f8fa;
-  padding: 18px 12px;
+  border-right: 1px solid #ececec;
+  background: var(--chatgpt-sidebar);
+  padding: 12px;
   display: flex;
   flex-direction: column;
+}
+
+.chatgpt-sidebar {
+  box-shadow: inset -1px 0 0 rgba(0, 0, 0, 0.02);
 }
 
 .brand {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 8px 14px;
-  border-bottom: 1px solid #e5e7eb;
-  margin-bottom: 4px;
+  padding: 8px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  margin-bottom: 8px;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.workspace-switcher:hover {
+  background: #ffffff;
+  border-color: #ececec;
 }
 
 .brand-logo {
@@ -280,15 +299,16 @@ onBeforeUnmount(() => {
 }
 
 .brand-title {
-  font-size: 12px;
-  color: #7a828c;
+  font-size: 14px;
+  font-weight: 650;
+  color: #111827;
   line-height: 1.45;
 }
 
 .brand-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #1f2a37;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6b7280;
   line-height: 1.45;
 }
 
@@ -299,6 +319,14 @@ onBeforeUnmount(() => {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.nav-section-label {
+  margin: 14px 10px 8px;
+  color: #8a94a3;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
 }
 
 :deep(.menu .el-menu-item) {
@@ -315,7 +343,7 @@ onBeforeUnmount(() => {
 }
 
 :deep(.menu .el-menu-item.is-active) {
-  background: #ebedef;
+  background: #ececf1;
   color: #111827;
 }
 
@@ -338,12 +366,12 @@ onBeforeUnmount(() => {
 }
 
 :deep(.chat-submenu .el-menu-item.is-active) {
-  background: #e8f0ec;
-  color: var(--brand-green-strong);
+  background: #ececf1;
+  color: #111827;
   position: relative;
 }
 
-/* 活跃会话项左侧绿色竖条指示 */
+/* 活跃会话项使用蓝紫渐变细条，避免全局视觉只剩绿色。 */
 :deep(.chat-submenu .el-menu-item.is-active::before) {
   content: '';
   position: absolute;
@@ -353,7 +381,7 @@ onBeforeUnmount(() => {
   width: 3px;
   height: 20px;
   border-radius: 2px;
-  background: var(--brand-green);
+  background: linear-gradient(180deg, var(--accent-blue), var(--accent-violet));
 }
 
 .chat-new-item {
@@ -362,7 +390,7 @@ onBeforeUnmount(() => {
 
 .new-chat-symbol {
   width: 16px;
-  color: #5f8f6b;
+  color: var(--accent-blue);
   font-size: 18px;
   line-height: 1;
 }
@@ -429,10 +457,11 @@ onBeforeUnmount(() => {
   width: fit-content;
   margin: 8px;
   padding: 8px 14px;
+  border: 1px solid #ececec;
   border-radius: var(--radius-md);
-  background: var(--success-bg);
+  background: #ffffff;
   font-size: 12px;
-  color: var(--brand-green);
+  color: #4b5563;
   font-weight: 500;
 }
 
@@ -443,22 +472,32 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
+.chatgpt-canvas {
+  background: var(--chatgpt-panel);
+}
+
 .topbar {
-  height: 64px;
-  padding: 0 28px;
+  height: 56px;
+  padding: 0 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 1px solid #f0f1f3;
-  background: rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(12px);
+  border-bottom: 1px solid #ececec;
+  background: rgba(255, 255, 255, 0.94);
+  backdrop-filter: blur(16px);
 }
 
 .topbar-title {
-  font-size: 18px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 650;
   color: #111827;
   line-height: 1.35;
+}
+
+.topbar-subtitle {
+  margin-top: 2px;
+  color: #6b7280;
+  font-size: 12px;
 }
 
 .topbar-status {
@@ -467,8 +506,8 @@ onBeforeUnmount(() => {
   gap: 8px;
   padding: 6px 10px;
   border-radius: 999px;
-  background: #f3f8f5;
-  color: #3f7b50;
+  background: #f6f7f9;
+  color: #4b5563;
   font-size: 12px;
   font-weight: 500;
   white-space: nowrap;
@@ -478,7 +517,7 @@ onBeforeUnmount(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: #4b9b52;
+  background: var(--accent-mint);
 }
 
 .main {

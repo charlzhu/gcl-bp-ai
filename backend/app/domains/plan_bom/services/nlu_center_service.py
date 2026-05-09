@@ -9,6 +9,7 @@ from openai import OpenAI
 
 from backend.app.core.config import settings
 from backend.app.domains.plan_bom.constants import CORE_MATERIAL_CATEGORIES
+from backend.app.domains.plan_bom.models import PlanPowerModelSheet, PlanPowerModelVersion, PlanPowerSupplierEfficiencyDistribution
 from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
 from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate
 
@@ -34,10 +35,13 @@ class PlanBomNluCenterService:
         "material_presence_check",
         "material_consistency_check",
         "supplier_reuse_quote_prepare",
+        "plan_power_prediction",
+        "plan_power_supplier_recommendation",
         "power_cell_requirement",
         "unsupported",
         "clarification",
     }
+    POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation"}
     INTENT_ALIASES = {
         "单订单关键材料规格查询": "single_order_material_specs",
         "单订单材料规格查询": "single_order_material_specs",
@@ -56,8 +60,12 @@ class PlanBomNluCenterService:
         "某类物料规格是否一致": "material_consistency_check",
         "材料一致性检查": "material_consistency_check",
         "供应商物料复用询价准备": "supplier_reuse_quote_prepare",
-        "功率电池需求": "power_cell_requirement",
-        "功率/电池片需求类问题": "power_cell_requirement",
+        "功率预测": "plan_power_prediction",
+        "功率档位分布预测": "plan_power_prediction",
+        "供应商功率推荐": "plan_power_supplier_recommendation",
+        "目标功率供应商推荐": "plan_power_supplier_recommendation",
+        "功率电池需求": "plan_power_supplier_recommendation",
+        "功率/电池片需求类问题": "plan_power_supplier_recommendation",
         "无法基于当前BOM数据回答的问题": "unsupported",
         "无法回答": "unsupported",
         "需要追问": "clarification",
@@ -139,6 +147,10 @@ class PlanBomNluCenterService:
         slots["model"] = self._extract_model(normalized)
         slots["year"] = self._extract_year(normalized)
         slots["country"] = self._extract_country(normalized)
+        slots["target_power_ratio"] = self._extract_target_power_ratio(normalized)
+        slots["supplier_name"] = self._extract_supplier_name(normalized)
+        slots["benchmark"] = self._extract_benchmark(normalized)
+        slots["explicit_power_configuration"] = self._extract_explicit_power_configuration(normalized)
         slots["need_table"] = any(word in normalized for word in ("表格", "清单", "列表", "统计出来", "列出来"))
         slots["need_excel"] = any(word.lower() in normalized.lower() for word in ("excel", "导表", "导出"))
         slots["output_format"] = "excel" if slots["need_excel"] else ("table" if slots["need_table"] else "narrative")
@@ -167,8 +179,16 @@ class PlanBomNluCenterService:
             受控 intent 编码。
         """
 
-        if any(word in question for word in ("功率预测", "满足订单需求功率", "需要什么样的电池", "功率倒推")):
-            return "power_cell_requirement"
+        if self._is_power_question(question) or (
+            slots.get("target_power_ratio")
+            and (slots.get("model") or slots.get("supplier_name") or slots.get("explicit_power_configuration") or slots.get("order_tail_no"))
+        ):
+            if slots.get("target_power_ratio") or any(
+                word in question
+                for word in ("推荐供应商", "供应商推荐", "推荐电池", "匹配度", "目标功率", "目标比例", "目标", "占比")
+            ):
+                return "plan_power_supplier_recommendation"
+            return "plan_power_prediction"
         if "到" in question and len(slots.get("bom_version") or []) >= 2:
             return "bom_version_compare"
         if any(word in question for word in ("版本", "A0", "A1", "A2", "A3", "变更")) and len(slots.get("bom_version") or []) >= 2:
@@ -199,6 +219,11 @@ class PlanBomNluCenterService:
         """
 
         missing: list[str] = []
+        has_explicit_power_config = bool(slots.get("model") and slots.get("explicit_power_configuration"))
+        if intent in {"plan_power_prediction", "plan_power_supplier_recommendation"} and not slots.get("order_tail_no") and not has_explicit_power_config:
+            missing.append("order_id")
+        if intent == "plan_power_supplier_recommendation" and not slots.get("target_power_ratio"):
+            missing.append("target_power_ratio")
         if intent in {"single_order_material_specs", "specific_material_query", "bom_version_compare"} and not slots.get("order_tail_no"):
             missing.append("order_id")
         if intent in {"multi_order_material_table", "cross_order_material_compare"} and len(slots.get("order_tail_no") or []) < 2:
@@ -259,6 +284,7 @@ class PlanBomNluCenterService:
             return rule_candidate
 
         validated_slots = dict(rule_candidate.slots)
+        is_power_intent = intent in self.POWER_INTENTS or rule_candidate.intent in self.POWER_INTENTS
         rejected_reasons: list[str] = []
         if "material_category" in slot_candidate:
             llm_core_materials, llm_non_core_materials = self._normalize_material_candidates(
@@ -276,7 +302,10 @@ class PlanBomNluCenterService:
         if "order_tail_no" in slot_candidate:
             tails = [self._normalize_order_tail(str(item)) for item in slot_candidate.get("order_tail_no") or []]
             tails = [item for item in tails if item]
-            if tails and self._all_order_tails_exist(tails):
+            rule_tails = rule_candidate.slots.get("order_tail_no") or []
+            if is_power_intent and tails != rule_tails:
+                rejected_reasons.append("功率预测类问题的 LLM 订单候选未与规则层原文抽取完全一致，未采纳订单槽位。")
+            elif tails and self._all_order_tails_exist(tails):
                 validated_slots["order_tail_no"] = tails
                 validated_slots["compare_orders"] = tails
             else:
@@ -287,6 +316,33 @@ class PlanBomNluCenterService:
                 validated_slots["bom_version"] = versions
             elif versions:
                 rule_candidate.guardrail_notes.append("LLM BOM 版本候选未通过问题原文或 BOM 版本索引校验，未采纳版本槽位。")
+        if "target_power_ratio" in slot_candidate:
+            target = self._normalize_target_power_ratio(slot_candidate.get("target_power_ratio"))
+            rule_target = rule_candidate.slots.get("target_power_ratio") or {}
+            if target and self._target_ratio_matches_rule(target, rule_target):
+                validated_slots["target_power_ratio"] = target
+            elif target:
+                rule_candidate.guardrail_notes.append(
+                    "LLM 目标功率比例候选未完全出现在规则层抽取结果中，未采纳目标比例槽位。"
+                )
+            else:
+                rule_candidate.guardrail_notes.append("LLM 目标功率比例候选未通过数字校验，未采纳目标比例槽位。")
+        if "supplier_name" in slot_candidate:
+            supplier = self._normalize_supplier_candidate(slot_candidate.get("supplier_name"))
+            rule_supplier = rule_candidate.slots.get("supplier_name")
+            if is_power_intent and supplier != rule_supplier:
+                rule_candidate.guardrail_notes.append("功率预测类问题的 LLM 供应商候选未与规则层原文抽取一致，未采纳供应商槽位。")
+            elif supplier:
+                validated_slots["supplier_name"] = supplier
+            else:
+                rule_candidate.guardrail_notes.append("LLM 供应商候选未命中 active 功率模型供应商，未采纳供应商槽位。")
+        if "benchmark" in slot_candidate:
+            benchmark = self._canonical_benchmark(str(slot_candidate.get("benchmark") or ""))
+            rule_benchmark = rule_candidate.slots.get("benchmark")
+            if is_power_intent and benchmark != rule_benchmark:
+                rule_candidate.guardrail_notes.append("功率预测类问题的 LLM 标板候选未与规则层原文抽取一致，未采纳标板槽位。")
+            elif benchmark:
+                validated_slots["benchmark"] = benchmark
         if rejected_reasons:
             rule_candidate.guardrail_notes.extend(rejected_reasons)
             rule_candidate.guardrail_notes.append("LLM 候选被拒绝，已保持规则层边界。")
@@ -294,7 +350,13 @@ class PlanBomNluCenterService:
 
         final_intent = intent
         final_missing = self._detect_missing_slots(intent, validated_slots)
-        if intent != rule_candidate.intent and final_missing and not rule_candidate.missing_slots:
+        if is_power_intent and rule_candidate.intent in self.POWER_INTENTS and intent != rule_candidate.intent:
+            # 功率预测 / 推荐的边界影响后续 M3 调用形态；LLM 只能辅助理解，不能把规则层已闭合的推荐改成预测，
+            # 也不能把预测改成推荐来绕过缺槽保护。
+            final_intent = rule_candidate.intent
+            final_missing = self._detect_missing_slots(final_intent, validated_slots)
+            rule_candidate.guardrail_notes.append(f"功率预测类问题的 LLM intent 与规则层冲突，保持规则层 intent：{rule_candidate.intent}。")
+        elif intent != rule_candidate.intent and final_missing and not rule_candidate.missing_slots:
             # LLM 候选不能把规则层已闭合的问题改成缺槽问题；这种冲突保持规则 intent，避免安全可答问题被降级。
             final_intent = rule_candidate.intent
             final_missing = self._detect_missing_slots(final_intent, validated_slots)
@@ -396,6 +458,253 @@ class PlanBomNluCenterService:
             if not self.repository.list_active_headers(order_no_like=tail, order_name_like=tail):
                 return False
         return True
+
+    @staticmethod
+    def _is_power_question(question: str) -> bool:
+        """判断问题是否属于计划 BOM 功率预测子能力。
+
+        参数：
+            question: 用户问题。
+
+        返回：
+            命中功率预测、目标功率、供应商推荐等关键词时返回 True。
+        """
+        power_words = (
+            "功率预测",
+            "功率档",
+            "功率分布",
+            "目标功率",
+            "目标比例",
+            "需求占比",
+            "占比",
+            "电池效率",
+            "效率段",
+            "供应商推荐",
+            "推荐供应商",
+            "各家供应商",
+            "哪些家电池",
+            "哪几家电池",
+            "哪个效率",
+            "用供应商",
+            "需要什么样的电池",
+            "电池可以满足",
+            "功率倒推",
+            "满足订单需求功率",
+        )
+        return any(word in question for word in power_words)
+
+    @staticmethod
+    def _extract_target_power_ratio(question: str) -> dict[str, float]:
+        """从自然语言中抽取目标功率档比例。
+
+        参数：
+            question: 用户问题，例如“目标620W 50%，625W 50%”“620:625 1:1”“715和720 2:8”。
+
+        返回：
+            `{功率档: 比例}` 字典。比例保留用户原始占比数值，后续推荐服务会归一化。
+        """
+        target: dict[str, float] = {}
+
+        def put(power_value: str | float, ratio_value: str | float) -> None:
+            """写入一个功率档比例；非法数字或非正比例直接忽略。"""
+            try:
+                power = float(power_value)
+                ratio = float(ratio_value)
+            except (TypeError, ValueError):
+                return
+            if ratio <= 0:
+                return
+            key = str(int(power)) if power.is_integer() else str(power)
+            target[key] = ratio
+
+        pair_patterns = [
+            # 业务常用写法：715:720=2:8、620:625 1:1、715和720 2:8。
+            r"(?P<p1>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?\s*(?:和|与|及|、|/|:|：)\s*"
+            r"(?P<p2>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?\s*(?:=|按|目标|比例|占比|需求占比|各占|\s)*"
+            r"(?P<r1>\d+(?:\.\d+)?)\s*[:：]\s*(?P<r2>\d+(?:\.\d+)?)",
+            # 业务口语写法：620W 50%，625W 50%。
+            r"(?P<power>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?\s*(?:占|比例|目标|为|是|各)?\s*(?P<ratio>\d+(?:\.\d+)?)\s*%",
+        ]
+        for match in re.finditer(pair_patterns[0], question):
+            put(match.group("p1"), match.group("r1"))
+            put(match.group("p2"), match.group("r2"))
+        for match in re.finditer(pair_patterns[1], question):
+            put(match.group("power"), match.group("ratio"))
+
+        half_match = re.search(
+            r"(?P<p1>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?\s*(?:和|与|及|、|/|:|：)\s*"
+            r"(?P<p2>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?[^。；;，,]{0,12}(?:各占一半|各一半|一半一半|各50%|各 50%)",
+            question,
+        )
+        if half_match:
+            put(half_match.group("p1"), 1)
+            put(half_match.group("p2"), 1)
+        return target
+
+    @staticmethod
+    def _extract_explicit_power_configuration(question: str) -> dict[str, str]:
+        """抽取用户直接写在问题中的功率模型配置项。
+
+        参数：
+            question: 用户问题，支持“焊带：0.24+玻璃：双镀+汇流条：...+接线盒：300/200”等 docx 问法。
+
+        返回：
+            可交给 M4 显式配置解析的配置字典；这里只做文本槽位抽取，不做数值计算。
+        """
+        config: dict[str, str] = {}
+        extractors = {
+            "ribbon": r"焊带\s*[:：]?\s*(?P<value>.+?)(?=\+?玻璃|[，,；;。]|$)",
+            "glass": r"玻璃\s*[:：]?\s*(?P<value>.+?)(?=\+?汇流条|\+?接线盒|[，,；;。]|$)",
+            "busbar": r"汇流条\s*[:：]?\s*(?P<value>.+?)(?=\+?接线盒|[，,；;。]|$)",
+            "cable": r"接线盒\s*[:：]?\s*(?P<value>.+?)(?=\s*[，,；;。]|\s*标板|$)",
+        }
+        for key, pattern in extractors.items():
+            match = re.search(pattern, question, flags=re.IGNORECASE)
+            if match:
+                value = match.group("value").strip().strip("+").strip()
+                if value:
+                    config[key] = value
+        benchmark = PlanBomNluCenterService._extract_benchmark(question)
+        if benchmark:
+            config["benchmark"] = benchmark
+        return config
+
+    def _extract_supplier_name(self, question: str) -> str | None:
+        """从问题中抽取已存在于 active 功率模型的供应商。
+
+        参数：
+            question: 用户问题。
+
+        返回：
+            命中的供应商名称；未命中时返回 None。
+        """
+        suppliers = self._active_power_suppliers()
+        normalized = question.replace(" ", "")
+        all_supplier_markers = (
+            "各家",
+            "所有供应商",
+            "全部供应商",
+            "所有电池供应商",
+            "全部电池供应商",
+            "各家电池供应商",
+            "各个电池供应商",
+            "所有电池厂家",
+            "全部电池厂家",
+            "哪些家",
+            "哪几家",
+            "各个供应商",
+        )
+        asks_all_suppliers = any(marker in normalized for marker in all_supplier_markers)
+        for supplier in sorted(suppliers, key=len, reverse=True):
+            supplier_key = supplier.replace(" ", "")
+            if supplier and supplier_key in normalized:
+                if asks_all_suppliers:
+                    # “通威、爱旭、时创等各家电池”这类 docx 派生问法是在举例要求全供应商，
+                    # 不能把第一个命中的供应商误当作筛选条件；真正指定单供应商的问法通常不会带“各家/哪些家”。
+                    return None
+                return supplier
+        return None
+
+    @staticmethod
+    def _extract_benchmark(question: str) -> str | None:
+        """抽取并归一化标板基准表达。
+
+        参数：
+            question: 用户问题。
+
+        返回：
+            当前业务确认的标板基准归一值；未命中时返回 None。
+        """
+        return PlanBomNluCenterService._canonical_benchmark(question)
+
+    @staticmethod
+    def _canonical_benchmark(value: str) -> str | None:
+        """归一化标板基准别名。"""
+        text = value.strip()
+        if not text:
+            return None
+        if any(alias in text for alias in ("TÜV北德", "TUV北德", "新北德", "北德")):
+            return "新北德"
+        if "计量院" in text:
+            return "中国计量院"
+        if "莱茵" in text:
+            return "莱茵基准"
+        return None
+
+    def _normalize_supplier_candidate(self, value: Any) -> str | None:
+        """校验 LLM 或规则抽取出的供应商是否存在于 active 功率模型。"""
+        raw_values = value if isinstance(value, list) else [value]
+        suppliers = self._active_power_suppliers()
+        for raw in raw_values:
+            text = str(raw or "").replace(" ", "")
+            for supplier in sorted(suppliers, key=len, reverse=True):
+                if supplier and supplier.replace(" ", "") == text:
+                    return supplier
+        return None
+
+    @staticmethod
+    def _normalize_target_power_ratio(value: Any) -> dict[str, float]:
+        """校验并归一 LLM 候选目标功率比例。"""
+        if not isinstance(value, dict):
+            return {}
+        result: dict[str, float] = {}
+        for key, raw_ratio in value.items():
+            try:
+                power = float(key)
+                ratio = float(raw_ratio)
+            except (TypeError, ValueError):
+                continue
+            if ratio <= 0:
+                continue
+            normalized_key = str(int(power)) if power.is_integer() else str(power)
+            result[normalized_key] = ratio
+        return result
+
+    @staticmethod
+    def _target_ratio_matches_rule(candidate: dict[str, float], rule_target: dict[str, float]) -> bool:
+        """校验 LLM 目标功率比例是否完全来自规则层抽取。
+
+        参数：
+            candidate: LLM 候选目标比例；
+            rule_target: 从问题原文用确定性正则抽取的目标比例。
+
+        返回：
+            所有功率档和比例均与规则层一致时返回 True；否则返回 False。
+        """
+        if not candidate or not rule_target:
+            return False
+        if set(candidate) != set(rule_target):
+            return False
+        return all(abs(float(candidate[key]) - float(rule_target[key])) <= 1e-9 for key in candidate)
+
+    def _active_power_suppliers(self) -> list[str]:
+        """读取当前 active 功率模型供应商名称列表。
+
+        返回：
+            去重后的供应商名称。异常时返回空列表，避免 NLU 层影响主问答链路。
+        """
+        try:
+            version = (
+                self.repository.db.query(PlanPowerModelVersion)
+                .filter(PlanPowerModelVersion.is_active == 1)
+                .order_by(PlanPowerModelVersion.id.desc())
+                .first()
+            )
+            if version is None:
+                return []
+            rows = (
+                self.repository.db.query(PlanPowerSupplierEfficiencyDistribution.supplier_name)
+                .join(PlanPowerModelSheet, PlanPowerModelSheet.id == PlanPowerSupplierEfficiencyDistribution.sheet_id)
+                .filter(
+                    PlanPowerModelSheet.version_id == version.id,
+                    PlanPowerSupplierEfficiencyDistribution.is_valid == 1,
+                )
+                .distinct()
+                .all()
+            )
+            return [str(row[0]) for row in rows if row[0]]
+        except Exception:  # noqa: BLE001
+            return []
 
     def _extract_order_tails(self, question: str) -> list[str]:
         """抽取订单号和短编号。
@@ -514,8 +823,8 @@ class PlanBomNluCenterService:
             型号字符串；未命中时返回 None。
         """
 
-        match = re.search(r"NT[0-9A-Z]+/[0-9A-Z]+GDF|NT[0-9A-Z]+GDF", question, flags=re.I)
-        return match.group(0).upper() if match else None
+        match = re.search(r"NT[0-9A-Z]+[-/][0-9A-Z]+GDF|NT[0-9A-Z]+GDF", question, flags=re.I)
+        return match.group(0).upper().replace("/", "-") if match else None
 
     @staticmethod
     def _extract_year(question: str) -> int | None:
@@ -598,7 +907,7 @@ class PlanBomNluCenterService:
             "你不能改变 A/B/C 边界；信息不足时只输出 missing_slots 候选，不要强行补全。\n"
             "订单必须尽量从用户问题原文提取，不要自行补全不存在的订单号。\n"
             f"intent_candidate 只能取：{sorted(self.INTENTS)}。\n"
-            "slot_candidate 可包含 order_tail_no、model、customer、country、year、bom_version、material_category、output_format、need_table、need_excel、missing_slots。\n"
+            "slot_candidate 可包含 order_tail_no、model、customer、country、year、bom_version、material_category、target_power_ratio、supplier_name、benchmark、output_format、need_table、need_excel、missing_slots。\n"
             f"material_category 必须优先取核心五类：{sorted(CORE_MATERIAL_CATEGORIES)}；如用户明确问非核心材料，只输出原始候选，不能自行扩展成核心材料。\n"
             "严格输出单个 JSON 对象，不要 markdown，不要解释性自然语言。\n"
             "示例：{\"intent_candidate\":\"single_order_material_specs\",\"slot_candidate\":{\"order_tail_no\":[\"00104\"],\"material_category\":[\"glass\",\"junction_box\"],\"need_table\":true},\"confidence\":0.85}"

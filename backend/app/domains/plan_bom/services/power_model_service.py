@@ -87,11 +87,7 @@ class PowerModelService:
         file_hash = hashlib.sha256(content).hexdigest()
         existing = self.repository.get_by_file_hash(file_hash)
         if existing is not None:
-            return PowerModelImportResult(
-                import_status="existing",
-                version=self.repository.version_to_dict(existing),
-                detail=self.repository.get_detail_payload(existing.id),
-            )
+            return self._activate_imported_version(import_status="existing", version_id=existing.id)
 
         try:
             parsed = self.parser.parse_bytes(content, file_name=file_name, file_hash=file_hash)
@@ -102,16 +98,39 @@ class PowerModelService:
         except IntegrityError:
             existing_after_race = self.repository.get_by_file_hash(file_hash)
             if existing_after_race is not None:
-                return PowerModelImportResult(
-                    import_status="existing",
-                    version=self.repository.version_to_dict(existing_after_race),
-                    detail=self.repository.get_detail_payload(existing_after_race.id),
-                )
+                return self._activate_imported_version(import_status="existing", version_id=existing_after_race.id)
             raise
+        return self._activate_imported_version(import_status="created", version_id=version.id)
+
+    def _activate_imported_version(self, *, import_status: str, version_id: int) -> PowerModelImportResult:
+        """将本次上传对应的功率模型版本设为生效并组装导入结果。
+
+        参数：
+            import_status: created / existing，保留幂等导入语义；
+            version_id: 本次上传对应的版本 ID。
+
+        返回：
+            含 active 状态的导入结果。
+
+        关键业务逻辑：
+            业务要求“默认生效最新上传版本”。因此本次上传若解析成功或仅有 warning，
+            就把该上传对应版本切为 active，保证后续功率预测链路读取到用户最后上传的有效版本。
+            若解析失败，则只保留失败版本历史，不覆盖当前可用 active 版本。
+        """
+        version = self.repository.get_version(version_id)
+        if version is None:
+            raise ValueError(f"功率模型版本不存在：{version_id}")
+        if version.parse_status == "failed" or version.error_count:
+            return PowerModelImportResult(
+                import_status=import_status,
+                version=self.repository.version_to_dict(version),
+                detail=self.repository.get_detail_payload(version_id),
+            )
+        activated = self.repository.activate_version(version_id)
         return PowerModelImportResult(
-            import_status="created",
-            version=self.repository.version_to_dict(version),
-            detail=self.repository.get_detail_payload(version.id),
+            import_status=import_status,
+            version=self.repository.version_to_dict(activated),
+            detail=self.repository.get_detail_payload(version_id),
         )
 
     def list_versions(self) -> list[dict[str, Any]]:

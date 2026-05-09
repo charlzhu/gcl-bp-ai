@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "model_aliases": {
+    "NT10/72GDF": "NT10-72GDF",
+    "NT10/78GDF": "NT10-78GDF",
+    "NT12/66GDF": "NT12-66GDF",
+    "NT12R/66GDF": "NT12R-66GDF",
+    "NT12R/78GDF": "NT12R-78GDF",
+    "NT12R/48GDF": "NT12R-48GDF",
+    "NT12R/48BGDF": "NT12R-48BGDF",
+    "NT12R/54GDF": "NT12R-54GDF",
+    "NT12R/54BGDF": "NT12R-54BGDF"
+  },
+  "benchmark_aliases": {
+    "北德": "北德基准",
+    "新北德": "北德基准",
+    "TÜV北德": "北德基准",
+    "TUV北德": "北德基准",
+    "莱茵": "莱茵基准",
+    "莱茵基准": "莱茵基准",
+    "计量院": "中国计量院",
+    "中国计量院": "中国计量院"
+  },
+  "option_aliases": {
+    "glass": {
+      "单镀+间隙贴膜": "单镀+间隙铝膜",
+      "双镀+间隙贴膜": "双镀+间隙铝膜",
+      "间隙贴膜": "间隙铝膜"
+    },
+    "cable": {}
+  }
+}

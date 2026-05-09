@@ -947,6 +947,48 @@ class LogisticsDataQaRepository:
             "top_months": [dict(row) for row in month_rows],
         }
 
+    def hist_remark_keyword_amount_summary(self, *, year: int, keywords: list[str]) -> dict[str, Any]:
+        """历史备注多关键词年度记录数与费用金额汇总。
+
+        参数：
+            year: 历史台账年份，仅支持 2023-2025。
+            keywords: 需要在 remark 字段中匹配的关键词列表。
+
+        返回：
+            包含年份、关键词、命中记录数、命中费用金额和年度总记录数的字典。
+
+        业务逻辑：
+            1. 该方法只做窄汇总，不生成明细清单或区域/年份透视表；
+            2. 多关键词之间按 OR 匹配，避免同一记录同时包含多个关键词时被重复计数；
+            3. SQL 参数全部走绑定参数，关键词不拼接进 SQL 文本。
+        """
+
+        keyword_filters = []
+        params: dict[str, Any] = {"year": year}
+        for idx, keyword in enumerate(keywords):
+            key = f"keyword_{idx}"
+            keyword_filters.append(f"remark LIKE :{key}")
+            params[key] = f"%{keyword}%"
+        keyword_sql = " OR ".join(keyword_filters) or "1=0"
+        row = self.db.execute(
+            text(
+                f"""
+                SELECT
+                    :year AS year,
+                    SUM(CASE WHEN {keyword_sql} THEN 1 ELSE 0 END) AS keyword_record_count,
+                    ROUND(SUM(CASE WHEN {keyword_sql} THEN total_fee ELSE 0 END), 0) AS keyword_total_fee,
+                    COUNT(*) AS total_record_count
+                FROM dwd_logistics_hist_shipment_detail
+                WHERE biz_year = :year
+                """
+            ),
+            params,
+        ).mappings().first()
+        payload = dict(row or {})
+        payload["year"] = year
+        payload["keywords"] = keywords
+        return payload
+
     def hist_remark_keyword_fee_ratio(self, *, keywords: list[str]) -> dict[str, Any]:
         """历史备注关键词费用占比。
 

@@ -57,4 +57,34 @@ class PlanBomImportReport(BaseModel):
     warnings: list[PlanBomImportIssue] = Field(default_factory=list)
 
 
-__all__ = ["PlanBomImportIssue", "PlanBomImportReport", "PlanBomImportStatus"]
+class PlanBomUploadHistoryItem(BaseModel):
+    """计划 BOM 上传历史摘要。"""
+
+    batch_id: str
+    source_type: str
+    source_tag: str
+    file_name: str
+    file_hash: str | None = None
+    status: str
+    total_files: int = 0
+    total_headers: int = 0
+    total_lines: int = 0
+    error_message: str | None = None
+    created_at: str | None = None
+    finished_at: str | None = None
+
+
+class PlanBomUploadHistoryResponse(BaseModel):
+    """计划 BOM 上传历史响应。"""
+
+    items: list[PlanBomUploadHistoryItem]
+    total: int
+
+
+__all__ = [
+    "PlanBomImportIssue",
+    "PlanBomImportReport",
+    "PlanBomImportStatus",
+    "PlanBomUploadHistoryItem",
+    "PlanBomUploadHistoryResponse",
+]

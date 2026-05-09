@@ -903,6 +903,31 @@ class LogisticsDataQaService:
                 warnings=warnings,
             )
 
+        if plan.query_key == "hist_remark_keyword_amount_summary":
+            data = self.repository.hist_remark_keyword_amount_summary(
+                year=int(filters["year"]),
+                keywords=filters["keywords"],
+            )
+            keywords_text = "/".join(filters["keywords"])
+            summary = (
+                f"{int(filters['year'])}年历史台账备注包含{keywords_text}的记录数量为"
+                f"{int(data.get('keyword_record_count') or 0):,}条，费用金额为"
+                f"{int(data.get('keyword_total_fee') or 0):,}元。"
+            )
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=["year", "keywords", "keyword_record_count", "keyword_total_fee", "total_record_count"],
+                table_rows=[data],
+                calculation_logic=[
+                    "按 dwd_logistics_hist_shipment_detail.biz_year 限定历史年份。",
+                    "在 remark 字段中按关键词 OR 匹配，命中记录只计数一次。",
+                    "费用金额按命中记录的 total_fee 汇总。",
+                ],
+                data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+                warnings=warnings,
+            )
+
         if plan.query_key == "hist_remark_keyword_fee_ratio":
             data = self.repository.hist_remark_keyword_fee_ratio(keywords=filters["keywords"])
             summary = (

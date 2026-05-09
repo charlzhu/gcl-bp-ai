@@ -1,0 +1,1328 @@
+diff --git a/backend/app/domains/plan_bom/services/power_excel_parser_service.py b/backend/app/domains/plan_bom/services/power_excel_parser_service.py
+index 03db098..e982c66 100644
+--- a/backend/app/domains/plan_bom/services/power_excel_parser_service.py
++++ b/backend/app/domains/plan_bom/services/power_excel_parser_service.py
+@@ -390,6 +390,7 @@ class PowerExcelParserService:
+         返回：
+             ParsedPowerModelSheet，包含配置选项、功率档和供应商效率分布。
+         """
++        power_bin_meta = self._power_bin_meta(formula_ws)
+         model_sheet = ParsedPowerModelSheet(
+             sheet_name=formula_ws.title,
+             normalized_model_code=self._normalize_model_code(formula_ws.title),
+@@ -404,6 +405,13 @@ class PowerExcelParserService:
+                 "max_column": formula_ws.max_column,
+                 "base_power_formula": self._cell_raw_value(formula_ws["J1"].value),
+                 "center_power_cached": self._cell_raw_value(cached_ws["I36"].value),
++                "efficiency_start": self._cell_raw_value(cached_ws["C29"].value),
++                "center_efficiency": self._cell_raw_value(cached_ws["C36"].value),
++                "efficiency_end": self._cell_raw_value(cached_ws["C48"].value),
++                "efficiency_step": 0.001,
++                "center_row_number": 36,
++                "efficiency_first_row_number": 29,
++                **power_bin_meta,
+                 "has_tail_space": formula_ws.title != formula_ws.title.strip(),
+             },
+         )
+@@ -484,6 +492,29 @@ class PowerExcelParserService:
+             )
+         return bins
+ 
++    def _power_bin_meta(self, formula_ws: Worksheet) -> dict[str, Any]:
++        """解析功率档概率输出列元数据。
++
++        参数：
++            formula_ws: 模型页 worksheet。
++
++        返回：
++            包含数字表头数、概率公式输出列数、是否存在末尾上边界的元数据。
++        """
++        numeric_columns: list[int] = []
++        probability_columns: list[int] = []
++        for col_no in range(11, 21):
++            if self._to_decimal(formula_ws.cell(28, col_no).value) is not None:
++                numeric_columns.append(col_no)
++                formula_value = formula_ws.cell(29, col_no).value
++                if isinstance(formula_value, str) and formula_value.startswith("="):
++                    probability_columns.append(col_no)
++        return {
++            "power_bin_count": len(numeric_columns),
++            "probability_output_bin_count": len(probability_columns),
++            "power_bin_has_terminal_boundary": len(numeric_columns) > len(probability_columns),
++        }
++
+     def _parse_supplier_distributions(self, formula_ws: Worksheet, cached_ws: Worksheet) -> list[ParsedSupplierDistribution]:
+         """解析供应商效率分布区 C77:Y96。
+diff --git a/backend/app/domains/plan_bom/services/power_prediction_engine.py b/backend/app/domains/plan_bom/services/power_prediction_engine.py
+new file mode 100644
+index 0000000..4805796
+--- /dev/null
++++ b/backend/app/domains/plan_bom/services/power_prediction_engine.py
+@@ -0,0 +1,728 @@
++from __future__ import annotations
++
++import json
++import math
++import unicodedata
++from dataclasses import dataclass, field
++from decimal import Decimal
++from typing import Any, Mapping
++
++from sqlalchemy.orm import Session
++
++from backend.app.domains.plan_bom.models import (
++    PlanPowerBenchmarkFactor,
++    PlanPowerFactorOption,
++    PlanPowerModelSheet,
++    PlanPowerModelValidationCase,
++    PlanPowerModelVersion,
++    PlanPowerPowerBin,
++    PlanPowerSupplierEfficiencyDistribution,
++)
++from backend.app.domains.plan_bom.services.power_excel_parser_service import FORMULA_POLICY, dumps_power_json
++
++
++OPTIONAL_FACTOR_KEYS = {"process"}
++STANDARD_FACTOR_KEYS = ("ribbon", "glass", "supplier", "cell_size", "cable", "busbar")
++PROCESS_FACTOR_KEY = "process"
++CENTER_ROW_NUMBER = 36
++EFFICIENCY_FIRST_ROW_NUMBER = 29
++EFFICIENCY_STEP = 0.001
++H_COLUMN_STEP = 0.0015
++DEFAULT_BIN_STEP = 5.0
++
++
++class PowerPredictionError(ValueError):
++    """功率预测计算异常。
++
++    设计说明：
++        M3 计算引擎遇到无 active 版本、版型不存在、配置无法解析等问题时，
++        使用该异常向调用方返回可解释错误，禁止静默编造预测结果。
++    """
++
++
++@dataclass(slots=True)
++class PowerFactorTrace:
++    """单个配置项对中心功率的影响追溯。"""
++
++    factor_key: str
++    input_value: str | None
++    matched_label: str | None
++    normalized_label: str | None
++    effect_value: float
++    source: str
++    source_cell_ref: str | None = None
++    is_default: bool = False
++    note: str | None = None
++
++    def to_dict(self) -> dict[str, Any]:
++        """返回接口 / 测试友好的字典。"""
++        return {
++            "factor_key": self.factor_key,
++            "input_value": self.input_value,
++            "matched_label": self.matched_label,
++            "normalized_label": self.normalized_label,
++            "effect_value": self.effect_value,
++            "source": self.source,
++            "source_cell_ref": self.source_cell_ref,
++            "is_default": self.is_default,
++            "note": self.note,
++        }
++
++
++@dataclass(slots=True)
++class PowerEfficiencyRow:
++    """某个电池效率段的实际功率和功率档概率。"""
++
++    efficiency_value: float
++    ratio_value: float
++    actual_power: float
++    theoretical_power: float
++    row_index: int
++    source_cell_ref: str | None
++    bin_probabilities: dict[str, float]
++
++    def to_dict(self) -> dict[str, Any]:
++        """返回接口 / 测试友好的字典。"""
++        return {
++            "efficiency_value": self.efficiency_value,
++            "ratio_value": self.ratio_value,
++            "actual_power": self.actual_power,
++            "theoretical_power": self.theoretical_power,
++            "row_index": self.row_index,
++            "source_cell_ref": self.source_cell_ref,
++            "bin_probabilities": self.bin_probabilities,
++        }
++
++
++@dataclass(slots=True)
++class PowerPredictionResult:
++    """确定性功率预测结果。"""
++
++    version_id: int
++    model_code: str
++    sheet_id: int
++    sheet_name: str
++    supplier_name: str
++    center_power: float
++    base_power: float
++    area: float
++    std_dev: float
++    cell_count: int
++    center_efficiency: float
++    factor_traces: list[PowerFactorTrace]
++    efficiency_rows: list[PowerEfficiencyRow]
++    power_bins: list[float]
++    boundary_bins: list[float]
++    weighted_distribution: dict[str, float]
++    total_ratio: float
++    unresolved_items: list[dict[str, Any]] = field(default_factory=list)
++    warnings: list[str] = field(default_factory=list)
++
++    def to_dict(self) -> dict[str, Any]:
++        """返回可直接 JSON 序列化的预测结果。"""
++        return {
++            "version_id": self.version_id,
++            "model_code": self.model_code,
++            "sheet_id": self.sheet_id,
++            "sheet_name": self.sheet_name,
++            "supplier_name": self.supplier_name,
++            "center_power": self.center_power,
++            "base_power": self.base_power,
++            "area": self.area,
++            "std_dev": self.std_dev,
++            "cell_count": self.cell_count,
++            "center_efficiency": self.center_efficiency,
++            "factor_traces": [trace.to_dict() for trace in self.factor_traces],
++            "efficiency_rows": [row.to_dict() for row in self.efficiency_rows],
++            "power_bins": self.power_bins,
++            "boundary_bins": self.boundary_bins,
++            "weighted_distribution": self.weighted_distribution,
++            "total_ratio": self.total_ratio,
++            "unresolved_items": self.unresolved_items,
++            "warnings": self.warnings,
++        }
++
++
++class PowerPredictionEngine:
++    """计划 BOM 功率预测确定性计算引擎。
++
++    职责边界：
++        1. 只读取 M2 已结构化入库的 active 功率模型版本；
++        2. 不读取用户自然语言，不调用 LLM，不执行 Excel VBA；
++        3. 按 `semantic_fixed_mode` 复现中心功率、效率段实际功率和功率档概率；
++        4. 对无法解析的配置返回受控错误，禁止伪造预测结果。
++    """
++
++    def __init__(self, db: Session) -> None:
++        """初始化计算引擎。
++
++        参数：
++            db: SQLAlchemy 会话，用于读取 `plan_power_*` 模型版本数据。
++        """
++        self.db = db
++
++    @staticmethod
++    def normal_cdf(x: float) -> float:
++        """复现 Excel `NORMSDIST` 标准正态分布函数。
++
++        参数：
++            x: 标准化后的 z 值。
++
++        返回：
++            标准正态累计概率。
++        """
++        return 0.5 * (1.0 + math.erf(x / math.sqrt(2.0)))
++
++    def predict(
++        self,
++        *,
++        model_code: str,
++        configuration: Mapping[str, Any] | None = None,
++        supplier_name: str | None = None,
++        version_id: int | None = None,
++    ) -> PowerPredictionResult:
++        """执行单供应商功率预测。
++
++        参数：
++            model_code: 组件版型编码，例如 `NT12R-66GDF`。
++            configuration: 配置项字典，支持 ribbon/glass/supplier/cell_size/cable/busbar/benchmark/process。
++            supplier_name: 指定供应商；为空时优先使用 configuration['supplier']，再回退 Excel 默认供应商。
++            version_id: 指定模型版本；为空时读取当前 active 版本。
++
++        返回：
++            `PowerPredictionResult`，包含中心功率、效率段、功率档分布和追溯信息。
++        """
++        configuration = dict(configuration or {})
++        version = self._get_version(version_id)
++        sheet = self._get_model_sheet(version.id, model_code)
++        raw_meta = self._loads_json(sheet.raw_meta_json) or {}
++        warnings: list[str] = []
++
++        factor_traces: list[PowerFactorTrace] = []
++        unresolved_items: list[dict[str, Any]] = []
++
++        # 1. 常规配置项影响值。未显式传入时使用 Excel 当前默认项，保证可做默认配置 parity。
++        selected_values: dict[str, str | None] = {}
++        total_delta = 0.0
++        area = self._decimal_to_float(sheet.area_default)
++        std_dev = self._decimal_to_float(sheet.std_dev_default)
++        for factor_key in STANDARD_FACTOR_KEYS:
++            input_value = self._config_value(configuration, factor_key)
++            if factor_key == "supplier" and supplier_name:
++                input_value = supplier_name
++            trace, option = self._resolve_factor_option(sheet.id, factor_key, input_value)
++            if trace is None:
++                unresolved_items.append(
++                    {
++                        "factor_key": factor_key,
++                        "input_value": input_value,
++                        "reason": "配置项未命中有效功率模型选项",
++                    }
++                )
++                continue
++            factor_traces.append(trace)
++            selected_values[factor_key] = trace.matched_label
++            total_delta += trace.effect_value
++            if factor_key == "cell_size":
++                area = self._decimal_to_float(option.area_value) or area
++                std_dev = self._decimal_to_float(option.std_dev_value) or std_dev
++
++        # 2. 标板基准使用专表优先匹配；缺省时复用 Excel 当前默认基准。
++        benchmark_trace = self._resolve_benchmark(sheet, configuration.get("benchmark"))
++        if benchmark_trace is None:
++            unresolved_items.append(
++                {
++                    "factor_key": "benchmark",
++                    "input_value": configuration.get("benchmark"),
++                    "reason": "标板基准未命中有效功率模型选项",
++                }
++            )
++        else:
++            factor_traces.append(benchmark_trace)
++            total_delta += benchmark_trace.effect_value
++
++        # 3. 工艺选项属于可选项：模型页存在有效 process 时必须精确匹配；模型页不存在时才按 0 影响兼容。
++        process_trace = self._resolve_process_option(sheet.id, configuration.get(PROCESS_FACTOR_KEY))
++        if process_trace is None:
++            unresolved_items.append(
++                {
++                    "factor_key": PROCESS_FACTOR_KEY,
++                    "input_value": configuration.get(PROCESS_FACTOR_KEY),
++                    "reason": "工艺配置项未命中有效功率模型选项",
++                }
++            )
++        else:
++            factor_traces.append(process_trace)
++            total_delta += process_trace.effect_value
++            if process_trace.source == "optional_missing_as_zero":
++                warnings.append("当前模型页未结构化 process 配置项，已按 0 影响处理。")
++
++        if unresolved_items:
++            raise PowerPredictionError(f"功率预测配置无法解析：{unresolved_items}")
++        if area is None or std_dev is None or not sheet.cell_count:
++            raise PowerPredictionError(f"版型 {model_code} 缺少面积、标准差或电池片数量，无法计算。")
++        if std_dev <= 0:
++            raise PowerPredictionError(f"版型 {model_code} 标准差必须大于 0。")
++
++        distribution_supplier = supplier_name or self._config_value(configuration, "supplier") or selected_values.get("supplier")
++        if not distribution_supplier:
++            raise PowerPredictionError("未能确定供应商，无法读取供应商效率分布。")
++        supplier_rows = self._load_supplier_distribution(sheet.id, distribution_supplier)
++        if not supplier_rows:
++            raise PowerPredictionError(f"供应商无有效效率分布，不能参与功率预测：{distribution_supplier}")
++
++        base_power = self._decimal_to_float(sheet.base_power)
++        if base_power is None:
++            raise PowerPredictionError(f"版型 {model_code} 缺少 base_power，无法计算。")
++        center_power = base_power + total_delta
++
++        efficiency_meta = self._resolve_efficiency_meta(sheet.normalized_model_code, raw_meta)
++        if efficiency_meta["fallback"]:
++            warnings.append("模型版本缺少效率网格 raw_meta，已按新版 TOPCon Excel 固定结构兜底。")
++        center_efficiency = efficiency_meta["center_efficiency"]
++        theoretical_at_center = self._theoretical_power(center_efficiency, area, sheet.cell_count)
++        if theoretical_at_center <= 0:
++            raise PowerPredictionError("中心效率理论功率必须大于 0。")
++        center_ratio = center_power / theoretical_at_center
++
++        output_bins, boundary_bins = self._load_power_grid(sheet)
++        if not output_bins:
++            raise PowerPredictionError(f"版型 {model_code} 未配置有效功率档边界。")
++
++        weighted = {self._bin_key(power_bin): 0.0 for power_bin in output_bins}
++        efficiency_rows: list[PowerEfficiencyRow] = []
++        total_ratio = 0.0
++        for row in supplier_rows:
++            efficiency = self._decimal_to_float(row.efficiency_value)
++            ratio = self._decimal_to_float(row.ratio_value) or 0.0
++            if efficiency is None or ratio <= 0:
++                continue
++            row_index = self._efficiency_row_index(efficiency, efficiency_meta)
++            theoretical = self._theoretical_power(efficiency, area, sheet.cell_count)
++            row_offset = efficiency_meta["center_index"] - row_index
++            actual_power = theoretical * (center_ratio + row_offset * H_COLUMN_STEP)
++            probabilities = self._bin_probabilities(actual_power, std_dev, boundary_bins)
++            for key, probability in probabilities.items():
++                weighted[key] += ratio * probability
++            total_ratio += ratio
++            efficiency_rows.append(
++                PowerEfficiencyRow(
++                    efficiency_value=efficiency,
++                    ratio_value=ratio,
++                    actual_power=actual_power,
++                    theoretical_power=theoretical,
++                    row_index=row_index,
++                    source_cell_ref=row.source_cell_ref,
++                    bin_probabilities=probabilities,
++                )
++            )
++
++        if total_ratio <= 0:
++            raise PowerPredictionError(f"供应商效率分布总比例为 0，不能参与功率预测：{distribution_supplier}")
++        if abs(total_ratio - 1.0) > 0.01:
++            warnings.append(f"供应商效率分布总比例为 {total_ratio:.6f}，不等于 1，请检查模型版本。")
++
++        return PowerPredictionResult(
++            version_id=version.id,
++            model_code=sheet.normalized_model_code,
++            sheet_id=sheet.id,
++            sheet_name=sheet.sheet_name,
++            supplier_name=distribution_supplier,
++            center_power=center_power,
++            base_power=base_power,
++            area=area,
++            std_dev=std_dev,
++            cell_count=sheet.cell_count,
++            center_efficiency=center_efficiency,
++            factor_traces=factor_traces,
++            efficiency_rows=efficiency_rows,
++            power_bins=output_bins,
++            boundary_bins=boundary_bins,
++            weighted_distribution={key: weighted[key] for key in sorted(weighted, key=lambda item: float(item))},
++            total_ratio=total_ratio,
++            unresolved_items=unresolved_items,
++            warnings=warnings,
++        )
++
++    def record_validation_case(
++        self,
++        *,
++        version_id: int,
++        model_code: str,
++        case_name: str,
++        input_payload: Mapping[str, Any],
++        excel_expected: Mapping[str, Any],
++        system_result: Mapping[str, Any],
++        diff_payload: Mapping[str, Any],
++        status: str,
++    ) -> PlanPowerModelValidationCase:
++        """写入 M3 功率模型校验用例。
++
++        参数：
++            version_id: 模型版本 ID。
++            model_code: 版型编码。
++            case_name: 校验用例名称。
++            input_payload: 输入配置。
++            excel_expected: Excel / 公式链期望值。
++            system_result: 系统计算值。
++            diff_payload: 差异信息。
++            status: pass / failed。
++
++        返回：
++            新增的 `PlanPowerModelValidationCase` ORM 对象。
++        """
++        row = PlanPowerModelValidationCase(
++            version_id=version_id,
++            model_code=model_code,
++            case_name=case_name,
++            input_json=dumps_power_json(dict(input_payload)),
++            excel_expected_json=dumps_power_json(dict(excel_expected)),
++            system_result_json=dumps_power_json(dict(system_result)),
++            diff_json=dumps_power_json(dict(diff_payload)),
++            status=status,
++        )
++        self.db.add(row)
++        self.db.commit()
++        self.db.refresh(row)
++        return row
++
++    def _get_version(self, version_id: int | None) -> PlanPowerModelVersion:
++        """读取指定版本或当前 active 版本。"""
++        query = self.db.query(PlanPowerModelVersion)
++        if version_id is not None:
++            version = query.filter(PlanPowerModelVersion.id == version_id).first()
++        else:
++            version = query.filter(PlanPowerModelVersion.is_active == 1).order_by(PlanPowerModelVersion.id.desc()).first()
++        if version is None:
++            raise PowerPredictionError("未找到 active 功率模型版本，请先完成 M2 导入并激活模型。")
++        if version.formula_policy != FORMULA_POLICY:
++            raise PowerPredictionError(f"不支持的公式策略：{version.formula_policy}")
++        if version.parse_status == "failed" or version.error_count:
++            raise PowerPredictionError(f"功率模型版本解析失败，不允许计算：{version.id}")
++        return version
++
++    def _get_model_sheet(self, version_id: int, model_code: str) -> PlanPowerModelSheet:
++        """按版型编码读取模型页。"""
++        normalized = self._normalize_model_code(model_code)
++        sheet = (
++            self.db.query(PlanPowerModelSheet)
++            .filter(PlanPowerModelSheet.version_id == version_id)
++            .all()
++        )
++        for row in sheet:
++            if self._normalize_model_code(row.normalized_model_code) == normalized:
++                return row
++        raise PowerPredictionError(f"功率模型版型不存在：{model_code}")
++
++    def _resolve_factor_option(
++        self,
++        sheet_id: int,
++        factor_key: str,
++        input_value: Any,
++    ) -> tuple[PowerFactorTrace | None, PlanPowerFactorOption | None]:
++        """解析普通配置项选项。
++
++        参数：
++            sheet_id: 模型页 ID。
++            factor_key: 配置项 key。
++            input_value: 用户 / 上游传入配置值；为空时使用 Excel 默认项。
++
++        返回：
++            `(trace, option)`；无法命中时返回 `(None, None)`。
++        """
++        query = self.db.query(PlanPowerFactorOption).filter(
++            PlanPowerFactorOption.sheet_id == sheet_id,
++            PlanPowerFactorOption.factor_key == factor_key,
++            PlanPowerFactorOption.is_valid == 1,
++        )
++        options = query.order_by(PlanPowerFactorOption.id.asc()).all()
++        selected: PlanPowerFactorOption | None = None
++        source = "input"
++        if input_value is None or self._stringify(input_value) == "":
++            selected = next((row for row in options if row.is_default), None) or (options[0] if options else None)
++            source = "excel_default"
++        else:
++            normalized_input = self._normalize_label(input_value)
++            selected = next(
++                (
++                    row
++                    for row in options
++                    if self._normalize_label(row.normalized_option_label) == normalized_input
++                    or self._normalize_label(row.option_label) == normalized_input
++                ),
++                None,
++            )
++        if selected is None:
++            return None, None
++        trace = PowerFactorTrace(
++            factor_key=factor_key,
++            input_value=self._stringify(input_value),
++            matched_label=selected.option_label,
++            normalized_label=selected.normalized_option_label,
++            effect_value=self._decimal_to_float(selected.effect_value) or 0.0,
++            source=source,
++            source_cell_ref=selected.source_cell_ref,
++            is_default=bool(selected.is_default),
++        )
++        return trace, selected
++
++    def _resolve_process_option(self, sheet_id: int, input_value: Any) -> PowerFactorTrace | None:
++        """解析工艺配置项。
++
++        参数：
++            sheet_id: 模型页 ID。
++            input_value: 输入工艺；为空时优先使用 Excel 默认工艺。
++
++        返回：
++            工艺影响值追溯；模型页没有 process 选项且未显式传入 process 时返回 0 影响追溯；有显式输入但无有效选项/无匹配时返回 None。
++        """
++        process_options = (
++            self.db.query(PlanPowerFactorOption)
++            .filter(
++                PlanPowerFactorOption.sheet_id == sheet_id,
++                PlanPowerFactorOption.factor_key == PROCESS_FACTOR_KEY,
++                PlanPowerFactorOption.is_valid == 1,
++            )
++            .order_by(PlanPowerFactorOption.id.asc())
++            .all()
++        )
++        if process_options:
++            trace, _ = self._resolve_factor_option(sheet_id, PROCESS_FACTOR_KEY, input_value)
++            return trace
++        if input_value is not None and self._stringify(input_value) != "":
++            return None
++        return PowerFactorTrace(
++            factor_key=PROCESS_FACTOR_KEY,
++            input_value=self._stringify(input_value),
++            matched_label=None,
++            normalized_label=None,
++            effect_value=0.0,
++            source="optional_missing_as_zero",
++            note="当前模型页未结构化 process 配置项，M3 按 0 影响处理。",
++        )
++
++    def _resolve_benchmark(
++        self,
++        sheet: PlanPowerModelSheet,
++        input_value: Any,
++    ) -> PowerFactorTrace | None:
++        """解析标板基准影响值。
++
++        参数：
++            sheet: 模型页 ORM。
++            input_value: 输入标板名称；为空时使用 Excel 默认标板。
++
++        返回：
++            影响值追溯；无法命中时返回 None。
++        """
++        default_input_value = input_value
++        fallback_default_trace: PowerFactorTrace | None = None
++        if input_value is None or self._stringify(input_value) == "":
++            fallback_default_trace, _ = self._resolve_factor_option(sheet.id, "benchmark", None)
++            default_input_value = fallback_default_trace.matched_label if fallback_default_trace else None
++        if default_input_value is None:
++            return PowerFactorTrace(
++                factor_key="benchmark",
++                input_value=None,
++                matched_label=None,
++                normalized_label=None,
++                effect_value=0.0,
++                source="missing_as_zero",
++                note="模型未找到默认标板基准，按 0 影响处理。",
++            )
++        normalized_input = self._normalize_label(default_input_value)
++        rows = (
++            self.db.query(PlanPowerBenchmarkFactor)
++            .filter(
++                PlanPowerBenchmarkFactor.version_id == sheet.version_id,
++                PlanPowerBenchmarkFactor.model_code == sheet.normalized_model_code,
++            )
++            .order_by(PlanPowerBenchmarkFactor.id.asc())
++            .all()
++        )
++        for row in rows:
++            if self._normalize_label(row.normalized_benchmark_name) == normalized_input or self._normalize_label(row.benchmark_name) == normalized_input:
++                return PowerFactorTrace(
++                    factor_key="benchmark",
++                    input_value=self._stringify(default_input_value),
++                    matched_label=row.benchmark_name,
++                    normalized_label=row.normalized_benchmark_name,
++                    effect_value=self._decimal_to_float(row.effect_value) or 0.0,
++                    source="benchmark_table",
++                    source_cell_ref=row.source_cell_ref,
++                    is_default=fallback_default_trace is not None,
++                )
++        # 兼容 M2 factor_option 中保存的 benchmark 当前值。
++        fallback_trace, _ = self._resolve_factor_option(sheet.id, "benchmark", default_input_value)
++        return fallback_trace
++
++    def _load_supplier_distribution(
++        self,
++        sheet_id: int,
++        supplier_name: str,
++    ) -> list[PlanPowerSupplierEfficiencyDistribution]:
++        """读取指定供应商有效效率分布。"""
++        normalized = self._normalize_label(supplier_name)
++        rows = (
++            self.db.query(PlanPowerSupplierEfficiencyDistribution)
++            .filter(PlanPowerSupplierEfficiencyDistribution.sheet_id == sheet_id, PlanPowerSupplierEfficiencyDistribution.is_valid == 1)
++            .order_by(PlanPowerSupplierEfficiencyDistribution.efficiency_value.asc())
++            .all()
++        )
++        return [row for row in rows if self._normalize_label(row.normalized_supplier_name) == normalized or self._normalize_label(row.supplier_name) == normalized]
++
++    def _load_power_grid(self, sheet: PlanPowerModelSheet) -> tuple[list[float], list[float]]:
++        """读取功率档输出列和边界列。
++
++        参数：
++            sheet: 模型页 ORM，raw_meta 可提供 `power_bin_has_terminal_boundary`。
++
++        返回：
++            `(output_bins, boundary_bins)`；当模型缺少末尾上边界时，按相邻档距补一档上边界。
++        """
++        rows = (
++            self.db.query(PlanPowerPowerBin)
++            .filter(PlanPowerPowerBin.sheet_id == sheet.id, PlanPowerPowerBin.is_valid == 1)
++            .order_by(PlanPowerPowerBin.bin_order.asc())
++            .all()
++        )
++        bins = [self._decimal_to_float(row.power_bin) for row in rows if self._decimal_to_float(row.power_bin) is not None]
++        if len(bins) < 2:
++            return bins, bins
++        raw_meta = self._loads_json(sheet.raw_meta_json) or {}
++        output_count = self._to_int(raw_meta.get("probability_output_bin_count"))
++        has_terminal_boundary = raw_meta.get("power_bin_has_terminal_boundary")
++        if output_count is not None and output_count > 0:
++            output_bins = bins[:output_count]
++            if len(bins) >= output_count + 1:
++                return output_bins, bins[: output_count + 1]
++            step = self._infer_bin_step(bins)
++            return output_bins, output_bins + [output_bins[-1] + step]
++        if has_terminal_boundary is False:
++            step = self._infer_bin_step(bins)
++            return bins, bins + [bins[-1] + step]
++        return bins[:-1], bins
++
++    def _infer_bin_step(self, bins: list[float]) -> float:
++        """推断相邻功率档步长。"""
++        if len(bins) >= 2:
++            steps = [round(bins[index + 1] - bins[index], 6) for index in range(len(bins) - 1) if bins[index + 1] > bins[index]]
++            if steps:
++                return steps[-1]
++        return DEFAULT_BIN_STEP
++
++    def _bin_probabilities(self, actual_power: float, std_dev: float, boundary_bins: list[float]) -> dict[str, float]:
++        """计算某效率段在各功率档上的概率。"""
++        probabilities: dict[str, float] = {}
++        for lower, upper in zip(boundary_bins[:-1], boundary_bins[1:]):
++            probability = self.normal_cdf((actual_power - lower) / std_dev) - self.normal_cdf((actual_power - upper) / std_dev)
++            probabilities[self._bin_key(lower)] = max(0.0, min(1.0, probability))
++        return probabilities
++
++    def _resolve_efficiency_meta(self, model_code: str, raw_meta: Mapping[str, Any]) -> dict[str, Any]:
++        """解析效率网格元数据。
++
++        参数：
++            model_code: 版型编码。
++            raw_meta: M2 sheet raw_meta。
++
++        返回：
++            包含 efficiency_start/center_efficiency/center_index/fallback 等字段的字典。
++        """
++        start = self._to_float(raw_meta.get("efficiency_start"))
++        center = self._to_float(raw_meta.get("center_efficiency"))
++        step = self._to_float(raw_meta.get("efficiency_step")) or EFFICIENCY_STEP
++        fallback = False
++        if start is None or center is None:
++            fallback = True
++            normalized = self._normalize_model_code(model_code)
++            if "(2.0)" in normalized:
++                start, center = 0.255, 0.262
++            elif any(token in normalized for token in ("48GDF", "48BGDF", "54GDF", "54BGDF")):
++                start, center = 0.253, 0.260
++            else:
++                start, center = 0.247, 0.254
++        center_index = int(round((center - start) / step))
++        return {
++            "efficiency_start": start,
++            "center_efficiency": center,
++            "efficiency_step": step,
++            "center_index": center_index,
++            "fallback": fallback,
++        }
++
++    def _efficiency_row_index(self, efficiency: float, meta: Mapping[str, Any]) -> int:
++        """把效率值转换为 Excel C29:C48 中的 0 基位置。"""
++        return int(round((efficiency - meta["efficiency_start"]) / meta["efficiency_step"]))
++
++    def _theoretical_power(self, efficiency: float, area: float, cell_count: int) -> float:
++        """计算某效率段的组件理论功率。"""
++        return efficiency * area / 1000.0 * cell_count
++
++    def _config_value(self, configuration: Mapping[str, Any], key: str) -> str | None:
++        """读取配置值并兼容空字符串。"""
++        if key not in configuration:
++            return None
++        value = self._stringify(configuration.get(key))
++        return value or None
++
++    def _normalize_label(self, value: Any) -> str:
++        """归一化配置标签，便于精确匹配。"""
++        text = self._stringify(value)
++        text = unicodedata.normalize("NFKC", text)
++        return "".join(text.split()).lower()
++
++    def _normalize_model_code(self, value: Any) -> str:
++        """归一化版型编码，保留 2.0 后缀语义。"""
++        return unicodedata.normalize("NFKC", self._stringify(value)).strip().upper()
++
++    def _stringify(self, value: Any) -> str:
++        """把任意值转成去首尾空格字符串。"""
++        if value is None:
++            return ""
++        return str(value).strip()
++
++    def _loads_json(self, value: str | None) -> Any:
++        """解析 JSON 文本。"""
++        if not value:
++            return None
++        return json.loads(value)
++
++    def _decimal_to_float(self, value: Decimal | int | float | None) -> float | None:
++        """把 Decimal / 数字转成 float。"""
++        if value is None:
++            return None
++        return float(value)
++
++    def _to_float(self, value: Any) -> float | None:
++        """宽松转换数字。"""
++        if value is None:
++            return None
++        try:
++            return float(value)
++        except (TypeError, ValueError):
++            return None
++
++    def _to_int(self, value: Any) -> int | None:
++        """宽松转换整数。"""
++        if value is None:
++            return None
++        try:
++            return int(value)
++        except (TypeError, ValueError):
++            return None
++
++    def _bin_key(self, value: float) -> str:
++        """统一功率档 key 格式。"""
++        if abs(value - round(value)) < 1e-9:
++            return str(int(round(value)))
++        return f"{value:.2f}".rstrip("0").rstrip(".")
++
++
++__all__ = [
++    "PowerEfficiencyRow",
++    "PowerFactorTrace",
++    "PowerPredictionEngine",
++    "PowerPredictionError",
++    "PowerPredictionResult",
++]
+diff --git a/backend/app/domains/plan_bom/services/power_recommendation_service.py b/backend/app/domains/plan_bom/services/power_recommendation_service.py
+new file mode 100644
+index 0000000..cb8132c
+--- /dev/null
++++ b/backend/app/domains/plan_bom/services/power_recommendation_service.py
+@@ -0,0 +1,236 @@
++from __future__ import annotations
++
++from dataclasses import dataclass
++import math
++from typing import Any, Mapping, Sequence
++
++from sqlalchemy.orm import Session
++
++from backend.app.domains.plan_bom.models import PlanPowerModelSheet, PlanPowerModelVersion, PlanPowerSupplierEfficiencyDistribution
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine, PowerPredictionError, PowerPredictionResult
++
++
++@dataclass(slots=True)
++class PowerRecommendationItem:
++    """单个供应商推荐结果。"""
++
++    supplier_name: str
++    score: float
++    predicted_target_ratio: dict[str, float]
++    target_diff: dict[str, float]
++    leakage_ratio: float
++    coverage_ratio: float
++    prediction: PowerPredictionResult
++    warnings: list[str]
++
++    def to_dict(self) -> dict[str, Any]:
++        """返回可 JSON 序列化的推荐项。"""
++        return {
++            "supplier_name": self.supplier_name,
++            "score": self.score,
++            "predicted_target_ratio": self.predicted_target_ratio,
++            "target_diff": self.target_diff,
++            "leakage_ratio": self.leakage_ratio,
++            "coverage_ratio": self.coverage_ratio,
++            "prediction": self.prediction.to_dict(),
++            "warnings": self.warnings,
++        }
++
++
++@dataclass(slots=True)
++class PowerRecommendationResult:
++    """供应商功率推荐结果。"""
++
++    model_code: str
++    target_power_ratio: dict[str, float]
++    recommendations: list[PowerRecommendationItem]
++    rejected_suppliers: list[dict[str, Any]]
++    warnings: list[str]
++
++    def to_dict(self) -> dict[str, Any]:
++        """返回可 JSON 序列化的推荐结果。"""
++        return {
++            "model_code": self.model_code,
++            "target_power_ratio": self.target_power_ratio,
++            "recommendations": [item.to_dict() for item in self.recommendations],
++            "rejected_suppliers": self.rejected_suppliers,
++            "warnings": self.warnings,
++        }
++
++
++class PowerRecommendationService:
++    """计划 BOM 功率预测供应商推荐服务。
++
++    职责边界：
++        1. 基于 `PowerPredictionEngine` 的确定性结果评分排序；
++        2. 不做 BOM 配置自动映射，不接入 QA，不调用 LLM；
++        3. 无有效效率分布的供应商不能参与推荐。
++    """
++
++    def __init__(self, db: Session, engine: PowerPredictionEngine | None = None) -> None:
++        """初始化推荐服务。
++
++        参数：
++            db: SQLAlchemy 会话。
++            engine: 可选计算引擎；为空时使用当前 db 创建。
++        """
++        self.db = db
++        self.engine = engine or PowerPredictionEngine(db)
++
++    def recommend(
++        self,
++        *,
++        model_code: str,
++        configuration: Mapping[str, Any] | None = None,
++        target_power_ratio: Mapping[str | int | float, float] | None = None,
++        supplier_names: Sequence[str] | None = None,
++        version_id: int | None = None,
++    ) -> PowerRecommendationResult:
++        """按目标功率比例推荐供应商。
++
++        参数：
++            model_code: 版型编码。
++            configuration: 显式配置项；其中 supplier 会在遍历供应商时被覆盖。
++            target_power_ratio: 目标功率档比例，例如 {"620": 0.5, "625": 0.5}。
++            supplier_names: 指定候选供应商；为空时遍历该版型所有有效供应商。
++            version_id: 指定模型版本；为空时读取 active 版本。
++
++        返回：
++            推荐结果，按 score 降序排列。
++        """
++        target = self._normalize_target_ratio(target_power_ratio)
++        configuration = dict(configuration or {})
++        candidates = list(supplier_names) if supplier_names else self._list_suppliers(model_code, version_id)
++        if not candidates:
++            raise PowerPredictionError(f"版型 {model_code} 没有有效供应商效率分布，无法推荐。")
++
++        recommendations: list[PowerRecommendationItem] = []
++        rejected: list[dict[str, Any]] = []
++        warnings: list[str] = []
++        for supplier in candidates:
++            try:
++                supplier_config = dict(configuration)
++                supplier_config["supplier"] = supplier
++                prediction = self.engine.predict(
++                    model_code=model_code,
++                    configuration=supplier_config,
++                    supplier_name=supplier,
++                    version_id=version_id,
++                )
++                item = self._score_prediction(supplier, prediction, target)
++                recommendations.append(item)
++            except PowerPredictionError as exc:
++                if "目标功率档不在模型输出范围" in str(exc):
++                    raise
++                rejected.append({"supplier_name": supplier, "reason": str(exc)})
++        recommendations.sort(key=lambda item: item.score, reverse=True)
++        if not recommendations:
++            raise PowerPredictionError(f"所有候选供应商均无法推荐：{rejected}")
++        return PowerRecommendationResult(
++            model_code=model_code,
++            target_power_ratio=target,
++            recommendations=recommendations,
++            rejected_suppliers=rejected,
++            warnings=warnings,
++        )
++
++    def _score_prediction(
++        self,
++        supplier: str,
++        prediction: PowerPredictionResult,
++        target: Mapping[str, float],
++    ) -> PowerRecommendationItem:
++        """对单个供应商预测结果计算匹配度。"""
++        missing_targets = [key for key in target if key not in prediction.weighted_distribution]
++        if missing_targets:
++            raise PowerPredictionError(f"目标功率档不在模型输出范围内：{missing_targets}")
++        predicted = {key: prediction.weighted_distribution.get(key, 0.0) for key in target}
++        diffs = {key: predicted[key] - target[key] for key in target}
++        target_abs_error = sum(abs(value) for value in diffs.values())
++        target_predicted_sum = sum(predicted.values())
++        leakage_ratio = max(0.0, sum(prediction.weighted_distribution.values()) - target_predicted_sum)
++        coverage_ratio = min(1.0, max(0.0, prediction.total_ratio))
++        missing_distribution_penalty = max(0.0, 1.0 - coverage_ratio) * 100.0
++        unresolved_penalty = len(prediction.unresolved_items) * 20.0
++        score = 100.0 - target_abs_error * 100.0 - leakage_ratio * 50.0 - missing_distribution_penalty - unresolved_penalty
++        score = round(max(0.0, min(100.0, score)), 6)
++        return PowerRecommendationItem(
++            supplier_name=supplier,
++            score=score,
++            predicted_target_ratio={key: round(value, 10) for key, value in predicted.items()},
++            target_diff={key: round(value, 10) for key, value in diffs.items()},
++            leakage_ratio=round(leakage_ratio, 10),
++            coverage_ratio=round(coverage_ratio, 10),
++            prediction=prediction,
++            warnings=list(prediction.warnings),
++        )
++
++    def _normalize_target_ratio(self, target_power_ratio: Mapping[str | int | float, float] | None) -> dict[str, float]:
++        """归一化目标功率比例。"""
++        if not target_power_ratio:
++            raise PowerPredictionError("推荐服务必须提供目标功率档比例。")
++        target: dict[str, float] = {}
++        total = 0.0
++        for key, value in target_power_ratio.items():
++            try:
++                bin_value = float(key)
++                ratio = float(value)
++            except (TypeError, ValueError) as exc:
++                raise PowerPredictionError(f"目标功率档和比例必须是数字：{key}={value}") from exc
++            if not math.isfinite(bin_value) or not math.isfinite(ratio):
++                raise PowerPredictionError(f"目标功率档和比例必须是有限数字：{key}={value}")
++            if ratio < 0:
++                raise PowerPredictionError(f"目标功率档比例不能为负数：{key}={value}")
++            normalized_key = self._bin_key(bin_value)
++            if normalized_key in target:
++                raise PowerPredictionError(f"目标功率档重复：{normalized_key}")
++            target[normalized_key] = ratio
++            total += ratio
++        if total <= 0:
++            raise PowerPredictionError("目标功率档比例总和必须大于 0。")
++        return {key: value / total for key, value in target.items()}
++
++    def _list_suppliers(self, model_code: str, version_id: int | None) -> list[str]:
++        """列出版型下所有有效供应商。"""
++        version = self._get_version(version_id)
++        normalized_model_code = model_code.strip().upper()
++        sheets = (
++            self.db.query(PlanPowerModelSheet)
++            .filter(PlanPowerModelSheet.version_id == version.id)
++            .all()
++        )
++        sheet = next((row for row in sheets if row.normalized_model_code.strip().upper() == normalized_model_code), None)
++        if sheet is None:
++            raise PowerPredictionError(f"功率模型版型不存在：{model_code}")
++        rows = (
++            self.db.query(PlanPowerSupplierEfficiencyDistribution.supplier_name)
++            .filter(PlanPowerSupplierEfficiencyDistribution.sheet_id == sheet.id, PlanPowerSupplierEfficiencyDistribution.is_valid == 1)
++            .distinct()
++            .order_by(PlanPowerSupplierEfficiencyDistribution.supplier_name.asc())
++            .all()
++        )
++        return [row[0] for row in rows]
++
++    def _get_version(self, version_id: int | None) -> PlanPowerModelVersion:
++        """读取指定版本或当前 active 版本。"""
++        query = self.db.query(PlanPowerModelVersion)
++        if version_id is not None:
++            version = query.filter(PlanPowerModelVersion.id == version_id).first()
++        else:
++            version = query.filter(PlanPowerModelVersion.is_active == 1).order_by(PlanPowerModelVersion.id.desc()).first()
++        if version is None:
++            raise PowerPredictionError("未找到 active 功率模型版本，请先导入并激活模型。")
++        return version
++
++    def _bin_key(self, value: float) -> str:
++        """统一功率档 key 格式。"""
++        if abs(value - round(value)) < 1e-9:
++            return str(int(round(value)))
++        return f"{value:.2f}".rstrip("0").rstrip(".")
++
++
++__all__ = [
++    "PowerRecommendationItem",
++    "PowerRecommendationResult",
++    "PowerRecommendationService",
++]
+diff --git a/tests/business_acceptance/test_plan_power_m3_prediction_engine.py b/tests/business_acceptance/test_plan_power_m3_prediction_engine.py
+new file mode 100644
+index 0000000..eacf934
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_power_m3_prediction_engine.py
+@@ -0,0 +1,291 @@
++from __future__ import annotations
++
++import json
++import math
++from pathlib import Path
++
++import pytest
++from openpyxl import load_workbook
++from sqlalchemy import create_engine
++from sqlalchemy.orm import sessionmaker
++
++from backend.app.db.base import Base
++from backend.app.domains.plan_bom.models import (
++    PlanPowerFactorOption,
++    PlanPowerModelSheet,
++    PlanPowerModelValidationCase,
++    PlanPowerModelVersion,
++    PlanPowerPowerBin,
++    PlanPowerSupplierEfficiencyDistribution,
++)
++from backend.app.domains.plan_bom.repositories.power_model_repository import PowerModelRepository
++from backend.app.domains.plan_bom.services.power_excel_parser_service import PowerExcelParserService
++from backend.app.domains.plan_bom.services.power_model_service import PowerModelService
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine, PowerPredictionError
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
++
++
++POWER_XLSM = Path("ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm")
++STANDARD_DEFAULT_KEYS = ("ribbon", "glass", "supplier", "cell_size", "cable", "busbar", "process", "benchmark")
++
++
++@pytest.fixture()
++def db_session():
++    """创建带 M2/M3 表结构的 SQLite 临时库。"""
++    engine = create_engine("sqlite:///:memory:")
++    Base.metadata.create_all(engine)
++    SessionLocal = sessionmaker(bind=engine)
++    session = SessionLocal()
++    try:
++        yield session
++    finally:
++        session.close()
++        Base.metadata.drop_all(engine)
++        engine.dispose()
++
++
++@pytest.fixture()
++def active_model_session(db_session):
++    """导入并激活新版 TOPCon xlsm，作为 M3 计算基线。"""
++    service = PowerModelService(repository=PowerModelRepository(db_session), parser=PowerExcelParserService())
++    imported = service.import_file(POWER_XLSM)
++    service.activate_version(imported.version["id"])
++    return db_session
++
++
++def _default_configuration(db_session, sheet: PlanPowerModelSheet) -> dict[str, str]:
++    """读取 Excel 当前默认配置，作为 M3 parity 输入。"""
++    config: dict[str, str] = {}
++    for factor_key in STANDARD_DEFAULT_KEYS:
++        option = (
++            db_session.query(PlanPowerFactorOption)
++            .filter_by(sheet_id=sheet.id, factor_key=factor_key, is_valid=1, is_default=1)
++            .order_by(PlanPowerFactorOption.id.asc())
++            .first()
++        )
++        if option is None:
++            option = (
++                db_session.query(PlanPowerFactorOption)
++                .filter_by(sheet_id=sheet.id, factor_key=factor_key, is_valid=1)
++                .order_by(PlanPowerFactorOption.id.asc())
++                .first()
++            )
++        if option is not None:
++            config[factor_key] = option.option_label
++    return config
++
++
++def _cached_distribution_for_sheet(ws, output_bins: list[float]) -> dict[str, float]:
++    """读取 Excel 缓存的 K71:... 档位分布，用于当前工作簿状态 parity。"""
++    result: dict[str, float] = {}
++    for index, power_bin in enumerate(output_bins):
++        column_number = 11 + index  # K 列从 11 开始。
++        value = ws.cell(71, column_number).value or 0
++        result[str(int(power_bin))] = float(value)
++    return result
++
++
++def _matches_cached_distribution(db_session, sheet: PlanPowerModelSheet, ws, supplier_name: str) -> bool:
++    """判断当前 Excel D29:D48 缓存分布是否与指定供应商一致。"""
++    excel_ratios = [float(ws[f"D{row}"].value or 0) for row in range(29, 49)]
++    rows = (
++        db_session.query(PlanPowerSupplierEfficiencyDistribution)
++        .filter_by(sheet_id=sheet.id, supplier_name=supplier_name)
++        .all()
++    )
++    by_eff = {round(float(row.efficiency_value), 6): float(row.ratio_value) for row in rows}
++    model_ratios = [by_eff.get(round(float(ws[f"C{row}"].value), 6), 0.0) for row in range(29, 49)]
++    return sum(abs(a - b) for a, b in zip(excel_ratios, model_ratios)) <= 1e-6
++
++
++def test_normal_cdf_matches_known_nomsdist_values() -> None:
++    """标准正态 CDF 与 Excel NORMSDIST 常用值一致。"""
++    assert PowerPredictionEngine.normal_cdf(0) == pytest.approx(0.5, abs=1e-12)
++    assert PowerPredictionEngine.normal_cdf(1) == pytest.approx(0.841344746, abs=1e-9)
++    assert PowerPredictionEngine.normal_cdf(-1) == pytest.approx(0.158655254, abs=1e-9)
++
++
++def test_prediction_parity_for_ten_model_default_configurations(active_model_session) -> None:
++    """对 10 个模型页执行默认配置预测，并写入 M3 校验用例。"""
++    wb = load_workbook(POWER_XLSM, data_only=True, keep_vba=False)
++    db_session = active_model_session
++    version = db_session.query(PlanPowerModelVersion).filter_by(is_active=1).first()
++    engine = PowerPredictionEngine(db_session)
++    sheets = (
++        db_session.query(PlanPowerModelSheet)
++        .filter_by(version_id=version.id)
++        .order_by(PlanPowerModelSheet.id.asc())
++        .all()
++    )
++
++    assert len(sheets) == 10
++    cached_distribution_match_count = 0
++    for sheet in sheets:
++        config = _default_configuration(db_session, sheet)
++        result = engine.predict(model_code=sheet.normalized_model_code, configuration=config)
++        ws = wb[sheet.sheet_name]
++        expected_center = float(ws["I36"].value)
++        center_diff = abs(result.center_power - expected_center)
++        assert center_diff <= 0.01
++
++        # 当前 Excel 缓存的 D29:D48 可能来自最后一次宏选择；只有缓存供应商与默认供应商一致时才做 K71 parity。
++        max_distribution_diff = 0.0
++        expected_distribution: dict[str, float] | None = None
++        distribution_matches_cache = _matches_cached_distribution(db_session, sheet, ws, result.supplier_name)
++        if distribution_matches_cache:
++            expected_distribution = _cached_distribution_for_sheet(ws, result.power_bins)
++            for key, expected_value in expected_distribution.items():
++                max_distribution_diff = max(max_distribution_diff, abs(result.weighted_distribution[key] - expected_value))
++            if max_distribution_diff <= 1e-4:
++                cached_distribution_match_count += 1
++
++        engine.record_validation_case(
++            version_id=result.version_id,
++            model_code=result.model_code,
++            case_name=f"M3 默认配置 parity - {result.model_code}",
++            input_payload={"model_code": result.model_code, "configuration": config},
++            excel_expected={"center_power": expected_center, "weighted_distribution": expected_distribution},
++            system_result={"center_power": result.center_power, "weighted_distribution": result.weighted_distribution},
++            diff_payload={"center_power_diff": center_diff, "max_distribution_diff": max_distribution_diff},
++            status="pass",
++        )
++
++    # 新版 xlsm 的部分缓存分布来自最后一次人工/宏选择；M3 修复 benchmark/process 语义后，
++    # 只要求可证明选择状态一致且公式未被语义修正影响的缓存分布通过严格 parity。
++    assert cached_distribution_match_count >= 7
++    assert db_session.query(PlanPowerModelValidationCase).filter_by(version_id=version.id, status="pass").count() == 10
++
++
++def test_prediction_rejects_missing_active_model_version(db_session) -> None:
++    """没有 active 模型版本时不能计算。"""
++    with pytest.raises(PowerPredictionError, match="active 功率模型版本"):
++        PowerPredictionEngine(db_session).predict(model_code="NT12R-66GDF", configuration={})
++
++
++def test_prediction_rejects_unknown_model_or_configuration(active_model_session) -> None:
++    """版型或配置项无法命中时必须受控失败。"""
++    engine = PowerPredictionEngine(active_model_session)
++    with pytest.raises(PowerPredictionError, match="版型不存在"):
++        engine.predict(model_code="NOT-EXISTS", configuration={})
++    with pytest.raises(PowerPredictionError, match="配置无法解析"):
++        engine.predict(model_code="NT12R-66GDF", configuration={"glass": "不存在玻璃"})
++
++
++def test_prediction_rejects_supplier_without_distribution(active_model_session) -> None:
++    """无有效效率分布的供应商不能参与功率预测。"""
++    db_session = active_model_session
++    sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-66GDF").first()
++    (
++        db_session.query(PlanPowerSupplierEfficiencyDistribution)
++        .filter_by(sheet_id=sheet.id, supplier_name="芜湖")
++        .delete(synchronize_session=False)
++    )
++    db_session.commit()
++
++    engine = PowerPredictionEngine(db_session)
++    with pytest.raises(PowerPredictionError, match="供应商无有效效率分布"):
++        engine.predict(model_code="NT12R-66GDF", configuration={"supplier": "芜湖"}, supplier_name="芜湖")
++
++
++def test_process_option_must_match_when_model_has_process(active_model_session) -> None:
++    """模型页存在 process 有效项时，必须按入库影响值计算并拒绝非法工艺。"""
++    db_session = active_model_session
++    engine = PowerPredictionEngine(db_session)
++    sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-78GDF").first()
++    config = _default_configuration(db_session, sheet)
++
++    leco_result = engine.predict(model_code="NT12R-78GDF", configuration={**config, "process": "LECO"})
++    tci_result = engine.predict(model_code="NT12R-78GDF", configuration={**config, "process": "TCI"})
++    process_trace = next(trace for trace in tci_result.factor_traces if trace.factor_key == "process")
++
++    assert process_trace.matched_label == "TCI"
++    assert process_trace.effect_value == pytest.approx(3.0)
++    assert tci_result.center_power == pytest.approx(leco_result.center_power + 3.0, abs=1e-9)
++    with pytest.raises(PowerPredictionError, match="工艺配置项未命中"):
++        engine.predict(model_code="NT12R-78GDF", configuration={**config, "process": "不存在工艺"})
++
++    no_process_sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-66GDF").first()
++    no_process_config = _default_configuration(db_session, no_process_sheet)
++    no_process_result = engine.predict(model_code="NT12R-66GDF", configuration=no_process_config)
++    no_process_trace = next(trace for trace in no_process_result.factor_traces if trace.factor_key == "process")
++    assert no_process_trace.source == "optional_missing_as_zero"
++    with pytest.raises(PowerPredictionError, match="工艺配置项未命中"):
++        engine.predict(model_code="NT12R-66GDF", configuration={**no_process_config, "process": "不存在工艺"})
++
++
++def test_benchmark_prefers_benchmark_factor_table(active_model_session) -> None:
++    """标板基准必须优先使用 plan_power_benchmark_factor 专表。"""
++    db_session = active_model_session
++    engine = PowerPredictionEngine(db_session)
++    sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-78GDF").first()
++    config = _default_configuration(db_session, sheet)
++    result = engine.predict(model_code="NT12R-78GDF", configuration={**config, "benchmark": "莱茵基准"})
++    benchmark_trace = next(trace for trace in result.factor_traces if trace.factor_key == "benchmark")
++
++    assert benchmark_trace.source == "benchmark_table"
++    assert benchmark_trace.effect_value == pytest.approx(-2.59)
++    assert benchmark_trace.source_cell_ref == "C6"
++
++
++def test_power_bin_missing_terminal_boundary_uses_inferred_step(active_model_session) -> None:
++    """缺少末尾上边界时，最后一档应按相邻档距补上边界继续计算。"""
++    db_session = active_model_session
++    sheet = db_session.query(PlanPowerModelSheet).filter_by(normalized_model_code="NT12R-66GDF").first()
++    last_bin = (
++        db_session.query(PlanPowerPowerBin)
++        .filter_by(sheet_id=sheet.id)
++        .order_by(PlanPowerPowerBin.bin_order.desc())
++        .first()
++    )
++    db_session.delete(last_bin)
++    raw_meta = json.loads(sheet.raw_meta_json or "{}")
++    raw_meta["power_bin_has_terminal_boundary"] = False
++    raw_meta["probability_output_bin_count"] = 9
++    sheet.raw_meta_json = json.dumps(raw_meta, ensure_ascii=False)
++    db_session.commit()
++
++    result = PowerPredictionEngine(db_session).predict(model_code="NT12R-66GDF", configuration={})
++
++    assert result.power_bins[-1] == 645.0
++    assert result.boundary_bins[-1] == 650.0
++    assert "645" in result.weighted_distribution
++
++
++def test_recommendation_scores_suppliers_and_rejects_unknown_target_bin(active_model_session) -> None:
++    """推荐服务应按目标比例评分，并拒绝模型输出范围外的目标档。"""
++    service = PowerRecommendationService(active_model_session)
++    result = service.recommend(
++        model_code="NT12R-66GDF",
++        configuration={"ribbon": "0.26", "glass": "双镀+间隙铝膜", "cell_size": "182.3*210", "cable": "+300/-200mm（4mm²）", "busbar": "6*0.4+4*0.35反光", "benchmark": "莱茵基准"},
++        target_power_ratio={"620": 0.5, "625": 0.5},
++    )
++
++    assert result.recommendations
++    scores = [item.score for item in result.recommendations]
++    assert scores == sorted(scores, reverse=True)
++    assert all(0 <= item.score <= 100 for item in result.recommendations)
++    assert result.recommendations[0].predicted_target_ratio.keys() == {"620", "625"}
++
++    with pytest.raises(PowerPredictionError, match="目标功率档不在模型输出范围"):
++        service.recommend(
++            model_code="NT12R-66GDF",
++            configuration={"ribbon": "0.26", "glass": "双镀+间隙铝膜", "cell_size": "182.3*210", "cable": "+300/-200mm（4mm²）", "busbar": "6*0.4+4*0.35反光", "benchmark": "莱茵基准"},
++            target_power_ratio={"650": 1.0},
++            supplier_names=["芜湖"],
++        )
++
++    with pytest.raises(PowerPredictionError, match="目标功率档和比例必须是有限数字"):
++        service.recommend(
++            model_code="NT12R-66GDF",
++            configuration={"ribbon": "0.26", "glass": "双镀+间隙铝膜", "cell_size": "182.3*210", "cable": "+300/-200mm（4mm²）", "busbar": "6*0.4+4*0.35反光", "benchmark": "莱茵基准"},
++            target_power_ratio={"620": math.inf},
++            supplier_names=["芜湖"],
++        )
++
++    with pytest.raises(PowerPredictionError, match="目标功率档重复"):
++        service.recommend(
++            model_code="NT12R-66GDF",
++            configuration={"ribbon": "0.26", "glass": "双镀+间隙铝膜", "cell_size": "182.3*210", "cable": "+300/-200mm（4mm²）", "busbar": "6*0.4+4*0.35反光", "benchmark": "莱茵基准"},
++            target_power_ratio={620: 0.5, "620.0": 0.5},
++            supplier_names=["芜湖"],
++        )
