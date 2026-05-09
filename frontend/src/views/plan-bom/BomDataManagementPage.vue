@@ -735,43 +735,6 @@ function handlePowerHistoryPageChange(page: number) {
   color: #6d28d9;
 }
 
-.operation-guide {
-  border-radius: 16px;
-  border: 1px solid rgba(47, 110, 66, 0.16);
-  background: rgba(240, 247, 244, 0.72);
-  padding: 16px;
-}
-
-.compact-guide {
-  display: grid;
-  align-self: stretch;
-  gap: 14px;
-}
-
-.guide-steps {
-  display: grid;
-  gap: 8px;
-}
-
-.guide-steps span {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  min-height: 34px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.66);
-  padding: 0 12px;
-  color: #0f172a;
-  font-weight: 600;
-}
-
-.guide-steps b {
-  color: var(--enterprise-primary);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-}
-
 .primary-overview {
   display: grid;
   min-width: 0;
@@ -835,13 +798,22 @@ function handlePowerHistoryPageChange(page: number) {
   background: #cbd5e1;
 }
 
-.overview-card--success::before,
-.overview-card--power::before {
-  background: var(--enterprise-primary);
+.overview-card--blue::before {
+  background: var(--accent-blue);
 }
 
-.overview-card--warning::before {
-  background: #d97706;
+.overview-card--violet::before,
+.overview-card--power::before {
+  background: var(--accent-violet);
+}
+
+.overview-card--success::before {
+  background: var(--accent-mint);
+}
+
+.overview-card--warning::before,
+.overview-card--amber::before {
+  background: var(--accent-amber);
 }
 
 .overview-card span,
@@ -1078,7 +1050,7 @@ function handlePowerHistoryPageChange(page: number) {
 @media (max-width: 980px) {
   .enterprise-hero,
   .upload-zone-grid,
-  .ops-overview-grid {
+  .primary-overview {
     grid-template-columns: 1fr;
   }
 
