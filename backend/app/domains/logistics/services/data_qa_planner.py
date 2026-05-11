@@ -1496,17 +1496,71 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "province": province},
             )
 
-        if year == 2026 and "各任务状态" in compact and any(status in compact for status in ("PREASSIGN", "ASSIGNED", "PRESIGNFOR", "SIGNEDFOR")):
+        status_distribution_question = re.sub(r"[？?。.!！]", "", compact)
+        if re.fullmatch(r"2026年各任务状态(?:的)?(?:数量|个数|分布|占比)(?:分别)?是多少", status_distribution_question):
+            # 仅放行无额外维度/排名/明细诉求的 2026 主任务表全量 status 分布；
+            # 使用整句模板而不是负向关键词列表，避免“各城市/每月/top3”等相邻问题被静默降级。
             return LogisticsDataQaPlan(
                 intent="detail_list",
                 query_key="sys_task_status_distribution",
                 metrics=["task_count", "task_share_pct"],
                 dimensions=["status"],
-                filters={"year": year, "table_scope": "ship_task"},
+                filters={"year": 2026, "table_scope": "ship_task"},
                 group_by=["status"],
             )
 
+        if year == 2026 and "各任务状态" in compact and any(status in compact for status in ("PREASSIGN", "ASSIGNED", "PRESIGNFOR", "SIGNEDFOR")):
+            # “各任务状态 + 显式状态码”常伴随筛选、额外维度、排名或明细诉求；
+            # 现有确定性 query_key 只支持全量状态分布和单状态精确句式，不能把显式状态条件丢弃后返回全量分布。
+            return LogisticsDataQaPlan(
+                intent="clarification",
+                needs_clarification=True,
+                clarification_questions=[
+                    "请确认要统计的是全量主任务状态分布，还是只筛选指定状态码。",
+                    "如需按省份、城市、月份、排名或明细展开，请先确认对应维度和输出模板。",
+                ],
+                clarification_missing_slots=["status_scope", "dimension_split", "result_metric"],
+                clarification_reason="当前问题包含显式状态码或额外维度诉求，不能用全量状态分布替代。",
+                clarification_category="state_breakdown_scope",
+                clarification_template="state_breakdown_scope",
+            )
+
         if year == 2026 and "物流任务中状态为" in compact and self.slot_extractor.extract_status(compact):
+            present_ship_statuses = [
+                status for status in ("PREASSIGN", "ASSIGNED", "PRESIGNFOR", "SIGNEDFOR") if status in compact
+            ]
+            unsafe_status_extra_scope = len(present_ship_statuses) != 1 or any(
+                keyword in compact
+                for keyword in (
+                    "各省",
+                    "各城市",
+                    "省份",
+                    "城市",
+                    "每月",
+                    "月度",
+                    "分月",
+                    "top",
+                    "TOP",
+                    "排名",
+                    "前50",
+                    "前五十",
+                    "明细",
+                )
+            )
+            if unsafe_status_extra_scope:
+                # 单状态查询才有稳定 query_key；多状态、额外维度、排名或明细都会改变输出口径，必须先追问。
+                return LogisticsDataQaPlan(
+                    intent="clarification",
+                    needs_clarification=True,
+                    clarification_questions=[
+                        "请确认只筛选一个状态，还是要同时比较多个状态。",
+                        "如需按省份、城市、月份、排名或明细展开，请先确认输出维度和表范围。",
+                    ],
+                    clarification_missing_slots=["status_scope", "dimension_split", "result_metric"],
+                    clarification_reason="当前状态查询包含多个状态或额外输出维度，不能静默降级为单状态全量分布。",
+                    clarification_category="state_breakdown_scope",
+                    clarification_template="state_breakdown_scope",
+                )
             return LogisticsDataQaPlan(
                 intent="detail_list",
                 query_key="sys_task_status_distribution",
@@ -2820,7 +2874,9 @@ class LogisticsDataQaPlanner:
         """
 
         normalized = LogisticsDataQaPlanner._normalize_remark_question(question)
-        return bool(re.search(r"备注(?:中|里)?[^\w]*包含", normalized))
+        # 备注字段可能被业务表述为“备注/备注字段/备注内容/备注项/备注栏”，
+        # “是否包含/是否含有”等问法同样是 remark 字段条件；未命中白名单时必须 fail closed。
+        return bool(re.search(r"备注(?:字段|内容|项|栏|中|里)?[^\w]*(?:是否)?[^\w]*(?:包含|含有|含)", normalized))
 
     @staticmethod
     def _extract_keywords_from_remark_phrase(phrase: str, allowed_keywords: tuple[str, ...]) -> list[str]:

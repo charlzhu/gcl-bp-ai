@@ -536,6 +536,85 @@ def test_clarification_audit_unknown_origin_vehicle_loading_summary_requires_cla
 
 
 
+def test_clarification_audit_2026_all_ship_task_status_distribution_is_supported() -> None:
+    """验证 Q0746 明确问 2026 年各任务状态数量时可直接返回主任务表状态分布。
+
+    参数：无。
+    返回值：无；通过断言验证 planner 与 service 都不会进入澄清。
+    业务逻辑：只支持无额外维度、无排名、无明细诉求的主任务表 status 总分布，避免把相邻复杂问题静默降级。
+    """
+
+    question = "2026年各任务状态的数量分别是多少?"
+    plan = LogisticsDataQaPlanner().build_plan(question)
+
+    assert plan.query_key == "sys_task_status_distribution"
+    assert not plan.needs_clarification
+    assert plan.metrics == ["task_count", "task_share_pct"]
+    assert plan.dimensions == ["status"]
+    assert plan.filters == {"year": 2026, "table_scope": "ship_task"}
+    assert plan.group_by == ["status"]
+
+    with SessionLocal() as db:
+        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question))
+
+    assert not result.needs_clarification
+    assert "2026年主任务表状态分布已返回" in result.answer_summary
+    assert result.result_table is not None
+    assert {"status", "task_count", "task_share_pct"}.issubset(set(result.result_table.columns))
+    assert len(result.result_table.rows) > 0
+
+
+
+def test_clarification_audit_2026_all_ship_task_status_distribution_rejects_noncanonical_scope() -> None:
+    """验证 Q0746 修复只放行精确总分布模板，相邻状态问题继续澄清。
+
+    参数：无。
+    返回值：无；通过断言验证状态含义、派车任务表、额外维度、排名、明细、无年份/非 2026 等都不被误放行。
+    业务逻辑：状态分布支持范围以主任务表全量 status 数量/占比为边界，其余问题必须先确认统计表和输出维度。
+    """
+
+    for question in (
+        "2026年各任务状态分别是什么?",
+        "2026年各任务状态的含义分别是什么?",
+        "2026年各任务状态多少?",
+        "2026年各任务状态分别多少?",
+        "2026年各任务状态的数量分别是多少，并按省份拆分?",
+        "2026年各任务状态PREASSIGN和ASSIGNED各省的数量分别是多少?",
+        "2026年各任务状态PREASSIGN和ASSIGNED数量top3是多少?",
+        "2026年各任务状态PREASSIGN和ASSIGNED的前50条明细是多少?",
+        "2026年物流任务中状态为PREASSIGN和ASSIGNED的数量分别是多少?",
+        "2026年物流任务中状态为PREASSIGN各省的数量分别是多少?",
+        "2026年物流任务中状态为PREASSIGN的前50条明细有哪些?",
+        "2026年各任务状态各城市的数量分别是多少?",
+        "2026年各任务状态各省的数量分别是多少?",
+        "2026年各任务状态各车型的数量分别是多少?",
+        "2026年各任务状态每个仓库的数量分别是多少?",
+        "2026年各任务状态每月的数量分别是多少?",
+        "2026年各任务状态月度分布是多少?",
+        "2026年各任务状态分月数量是多少?",
+        "2026年各任务状态各基地的数量分别是多少?",
+        "2026年各任务状态各项目的数量分别是多少?",
+        "2026年各任务状态各采购方式的数量分别是多少?",
+        "2026年各任务状态各采购类型的数量分别是多少?",
+        "2026年各任务状态各供应商的数量分别是多少?",
+        "2026年各任务状态各物流商的数量分别是多少?",
+        "2026年各任务状态占比最高的省份?",
+        "2026年各任务状态数量最少的是哪个?",
+        "2026年各任务状态占比最低的是哪个?",
+        "2026年各任务状态数量top3是多少?",
+        "2026年各任务状态数量TOP3是多少?",
+        "2026年各任务状态数量倒数前三是多少?",
+        "2026年派车任务表中各任务状态的数量分别是多少?",
+        "各任务状态的数量分别是多少?",
+        "2025年各任务状态的数量分别是多少?",
+        "请列出2026年各任务状态的前50条明细?",
+    ):
+        plan = LogisticsDataQaPlanner().build_plan(question)
+        assert plan.needs_clarification, question
+        assert plan.query_key is None, question
+
+
+
 def test_clarification_audit_driver_consistency_summary_not_limited_by_top_n() -> None:
     """验证司机一致性摘要总量不受明细 top_n 截断影响。
 
@@ -732,6 +811,13 @@ def test_remark_keyword_fee_ratio_rejects_aliases_and_extra_scope() -> None:
         "备注包含装卸的总费用占历史物流总费用的比例是多少？",
         "备注中包含装卸的总运费占历史物流总运费的比例是多少？",
         "备注包含装卸多少钱？",
+        "备注字段包含装卸多少钱？",
+        "备注内容包含装卸多少钱？",
+        "备注项含有装卸多少钱？",
+        "备注栏含装卸多少钱？",
+        "备注中是否包含装卸多少钱？",
+        "备注字段是否含有装卸多少钱？",
+        "备注中：是否包含装卸多少钱？",
         "备注，包含装卸多少钱？",
         "备注：包含装卸多少钱？",
         "备注，，包含装卸多少钱？",
