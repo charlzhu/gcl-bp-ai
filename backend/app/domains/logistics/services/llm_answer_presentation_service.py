@@ -76,6 +76,17 @@ class LogisticsLlmAnswerPresentationService:
         "month": "月份",
         "scope_label": "统计范围",
     }
+    TECHNICAL_VISIBLE_TOKENS = (
+        "query_key",
+        "planner",
+        "guardrail",
+        "SQL",
+        "sql",
+        "dwd_logistics_",
+        "ods_logistic_",
+        "dws_logistics_",
+        "actual_watt",
+    )
 
     def __init__(
         self,
@@ -437,6 +448,11 @@ class LogisticsLlmAnswerPresentationService:
             caveats=self._normalize_string_list(payload.get("caveats")) or fallback.caveats,
             debug=payload.get("debug") if isinstance(payload.get("debug"), dict) else {},
         )
+        if self._visible_text_has_technical_leak(
+            [presentation.title, presentation.answer, *presentation.highlights, *presentation.caveats]
+        ):
+            # LLM 表达层面向业务用户，不能把表名、字段名、SQL 或内部 query_key 暴露到主展示。
+            return fallback, "llm_technical_visible_leak"
         if not self._text_numbers_are_safe(
             [presentation.title, presentation.answer, *presentation.highlights, *presentation.caveats],
             result=result,
@@ -871,6 +887,23 @@ class LogisticsLlmAnswerPresentationService:
                 if token not in allowed:
                     return False
         return True
+
+    def _visible_text_has_technical_leak(self, texts: list[str]) -> bool:
+        """判断主展示文案是否泄露内部技术实现词。
+
+        参数：
+            texts: title、answer、highlights、caveats 等业务用户可见文案。
+        返回：
+            命中表名、字段名、SQL 或内部编排 key 时返回 True。
+        业务逻辑：
+            表格列名、debug 可保留后端字段；但自然语言展示必须面向业务口径，
+            不能出现 dwd/ods/dws 表名、actual_watt、query_key 等实现细节。
+        """
+
+        visible_text = "\n".join(text for text in texts if text)
+        if not visible_text:
+            return False
+        return any(token in visible_text for token in self.TECHNICAL_VISIBLE_TOKENS)
 
     def _collect_backend_number_tokens(self, result: LogisticsDataQaResult) -> set[str]:
         """收集后端结果中允许出现的数值 token。"""
