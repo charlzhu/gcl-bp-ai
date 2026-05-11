@@ -1,4 +1,5 @@
 import { http } from '@/utils/http'
+import { postJsonLineStream, type JsonLineStreamHandlers } from '@/utils/streamingApi'
 
 /**
  * 计划 BOM 明细查询请求体。
@@ -167,6 +168,17 @@ export async function askPlanBomQuestion(payload: PlanBomQaPayload) {
 }
 
 /**
+ * 调用计划 BOM 自然语言问答流式接口。
+ * 说明：后端先完成 BOM 查询/功率计算，再把“提问 + 确定性结果”交给 LLM 流式表达。
+ */
+export async function streamPlanBomQuestion(
+  payload: PlanBomQaPayload,
+  handlers: JsonLineStreamHandlers<PlanBomQaResponse>,
+) {
+  return postJsonLineStream<PlanBomQaResponse>('/plan-bom/qa/ask/stream', payload, handlers)
+}
+
+/**
  * 上传计划 BOM Excel 文件。
  */
 export interface PlanBomUploadOptions {
@@ -214,17 +226,44 @@ function emitUploadProgress(event: UploadProgressEventLike, callback?: (percenta
 export async function uploadPlanBomExcel(file: File, options: PlanBomUploadOptions = {}) {
   const formData = new FormData()
   formData.append('file', file)
+  appendPlanBomUploadFields(formData, options)
+  const resp = await http.post('/plan-bom/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
+  })
+  return resp.data
+}
+
+/**
+ * 批量上传计划 BOM Excel 文件。
+ * 说明：
+ * 1. 多个文件统一使用后端 files 字段，后端逐文件解析并返回汇总；
+ * 2. 前端不解析 Excel 内容，只负责选择文件、上传和展示逐文件结果；
+ * 3. 继续复用单文件上传的 source / overwrite / remark / 进度参数。
+ */
+export async function uploadPlanBomExcelBatch(files: File[], options: PlanBomUploadOptions = {}) {
+  const formData = new FormData()
+  files.forEach((file) => {
+    formData.append('files', file)
+  })
+  appendPlanBomUploadFields(formData, options)
+  const resp = await http.post('/plan-bom/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
+  })
+  return resp.data
+}
+
+/**
+ * 追加 BOM 上传公共表单字段。
+ */
+function appendPlanBomUploadFields(formData: FormData, options: PlanBomUploadOptions) {
   formData.append('business_type', options.business_type || 'plan_bom')
   formData.append('source', options.source || 'manual_upload')
   formData.append('overwrite', String(options.overwrite ?? true))
   if (options.remark) {
     formData.append('remark', options.remark)
   }
-  const resp = await http.post('/plan-bom/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
-  })
-  return resp.data
 }
 
 /**

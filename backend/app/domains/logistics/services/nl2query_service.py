@@ -455,12 +455,62 @@ class LogisticsNL2QueryService:
         if transport_mode:
             result["transport_mode"] = transport_mode
 
-        # 排序语义：排名 / top / 前几，默认按指标倒序。
-        if any(token in compact_question for token in ("排名", "排行", "top", "TOP", "前十", "前10")):
+        # 排序语义：排名 / top / 前几，默认按指标倒序；TopN 数量从问句抽取，避免固定前十。
+        ranking_limit = self._extract_ranking_limit(compact_question)
+        if any(token in compact_question for token in ("排名", "排行", "top", "TOP")) or ranking_limit:
             result["order_by"] = result["metric_type"]
             result["order_direction"] = "desc"
-            result["limit"] = 10
+            result["limit"] = ranking_limit or 10
         return result
+
+    @staticmethod
+    def _extract_ranking_limit(question: str) -> int | None:
+        """从排名问句里抽取 TopN 数量。
+
+        参数：
+            question: 已压缩空白的问题。
+        返回值：
+            命中“前5/前五/Top20”等明确排名数量时返回整数，否则返回 None。
+        业务逻辑：
+            只用于 NL2Query 的排序 limit，不把“前5个月/top5个月”等时间范围误当作排名条数。
+        """
+
+        def parse_positive_integer(raw_value: str) -> int | None:
+            value = raw_value.strip()
+            if value.isdigit():
+                parsed = int(value)
+                return parsed if parsed > 0 else None
+            digit_map = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
+            if value in digit_map:
+                return digit_map[value]
+            if value == "十":
+                return 10
+            if "十" not in value or value.count("十") != 1:
+                return None
+            tens_text, ones_text = value.split("十", 1)
+            tens = 1 if tens_text == "" else digit_map.get(tens_text)
+            ones = 0 if ones_text == "" else digit_map.get(ones_text)
+            if tens is None or ones is None:
+                return None
+            parsed = tens * 10 + ones
+            return parsed if parsed > 0 else None
+
+        normalized = question.rstrip("?？。.!！")
+        top_match = re.search(
+            r"(?i)top(?P<limit>\d+)(?:名|位|条|个(?!月|工作日|自然日|日|年))?"
+            r"(?=$|[?？。.!！,，；;、]|和|与|及|客户|承运商|物流公司|城市|项目|省|状态|司机|结果)",
+            normalized,
+        )
+        if top_match:
+            return parse_positive_integer(top_match.group("limit"))
+        front_match = re.search(
+            r"前(?P<limit>\d+|[一二两三四五六七八九十]+)"
+            r"(?:名|位|条|个(?!月|工作日|自然日|日|年)|(?=$|[?？。.!！,，；;、]|和|与|及|客户|承运商|物流公司|城市|项目|省|状态|司机|结果))",
+            normalized,
+        )
+        if not front_match:
+            return None
+        return parse_positive_integer(front_match.group("limit"))
 
     @staticmethod
     def _normalize_year_token(year_token: str) -> str:

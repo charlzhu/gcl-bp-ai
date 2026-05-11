@@ -15,7 +15,7 @@
           <div class="section-heading">
             <div>
               <h3 class="section-title">BOM 问答与上传</h3>
-              <p class="section-subtitle">支持自然语言查询、业务化追问、拒答解释，以及单个 BOM Excel 上传导入。</p>
+              <p class="section-subtitle">支持自然语言查询、业务化追问、拒答解释，以及 BOM Excel 批量上传导入。</p>
             </div>
           </div>
 
@@ -29,7 +29,7 @@
             <div class="qa-actions__footer">
               <el-space wrap>
                 <el-button type="primary" :loading="qaLoading" round @click="submitQaQuestion">发送问题</el-button>
-                <input type="file" accept=".xls,.xlsx,.xlsm" @change="handleUploadInputChange" />
+                <input type="file" accept=".xls,.xlsx,.xlsm" multiple @change="handleUploadInputChange" />
               </el-space>
               <span class="query-actions__hint">上传接口：POST /api/v1/plan-bom/upload</span>
             </div>
@@ -328,7 +328,7 @@ import type {
   PlanBomMaterialItem,
   PlanBomQaResponse,
 } from '@/api/planBom'
-import { askPlanBomQuestion, fetchPlanBomDetailQuery, uploadPlanBomExcel } from '@/api/planBom'
+import { askPlanBomQuestion, fetchPlanBomDetailQuery, uploadPlanBomExcelBatch } from '@/api/planBom'
 
 interface CandidateSelectionState {
   order_identity_key: string
@@ -800,15 +800,15 @@ async function submitQaQuestion() {
 }
 
 /**
- * 上传单个 BOM Excel 文件。
+ * 批量上传 BOM Excel 文件。
  */
 async function handleUploadInputChange(event: Event) {
   const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
+  const files = Array.from(target.files || [])
+  if (!files.length) return
   qaError.value = ''
   try {
-    const resp = await uploadPlanBomExcel(file)
+    const resp = await uploadPlanBomExcelBatch(files)
     uploadResult.value = typeof resp === 'object' && resp !== null && 'data' in resp ? resp.data : resp
   } catch (error: any) {
     qaError.value = error?.response?.data?.message || error?.message || 'BOM 上传失败，请稍后重试'

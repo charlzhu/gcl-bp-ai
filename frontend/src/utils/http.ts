@@ -52,6 +52,21 @@ export const http = axios.create({
   timeout: 30000,
 })
 
+/**
+ * 为 fetch / ReadableStream 构造与 Axios 相同的 API 地址。
+ *
+ * 参数：
+ *   path: 以 / 开头的后端 API 路径，不包含 apiPrefix。
+ *
+ * 返回值：
+ *   可直接传给 fetch 的 URL，默认仍为同源相对路径。
+ */
+export function buildApiUrl(path: string) {
+  const base = resolveBrowserApiBaseURL().replace(/\/+$/, '')
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${base}${normalizedPath}`
+}
+
 http.interceptors.response.use(
   (response) => response,
   (error) => {

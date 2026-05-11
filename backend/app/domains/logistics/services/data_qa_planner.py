@@ -85,7 +85,7 @@ class LogisticsDataQaPlanner:
         "物流发运合计多少量",
         "发运多少量",
     )
-    TRIP_KEYWORDS = ("总车次", "承运车次", "发运车次", "多少车次", "多少车", "总共发了多少车次", "总车数", "车数", "车辆数")
+    TRIP_KEYWORDS = ("总车次", "承运车次", "发运车次", "多少车次", "多少车", "总共发了多少车次", "总车数", "车数", "车辆数", "车次")
     TOTAL_FEE_KEYWORDS = (
         "总费用",
         "总运费",
@@ -97,6 +97,8 @@ class LogisticsDataQaPlanner:
         "运费多少",
         "运输费用",
     )
+    REMARK_SUPPORTED_KEYWORDS = ("倒运", "中转", "换车", "压车", "放空")
+    REMARK_FEE_RATIO_KEYWORDS = ("倒运", "中转")
     ASSIST_SUPPORTED_QUERY_KEYS = {
         "hist_total_fee_city_rank",
         "hist_avg_fee_by_month",
@@ -134,6 +136,7 @@ class LogisticsDataQaPlanner:
         """把自然语言问题转换成最小可执行查询计划。"""
         normalized_question = question.strip()
         compact = re.sub(r"\s+", "", normalized_question)
+        ranking_top_n = self._extract_top_n(compact)
         policy = LogisticsQuestionBankResponsePolicy().match(normalized_question)
 
         # 不支持边界必须先于高置信 A 类候选生效。
@@ -163,6 +166,38 @@ class LogisticsDataQaPlanner:
 
         pre_year = self._extract_year(compact)
         pre_origin_place = self._extract_origin_place(compact)
+        pre_remark_amount_keywords = self._extract_valid_remark_keywords(compact, self.REMARK_SUPPORTED_KEYWORDS)
+        if self._is_supported_remark_keyword_amount_summary(compact, pre_year, pre_remark_amount_keywords):
+            # remark 年度汇总是受控白名单；必须早于始发地/车型等宽条件分支，避免其它 query_key 抢先吞掉备注条件。
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="hist_remark_keyword_amount_summary",
+                metrics=["record_count", "total_fee"],
+                dimensions=[],
+                filters={"year": pre_year, "keywords": pre_remark_amount_keywords},
+            )
+        if self._is_supported_remark_keyword_fee_ratio(compact):
+            # remark 费用占比是受控白名单；直接放行，未命中的 remark 问法一律进入澄清保护。
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="hist_remark_keyword_fee_ratio",
+                metrics=["total_fee", "fee_share_pct"],
+                dimensions=[],
+                filters={"keywords": ["倒运", "中转"], "default_history_scope": "2023-2025"},
+            )
+        if self._is_remark_keyword_question_needing_clarification(compact):
+            return LogisticsDataQaPlan(
+                intent="clarification",
+                needs_clarification=True,
+                clarification_questions=[
+                    "请先确认备注关键词、时间范围、统计指标和是否需要明细。",
+                    "当前仅支持已审计的备注关键词年度记录数/费用金额汇总，以及倒运/中转总费用占历史物流总费用比例。",
+                ],
+                clarification_missing_slots=["备注关键词口径", "统计指标口径", "时间范围或明细模板"],
+                clarification_reason="当前问题包含备注关键词条件，但未命中已审计的窄口径白名单，不能用通用费用或其它聚合结果替代。",
+                clarification_category="remark_keyword_scope",
+                clarification_template="remark_keyword_scope",
+            )
         if (
             "目的省份和车型组合" in compact
             and any(keyword in compact for keyword in ("平均单车费用", "平均单车运费", "平均单价/车", "车次", "总费用"))
@@ -223,17 +258,10 @@ class LogisticsDataQaPlanner:
                 sort=[{"field": "total_fee", "direction": "desc"}],
             )
 
-        remark_amount_keywords = [keyword for keyword in ("倒运", "中转", "换车", "压车", "放空") if keyword in compact]
-        if (
-            pre_year in {2023, 2024, 2025}
-            and "备注中包含" in compact
-            and remark_amount_keywords
-            and any(keyword in compact for keyword in ("记录数量", "记录数"))
-            and any(keyword in compact for keyword in ("费用金额", "总费用", "费用"))
-            and not any(keyword in compact for keyword in ("按年份拆分", "涉及区域", "前50", "前五十", "明细", "线路"))
-        ):
+        remark_amount_keywords = self._extract_valid_remark_keywords(compact, self.REMARK_SUPPORTED_KEYWORDS)
+        if self._is_supported_remark_keyword_amount_summary(compact, pre_year, remark_amount_keywords):
             # 年度 remark 多关键词记录数/费用金额是历史台账字段可直接计算的窄汇总；
-            # 明细清单、区域分布和跨年拆分仍交给复杂报表保护规则，避免扩大支持范围。
+            # 明细清单、区域分布、未知关键词、运费别名和跨年拆分仍保持澄清，避免扩大支持范围。
             return LogisticsDataQaPlan(
                 intent="aggregate",
                 query_key="hist_remark_keyword_amount_summary",
@@ -355,6 +383,7 @@ class LogisticsDataQaPlanner:
             # “公路运输/铁路运输”是运输方式，不是承运商名称；避免系统侧总运费按 company_name 过滤到 0。
             company_name = None
         monthly_breakdown = self._is_monthly_breakdown_request(compact)
+        region_breakdown = self._is_all_region_breakdown_request(compact)
         no_explicit_time = not year and not year_range and not months
         if no_explicit_time and self._is_total_fee_question(compact):
             # 用户没有给年月日时，不再追问时间条件；按产品口径默认查询 2023-2026 全时间。
@@ -382,6 +411,17 @@ class LogisticsDataQaPlanner:
                 filters["region_name"] = region
             if transport_mode:
                 filters["transport_mode"] = transport_mode
+            if region_breakdown:
+                # “各区域/分区域/每个区域/区域分别”表达的是按区域拆分，不能退化为全局总和。
+                return LogisticsDataQaPlan(
+                    intent="detail_list",
+                    query_key="mixed_mw_by_all_regions_2023_2026",
+                    metrics=["shipment_mw"],
+                    dimensions=["region_name"],
+                    filters=filters,
+                    group_by=["region_name"],
+                    sort=[{"field": "shipment_mw", "direction": "desc"}],
+                )
             return LogisticsDataQaPlan(
                 intent="aggregate",
                 query_key="mixed_mw_summary_2023_2026",
@@ -390,7 +430,8 @@ class LogisticsDataQaPlanner:
                 filters=filters,
             )
 
-        if "各城市总费用排名前五" in compact:
+        city_total_fee_rank_limit = self._extract_city_total_fee_rank_limit(compact)
+        if year and province and city_total_fee_rank_limit:
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="hist_total_fee_city_rank",
@@ -399,7 +440,7 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "province": province},
                 group_by=["city"],
                 sort=[{"field": "total_fee", "direction": "desc"}],
-                limit=5,
+                limit=city_total_fee_rank_limit,
             )
 
         if "每月平均运费" in compact and origin_place and province and "17.5" in compact:
@@ -560,16 +601,24 @@ class LogisticsDataQaPlanner:
             )
 
         if "SIGNEDFOR签收率" in compact and "承运商" in compact and year == 2026:
+            signedfor_top_n = self._extract_top_n(compact) or 10
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="sys_signedfor_rate_by_carrier",
                 metrics=["signedfor_rate"],
                 dimensions=["carrier"],
-                filters={"year": year},
+                filters={"year": year, "top_n": signedfor_top_n},
                 group_by=["carrier"],
+                limit=signedfor_top_n,
             )
 
-        if year in {2023, 2024, 2025} and self._is_carrier_kpi_question(compact) and not self._is_monthly_fee_compare_question(compact):
+        if (
+            year in {2023, 2024, 2025}
+            and self._is_carrier_kpi_question(compact)
+            and not self._is_monthly_fee_compare_question(compact)
+            and not self._extract_top_n(compact)
+            and not self._has_extra_breakdown_intent(compact, allowed_dimension="carrier_name")
+        ):
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="hist_carrier_kpi_by_year",
@@ -694,7 +743,14 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "special_scope": "liujuan"},
             )
 
-        if year == 2026 and customer_name and self._is_total_fee_question(compact) and not origin_place:
+        if (
+            year == 2026
+            and customer_name
+            and self._is_total_fee_question(compact)
+            and not origin_place
+            and not ranking_top_n
+            and not any(keyword in compact for keyword in ("排名", "排行", "top", "TOP"))
+        ):
             filters: dict[str, Any] = {"year": year, "months": months, "customer_name": customer_name}
             if monthly_breakdown:
                 filters["monthly_breakdown"] = True
@@ -708,7 +764,15 @@ class LogisticsDataQaPlanner:
                 sort=[{"field": "biz_month", "direction": "asc"}] if monthly_breakdown else [],
             )
 
-        if year == 2026 and company_name and self._is_total_fee_question(compact) and not origin_place and not customer_name:
+        if (
+            year == 2026
+            and company_name
+            and self._is_total_fee_question(compact)
+            and not origin_place
+            and not customer_name
+            and not ranking_top_n
+            and not any(keyword in compact for keyword in ("排名", "排行", "top", "TOP"))
+        ):
             filters: dict[str, Any] = {"year": year, "months": months, "company_name": company_name}
             if monthly_breakdown:
                 filters["monthly_breakdown"] = True
@@ -736,6 +800,8 @@ class LogisticsDataQaPlanner:
             and not system_base_code
             and not procurement_type
             and not any(keyword in compact for keyword in ("经营计划", "辅料送样", "刘娟"))
+            and not ranking_top_n
+            and not any(keyword in compact for keyword in ("排名", "排行", "top", "TOP"))
         ):
             return LogisticsDataQaPlan(
                 intent="aggregate",
@@ -804,6 +870,18 @@ class LogisticsDataQaPlanner:
                 },
             )
 
+        if year in {2023, 2024, 2025} and region_breakdown and self._is_mw_question(compact):
+            # 用户说“各区域/分区域/每个区域/区域分别”时，诉求是区域拆分；必须优先于总和分支。
+            return LogisticsDataQaPlan(
+                intent="detail_list",
+                query_key="hist_mw_by_all_regions",
+                metrics=["shipment_mw"],
+                dimensions=["region_name"],
+                filters={"year": year},
+                group_by=["region_name"],
+                sort=[{"field": "shipment_mw", "direction": "desc"}],
+            )
+
         if year in {2023, 2024, 2025} and region and self._is_mw_question(compact):
             return LogisticsDataQaPlan(
                 intent="aggregate",
@@ -861,7 +939,8 @@ class LogisticsDataQaPlanner:
         vehicle_type = self._resolve_assist_vehicle_type(compact, llm_result)
         special_scope = self._resolve_assist_special_scope(compact, llm_result)
 
-        if candidate_query_key == "hist_total_fee_city_rank" and year and province:
+        city_total_fee_rank_limit = self._extract_city_total_fee_rank_limit(compact)
+        if candidate_query_key == "hist_total_fee_city_rank" and year and province and city_total_fee_rank_limit:
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key=candidate_query_key,
@@ -870,7 +949,7 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "province": province},
                 group_by=["city"],
                 sort=[{"field": "total_fee", "direction": "desc"}],
-                limit=5,
+                limit=city_total_fee_rank_limit,
             )
 
         if candidate_query_key == "hist_avg_fee_by_month" and year and origin_place and province and vehicle_type:
@@ -965,13 +1044,15 @@ class LogisticsDataQaPlanner:
             )
 
         if candidate_query_key == "sys_signedfor_rate_by_carrier" and year == 2026:
+            signedfor_top_n = self._extract_top_n(compact) or 10
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key=candidate_query_key,
                 metrics=["signedfor_rate"],
                 dimensions=["carrier"],
-                filters={"year": year},
+                filters={"year": year, "top_n": signedfor_top_n},
                 group_by=["carrier"],
+                limit=signedfor_top_n,
             )
 
         if candidate_query_key == "hist_multi_origin_customers" and year:
@@ -1040,6 +1121,7 @@ class LogisticsDataQaPlanner:
         carrier_name = self._extract_historical_carrier_name(compact)
         procurement_type = self._extract_procurement_type(compact)
         monthly_breakdown = self._is_monthly_breakdown_request(compact)
+        ranking_top_n = self._extract_top_n(compact)
         if (
             company_name
             and (
@@ -1063,6 +1145,28 @@ class LogisticsDataQaPlanner:
             special_scope = "sample"
         elif "刘娟" in compact:
             special_scope = "liujuan"
+        region_list = self._extract_region_list(compact)
+        region_breakdown = self._is_all_region_breakdown_request(compact) or (
+            len(region_list) >= 2 and any(keyword in compact for keyword in ("分别", "列出", "统计", "按"))
+        )
+
+        if year in {2023, 2024, 2025} and region_breakdown and self._is_mw_question(compact):
+            # “分区域/各区域”或显式点名多个大区，业务语义都是按区域拆分；
+            # 若同时给出晶茂等已校验承运商简称，必须保留下推过滤，不能退化成全承运商总量。
+            filters: dict[str, Any] = {"year": year}
+            if carrier_name:
+                filters["carrier_name"] = carrier_name
+            if region_list:
+                filters["regions"] = region_list
+            return LogisticsDataQaPlan(
+                intent="detail_list",
+                query_key="hist_mw_by_all_regions",
+                metrics=["shipment_mw"],
+                dimensions=["region_name"],
+                filters=filters,
+                group_by=["region_name"],
+                sort=[{"field": "shipment_mw", "direction": "desc"}],
+            )
 
         if (
             year in {2023, 2024, 2025}
@@ -1359,7 +1463,7 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "months": months, "transport_mode": transport_mode},
             )
 
-        if "倒运" in compact and "中转" in compact and any(keyword in compact for keyword in ("总费用占", "总运费占", "比例", "占比")):
+        if self._is_supported_remark_keyword_fee_ratio(compact):
             return LogisticsDataQaPlan(
                 intent="aggregate",
                 query_key="hist_remark_keyword_fee_ratio",
@@ -1422,16 +1526,25 @@ class LogisticsDataQaPlanner:
                 group_by=["status"],
             )
 
-        if year == 2026 and "PREASSIGN" in compact and "省" in compact and any(keyword in compact for keyword in ("最多", "排名")):
+        if (
+            year == 2026
+            and "PREASSIGN" in compact
+            and "省" in compact
+            and any(keyword in compact for keyword in ("最多", "排名", "排行"))
+            and not self._has_reverse_ranking_intent(compact)
+            and not self._has_extra_breakdown_intent(compact, allowed_dimension="delivery_province")
+            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric="task_count")
+        ):
+            top_n = ranking_top_n or 10
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="sys_task_status_province_ranking",
                 metrics=["task_count"],
                 dimensions=["delivery_province"],
-                filters={"year": year, "status": "PREASSIGN", "top_n": 10},
+                filters={"year": year, "status": "PREASSIGN", "top_n": top_n},
                 group_by=["delivery_province"],
                 sort=[{"field": "task_count", "direction": "desc"}],
-                limit=10,
+                limit=top_n,
             )
 
         if year == 2026 and "reconciliation_status" in compact and "填充率" in compact and "月份" in compact:
@@ -1451,21 +1564,30 @@ class LogisticsDataQaPlanner:
                 query_key="sys_ship_product_detail_stats",
                 metrics=["avg_detail_count", "detail_count"],
                 dimensions=["task_id"],
-                filters={"year": year, "top_n": 10},
+                filters={"year": year, "top_n": ranking_top_n or 10},
                 sort=[{"field": "detail_count", "direction": "desc"}],
-                limit=10,
+                limit=ranking_top_n or 10,
             )
 
-        if year == 2026 and "司机" in compact and any(keyword in compact for keyword in ("派车任务量最高", "前20", "前二十")):
+        if (
+            year == 2026
+            and "司机" in compact
+            and "派车任务量" in compact
+            and (ranking_top_n or "最高" in compact)
+            and not self._has_reverse_ranking_intent(compact)
+            and not self._has_extra_breakdown_intent(compact, allowed_dimension="driver_name")
+            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric="assign_task_count")
+        ):
+            top_n = ranking_top_n or 20
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="sys_driver_task_ranking",
                 metrics=["assign_task_count"],
                 dimensions=["driver_name"],
-                filters={"year": year, "top_n": 20},
+                filters={"year": year, "top_n": top_n},
                 group_by=["driver_name"],
                 sort=[{"field": "assign_task_count", "direction": "desc"}],
-                limit=20,
+                limit=top_n,
             )
 
         if year == 2026 and "送货单解析状态分布" in compact:
@@ -1723,10 +1845,13 @@ class LogisticsDataQaPlanner:
         carrier_ranking_metric = self._resolve_carrier_ranking_metric(compact)
         if (
             carrier_ranking_metric
+            and ranking_top_n
             and any(keyword in compact for keyword in ("承运商", "物流公司", "各物流"))
-            and "前十" in compact
             and year in {2024, 2025, 2026}
             and (year in {2024, 2025} or months)
+            and not self._has_reverse_ranking_intent(compact)
+            and not self._has_extra_breakdown_intent(compact, allowed_dimension="carrier_name")
+            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric=carrier_ranking_metric)
         ):
             return LogisticsDataQaPlan(
                 intent="ranking",
@@ -1737,11 +1862,11 @@ class LogisticsDataQaPlanner:
                     "year": year,
                     "months": months if year == 2026 else None,
                     "ranking_metric": carrier_ranking_metric,
-                    "top_n": 10,
+                    "top_n": ranking_top_n,
                 },
                 group_by=["carrier_name"],
                 sort=[{"field": carrier_ranking_metric, "direction": "desc"}],
-                limit=10,
+                limit=ranking_top_n,
             )
 
         if year == 2026 and any(keyword in compact for keyword in ("招标", "询比价")) and self._is_mw_question(compact):
@@ -1812,28 +1937,46 @@ class LogisticsDataQaPlanner:
                 filters=filters,
             )
 
-        if year == 2026 and "送达城市任务量排名前十" in compact:
+        if (
+            year == 2026
+            and ranking_top_n
+            and "送达城市" in compact
+            and "任务量" in compact
+            and any(keyword in compact for keyword in ("排名", "排行"))
+            and not self._has_reverse_ranking_intent(compact)
+            and not self._has_extra_breakdown_intent(compact, allowed_dimension="delivery_city")
+            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric="task_count")
+        ):
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="sys_task_count_ranking",
                 metrics=["task_count"],
                 dimensions=["delivery_city"],
-                filters={"year": year, "dimension": "delivery_city", "top_n": 10},
+                filters={"year": year, "dimension": "delivery_city", "top_n": ranking_top_n},
                 group_by=["delivery_city"],
                 sort=[{"field": "task_count", "direction": "desc"}],
-                limit=10,
+                limit=ranking_top_n,
             )
 
-        if year == 2026 and "project_name维度任务量排名前十" in compact:
+        if (
+            year == 2026
+            and ranking_top_n
+            and "project_name维度" in compact
+            and "任务量" in compact
+            and any(keyword in compact for keyword in ("排名", "排行"))
+            and not self._has_reverse_ranking_intent(compact)
+            and not self._has_extra_breakdown_intent(compact, allowed_dimension="project_name")
+            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric="task_count")
+        ):
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="sys_task_count_ranking",
                 metrics=["task_count"],
                 dimensions=["project_name"],
-                filters={"year": year, "dimension": "project_name", "top_n": 10},
+                filters={"year": year, "dimension": "project_name", "top_n": ranking_top_n},
                 group_by=["project_name"],
                 sort=[{"field": "task_count", "direction": "desc"}],
-                limit=10,
+                limit=ranking_top_n,
             )
 
         if year == 2026 and "delivery_distance" in compact and "填充率" in compact:
@@ -1842,10 +1985,10 @@ class LogisticsDataQaPlanner:
                 query_key="sys_delivery_distance_fill_rate_by_province",
                 metrics=["fill_rate"],
                 dimensions=["delivery_province"],
-                filters={"year": year, "top_n": 10},
+                filters={"year": year, "top_n": ranking_top_n or 10},
                 group_by=["delivery_province"],
                 sort=[{"field": "fill_rate", "direction": "asc"}],
-                limit=10,
+                limit=ranking_top_n or 10,
             )
 
         if (year == 2026 or "送货单解析成功率" in compact) and "承运商" in compact and "解析成功率" in compact:
@@ -1854,8 +1997,9 @@ class LogisticsDataQaPlanner:
                 query_key="sys_parse_success_rate_by_carrier",
                 metrics=["parse_success_rate"],
                 dimensions=["company_name"],
-                filters={"year": 2026, "top_n": 10},
+                filters={"year": 2026, "top_n": ranking_top_n or 10},
                 group_by=["company_name"],
+                limit=ranking_top_n or 10,
             )
 
         if year == 2026 and "company_id" in compact and "找不到映射" in compact:
@@ -1873,35 +2017,48 @@ class LogisticsDataQaPlanner:
                 query_key="sys_extra_cost_audited_concentration",
                 metrics=["task_count"],
                 dimensions=["company_name", "delivery_province"],
-                filters={"year": year, "top_n": 10},
+                filters={"year": year, "top_n": ranking_top_n or 10},
+                limit=ranking_top_n or 10,
             )
 
-        if province and any(keyword in compact for keyword in ("前5名客户", "前五名客户", "客户按总费用排前五", "客户按总费用排前5")) and "总费用" in compact and self._is_mw_question(compact):
+        if (
+            province
+            and ranking_top_n
+            and "客户" in compact
+            and self._is_total_fee_question(compact)
+            and self._is_mw_question(compact)
+            and not self._has_reverse_ranking_intent(compact)
+            and not self._has_extra_breakdown_intent(compact, allowed_dimension="customer_name")
+        ):
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="hist_top_customers_fee_and_mw_by_province",
                 metrics=["total_fee", "shipment_mw"],
                 dimensions=["customer_name"],
-                filters={"year": year, "province": province},
+                filters={"year": year, "province": province, "top_n": ranking_top_n},
                 group_by=["customer_name"],
                 sort=[{"field": "total_fee", "direction": "desc"}],
-                limit=5,
+                limit=ranking_top_n,
             )
 
         if (
             "历史台账" in compact
-            and "前10个客户" in compact
+            and ranking_top_n
+            and "客户" in compact
             and self._is_mw_question(compact)
+            and not self._is_total_fee_question(compact)
+            and not self._has_reverse_ranking_intent(compact)
+            and not self._has_extra_breakdown_intent(compact, allowed_dimension="customer_name")
         ):
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="hist_customer_mw_ranking",
                 metrics=["shipment_mw"],
                 dimensions=["customer_name"],
-                filters={"year": year if year in {2023, 2024, 2025} else None, "top_n": 10},
+                filters={"year": year if year in {2023, 2024, 2025} else None, "top_n": ranking_top_n},
                 group_by=["customer_name"],
                 sort=[{"field": "shipment_mw", "direction": "desc"}],
-                limit=10,
+                limit=ranking_top_n,
             )
 
         if (
@@ -2054,6 +2211,24 @@ class LogisticsDataQaPlanner:
         """从公共槽位抽取器提取区域。"""
 
         return self.slot_extractor.extract_region(question)
+
+    def _extract_region_list(self, question: str) -> list[str]:
+        """提取问句里显式点名的区域列表。
+
+        参数：
+            question: 已压缩空白的用户问题。
+        返回：
+            按问句出现顺序去重后的区域名称列表。
+        业务逻辑：
+            “华东、华北、华南分别”这类问法不是单一区域过滤，
+            而是多个点名区域的拆分列表，需要保留给仓储层做 IN 过滤。
+        """
+
+        regions: list[str] = []
+        for region_name in self.REGION_NAMES:
+            if region_name in question and region_name not in regions:
+                regions.append(region_name)
+        return sorted(regions, key=lambda item: question.index(item))
 
     def _extract_province(self, question: str) -> str | None:
         """从公共槽位抽取器提取省份。"""
@@ -2354,6 +2529,398 @@ class LogisticsDataQaPlanner:
         """判断当前问句是否在问总费用/总运费。"""
         return any(keyword in question for keyword in self.TOTAL_FEE_KEYWORDS)
 
+    def _extract_top_n(self, question: str) -> int | None:
+        """抽取排名类问题中的正整数 TopN。
+
+        参数：
+            question: 已压缩空白的用户问题。
+        返回值：
+            命中“前5/前五/前十一/Top20”等正整数表达时返回 N，否则返回 None。
+        业务逻辑：
+            该函数只负责解析数量，不单独决定 query_key；调用方必须继续校验年份、维度、
+            指标和排序方向，避免把复杂排名问题误收进简单 TopN 分支。
+        """
+
+        normalized = question.rstrip("?？。.!！")
+        top_match = re.search(
+            r"(?i)top(?P<limit>\d+)(?:名|位|条|个(?!月|工作日|自然日|日|年))?"
+            r"(?=$|[?？。.!！,，；;、]|和|与|及|客户|承运商|物流公司|城市|项目|省|状态|司机|结果)",
+            normalized,
+        )
+        if top_match:
+            return self._parse_positive_integer(top_match.group("limit"))
+
+        front_match = re.search(
+            r"前(?P<limit>\d+|[一二两三四五六七八九十]+)"
+            # “前五集中在哪里/前五主要集中在哪”也是业务常见 TopN 问法，不能因为“集中”不是维度词而退回默认 10。
+            r"(?:名|位|条|个(?!月|工作日|自然日|日|年)|(?=$|[?？。.!！,，；;、]|和|与|及|客户|承运商|物流公司|城市|项目|省|状态|司机|结果|集中|在哪|哪里))",
+            normalized,
+        )
+        if not front_match:
+            return None
+        return self._parse_positive_integer(front_match.group("limit"))
+
+    @staticmethod
+    def _parse_positive_integer(raw_value: str) -> int | None:
+        """把阿拉伯数字或常见中文数字转换为正整数。
+
+        参数：
+            raw_value: 待解析的数字文本，例如 10、五、十一、二十。
+        返回值：
+            可解析且大于 0 时返回整数，否则返回 None。
+        业务逻辑：
+            当前 TopN 只需要稳定覆盖几十以内的业务问法；不解析复杂大写金额或小数，
+            防止非排名数量被误当成 limit。
+        """
+
+        value = raw_value.strip()
+        if not value:
+            return None
+        if value.isdigit():
+            parsed = int(value)
+            return parsed if parsed > 0 else None
+
+        digit_map = {
+            "一": 1,
+            "二": 2,
+            "两": 2,
+            "三": 3,
+            "四": 4,
+            "五": 5,
+            "六": 6,
+            "七": 7,
+            "八": 8,
+            "九": 9,
+        }
+        if value in digit_map:
+            return digit_map[value]
+        if value == "十":
+            return 10
+        if "十" not in value or value.count("十") != 1:
+            return None
+
+        tens_text, ones_text = value.split("十", 1)
+        tens = 1 if tens_text == "" else digit_map.get(tens_text)
+        ones = 0 if ones_text == "" else digit_map.get(ones_text)
+        if tens is None or ones is None:
+            return None
+        parsed = tens * 10 + ones
+        return parsed if parsed > 0 else None
+
+    @staticmethod
+    def _has_reverse_ranking_intent(question: str) -> bool:
+        """判断问题是否要求反向排序或低值排名。"""
+
+        return any(
+            keyword in question
+            for keyword in (
+                "最低",
+                "最少",
+                "倒数",
+                "升序",
+                "从低到高",
+                "由低到高",
+                "后十",
+                "后10",
+                "bottom",
+                "Bottom",
+                "BOTTOM",
+            )
+        )
+
+    @staticmethod
+    def _is_all_region_breakdown_request(question: str) -> bool:
+        """判断用户是否要求按所有区域拆分返回。
+
+        参数：
+            question: 已压缩空白的用户问题。
+        返回值：
+            命中“各区域/分区域/每个区域/区域分别/按区域”等通用区域拆分表达时返回 True。
+        业务逻辑：
+            “华东区域”等具体区域是筛选条件，不是拆分诉求；这里只识别全区域分组表达，
+            避免把业务员要求的分区域结果误查成一条全局总和。
+        """
+
+        return any(
+            keyword in question
+            for keyword in (
+                "各区域",
+                "各大区",
+                "分区域",
+                "分大区",
+                "每个区域",
+                "每个大区",
+                "各个区域",
+                "各个大区",
+                "区域分别",
+                "大区分别",
+                "按区域",
+                "按大区",
+                "区域拆分",
+                "大区拆分",
+                "区域分组",
+                "大区分组",
+            )
+        )
+
+    @staticmethod
+    def _has_extra_breakdown_intent(question: str, *, allowed_dimension: str | None = None) -> bool:
+        """判断 TopN 问题是否追加了当前 query_key 不支持的拆分维度。
+
+        参数：
+            question: 已压缩空白的问题。
+            allowed_dimension: 当前 query_key 已经承载的分组维度；该维度本身不算额外拆分。
+        返回值：
+            用户追加“按区域/按月份/按城市”等非当前维度拆分诉求时返回 True。
+        业务逻辑：
+            TopN 泛化只允许改变返回条数，不能静默丢弃新的拆分维度；但像
+            “按省任务量排名”本身就是 delivery_province 维度，不能被误拦截。
+        """
+
+        dimension_phrases = {
+            "region_name": ("区域", "大区"),
+            "carrier_name": ("承运商", "物流公司", "物流供应商"),
+            "company_name": ("承运商", "物流公司", "物流供应商"),
+            "delivery_city": ("城市", "送达城市"),
+            "city": ("城市", "送达城市"),
+            "delivery_province": ("省份", "省", "送达省份"),
+            "customer_name": ("客户",),
+            "project_name": ("项目", "project_name"),
+            "driver_name": ("司机", "驾驶员"),
+            "biz_month": ("月份", "月度", "按月"),
+        }
+        allowed_phrases = set(dimension_phrases.get(allowed_dimension or "", ()))
+
+        for dimension_key, phrases in dimension_phrases.items():
+            if dimension_key == allowed_dimension:
+                continue
+            for phrase in phrases:
+                if phrase in allowed_phrases:
+                    continue
+                patterns = (
+                    f"按{phrase}",
+                    f"按{phrase}分",
+                    f"按{phrase}拆分",
+                    f"{phrase}拆分",
+                    f"{phrase}分组",
+                    f"分{phrase}",
+                    f"各{phrase}",
+                    f"{phrase}维度",
+                )
+                if any(pattern in question for pattern in patterns):
+                    return True
+
+        if any(keyword in question for keyword in ("拆分", "分组")):
+            # 如果出现泛化拆分词但没有命中允许维度，保守澄清，避免丢条件。
+            return not any(phrase in question for phrase in allowed_phrases)
+        return False
+
+    def _has_extra_metric_for_single_metric_ranking(self, question: str, *, allowed_metric: str) -> bool:
+        """判断单指标排名问题是否混入了其它指标。
+
+        参数：
+            question: 已压缩空白的用户问题。
+            allowed_metric: 当前 query_key 支持的唯一排序指标。
+        返回值：
+            问句中出现当前单指标 query_key 之外的费用、发运量、车次或单瓦成本诉求时返回 True。
+        业务逻辑：
+            TopN 泛化只改变 limit，不扩大指标集合；例如“总发运量和总费用排名”不能被
+            “客户总发运量排名”或“承运商总费用排名”静默吞掉。
+        """
+
+        asks_total_fee = self._is_total_fee_question(question)
+        asks_mw = self._is_mw_question(question)
+        asks_trip = self._is_trip_question(question)
+        asks_unit_fee = self._is_unit_fee_question(question)
+        asks_task_count = any(keyword in question for keyword in ("任务量", "任务数", "订单数", "主任务数", "派车任务量"))
+
+        if allowed_metric == "total_fee":
+            return asks_mw or asks_trip or asks_unit_fee or asks_task_count
+        if allowed_metric in {"shipment_mw", "task_count", "assign_task_count"}:
+            return asks_total_fee or asks_trip or asks_unit_fee or (asks_task_count and allowed_metric == "shipment_mw")
+        if allowed_metric == "unit_fee_per_watt":
+            return asks_total_fee or asks_mw or asks_trip or asks_task_count
+        return False
+
+    def _extract_city_total_fee_rank_limit(self, question: str) -> int | None:
+        """抽取省份内城市总费用排名问题的 TopN 限制。
+
+        参数：
+            question: 已压缩空白的用户问题。
+        返回值：
+            命中“城市 + 总费用 + 排名 + 前N”窄口径时返回 N，否则返回 None。
+        业务逻辑：
+            该能力只服务“YYYY年<省份>各城市总费用排名前N”类明确问题；年份和省份由调用方校验，
+            本函数不放宽到缺省时间、缺省地域或非城市维度的模糊排名问题。
+        """
+
+        extra_scope_keywords = (
+            "承运商",
+            "物流公司",
+            "发运量",
+            "运量",
+            "车次",
+            "车型",
+            "客户",
+            "项目",
+            "拆分",
+            "分组",
+            "最低",
+            "最少",
+            "倒数",
+            "从低到高",
+            "升序",
+        )
+        if any(keyword in question for keyword in extra_scope_keywords) or self._has_extra_breakdown_intent(question, allowed_dimension="city"):
+            # 额外维度、额外指标或反向排序会改变执行口径，不能被单纯“各城市总费用 TopN”吞掉。
+            return None
+
+        normalized = question.rstrip("?？。.!！")
+        rank_pattern = re.compile(
+            r"(?:各)?城市"
+            r"(?:总费用|总运费)"
+            r"(?:排名|排行)"
+            r"(?:前(?P<limit>\d+|[一二两三四五六七八九十两]+)|(?P<top>top\d+))"
+            r"(?:名|个|位)?$",
+            re.IGNORECASE,
+        )
+        match = rank_pattern.search(normalized)
+        if not match:
+            # 只接受“城市总费用排名前N”这一窄结构；如果用户追加了承运商拆分、发运量、最低排名等口径，
+            # 这里故意不命中，让后续澄清/不支持边界接管，避免把复杂问题错答成单纯城市 TopN。
+            return None
+
+        raw_limit = match.group("limit") or (match.group("top") or "").lower().removeprefix("top")
+        return self._parse_positive_integer(raw_limit)
+
+    @staticmethod
+    def _normalize_remark_question(question: str) -> str:
+        """规整备注关键词问题，便于做严格整句白名单匹配。
+
+        参数：
+            question: 用户问题原文或已压缩文本。
+        返回值：
+            去掉空白、引号和句末问号后的问题文本。
+        业务逻辑：只做格式归一，不改写业务词，避免把未审计别名扩展为已支持口径。
+        """
+
+        normalized = re.sub(r"\s+", "", question)
+        normalized = re.sub(r"[“”‘’\"']", "", normalized)
+        return normalized.rstrip("?？。.")
+
+    @staticmethod
+    def _has_remark_keyword_intent(question: str) -> bool:
+        """判断问题是否表达“备注包含某关键词”的意图。
+
+        参数：
+            question: 已压缩空白的问题。
+        返回值：
+            命中“备注包含”或“备注中包含”时返回 True。
+        业务逻辑：remark 字段是专门口径，未白名单支持时必须 fail closed，不能落入通用总费用/承运商链路。
+        """
+
+        normalized = LogisticsDataQaPlanner._normalize_remark_question(question)
+        return bool(re.search(r"备注(?:中|里)?[^\w]*包含", normalized))
+
+    @staticmethod
+    def _extract_keywords_from_remark_phrase(phrase: str, allowed_keywords: tuple[str, ...]) -> list[str]:
+        """从已定位的备注关键词短语中抽取受控关键词。
+
+        参数：
+            phrase: 严格正则已捕获的关键词短语。
+            allowed_keywords: 当前 query_key 允许的关键词集合。
+        返回值：
+            短语只由允许关键词和连接词构成时，返回命中的关键词；否则返回空列表。
+        业务逻辑：必须校验严格 fullmatch 捕获的 phrase，不能重新从整句搜索第一个分隔符，否则会吞掉后续未知条件。
+        """
+
+        keyword_pattern = "|".join(re.escape(keyword) for keyword in allowed_keywords)
+        connector_pattern = r"(?:或|和|、|,|，|/|及|与)"
+        if not re.fullmatch(rf"(?:{keyword_pattern})(?:{connector_pattern}(?:{keyword_pattern}))*", phrase):
+            return []
+        tokens = re.findall(keyword_pattern, phrase)
+        if len(tokens) != len(set(tokens)):
+            return []
+        return [keyword for keyword in allowed_keywords if keyword in tokens]
+
+    def _extract_valid_remark_keywords(self, question: str, allowed_keywords: tuple[str, ...]) -> list[str]:
+        """从备注关键词短语中抽取受控关键词。
+
+        参数：
+            question: 用户问题。
+            allowed_keywords: 当前 query_key 允许的关键词集合。
+        返回值：
+            按 allowed_keywords 顺序返回问题中出现的关键词；短语包含未知词时返回空列表。
+        业务逻辑：不能只靠全文包含关键词，否则“倒运和装卸”会被错误窄化为“倒运”。
+        """
+
+        normalized = self._normalize_remark_question(question)
+        match = re.search(r"备注(?:中|里)?[：:,，]?包含(?P<phrase>.+?)(?:的记录数量|的记录数|的记录[，,]?其总费用占|的记录总费用占|的总费用占|其总费用占|总费用占)", normalized)
+        if not match:
+            return []
+        phrase = match.group("phrase")
+        return self._extract_keywords_from_remark_phrase(phrase, allowed_keywords)
+
+    def _is_supported_remark_keyword_amount_summary(self, question: str, year: int | None, remark_keywords: list[str]) -> bool:
+        """判断是否为已审计的年度备注关键词记录数/费用金额汇总。
+
+        参数：
+            question: 已压缩空白的问题。
+            year: 抽取出的年份。
+            remark_keywords: 已校验的备注关键词。
+        返回值：
+            仅当问题完整匹配单年、受控关键词、记录数量和费用金额口径时返回 True。
+        业务逻辑：区域、明细、占比、总运费别名、未知关键词都会改变统计口径，必须澄清。
+        """
+
+        normalized = self._normalize_remark_question(question)
+        match = re.fullmatch(
+            r"(?:请统计|统计)?(?P<year>2023|2024|2025)年备注(?:中|里)?[：:,，]?包含(?P<phrase>.+?)的记录(?:数量|数)和(?:费用金额|金额|总费用|费用)(?:是多少)?",
+            normalized,
+        )
+        exact_keywords = self._extract_keywords_from_remark_phrase(match.group("phrase"), self.REMARK_SUPPORTED_KEYWORDS) if match else []
+        return bool(
+            match
+            and year in {2023, 2024, 2025}
+            and int(match.group("year")) == year
+            and exact_keywords
+            and exact_keywords == remark_keywords
+        )
+
+    def _is_supported_remark_keyword_fee_ratio(self, question: str) -> bool:
+        """判断是否为已审计的备注倒运/中转费用占历史物流总费用比例。
+
+        参数：
+            question: 用户问题。
+        返回值：
+            仅当问题不带显式时间、关键词只包含倒运/中转、分母为历史物流总费用且使用总费用口径时返回 True。
+        业务逻辑：总运费、历史总费用、百分比、区域/车型/明细等别名或额外条件暂未审计，必须澄清。
+        """
+
+        normalized = self._normalize_remark_question(question)
+        match = re.fullmatch(
+            r"(?:请问|请统计|统计)?备注(?:中|里)?[：:,，]?包含(?P<phrase>.+?)(?:的记录[，,]?其|的记录|其)?的?总费用占历史物流总费用(?:的)?(?:比例|占比)(?:是多少)?",
+            normalized,
+        )
+        remark_keywords = self._extract_keywords_from_remark_phrase(match.group("phrase"), self.REMARK_FEE_RATIO_KEYWORDS) if match else []
+        return (
+            bool(match)
+            and not self._extract_years(question)
+            and remark_keywords == list(self.REMARK_FEE_RATIO_KEYWORDS)
+        )
+
+    def _is_remark_keyword_question_needing_clarification(self, question: str) -> bool:
+        """判断未落入白名单的备注关键词问题是否需要澄清保护。
+
+        参数：
+            question: 已压缩空白的用户问题。
+        返回值：
+            只要表达“备注包含”意图且未被白名单放行，就返回 True。
+        业务逻辑：remark 字段查询不能被当作承运商名、区域名或普通总费用问题继续兜底，否则会产生误答。
+        """
+
+        return self._has_remark_keyword_intent(question)
+
     def _is_complex_report_question(self, question: str) -> bool:
         """判断是否属于当前应追问报表模板的复杂报表题。
 
@@ -2366,6 +2933,14 @@ class LogisticsDataQaPlanner:
         说明：
             该判断不扩 query_key，只保护现有稳定链路，避免把单指标结果包装成完整报表。
         """
+
+        if self._is_supported_remark_keyword_fee_ratio(question):
+            # 备注“倒运/中转”费用占历史物流总费用比例已有专用确定性 query_key；
+            # 不能被宽表/明细类备注关键词保护规则误判为复杂报表。
+            return False
+        if self._is_remark_keyword_question_needing_clarification(question):
+            # 未落入严格白名单的备注关键词题必须先追问，避免掉入通用总费用/承运商抽取链路误答。
+            return True
 
         complex_keywords = (
             "宽表",
@@ -2601,6 +3176,6 @@ class LogisticsDataQaPlanner:
         """解析承运商排名题的排序指标。"""
         if self._is_unit_fee_question(question):
             return "unit_fee_per_watt"
-        if any(keyword in question for keyword in ("总运费", "运费排名", "按运费排名", "运输费用排名", "按运输费用排名")):
+        if any(keyword in question for keyword in ("总费用", "总运费", "费用排名", "运费排名", "按费用排名", "按运费排名", "运输费用排名", "按运输费用排名")):
             return "total_fee"
         return None

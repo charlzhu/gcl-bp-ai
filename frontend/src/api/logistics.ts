@@ -1,4 +1,5 @@
 import { http } from '@/utils/http'
+import { postJsonLineStream, type JsonLineStreamHandlers } from '@/utils/streamingApi'
 
 /**
  * 自然语言查询请求体。
@@ -255,6 +256,17 @@ export async function fetchLogisticsDataQaQuery(payload: LogisticsDataQaPayload)
     trace_id?: string | null
     data?: LogisticsDataQaResult | null
   }
+}
+
+/**
+ * 物流数据问答流式查询。
+ * 说明：后端先完成确定性查询，再把“提问 + 结果”交给 LLM 流式表达。
+ */
+export async function streamLogisticsDataQaQuery(
+  payload: LogisticsDataQaPayload,
+  handlers: JsonLineStreamHandlers<LogisticsDataQaResult>,
+) {
+  return postJsonLineStream<LogisticsDataQaResult>('/logistics/data-qa/query/stream', payload, handlers)
 }
 
 /**

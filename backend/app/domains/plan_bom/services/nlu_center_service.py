@@ -140,6 +140,7 @@ class PlanBomNluCenterService:
         slots: dict[str, Any] = {}
         slots["order_tail_no"] = self._extract_order_tails(normalized)
         slots["compare_orders"] = slots["order_tail_no"][:]
+        slots["order_name_hint"] = self._extract_order_name_hint(normalized)
         slots["material_category"] = self._extract_material_categories(normalized)
         slots["non_core_material_category"] = self._extract_non_core_material_categories(normalized)
         slots["material_alias"] = self._extract_material_aliases(normalized)
@@ -185,7 +186,24 @@ class PlanBomNluCenterService:
         ):
             if slots.get("target_power_ratio") or any(
                 word in question
-                for word in ("推荐供应商", "供应商推荐", "推荐电池", "匹配度", "目标功率", "目标比例", "目标", "占比")
+                for word in (
+                    "推荐供应商",
+                    "供应商推荐",
+                    "推荐电池",
+                    "匹配度",
+                    "目标功率",
+                    "目标比例",
+                    "目标",
+                    "占比",
+                    "各家供应商",
+                    "各个供应商",
+                    "供应商厂家",
+                    "各个供应商厂家",
+                    "从什么电池效率",
+                    "需要从什么电池效率",
+                    "电池效率可以满足",
+                    "效率可以满足",
+                )
             ):
                 return "plan_power_supplier_recommendation"
             return "plan_power_prediction"
@@ -482,9 +500,15 @@ class PlanBomNluCenterService:
             "供应商推荐",
             "推荐供应商",
             "各家供应商",
+            "各个供应商",
+            "供应商厂家",
+            "各个供应商厂家",
             "哪些家电池",
             "哪几家电池",
             "哪个效率",
+            "从什么电池效率",
+            "需要从什么电池效率",
+            "供应需要从什么电池效率",
             "用供应商",
             "需要什么样的电池",
             "电池可以满足",
@@ -539,6 +563,55 @@ class PlanBomNluCenterService:
         if half_match:
             put(half_match.group("p1"), 1)
             put(half_match.group("p2"), 1)
+        if target:
+            return target
+
+        # 真实业务常把“615 功率 / 单一需求720功率”作为 100% 单一目标档，
+        # 只在功率/效率/供应商语境下采纳，避免把订单号、年份或线长误当成功率目标。
+        power_context_words = (
+            "目标功率",
+            "目标",
+            "需求",
+            "电池效率",
+            "效率段",
+            "供应商",
+            "供应",
+            "满足",
+            "单一需求",
+        )
+        if not any(word in question for word in power_context_words):
+            return target
+        single_patterns = [
+            r"(?:单一需求|单一|目标功率|目标|需求)?\s*(?P<power>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|功率|功率档)",
+            r"(?:功率|目标功率|单一需求)\s*(?P<power>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?",
+        ]
+        for pattern in single_patterns:
+            match = re.search(pattern, question)
+            if not match:
+                continue
+            power_text = match.group("power")
+            try:
+                power_value = float(power_text)
+            except (TypeError, ValueError):
+                continue
+            prefix = question[max(0, match.start("power") - 10) : match.start("power")]
+            previous_char = question[match.start("power") - 1] if match.start("power") > 0 else ""
+            if power_value < 300 or power_value > 900:
+                # 组件目标功率应落在功率模型常见输出区间；104/1073/2025 等订单号或年份片段不能当成功率档。
+                continue
+            if (power_text.startswith("0") and len(power_text) > 3) or previous_char.isdigit():
+                # 订单尾号常写成 00615；正则可能命中其中的 0615/615，必须保持为识别符而不是 615W 目标档。
+                continue
+            if previous_char and (previous_char.isascii() and previous_char.isalnum() or previous_char in "-_/—–"):
+                # NT720、项目-615 这类型号/项目码紧贴数字，不能仅因后面有“功率预测/供应商推荐”就抽成目标功率。
+                continue
+            if any(marker in prefix for marker in ("订单", "单号", "评审", "编号", "项目号")) and not any(
+                marker in prefix for marker in ("目标", "需求", "单一")
+            ):
+                # “订单615功率预测”中的 615 是订单尾号；只有“目标/需求/单一”明确修饰时才可作为目标功率。
+                continue
+            put(power_text, 1)
+            break
         return target
 
     @staticmethod
@@ -546,24 +619,79 @@ class PlanBomNluCenterService:
         """抽取用户直接写在问题中的功率模型配置项。
 
         参数：
-            question: 用户问题，支持“焊带：0.24+玻璃：双镀+汇流条：...+接线盒：300/200”等 docx 问法。
+            question: 用户问题，支持“0.24焊带+双镀玻璃+300/200线长”、
+                “焊带：0.24+玻璃：双镀+接线盒：300/200”等真实业务口语和结构化问法。
 
         返回：
             可交给 M4 显式配置解析的配置字典；这里只做文本槽位抽取，不做数值计算。
         """
         config: dict[str, str] = {}
-        extractors = {
-            "ribbon": r"焊带\s*[:：]?\s*(?P<value>.+?)(?=\+?玻璃|[，,；;。]|$)",
-            "glass": r"玻璃\s*[:：]?\s*(?P<value>.+?)(?=\+?汇流条|\+?接线盒|[，,；;。]|$)",
-            "busbar": r"汇流条\s*[:：]?\s*(?P<value>.+?)(?=\+?接线盒|[，,；;。]|$)",
-            "cable": r"接线盒\s*[:：]?\s*(?P<value>.+?)(?=\s*[，,；;。]|\s*标板|$)",
+
+        def clean(value: str | None) -> str:
+            """清理材料槽位文本，去掉连接符和口语尾词。"""
+            return (value or "").strip().strip("+").strip()
+
+        # 真实业务经常把规格写在材料名前面，例如“0.24焊带”；
+        # 这些前置写法优先于旧的“焊带：0.24”后置写法，避免把“双镀玻璃”误塞到焊带槽位。
+        prefix_extractors = {
+            "ribbon": r"(?P<value>φ?\s*\d+(?:\.\d+)?(?:\s*\+\s*φ?\s*\d+(?:\.\d+)?)*)\s*(?:mm)?\s*焊带",
+            # “超高透”必须放在“高透”前面，避免正则从中间命中成普通高透。
+            "glass": r"(?P<value>超高透|高透|双镀|单镀|透明|白玻|镀膜|非镀膜)\s*玻璃",
+            "busbar": r"(?P<value>\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*mm?[^，,；;。+]*?)\s*汇流条",
+            "cable": r"(?P<value>\+?\d{2,4}\s*/\s*-?\d{2,4}\s*(?:mm)?\s*(?:线长|线缆长度|线缆|接线盒))",
         }
-        for key, pattern in extractors.items():
+        for key, pattern in prefix_extractors.items():
             match = re.search(pattern, question, flags=re.IGNORECASE)
             if match:
-                value = match.group("value").strip().strip("+").strip()
+                value = clean(match.group("value"))
                 if value:
                     config[key] = value
+
+        # 对“高透玻璃+间隙铝膜”这类玻璃+间隙膜组合，保留间隙膜信息给 M4 做确定性 option 归一。
+        if "glass" in config and any(word in question for word in ("间隙铝膜", "间隙膜", "间隙贴膜")):
+            if "间隙" not in config["glass"]:
+                config["glass"] = f"{config['glass']}+间隙铝膜"
+
+        # 兼容结构化后置写法；仅在前置写法没有命中该槽位时使用，避免跨材料贪婪误抽。
+        suffix_extractors = {
+            "ribbon": r"焊带\s*[:：]\s*(?P<value>.+?)(?=\+?玻璃|\+?汇流条|\+?接线盒|\+?线长|[，,；;。]|$)",
+            "glass": r"玻璃\s*[:：]\s*(?P<value>.+?)(?=\+?汇流条|\+?接线盒|\+?线长|[，,；;。]|$)",
+            "busbar": r"汇流条\s*[:：]\s*(?P<value>.+?)(?=\+?接线盒|\+?线长|[，,；;。]|$)",
+            "cable": r"(?:接线盒|线长|线缆长度|线缆)\s*[:：]?\s*(?P<value>\+?\d{2,4}\s*/\s*-?\d{2,4}(?:mm)?)(?=\s*[，,；;。]|\s*标板|$)",
+        }
+        for key, pattern in suffix_extractors.items():
+            if key in config:
+                continue
+            match = re.search(pattern, question, flags=re.IGNORECASE)
+            if match:
+                value = clean(match.group("value"))
+                if value:
+                    config[key] = value
+
+        # 无 BOM 方案评估时，业务员常省略“汇流条/接线盒”字样，直接写
+        # “6*0.35+4*0.35反光+400/-200mm（4mm²）”。这里仍只做槽位抽取，
+        # 后续是否是有效模型 option 交给 M4 确定性校验，避免按截图值写死。
+        if "busbar" not in config:
+            match = re.search(
+                r"(?P<value>\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*\+\s*\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*(?:反光)?)",
+                question,
+                flags=re.IGNORECASE,
+            )
+            if match:
+                value = clean(match.group("value"))
+                if value:
+                    config["busbar"] = value
+        if "cable" not in config:
+            match = re.search(
+                r"(?P<value>\+?\d{2,4}\s*/\s*-?\d{2,4}\s*mm?\s*[（(]\s*\d+(?:\.\d+)?\s*mm\s*(?:²|2)\s*[）)])",
+                question,
+                flags=re.IGNORECASE,
+            )
+            if match:
+                # 对带线径的接线盒长度，“+400/-200”中的前导 + 是业务符号，不是材料连接符，需保留。
+                value = match.group("value").strip()
+                if value:
+                    config["cable"] = value
         benchmark = PlanBomNluCenterService._extract_benchmark(question)
         if benchmark:
             config["benchmark"] = benchmark
@@ -723,6 +851,48 @@ class PlanBomNluCenterService:
             if tail and tail not in normalized:
                 normalized.append(tail)
         return normalized
+
+    @staticmethod
+    def _extract_order_name_hint(question: str) -> str | None:
+        """抽取用户显式给出的 BOM 文件名或客户实例片段，用于同评审号候选消歧。
+
+        参数：
+            question: 用户问题原文。
+
+        返回：
+            可与 `PlanBomHeader.order_name/raw_file_name` 做包含匹配的订单名称片段；未命中时返回 None。
+        业务逻辑：同一个评审号可能被多个客户实例共用，
+            当用户已经写出完整 BOM 名、`版型(客户-年份-尾号)` 或独立 `客户-年份-尾号` 时，
+            应把该实例片段作为确定性消歧条件，而不是针对某个客户名硬编码。
+        """
+
+        patterns = [
+            r"(?P<hint>NT[0-9A-Z]+[-/][0-9A-Z]+GDF[（(][^）)]*?20\d{2}[-_]\d{5}[^）)]*[）)]\s*Bill of materials)",
+            r"NT[0-9A-Z]+[-/][0-9A-Z]+GDF[（(](?P<hint>[^）)]*?20\d{2}[-_]\d{5})[）)]",
+            r"(?P<hint>[\u4e00-\u9fa5][\u4e00-\u9fa5A-Za-z0-9_/\-]{0,40}[-—–]20\d{2}[-_]\d{5})",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, question, flags=re.IGNORECASE)
+            if match:
+                hint = PlanBomNluCenterService._clean_order_name_hint(match.group("hint"))
+                if hint:
+                    return hint
+        return None
+
+    @staticmethod
+    def _clean_order_name_hint(value: str) -> str:
+        """清理客户实例片段前后的口语词，避免把“请问/帮我查”等写入消歧键。
+
+        参数：
+            value: 正则初步抽取到的订单名称片段。
+
+        返回：
+            可用于候选包含匹配的干净片段。
+        """
+
+        hint = value.strip(" \t\r\n，,。；;：:、")
+        hint = re.sub(r"^(请问一下|请问|请帮我查一下|请帮我查|帮忙看一下|帮忙看下|帮忙查一下|帮忙查|帮我看一下|帮我看下|帮我查一下|帮我查|麻烦看一下|麻烦看下|麻烦查一下|麻烦帮我查一下|麻烦帮我查|查询|查一下|看一下|我想查|我要查|请查一下|请查)", "", hint)
+        return hint.strip(" \t\r\n，,。；;：:、")
 
     @staticmethod
     def _normalize_order_tail(value: str) -> str:
