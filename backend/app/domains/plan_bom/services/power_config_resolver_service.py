@@ -211,6 +211,7 @@ class PlanBomPowerConfigResolverService:
         order_name: str | None = None,
         version_no: str | None = None,
         benchmark: str | None = None,
+        explicit_configuration: Mapping[str, Any] | None = None,
     ) -> PowerBomConfigResolution:
         """解析真实 BOM 对应的功率预测配置。
 
@@ -221,6 +222,7 @@ class PlanBomPowerConfigResolverService:
             order_name: 订单名称片段；
             version_no: 指定 BOM 版本号；
             benchmark: 可选标板基准，若不传则使用 active 模型默认值。
+            explicit_configuration: 用户在订单问题中直接给出的功率配置；用于覆盖 BOM 中缺失线径等可确定配置。
 
         返回：
             `PowerBomConfigResolution`，包含配置、原始 BOM 追溯、未识别项和候选项。
@@ -284,6 +286,14 @@ class PlanBomPowerConfigResolverService:
             else:
                 resolved[factor_key] = item
 
+        self._apply_explicit_configuration_overrides(
+            sheet=sheet,
+            explicit_configuration=explicit_configuration,
+            resolved=resolved,
+            unresolved=unresolved,
+            warnings=warnings,
+        )
+
         for factor_key, default_rule in (self.mapping.get("model_defaults") or {}).items():
             if factor_key == "benchmark" and benchmark:
                 benchmark_value = self._canonical_benchmark(benchmark)
@@ -320,6 +330,57 @@ class PlanBomPowerConfigResolverService:
                 warnings.append(f"功率模型缺少默认 {factor_key} 选项，M3 调用时可能需要显式补充。")
 
         return self._build_result(header, model_code_item.value, resolved, unresolved, source_lines, warnings)
+
+    def _apply_explicit_configuration_overrides(
+        self,
+        *,
+        sheet: PlanPowerModelSheet,
+        explicit_configuration: Mapping[str, Any] | None,
+        resolved: dict[str, PowerBomResolvedItem],
+        unresolved: list[PowerBomUnresolvedItem],
+        warnings: list[str],
+    ) -> None:
+        """把用户显式给出的功率配置覆盖到订单 BOM 解析结果中。
+
+        参数：
+            sheet: 当前订单命中的功率模型页。
+            explicit_configuration: NLU 从问题原文抽取的 ribbon/glass/cable 等配置。
+            resolved: 已解析配置字典，原地更新。
+            unresolved: 未解析配置列表，原地移除被显式配置解决的项目。
+            warnings: 解析警告列表，原地追加降级说明。
+
+        返回：
+            无返回值。该方法只做 M4 确定性 option 校验，不计算功率数值。
+        """
+        if not explicit_configuration:
+            return
+        for factor_key in ("ribbon", "glass", "busbar", "cable", "cell_size", "supplier", "benchmark"):
+            raw_value = explicit_configuration.get(factor_key)
+            if raw_value is None or self._stringify(raw_value) == "":
+                continue
+            option = self._coerce_explicit_option(sheet, factor_key, self._stringify(raw_value), warnings)
+            # 用户显式给出配置时，其语义优先于 BOM 自动反查；若无法命中真实 option，必须 fail-closed。
+            unresolved[:] = [item for item in unresolved if item.factor_key != factor_key]
+            if option is None:
+                unresolved.append(
+                    PowerBomUnresolvedItem(
+                        factor_key=factor_key,
+                        reason="显式输入配置未命中当前功率模型有效选项，不能用 BOM 或默认值静默替代。",
+                        source_descriptions=[self._stringify(raw_value)],
+                        candidate_options=self._option_labels(sheet.id, factor_key),
+                        strategy="ask_confirmation",
+                    )
+                )
+                resolved.pop(factor_key, None)
+                continue
+            resolved[factor_key] = PowerBomResolvedItem(
+                factor_key=factor_key,
+                value=option.option_label,
+                source="explicit_input",
+                confidence=0.95,
+                source_description=self._stringify(raw_value),
+                rule_id=f"explicit.{factor_key}",
+            )
 
     def resolve_explicit_configuration(
         self,
@@ -463,6 +524,11 @@ class PlanBomPowerConfigResolverService:
             headers = [header for header in headers if header.version_no == version_no]
             if not headers:
                 return PowerBomConfigResolution(status=NOT_FOUND_STATUS, message="已找到订单，但指定 BOM 版本不存在。")
+
+        if order_name:
+            hinted_headers = self._filter_headers_by_order_name_hint(headers, order_name)
+            if hinted_headers:
+                headers = hinted_headers
 
         identity_keys = {header.order_identity_key for header in headers}
         if len(identity_keys) > 1 and not order_identity_key:
@@ -795,14 +861,14 @@ class PlanBomPowerConfigResolverService:
                         warnings.append(f"显式焊带包含多个规格 {value}，已按较大直径 {option.option_label} 映射到功率模型单选项。")
                     return option
         if factor_key == "glass":
-            # 用户只说“双镀/单镀”时，优先选择 active 模型默认玻璃中相同镀膜前缀的选项；
-            # 这样既不编造间隙膜/镀釉，也与 Excel 当前配置默认态保持一致。
+            # 用户只说“双镀/单镀/超高透”等玻璃大类时，优先选择 active 模型默认玻璃中相同前缀的选项；
+            # 默认项前缀不一致时，再在当前模型候选里寻找唯一/首个同前缀选项，仍以模型真实 option 为准。
             default_option = self._default_option(sheet.id, factor_key)
             coating_prefix = None
-            if "双镀" in value:
-                coating_prefix = "双镀"
-            elif "单镀" in value:
-                coating_prefix = "单镀"
+            for candidate_prefix in ("超高透", "高透", "双镀", "单镀"):
+                if candidate_prefix in value:
+                    coating_prefix = candidate_prefix
+                    break
             if coating_prefix and default_option and default_option.option_label.startswith(coating_prefix):
                 warnings.append(f"显式玻璃仅给出 {coating_prefix}，已沿用 active 模型默认玻璃细分：{default_option.option_label}。")
                 return default_option
@@ -812,18 +878,29 @@ class PlanBomPowerConfigResolverService:
                         warnings.append(f"显式玻璃仅给出 {coating_prefix}，已匹配当前模型候选：{candidate.option_label}。")
                         return candidate
         if factor_key == "cable":
-            # 显式接线盒只写“300/200”时，线径必须来自 active 模型默认 option，
-            # 不能在规则层写死 4mm²；否则模型默认线径调整后 QA 会悄悄算错。
-            length_match = re.search(r"(\d{2,4})\s*/\s*(\d{2,4})", normalized)
+            # 显式接线盒可能写“300/200线长”，也可能在无 BOM 方案评估中写“+400/-200mm（4mm²）”。
+            # 长度和线径都只用于拼当前模型真实 option；若拼不出有效 option，仍 fail-closed 追问。
+            length_match = re.search(r"(\d{2,4})\s*/\s*-?(\d{2,4})", normalized)
             default_option = self._default_option(sheet.id, factor_key)
             if length_match:
+                explicit_wire_match = re.search(r"(?P<size>\d+(?:\.\d+)?)\s*mm\s*(?:²|2)", value, flags=re.IGNORECASE)
+                explicit_wire_size = f"{self._format_number(explicit_wire_match.group('size'))}mm²" if explicit_wire_match else None
                 default_wire_size = self._default_cable_wire_size(default_option)
-                if default_wire_size:
-                    candidate_value = f"+{length_match.group(1)}/-{length_match.group(2)}mm（{default_wire_size}）"
+                wire_candidates = (
+                    [(explicit_wire_size, "显式线径")]
+                    if explicit_wire_size
+                    else [(default_wire_size, "active 模型默认线径")]
+                )
+                for wire_size, wire_source in wire_candidates:
+                    if not wire_size:
+                        continue
+                    candidate_value = f"+{length_match.group(1)}/-{length_match.group(2)}mm（{wire_size}）"
                     option = self._coerce_to_valid_option(sheet.id, factor_key, candidate_value)
                     if option is not None:
-                        warnings.append(f"显式接线盒只给出长度 {value}，已按 active 模型默认线径 {default_wire_size} 映射为 {option.option_label}。")
+                        warnings.append(f"显式接线盒长度 {value} 已按{wire_source} {wire_size} 映射为 {option.option_label}。")
                         return option
+                if explicit_wire_size:
+                    return None
                 if default_option and f"+{length_match.group(1)}/-{length_match.group(2)}" in self._normalize_label(default_option.option_label):
                     warnings.append(f"显式接线盒只给出长度 {value}，已沿用 active 模型默认选项：{default_option.option_label}。")
                     return default_option
@@ -893,6 +970,43 @@ class PlanBomPowerConfigResolverService:
             key=lambda header: (header.effective_date is not None, header.effective_date, header.version_no or "", header.id),
             reverse=True,
         )[0]
+
+    def _filter_headers_by_order_name_hint(self, headers: list[PlanBomHeader], order_name_hint: str) -> list[PlanBomHeader]:
+        """按用户原文中的 BOM 名称/客户实例片段过滤候选。
+
+        参数：
+            headers: 已由订单号/评审号和版本初筛后的候选。
+            order_name_hint: NLU 从原文抽取的 BOM 文件名或客户实例片段。
+
+        返回：
+            命中提示片段的候选列表；若无法可靠命中则返回空列表，由调用方保留原候选并继续澄清。
+        业务逻辑：同一个评审号可能对应多个客户实例，不能只靠 `GCL-...-00106` 判定；
+            但当用户已经给出 `客户名称-年份-尾号` 或完整 BOM 名称时，应优先用该片段消歧。
+        """
+
+        normalized_hint = self._normalize_order_name_hint(order_name_hint)
+        if not normalized_hint:
+            return []
+        matched: list[PlanBomHeader] = []
+        for header in headers:
+            candidate_text = " ".join(
+                part
+                for part in [header.order_name, header.raw_file_name, header.order_no, header.file_no]
+                if part
+            )
+            if normalized_hint in self._normalize_order_name_hint(candidate_text):
+                matched.append(header)
+        return matched
+
+    @staticmethod
+    def _normalize_order_name_hint(value: str | None) -> str:
+        """归一 BOM 名称提示，去除空白、括号差异和常见分隔符以便包含匹配。"""
+        text = PlanBomPowerConfigResolverService._stringify(value)
+        return re.sub(
+            r"[\s，,。；;：:、（）()\[\]【】/_\-]+",
+            "",
+            text.replace("－", "-").replace("—", "-").replace("–", "-").lower(),
+        )
 
     @staticmethod
     def _group_lines(lines: list[PlanBomMaterialLine]) -> dict[str, list[PlanBomMaterialLine]]:

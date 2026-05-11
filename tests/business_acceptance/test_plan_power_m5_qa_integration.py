@@ -107,7 +107,7 @@ def test_plan_bom_qa_answers_power_prediction_for_real_order(live_db_session, qa
 
 
 def test_plan_bom_qa_recommends_suppliers_by_target_ratio(live_db_session, qa_service) -> None:
-    """用户给出目标功率比例时，QA 应调用 M3 推荐服务并返回供应商匹配度。"""
+    """用户给出目标功率比例时，QA 应调用 M3 推荐服务并返回业务可读的供应商推荐表。"""
     tail, _, resolved = _resolved_order_tail(live_db_session)
     prediction = PowerPredictionEngine(live_db_session).predict(
         model_code=resolved.model_code,
@@ -125,7 +125,11 @@ def test_plan_bom_qa_recommends_suppliers_by_target_ratio(live_db_session, qa_se
     recommendation = response.raw_result["power_recommendation"]
     assert recommendation["recommendations"]
     assert response.result_table.rows
-    assert {"供应商", "匹配度"}.issubset(set(response.result_table.columns))
+    assert {"供应商", "目标功率档", "预测比例", "CTM 值", "建议效率段", "落档比例预估"}.issubset(
+        set(response.result_table.columns)
+    )
+    assert "匹配度" not in response.result_table.columns
+    assert "差异" not in response.result_table.columns
 
 
 def test_plan_bom_qa_accepts_explicit_supplier_for_power_prediction(live_db_session, qa_service) -> None:

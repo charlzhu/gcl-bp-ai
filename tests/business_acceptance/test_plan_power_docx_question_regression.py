@@ -119,7 +119,20 @@ def _assert_power_recommendation_response(
     assert set(response.raw_result["power_recommendation"]["target_power_ratio"]) == expected_bins
     assert response.raw_result["power_recommendation"]["recommendations"]
     assert response.result_table.rows
-    assert {"供应商", "匹配度", "目标功率档", "建议效率段"}.issubset(set(response.result_table.columns))
+    expected_columns = {"供应商", "目标功率档", "预测比例", "CTM 值", "建议效率段", "落档比例预估"}
+    assert expected_columns.issubset(set(response.result_table.columns))
+    assert "匹配度" not in response.result_table.columns
+    assert "差异" not in response.result_table.columns
+    for row in response.result_table.rows:
+        assert "匹配度" not in row
+        assert "差异" not in row
+        assert str(row.get("CTM 值", "")).endswith("%")
+        efficiency_segments = [segment for segment in str(row.get("建议效率段", "")).split("、") if segment]
+        assert 1 <= len(efficiency_segments) <= 2
+        assert [float(segment.rstrip("%")) for segment in efficiency_segments] == sorted(
+            float(segment.rstrip("%")) for segment in efficiency_segments
+        )
+        assert str(row.get("落档比例预估", ""))
     if expected_supplier:
         assert response.nlu.slots["supplier_name"] == expected_supplier
         assert {row["供应商"] for row in response.result_table.rows} == {expected_supplier}

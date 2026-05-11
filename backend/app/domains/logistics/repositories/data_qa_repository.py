@@ -1175,23 +1175,52 @@ class LogisticsDataQaRepository:
         ).mappings().all()
         return [dict(row) for row in rows]
 
-    def hist_mw_by_all_regions(self, *, year: int) -> list[dict[str, Any]]:
-        """历史按区域汇总发运量 MW。"""
+    def hist_mw_by_all_regions(
+        self,
+        *,
+        year: int,
+        carrier_name: str | None = None,
+        regions: list[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """历史按区域汇总发运量 MW。
+
+        参数：
+            year: 历史台账年份。
+            carrier_name: 可选承运商简称，按物流公司名称模糊匹配。
+            regions: 可选点名区域列表，只返回用户明确要求的区域。
+        返回值：
+            按区域分组后的发运量 MW 列表。
+        业务逻辑：
+            用户问“晶茂在华东、华北、华南分别发运量”时，承运商和区域列表都是过滤条件；
+            不能只按年份统计全部承运商，也不能把多个区域合成一条总量。
+        """
+
+        filters = ["biz_year = :year", "region_name IS NOT NULL", "TRIM(region_name) <> ''"]
+        params: dict[str, Any] = {"year": year}
+        if carrier_name:
+            filters.append("logistics_company_name LIKE :carrier_name")
+            params["carrier_name"] = f"%{carrier_name}%"
+        if regions:
+            region_params: list[str] = []
+            for index, region_name in enumerate(regions):
+                key = f"region_{index}"
+                region_params.append(f":{key}")
+                params[key] = region_name
+            filters.append(f"region_name IN ({', '.join(region_params)})")
+        where_sql = " AND ".join(filters)
         rows = self.db.execute(
             text(
-                """
+                f"""
                 SELECT
                     region_name,
                     ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw
                 FROM dwd_logistics_hist_shipment_detail
-                WHERE biz_year = :year
-                  AND region_name IS NOT NULL
-                  AND TRIM(region_name) <> ''
+                WHERE {where_sql}
                 GROUP BY region_name
                 ORDER BY shipment_mw DESC, region_name ASC
                 """
             ),
-            {"year": year},
+            params,
         ).mappings().all()
         return [dict(row) for row in rows]
 
@@ -3141,7 +3170,7 @@ class LogisticsDataQaRepository:
         return [dict(row) for row in rows]
 
     def sys_parse_success_rate_by_carrier(self, *, year: int, top_n: int = 10) -> dict[str, Any]:
-        """2026 按承运商统计送货单解析成功率前后十。"""
+        """2026 按承运商统计送货单解析成功率前后 N。"""
         top_rows = self.db.execute(
             text(
                 f"""
@@ -3178,7 +3207,9 @@ class LogisticsDataQaRepository:
             ),
             {"year": year, "limit_value": top_n},
         ).mappings().all()
-        return {"top10": [dict(row) for row in top_rows], "bottom10": [dict(row) for row in bottom_rows]}
+        top_items = [dict(row) for row in top_rows]
+        bottom_items = [dict(row) for row in bottom_rows]
+        return {"top_rows": top_items, "bottom_rows": bottom_items, "top10": top_items, "bottom10": bottom_items}
 
     def sys_company_mapping_gap(self, *, year: int, limit: int = 20) -> dict[str, Any]:
         """2026 company_id 无法映射承运商主数据的任务清单。"""
@@ -3270,8 +3301,8 @@ class LogisticsDataQaRepository:
             "top_provinces": [dict(row) for row in province_rows],
         }
 
-    def sys_signedfor_rate_by_carrier(self, *, year: int) -> dict[str, Any]:
-        """2026 承运商签收率排行。"""
+    def sys_signedfor_rate_by_carrier(self, *, year: int, top_n: int = 10) -> dict[str, Any]:
+        """2026 承运商签收率前后 N 排行。"""
         top_rows = self.db.execute(
             text(
                 """
@@ -3284,10 +3315,10 @@ class LogisticsDataQaRepository:
                   AND company_name IS NOT NULL
                 GROUP BY company_name
                 ORDER BY signedfor_rate DESC, task_count DESC, company_name ASC
-                LIMIT 10
+                LIMIT :limit_value
                 """
             ),
-            {"year": year},
+            {"year": year, "limit_value": top_n},
         ).mappings().all()
         bottom_rows = self.db.execute(
             text(
@@ -3301,12 +3332,14 @@ class LogisticsDataQaRepository:
                   AND company_name IS NOT NULL
                 GROUP BY company_name
                 ORDER BY signedfor_rate ASC, task_count DESC, company_name ASC
-                LIMIT 10
+                LIMIT :limit_value
                 """
             ),
-            {"year": year},
+            {"year": year, "limit_value": top_n},
         ).mappings().all()
-        return {"top10": [dict(row) for row in top_rows], "bottom10": [dict(row) for row in bottom_rows]}
+        top_items = [dict(row) for row in top_rows]
+        bottom_items = [dict(row) for row in bottom_rows]
+        return {"top_rows": top_items, "bottom_rows": bottom_items, "top10": top_items, "bottom10": bottom_items}
 
     def sys_companies_without_tasks(self, *, year: int) -> dict[str, Any]:
         """已建档但无 2026 任务的物流公司。"""

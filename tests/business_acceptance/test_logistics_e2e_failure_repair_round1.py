@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from backend.app.db.session import SessionLocal
 from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
+from backend.app.domains.logistics.schemas.llm_understanding import LogisticsLlmUnderstandingResult
 from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
 from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
 
@@ -33,6 +34,264 @@ def test_region_transport_total_quantity_is_supported() -> None:
 
     assert not result.needs_clarification
     assert "5,379,298" in result.answer_summary
+
+
+def test_hist_city_total_fee_rank_supports_variable_top_n() -> None:
+    """验证历史省份内城市总费用排名支持前五、前十等同类 TopN 问法。
+
+    参数：无。
+    返回值：无；通过断言验证 planner 解析年份、省份、城市维度和 TopN 限制。
+    业务逻辑：用户把“排名前五”换成“排名前十/前10”时，问题的时间、地域、指标和维度仍然完整，不应被要求澄清。
+    """
+
+    planner = LogisticsDataQaPlanner()
+    cases = [
+        ("2024年江苏省各城市总费用排名前五？", 2024, 5),
+        ("2025年江苏省各城市总费用排名前十？", 2025, 10),
+        ("2025年江苏省各城市总费用排名前10？", 2025, 10),
+        ("2025年江苏省各城市总费用排名前十一？", 2025, 11),
+        ("2025年江苏省各城市总费用排名前二十？", 2025, 20),
+        ("2025年江苏省各城市总费用排名TOP20？", 2025, 20),
+    ]
+
+    for question, expected_year, expected_limit in cases:
+        plan = planner.build_plan(question)
+
+        assert plan.query_key == "hist_total_fee_city_rank", question
+        assert not plan.needs_clarification, question
+        assert plan.filters == {"year": expected_year, "province": "江苏"}
+        assert plan.dimensions == ["city"]
+        assert plan.group_by == ["city"]
+        assert plan.sort == [{"field": "total_fee", "direction": "desc"}]
+        assert plan.limit == expected_limit
+
+
+def test_hist_city_total_fee_rank_guardrail_candidate_keeps_top_n() -> None:
+    """验证 Guardrail 候选回构同步使用问句中的 TopN，不再固定为前五。
+
+    参数：无。
+    返回值：无；通过断言验证候选 query_key 回构后的 limit 和过滤条件。
+    业务逻辑：LLM 只能补齐受控槽位，最终执行计划仍必须由规则层从原始问句确定 TopN，避免同类问法在 assist 链路中退回固定前五。
+    """
+
+    planner = LogisticsDataQaPlanner()
+    llm_result = LogisticsLlmUnderstandingResult(filters={"year": 2025, "province": "江苏"})
+
+    plan = planner.build_plan_from_guardrail_candidate(
+        "2025年江苏省各城市总费用排名前十？",
+        candidate_query_key="hist_total_fee_city_rank",
+        llm_result=llm_result,
+    )
+
+    assert plan is not None
+    assert plan.query_key == "hist_total_fee_city_rank"
+    assert plan.filters == {"year": 2025, "province": "江苏"}
+    assert plan.limit == 10
+
+
+def test_hist_city_total_fee_rank_does_not_swallow_extra_scope() -> None:
+    """验证城市总费用 TopN 分支不吞掉额外维度、额外指标或反向排序口径。
+
+    参数：无。
+    返回值：无；通过断言验证复杂问法不会被误规划成单纯城市总费用 TopN。
+    业务逻辑：只有“各城市总费用排名前N”这种窄问题可以直答；如果用户追加承运商拆分、发运量、最低排名或复合中文数字，不能静默忽略这些口径。
+    """
+
+    planner = LogisticsDataQaPlanner()
+    cases = [
+        "2025年江苏省各城市内承运商总费用排名前十？",
+        "2025年江苏省各城市总费用排名前十，按承运商拆分？",
+        "2025年江苏省按承运商拆分各城市总费用排名前十？",
+        "2025年江苏省按物流公司拆分各城市总费用排名前十？",
+        "2025年江苏省发运量和各城市总费用排名前十？",
+        "2025年江苏省各城市总费用和发运量排名前十？",
+        "2025年江苏省各城市总费用最低排名前十？",
+    ]
+
+    for question in cases:
+        plan = planner.build_plan(question)
+
+        assert plan.query_key != "hist_total_fee_city_rank", question
+
+    llm_result = LogisticsLlmUnderstandingResult(filters={"year": 2025, "province": "江苏"})
+    blocked = planner.build_plan_from_guardrail_candidate(
+        "2025年江苏省各城市总费用排名前十，按承运商拆分？",
+        candidate_query_key="hist_total_fee_city_rank",
+        llm_result=llm_result,
+    )
+    assert blocked is None
+
+    prefix_blocked = planner.build_plan_from_guardrail_candidate(
+        "2025年江苏省按承运商拆分各城市总费用排名前十？",
+        candidate_query_key="hist_total_fee_city_rank",
+        llm_result=llm_result,
+    )
+    assert prefix_blocked is None
+
+
+def test_logistics_ranking_branches_parse_variable_top_n() -> None:
+    """验证其它物流排名分支不再写死前五、前十或前二十。
+
+    参数：无。
+    返回值：无；通过断言验证 TopN 从问句抽取并写入 plan。
+    业务逻辑：用户只改“前几名”时，年份、维度、指标和排序口径没有变化，应继续进入同一确定性 query_key。
+    """
+
+    planner = LogisticsDataQaPlanner()
+    cases = [
+        (
+            "2025年各承运商总运费排名前五？",
+            "carrier_metric_ranking",
+            {"year": 2025, "months": None, "ranking_metric": "total_fee", "top_n": 5},
+            5,
+            ["carrier_name"],
+        ),
+        (
+            "2026年1月各承运商总费用排名前5？",
+            "carrier_metric_ranking",
+            {"year": 2026, "months": [1], "ranking_metric": "total_fee", "top_n": 5},
+            5,
+            ["carrier_name"],
+        ),
+        (
+            "2026年1月各承运商总费用TOP5？",
+            "carrier_metric_ranking",
+            {"year": 2026, "months": [1], "ranking_metric": "total_fee", "top_n": 5},
+            5,
+            ["carrier_name"],
+        ),
+        (
+            "2026年送达城市任务量排名前五？",
+            "sys_task_count_ranking",
+            {"year": 2026, "dimension": "delivery_city", "top_n": 5},
+            5,
+            ["delivery_city"],
+        ),
+        (
+            "2026年project_name维度任务量排名前五？",
+            "sys_task_count_ranking",
+            {"year": 2026, "dimension": "project_name", "top_n": 5},
+            5,
+            ["project_name"],
+        ),
+        (
+            "2026年PREASSIGN状态按省任务量排名前五？",
+            "sys_task_status_province_ranking",
+            {"year": 2026, "status": "PREASSIGN", "top_n": 5},
+            5,
+            ["delivery_province"],
+        ),
+        (
+            "2026年司机派车任务量排名前十？",
+            "sys_driver_task_ranking",
+            {"year": 2026, "top_n": 10},
+            10,
+            ["driver_name"],
+        ),
+        (
+            "2025年江苏省前10名客户总费用和发运量是多少？",
+            "hist_top_customers_fee_and_mw_by_province",
+            {"year": 2025, "province": "江苏", "top_n": 10},
+            10,
+            ["customer_name"],
+        ),
+        (
+            "历史台账前5个客户总发运量？",
+            "hist_customer_mw_ranking",
+            {"year": None, "top_n": 5},
+            5,
+            ["customer_name"],
+        ),
+        (
+            "2026年ship_product明细平均每个物流任务前五？",
+            "sys_ship_product_detail_stats",
+            {"year": 2026, "top_n": 5},
+            5,
+            ["task_id"],
+        ),
+        (
+            "2026年delivery_distance填充率最低前五省份？",
+            "sys_delivery_distance_fill_rate_by_province",
+            {"year": 2026, "top_n": 5},
+            5,
+            ["delivery_province"],
+        ),
+        (
+            "2026年按承运商统计送货单解析成功率前五和后五？",
+            "sys_parse_success_rate_by_carrier",
+            {"year": 2026, "top_n": 5},
+            5,
+            ["company_name"],
+        ),
+        (
+            "2026年承运商SIGNEDFOR签收率前五和后五？",
+            "sys_signedfor_rate_by_carrier",
+            {"year": 2026, "top_n": 5},
+            5,
+            ["carrier"],
+        ),
+        (
+            "2026年extra_cost_audited=1前五集中在哪里？",
+            "sys_extra_cost_audited_concentration",
+            {"year": 2026, "top_n": 5},
+            5,
+            ["company_name", "delivery_province"],
+        ),
+    ]
+
+    for question, expected_query_key, expected_filters, expected_limit, expected_dimensions in cases:
+        plan = planner.build_plan(question)
+
+        assert plan.query_key == expected_query_key, question
+        assert not plan.needs_clarification, question
+        assert plan.filters == expected_filters
+        assert plan.limit == expected_limit
+        assert plan.dimensions == expected_dimensions
+
+
+def test_logistics_ranking_variable_top_n_does_not_drop_extra_dimensions() -> None:
+    """验证 TopN 泛化不会吞掉额外维度、额外指标或反向排序。
+
+    参数：无。
+    返回值：无；通过断言验证复杂问法不会被误规划成简单 TopN。
+    业务逻辑：TopN 可以灵活解析，但不能把“按区域/承运商拆分、最低排序、额外指标”等口径静默丢弃。
+    """
+
+    planner = LogisticsDataQaPlanner()
+    cases = [
+        "2025年各承运商总运费排名前五并按区域拆分？",
+        "2025年各承运商总运费排名前五名按区域？",
+        "2026年送达城市任务量排名前五并按承运商拆分？",
+        "2026年送达城市任务量排名前五名按省份？",
+        "2026年前5个月送达城市任务量排名？",
+        "2026年送达城市任务量排名top5个月？",
+        "2026年司机派车任务量最低前十？",
+        "2026年司机派车任务量排名前十名按月份？",
+        "2025年江苏省前10名客户总费用和发运量按城市拆分？",
+        "2025年江苏省前10名客户总费用和发运量按城市？",
+        "历史台账前5个客户总发运量和总费用？",
+        "2025年江苏省按区域各城市总费用排名前十？",
+        "2026年PREASSIGN状态按省任务量和总费用排名前五？",
+        "2026年送达城市任务量和车次排名前五？",
+        "2026年司机派车任务量和车次排名前十？",
+        "2026年1月各承运商总费用和任务量排名前五？",
+    ]
+
+    simple_ranking_keys = {
+        "hist_total_fee_city_rank",
+        "carrier_metric_ranking",
+        "sys_task_count_ranking",
+        "sys_task_status_province_ranking",
+        "sys_driver_task_ranking",
+        "hist_top_customers_fee_and_mw_by_province",
+        "hist_customer_mw_ranking",
+    }
+
+    for question in cases:
+        plan = planner.build_plan(question)
+
+        assert plan.query_key not in simple_ranking_keys, question
+        assert plan.needs_clarification or plan.unsupported_reason or plan.query_key is None, question
 
 
 def test_missing_time_defaults_to_2023_2026_total_mw() -> None:
@@ -410,6 +669,120 @@ def test_remark_multi_keyword_year_amount_summary_is_supported() -> None:
     )
 
 
+def _assert_remark_keyword_question_requires_clarification(question: str) -> None:
+    """断言备注关键词越界问法必须保持澄清状态。
+
+    参数：
+        question: 待验证的自然语言问题。
+    返回值：无；通过断言验证问题没有进入窄口径 remark 或通用总费用 query_key。
+    业务逻辑：remark 关键词能力只支持已审计的年度金额汇总和历史物流总费用占比，额外年份、维度、分母、别名或明细诉求都必须先追问。
+    """
+
+    plan = LogisticsDataQaPlanner().build_plan(question)
+
+    assert plan.needs_clarification, question
+    assert plan.query_key is None, question
+
+
+def test_remark_keyword_fee_ratio_without_record_delimiter_is_supported() -> None:
+    """验证关键词后直接接“总费用占比”的窄口径费用占比问法可支持。
+
+    参数：无。
+    返回值：无；通过断言验证没有显式“记录/其”分隔符时仍能识别备注关键词列表。
+    业务逻辑：业务常说“备注中包含倒运或中转的总费用占...”，该问法与“记录，其总费用占...”等价，应进入同一确定性 query_key。
+    """
+
+    for question in (
+        "备注中包含倒运或中转的总费用占历史物流总费用的比例是多少？",
+        "备注包含倒运或中转的总费用占历史物流总费用的比例是多少？",
+        "备注中包含“倒运”或“中转”的记录,其总费用占历史物流总费用的比例是多少?",
+        "备注，包含倒运或中转的总费用占历史物流总费用的比例是多少？",
+        "备注：包含倒运或中转的总费用占历史物流总费用的比例是多少？",
+        "备注里包含倒运或中转的总费用占历史物流总费用的比例是多少？",
+    ):
+        plan = LogisticsDataQaPlanner().build_plan(question)
+        assert plan.query_key == "hist_remark_keyword_fee_ratio"
+        assert not plan.needs_clarification
+        assert plan.filters == {"keywords": ["倒运", "中转"], "default_history_scope": "2023-2025"}
+
+
+def test_remark_keyword_fee_ratio_rejects_aliases_and_extra_scope() -> None:
+    """验证备注关键词费用占比遇到别名、显式时间、替代分母或额外维度时必须追问。
+
+    参数：无。
+    返回值：无；通过断言验证窄口径历史物流总费用占比不会吞掉用户指定条件。
+    业务逻辑：`hist_remark_keyword_fee_ratio` 固定使用 2023-2025 历史物流总费用作为分母，且只支持“总费用”口径。
+    """
+
+    for question in (
+        "2023年备注中包含倒运或中转的记录，其总费用占历史物流总费用的比例是多少？",
+        "今年备注包含倒运或中转的总费用占历史物流总费用的比例是多少？",
+        "近三年备注中包含倒运或中转的总费用占历史物流总费用的比例是多少？",
+        "本月备注包含倒运或中转的总费用占历史物流总费用的比例是多少？",
+        "备注中包含倒运或中转的记录数量占历史总记录数的比例是多少？",
+        "备注包含倒运或中转的总费用占华东区域总费用的比例是多少？",
+        "备注中包含倒运或中转的总费用占历史物流总费用里的水路费用的比例是多少？",
+        "各发货地备注包含倒运或中转的总费用占历史物流总费用的比例是多少？",
+        "备注包含倒运或中转和滞留的总费用占历史物流总费用的比例是多少？",
+        "备注中包含滞留的总运费占历史物流总运费的比例是多少？",
+        "备注包含倒运或中转的总运费占历史物流总运费的比例是多少？",
+        "备注包含倒运或中转的总费用占历史总费用的比例是多少？",
+        "备注包含倒运或中转的总费用占历史物流总费用的百分比是多少？",
+        "备注包含倒运或中转的总费用占历史物流总费用的比例是多少，并给出具体记录？",
+        "备注包含装卸的总费用占历史物流总费用的比例是多少？",
+        "备注中包含装卸的总运费占历史物流总运费的比例是多少？",
+        "备注包含装卸多少钱？",
+        "备注，包含装卸多少钱？",
+        "备注：包含装卸多少钱？",
+        "备注，，包含装卸多少钱？",
+        "备注：：包含装卸多少钱？",
+        "备注、包含装卸多少钱？",
+        "备注中：包含装卸多少钱？",
+        "备注里包含装卸多少钱？",
+        "备注中包含装卸花了多少钱？",
+        "备注中，包含装卸的总运费是多少？",
+        "2023年华东区域备注包含装卸的总费用是多少？",
+        "2026年1月备注中包含装卸的总运费是多少？",
+        "2026年1月备注中，包含装卸的总运费是多少？",
+        "2023年合肥始发各车型备注包含装卸的车次和总费用是多少？",
+        "备注包含倒运或中转的总费用占华东区域的总费用占历史物流总费用的比例是多少？",
+        "备注包含倒运或中转的总费用占装卸的总费用占历史物流总费用的比例是多少？",
+        "备注包含倒运或或中转的总费用占历史物流总费用的比例是多少？",
+        "备注包含倒运或中转或的总费用占历史物流总费用的比例是多少？",
+    ):
+        _assert_remark_keyword_question_requires_clarification(question)
+
+
+def test_remark_keyword_amount_summary_rejects_ratio_and_extra_scope() -> None:
+    """验证备注关键词年度金额汇总遇到占比、未知关键词或额外维度时必须追问。
+
+    参数：无。
+    返回值：无；通过断言验证年度记录数/费用金额窄口径不会静默忽略额外条件。
+    业务逻辑：该 query_key 只支持单年、受控关键词、无额外维度的记录数和费用金额；比例、区域、总运费、未知关键词都会改变口径。
+    """
+
+    supported = LogisticsDataQaPlanner().build_plan("请统计2023年备注里包含倒运，中转，换车，压车，放空的记录数量和费用金额？")
+    assert supported.query_key == "hist_remark_keyword_amount_summary"
+    assert not supported.needs_clarification
+
+    for question in (
+        "请统计2023年备注包含倒运或中转的记录数量和费用金额占历史物流总费用的比例是多少？",
+        "请统计2023年华东区域备注中包含倒运、中转、换车、压车、放空的记录数量和费用金额？",
+        "请统计2023年备注中包含倒运、中转、滞留的记录数量和费用金额？",
+        "请统计2023年备注包含倒运、中转的记录数量和费用金额，返空是否也计算？",
+        "请统计2023年各发货地备注包含倒运、中转的记录数量和费用金额？",
+        "请统计去年备注中包含倒运、中转的记录数量和费用金额？",
+        "请统计2023年备注中包含倒运、中转的记录数量和费用金额比重？",
+        "请统计2023年备注包含倒运、中转的每条记录详情和费用金额？",
+        "请统计2023年备注包含倒运、中转的记录数量和总运费？",
+        "请统计2023年备注包含装卸的记录数量和费用金额？",
+        "请统计2023年备注包含倒运的记录数量和装卸的记录数量和费用金额？",
+        "请统计2023年备注包含倒运、、中转的记录数量和费用金额？",
+        "请统计2023年备注包含倒运和和中转的记录数量和费用金额？",
+    ):
+        _assert_remark_keyword_question_requires_clarification(question)
+
+
 def test_remark_keyword_detail_list_still_requires_clarification() -> None:
     """验证备注关键词明细清单仍保持澄清边界。
 
@@ -425,7 +798,7 @@ def test_remark_keyword_detail_list_still_requires_clarification() -> None:
 
     assert plan.needs_clarification
     assert plan.query_key is None
-    assert "报表模板" in plan.clarification_missing_slots
+    assert "时间范围或明细模板" in plan.clarification_missing_slots
 
 
 def test_multi_year_monthly_multi_metric_report_requires_clarification() -> None:

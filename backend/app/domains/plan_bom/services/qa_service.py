@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import logging
+import re
 from typing import Any
 
+from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
 from backend.app.domains.plan_bom.constants import CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
 from backend.app.domains.plan_bom.models import PlanBomHeader, PlanBomMaterialLine
 from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
@@ -51,6 +54,7 @@ class PlanBomQaService:
         power_config_resolver: PlanBomPowerConfigResolverService | None = None,
         power_prediction_engine: PowerPredictionEngine | None = None,
         power_recommendation_service: PowerRecommendationService | None = None,
+        query_log_repository: LogisticsQueryRepository | None = None,
     ) -> None:
         """初始化 BOM QA 服务。
 
@@ -62,6 +66,7 @@ class PlanBomQaService:
             power_config_resolver: M4 BOM 配置自动映射服务，未注入时按 repository 所在 DB 懒创建。
             power_prediction_engine: M3 单供应商功率预测引擎，未注入时懒创建。
             power_recommendation_service: M3 供应商推荐服务，未注入时懒创建。
+            query_log_repository: 统一查询历史写入仓储，复用 sys_query_log。
 
         返回：
             无返回值。
@@ -77,6 +82,7 @@ class PlanBomQaService:
             repository.db,
             engine=self.power_prediction_engine,
         )
+        self.query_log_repository = query_log_repository or LogisticsQueryRepository()
 
     def ask(self, question: str, *, use_llm: bool = True, trace_id: str | None = None) -> PlanBomQaResponse:
         """回答计划 BOM 自然语言问题。
@@ -367,6 +373,8 @@ class PlanBomQaService:
         """
 
         tail = (nlu.slots.get("order_tail_no") or [None])[0]
+        bom_version = (nlu.slots.get("bom_version") or [None])[0]
+        order_name_hint = nlu.slots.get("order_name_hint")
         benchmark = nlu.slots.get("benchmark")
         explicit_configuration = dict(nlu.slots.get("explicit_power_configuration") or {})
         if benchmark and "benchmark" not in explicit_configuration:
@@ -374,7 +382,13 @@ class PlanBomQaService:
         if nlu.slots.get("supplier_name") and "supplier" not in explicit_configuration:
             explicit_configuration["supplier"] = nlu.slots.get("supplier_name")
         if tail:
-            resolution = self.power_config_resolver.resolve(order_no=tail, benchmark=benchmark)
+            resolution = self.power_config_resolver.resolve(
+                order_no=tail,
+                order_name=order_name_hint,
+                version_no=bom_version,
+                benchmark=benchmark,
+                explicit_configuration=explicit_configuration,
+            )
         else:
             resolution = self.power_config_resolver.resolve_explicit_configuration(
                 model_code=nlu.slots.get("model"),
@@ -394,7 +408,10 @@ class PlanBomQaService:
                         severity="warning",
                     ),
                     nlu=nlu,
-                    answer_summary=self._power_resolution_clarification_summary(resolution_payload),
+                    answer_summary=self._power_resolution_clarification_summary(
+                        resolution_payload,
+                        question=question,
+                    ),
                     raw_result={"bom_config_resolution": resolution_payload},
                     warnings=["M4 配置解析未完全 resolved，已停止调用 M3 计算，避免编造功率预测。"],
                 )
@@ -531,7 +548,7 @@ class PlanBomQaService:
                 nlu=nlu,
                 answer_summary=answer,
                 result_table=PlanBomTableSpec(
-                    columns=["供应商", "匹配度", "目标功率档", "目标比例", "预测比例", "差异", "中心功率", "建议效率段"],
+                    columns=["供应商", "目标功率档", "目标比例", "预测比例", "CTM 值", "中心功率", "建议效率段", "落档比例预估"],
                     rows=rows,
                 ),
                 raw_result={
@@ -566,17 +583,21 @@ class PlanBomQaService:
         rows: list[dict[str, Any]] = []
         for item in recommendation.recommendations:
             efficiency_label = PlanBomQaService._format_suggested_efficiency_segments(item.suggested_efficiency_segments)
+            bin_probability_label = PlanBomQaService._format_efficiency_bin_probability_estimate(
+                item=item,
+                target_bins=list(recommendation.target_power_ratio.keys()),
+            )
             for power_bin, target_ratio in recommendation.target_power_ratio.items():
                 rows.append(
                     {
                         "供应商": item.supplier_name,
-                        "匹配度": round(item.score, 4),
                         "目标功率档": f"{power_bin}W",
                         "目标比例": round(float(target_ratio) * 100.0, 4),
                         "预测比例": round(float(item.predicted_target_ratio.get(power_bin, 0.0)) * 100.0, 4),
-                        "差异": round(float(item.target_diff.get(power_bin, 0.0)) * 100.0, 4),
+                        "CTM 值": PlanBomQaService._format_ctm_value(item.prediction),
                         "中心功率": round(item.prediction.center_power, 4),
                         "建议效率段": efficiency_label,
+                        "落档比例预估": bin_probability_label,
                     }
                 )
         return rows
@@ -592,12 +613,169 @@ class PlanBomQaService:
             用于 QA 表格展示的效率段文本；无建议时返回空字符串。
         """
         labels: list[str] = []
-        for segment in segments[:3]:
+        sorted_segments = sorted(
+            segments,
+            key=lambda item: float(item.get("efficiency_value") or item.get("efficiency_percent") or 0.0),
+        )
+        for segment in sorted_segments[:2]:
             percent = segment.get("efficiency_percent")
             if percent is None:
                 continue
-            labels.append(f"{round(float(percent), 3)}%")
+            labels.append(f"{PlanBomQaService._format_percent_number(float(percent), digits=3)}%")
         return "、".join(labels)
+
+    @staticmethod
+    def _format_ctm_value(prediction: PowerPredictionResult) -> str:
+        """按业务口径格式化 CTM 值。
+
+        参数：
+            prediction: M3 确定性功率预测结果，包含中心功率、中心效率、面积和电池片数。
+
+        返回：
+            百分比展示文本；关键字段缺失或分母非法时返回空字符串，避免编造结果。
+        """
+        denominator = float(prediction.center_efficiency) * float(prediction.area) * float(prediction.cell_count) / 1000.0
+        if denominator <= 0:
+            return ""
+        ctm_value = float(prediction.center_power) / denominator * 100.0
+        return f"{ctm_value:.2f}%"
+
+    @staticmethod
+    def _format_efficiency_bin_probability_estimate(*, item: Any, target_bins: list[str]) -> str:
+        """格式化建议效率段的落档比例预估。
+
+        参数：
+            item: `PowerRecommendationItem`，其中 `prediction.efficiency_rows[*].bin_probabilities`
+                是唯一数据来源。
+            target_bins: 用户关注的目标功率档列表。
+
+        返回：
+            形如 `25.5%→615W 12.98%\n25.6%→615W 82.08%` 的展示文本；没有可追溯效率行时返回空字符串。
+        """
+        segments = PlanBomQaService._select_display_efficiency_segments(item.suggested_efficiency_segments)
+        if not segments:
+            return ""
+
+        labels: list[str] = []
+        for segment in segments:
+            row = PlanBomQaService._find_efficiency_row(item.prediction.efficiency_rows, segment)
+            if row is None:
+                continue
+            bin_labels = PlanBomQaService._format_probability_bins(row.bin_probabilities, target_bins=target_bins)
+            if not bin_labels:
+                continue
+            percent = segment.get("efficiency_percent")
+            if percent is None:
+                percent = float(row.efficiency_value) * 100.0
+            labels.append(f"{PlanBomQaService._format_percent_number(float(percent), digits=3)}%→{'、'.join(bin_labels)}")
+        return "\n".join(labels)
+
+    @staticmethod
+    def _select_display_efficiency_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """选择表格中展示的建议效率段。
+
+        参数：
+            segments: 推荐服务输出的候选效率段。
+
+        返回：
+            按效率从低到高排序后的前 2 个效率段，满足业务员“从最低效率开始展示”的要求。
+        """
+        return sorted(
+            segments,
+            key=lambda item: float(item.get("efficiency_value") or item.get("efficiency_percent") or 0.0),
+        )[:2]
+
+    @staticmethod
+    def _find_efficiency_row(efficiency_rows: list[Any], segment: dict[str, Any]) -> Any | None:
+        """从预测结果中查找建议效率段对应的效率行。
+
+        参数：
+            efficiency_rows: `PowerPredictionResult.efficiency_rows`。
+            segment: 推荐服务输出的单个建议效率段。
+
+        返回：
+            匹配的效率行；找不到时返回 None，避免脱离模型明细编造落档比例。
+        """
+        raw_efficiency = segment.get("efficiency_value")
+        if raw_efficiency is None and segment.get("efficiency_percent") is not None:
+            raw_efficiency = float(segment["efficiency_percent"]) / 100.0
+        if raw_efficiency is None:
+            return None
+        target_efficiency = float(raw_efficiency)
+        for row in efficiency_rows:
+            if abs(float(row.efficiency_value) - target_efficiency) <= 0.0000001:
+                return row
+        return None
+
+    @staticmethod
+    def _format_probability_bins(bin_probabilities: dict[str, float], *, target_bins: list[str]) -> list[str]:
+        """格式化目标档和一个相邻档的落档概率。
+
+        参数：
+            bin_probabilities: 单个效率段的功率档概率，来源于后端正态落档计算。
+            target_bins: 用户关注的目标功率档。
+
+        返回：
+            至少包含目标功率档的展示片段；若存在相邻档，则追加概率最高的相邻档。
+        """
+        ordered_keys = sorted(bin_probabilities.keys(), key=lambda value: float(value))
+        selected_keys: list[str] = []
+        for power_bin in target_bins:
+            if power_bin in bin_probabilities and power_bin not in selected_keys:
+                selected_keys.append(power_bin)
+
+        adjacent_key = PlanBomQaService._highest_probability_adjacent_bin(
+            ordered_keys=ordered_keys,
+            target_bins=target_bins,
+            bin_probabilities=bin_probabilities,
+        )
+        if adjacent_key and adjacent_key not in selected_keys:
+            selected_keys.append(adjacent_key)
+
+        return [f"{key}W {float(bin_probabilities.get(key, 0.0)) * 100.0:.2f}%" for key in selected_keys]
+
+    @staticmethod
+    def _highest_probability_adjacent_bin(
+        *,
+        ordered_keys: list[str],
+        target_bins: list[str],
+        bin_probabilities: dict[str, float],
+    ) -> str | None:
+        """选择目标档旁边概率最高的相邻功率档。
+
+        参数：
+            ordered_keys: 按功率升序排列的模型输出档位。
+            target_bins: 用户关注的目标功率档。
+            bin_probabilities: 单个效率段的功率档概率。
+
+        返回：
+            相邻档 key；没有可用相邻档时返回 None。
+        """
+        adjacent: set[str] = set()
+        for target_bin in target_bins:
+            if target_bin not in ordered_keys:
+                continue
+            index = ordered_keys.index(target_bin)
+            if index > 0:
+                adjacent.add(ordered_keys[index - 1])
+            if index + 1 < len(ordered_keys):
+                adjacent.add(ordered_keys[index + 1])
+        if not adjacent:
+            return None
+        return max(adjacent, key=lambda key: float(bin_probabilities.get(key, 0.0)))
+
+    @staticmethod
+    def _format_percent_number(value: float, *, digits: int) -> str:
+        """格式化百分比数字，去掉无意义的尾随 0。
+
+        参数：
+            value: 百分比数值。
+            digits: 最多保留的小数位数。
+
+        返回：
+            去尾零后的数字文本。
+        """
+        return f"{value:.{digits}f}".rstrip("0").rstrip(".")
 
     @staticmethod
     def _power_configuration_text(resolution_payload: dict[str, Any]) -> str:
@@ -611,14 +789,51 @@ class PlanBomQaService:
         return "；".join(pairs) if pairs else "无可展示配置"
 
     @staticmethod
-    def _power_resolution_clarification_summary(resolution_payload: dict[str, Any]) -> str:
-        """为 M4 candidate / partial 状态生成追问摘要。"""
+    def _power_resolution_clarification_summary(resolution_payload: dict[str, Any], *, question: str = "") -> str:
+        """为 M4 candidate / partial 状态生成追问摘要。
+
+        参数：
+            resolution_payload: M4 配置解析追溯。
+            question: 用户原始问题；用于提示候选名称与用户输入项目/客户名不一致。
+
+        返回：
+            面向业务用户的追问摘要，候选态会列出受控候选名称。
+        """
         if resolution_payload.get("status") == CANDIDATE_REQUIRED_STATUS:
-            count = resolution_payload.get("candidate_total_count") or len(resolution_payload.get("candidates") or [])
-            return f"当前订单条件命中 {count} 个 BOM 候选，请先确认订单或文件实例后再做功率预测。"
+            candidates = resolution_payload.get("candidates") or []
+            count = resolution_payload.get("candidate_total_count") or len(candidates)
+            candidate_labels = []
+            for index, candidate in enumerate(candidates[:5], start=1):
+                order_name = candidate.get("order_name") or "未命名 BOM"
+                order_no = candidate.get("order_no") or "未知订单号"
+                version_no = candidate.get("version_no") or "未知版本"
+                candidate_labels.append(f"{index}. {order_name}（{order_no}，版本 {version_no}）")
+            candidate_text = "；".join(candidate_labels) if candidate_labels else "暂无可展示候选"
+            mismatch_text = PlanBomQaService._candidate_name_mismatch_text(question, candidates)
+            return (
+                f"当前订单条件命中 {count} 个 BOM 候选，请先确认订单或文件实例后再做功率预测。"
+                f"候选包括：{candidate_text}。{mismatch_text}"
+            )
         unresolved = resolution_payload.get("unresolved_items") or []
         labels = [str(item.get("factor_key")) for item in unresolved if item.get("factor_key")]
         return f"当前 BOM 配置仍有未确认项：{', '.join(labels) if labels else '未知配置'}。请确认后再执行功率预测。"
+
+    @staticmethod
+    def _candidate_name_mismatch_text(question: str, candidates: list[dict[str, Any]]) -> str:
+        """识别用户输入的订单前缀是否未出现在候选 BOM 名称中。"""
+        if not question or not candidates:
+            return ""
+        # 业务常写“客户/项目—00106”；尾号候选过多时，将破折号前的项目词与候选名做只读比对。
+        match = re.search(r"(?P<token>[\u4e00-\u9fa5A-Za-z0-9/\-]+)\s*[—-]\s*\d{5}", question)
+        if not match:
+            return ""
+        token = match.group("token").strip()
+        if not token or token.upper().startswith("GCL"):
+            return ""
+        candidate_text = " ".join(str(candidate.get("order_name") or "") + " " + str(candidate.get("order_no") or "") for candidate in candidates)
+        if token in candidate_text:
+            return ""
+        return f"你输入的“{token}”未匹配当前候选名称，请确认是否为同一订单/项目。"
 
     def _resolve_core_material_categories(
         self,
@@ -837,7 +1052,7 @@ class PlanBomQaService:
         response: PlanBomQaResponse,
         trace_recorder: QaTraceRecorder,
     ) -> PlanBomQaResponse:
-        """补齐 BOM QA 响应的明细节点。
+        """补齐 BOM QA 响应的明细节点，并写入统一查询历史。
 
         参数：
             response: 已完成确定性查询和 presentation 的响应；
@@ -869,14 +1084,184 @@ class PlanBomQaService:
             },
         )
         response.trace_events = trace_recorder.events
+        history_log_id = self._write_history_snapshot(
+            question=response.question,
+            trace_id=trace_recorder.trace_id,
+            response=response,
+        )
+        trace_recorder.add(
+            "history_snapshot_written",
+            "BOM QA 查询历史快照写入完成。",
+            {"history_log_id": history_log_id, "history_ready": bool(history_log_id)},
+        )
+        response.trace_events = trace_recorder.events
         logger.info(
-            "plan_bom_qa_completed trace_id=%s classification=%s status=%s rows=%s",
+            "plan_bom_qa_completed trace_id=%s classification=%s status=%s rows=%s history_log_id=%s",
             trace_recorder.trace_id,
             response.classification,
             response.status.code,
             len(response.result_table.rows),
+            history_log_id,
         )
         return response
+
+    def write_error_log(self, *, question: str, trace_id: str | None, message: str) -> int:
+        """把 BOM QA API 异常写入统一查询历史。
+
+        参数：
+            question: 用户原始问题；
+            trace_id: 当前请求追踪号；
+            message: 异常摘要，写入前会截断，避免日志过大。
+
+        返回：
+            新写入的 `sys_query_log.id`；写入失败时返回 0。
+        """
+
+        safe_message = self._safe_log_message(message)
+        self._rollback_before_error_log()
+        response = PlanBomQaResponse(
+            question=question,
+            classification="D",
+            status=PlanBomQaStatus(
+                code="EXECUTION_ERROR",
+                message="计划 BOM 问答执行异常，已记录失败快照。",
+                success=False,
+                severity="error",
+            ),
+            nlu=PlanBomNluCandidate(
+                question=question,
+                intent="plan_bom_qa_error",
+                slots={},
+                missing_slots=[],
+                confidence=0.0,
+                provider_mode="error",
+                guardrail_notes=[safe_message],
+            ),
+            answer_summary=f"计划 BOM 问答执行异常：{safe_message}",
+            warnings=["该记录来自 API 异常兜底日志，业务结果未完成计算。"],
+            raw_result={"error_message": safe_message},
+        )
+        return self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+
+    def _write_history_snapshot(
+        self,
+        *,
+        question: str,
+        trace_id: str | None,
+        response: PlanBomQaResponse,
+    ) -> int:
+        """把 BOM QA 当前响应快照写入 sys_query_log。
+
+        参数：
+            question: 用户原始问题；
+            trace_id: 当前请求追踪号；
+            response: 已生成的 BOM QA 响应或异常兜底响应。
+
+        返回：
+            新写入的日志 ID；任何日志异常都被吞掉并返回 0，不影响主问答链路。
+        """
+
+        try:
+            result_count = len(response.result_table.rows)
+            query_result_snapshot = response.model_dump(mode="json")
+            query_result_snapshot["query_type"] = "plan_bom_qa"
+            query_result_snapshot["execution_mode"] = "plan_bom_qa"
+            query_result_snapshot["item_count"] = result_count
+            status_payload = response.status.model_dump(mode="json")
+            payload_snapshot = {
+                "question": question,
+                "request_payload": {"question": question, "domain": "plan_bom"},
+                "response_meta": {
+                    "question": question,
+                    "domain": "plan_bom",
+                    "mode": "plan_bom_qa",
+                    "metric_type": response.nlu.intent,
+                    "source_scope": "plan_bom_ai",
+                    "status": status_payload,
+                    "trace_ready": bool(trace_id),
+                    "classification": response.classification,
+                    "result_count": result_count,
+                },
+                "query_result": query_result_snapshot,
+            }
+            log_id = self.query_log_repository.write_query_log(
+                self.repository.db,
+                {
+                    "trace_id": trace_id or "local-dev",
+                    "query_type": "PLAN_BOM_QA",
+                    "question_text": question,
+                    "request_payload": json.dumps(payload_snapshot, ensure_ascii=False, default=str),
+                    "route_type": "plan_bom_qa",
+                    "metric_type": response.nlu.intent,
+                    "result_count": result_count,
+                    "status": self._resolve_history_row_status(response),
+                    "message": response.answer_summary,
+                },
+            )
+            self.repository.db.commit()
+            return log_id
+        except Exception as exc:  # noqa: BLE001
+            try:
+                self.repository.db.rollback()
+            except Exception as rollback_exc:  # noqa: BLE001
+                logger.warning("rollback plan bom qa history snapshot failed: %s", rollback_exc)
+            logger.warning("write plan bom qa history snapshot failed: %s", exc)
+            return 0
+
+    @staticmethod
+    def _resolve_history_row_status(response: PlanBomQaResponse) -> str:
+        """把 BOM QA 响应状态转换成 sys_query_log 列表状态。"""
+        if response.status.code == "EXECUTION_ERROR" or not response.status.success:
+            return "ERROR"
+        if response.classification == "B" or response.status.code == "CLARIFICATION_REQUIRED":
+            return "CLARIFICATION"
+        if response.status.code == "UNSUPPORTED_QUESTION":
+            return "UNSUPPORTED"
+        if response.status.code == "EMPTY_RESULT":
+            return "EMPTY_RESULT"
+        return "SUCCESS"
+
+    @staticmethod
+    def _safe_log_message(message: str) -> str:
+        """返回已脱敏且长度受控的异常摘要。
+
+        参数：
+            message: 原始异常文本，可能包含下游 API key、Bearer token、密码或连接串。
+
+        返回：
+            可写入 sys_query_log 的安全摘要。
+        """
+        text = str(message or "")
+        redaction_patterns = [
+            # OpenAI/兼容模型常见 sk- 前缀密钥。
+            (r"sk-[A-Za-z0-9_-]{8,}", "[REDACTED]"),
+            # Authorization: Bearer xxx 或 Authorization=Bearer xxx。
+            (r"(?i)(authorization\s*[:=]\s*bearer\s+)([^\s,;]+)", r"\1[REDACTED]"),
+            # 某些 HTTP/SDK 异常只保留独立 Bearer xxx 片段，也必须脱敏。
+            (r"(?i)(\bbearer\s+)([^\s,;]+)", r"\1[REDACTED]"),
+            # JSON/字典字符串中的 "api_key":"xxx"、'password': 'xxx' 等键值形式。
+            (
+                r"(?i)((?:[\"']?)(?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|passwd|token)(?:[\"']?)\s*[:=]\s*[\"']?)([^\"',\s&;}\]]+)",
+                r"\1[REDACTED]",
+            ),
+            # api_key=xxx、password: xxx、access_token=xxx 等无引号键值形式。
+            (
+                r"(?i)((?:api[_-]?key|access[_-]?token|refresh[_-]?token|secret|password|passwd|token)\s*[:=]\s*)([^,\s&;]+)",
+                r"\1[REDACTED]",
+            ),
+            # mysql://user:password@host/db 等 URL 连接串中的密码。
+            (r"(://[^:/\s]+:)([^@\s/]+)(@)", r"\1[REDACTED]\3"),
+        ]
+        for pattern, replacement in redaction_patterns:
+            text = re.sub(pattern, replacement, text)
+        return text if len(text) <= 500 else f"{text[:500]}...已截断"
+
+    def _rollback_before_error_log(self) -> None:
+        """异常兜底写日志前先清理业务 Session 的失败事务状态。"""
+        try:
+            self.repository.db.rollback()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("rollback plan bom qa session before error log failed: %s", exc)
 
     @staticmethod
     def _default_columns() -> list[str]:

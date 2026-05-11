@@ -673,10 +673,11 @@ class LogisticsDataQaService:
             )
 
         if plan.query_key == "hist_top_customers_fee_and_mw_by_province":
+            top_n = filters.get("top_n", plan.limit or 5)
             data = self.repository.hist_top_customers_fee_and_mw_by_province(
                 year=filters["year"],
                 province=filters["province"],
-                top_n=plan.limit or 5,
+                top_n=top_n,
             )
             scope_text = (
                 f"{filters['year']}年{filters['province']}"
@@ -684,7 +685,7 @@ class LogisticsDataQaService:
                 else f"{filters['province']}历史累计"
             )
             summary = (
-                f"{scope_text}发运记录中，按客户名称统计的前{plan.limit or 5}名客户"
+                f"{scope_text}发运记录中，按客户名称统计的前{top_n}名客户"
                 "总费用和总发运量已返回。"
             )
             return self._build_result(
@@ -701,11 +702,12 @@ class LogisticsDataQaService:
             )
 
         if plan.query_key == "hist_customer_mw_ranking":
+            top_n = filters.get("top_n", plan.limit or 10)
             data = self.repository.hist_customer_mw_ranking(
                 year=filters.get("year"),
-                top_n=filters.get("top_n", plan.limit or 10),
+                top_n=top_n,
             )
-            summary = f"{data['scope_label']}总发运瓦数最高的前{plan.limit or 10}个客户已返回。"
+            summary = f"{data['scope_label']}总发运瓦数最高的前{top_n}个客户已返回。"
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
@@ -1035,6 +1037,26 @@ class LogisticsDataQaService:
                 warnings=warnings,
             )
 
+        if plan.query_key == "mixed_mw_by_all_regions_2023_2026":
+            data = self.repository.mixed_mw_by_all_regions_2023_2026(
+                months=filters.get("months"),
+                transport_mode=filters.get("transport_mode"),
+            )
+            summary = "2023-2026年各区域发运量汇总已按区域拆分返回。"
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=["region_name", "shipment_mw", "hist_shipment_mw", "sys_2026_shipment_mw"],
+                table_rows=data,
+                calculation_logic=[
+                    "未给年月日时，默认查询 2023-2026 全时间范围。",
+                    "2023-2025 与 2026 数据分别按统一发运量口径折算为 MW 后合并。",
+                    "本次按区域分组展示，不把各区域相加成单行总和。",
+                ],
+                data_scope={"business_scope": "2023-2026年物流发运量", **filters},
+                warnings=warnings,
+            )
+
         if plan.query_key == "mixed_mw_summary_2023_2026":
             data = self.repository.mixed_mw_summary_2023_2026(
                 months=filters.get("months"),
@@ -1145,15 +1167,26 @@ class LogisticsDataQaService:
             )
 
         if plan.query_key == "hist_mw_by_all_regions":
-            data = self.repository.hist_mw_by_all_regions(year=filters["year"])
-            summary = f"{filters['year']}年各区域发运量汇总已返回。"
+            data = self.repository.hist_mw_by_all_regions(
+                year=filters["year"],
+                carrier_name=filters.get("carrier_name"),
+                regions=filters.get("regions"),
+            )
+            scope_parts = [f"{filters['year']}年"]
+            if filters.get("carrier_name"):
+                scope_parts.append(str(filters["carrier_name"]))
+            if filters.get("regions"):
+                scope_parts.append("、".join(str(item) for item in filters["regions"]))
+            else:
+                scope_parts.append("各区域")
+            summary = f"{''.join(scope_parts)}发运量汇总已按区域拆分返回。"
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
                 table_columns=["region_name", "shipment_mw"],
                 table_rows=data,
-                calculation_logic=["历史发运量 MW 使用 actual_watt 汇总后除以 1,000,000，并按区域分组。"],
-                data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+                calculation_logic=["历史发运量按已入库的实际发运瓦数汇总后折算为 MW，并按区域分组。"],
+                data_scope={"business_scope": "历史物流发运量", **filters},
                 warnings=warnings,
             )
 
@@ -1573,24 +1606,25 @@ class LogisticsDataQaService:
 
         if plan.query_key == "carrier_metric_ranking":
             ranking_metric = filters["ranking_metric"]
+            top_n = filters.get("top_n", plan.limit or 10)
             if filters["year"] == 2026:
                 data = self.repository.sys_carrier_ranking(
                     year=filters["year"],
                     months=filters["months"],
                     ranking_metric=ranking_metric,
-                    top_n=filters.get("top_n", plan.limit or 10),
+                    top_n=top_n,
                 )
             else:
                 data = self.repository.hist_carrier_ranking(
                     year=filters["year"],
                     ranking_metric=ranking_metric,
-                    top_n=filters.get("top_n", plan.limit or 10),
+                    top_n=top_n,
                 )
             month_text = ""
             if filters.get("months"):
                 month_text = "、".join(f"{month}月" for month in filters["months"])
             metric_text = "单瓦成本" if ranking_metric == "unit_fee_per_watt" else "总运费"
-            summary = f"{filters['year']}年{month_text}各承运商按{metric_text}排名前十结果已返回。"
+            summary = f"{filters['year']}年{month_text}各承运商按{metric_text}排名前{top_n}结果已返回。"
             table_columns = (
                 ["carrier_name", "unit_fee_per_watt", "total_fee", "shipment_mw", "task_count"]
                 if ranking_metric == "unit_fee_per_watt"
@@ -1604,7 +1638,7 @@ class LogisticsDataQaService:
                 calculation_logic=[
                     "历史口径下总运费按 total_fee 汇总，单瓦成本按 total_fee / actual_watt 计算。",
                     "2026 系统口径下总运费沿用正式 price × 解析总车数，单瓦成本 = 系统总运费 / 总发运瓦数。",
-                    "排名统一按指标降序返回前十名。",
+                    f"排名统一按指标降序返回前{top_n}名。",
                 ],
                 data_scope={"tables": ["dwd_logistics_hist_shipment_detail", "dwd_logistics_ship_task", "dwd_logistics_ship_product"], **filters},
                 warnings=warnings,
@@ -2107,11 +2141,12 @@ class LogisticsDataQaService:
             )
 
         if plan.query_key == "sys_delivery_distance_fill_rate_by_province":
+            top_n = filters.get("top_n", plan.limit or 10)
             data = self.repository.sys_delivery_distance_fill_rate_by_province(
                 year=filters["year"],
-                top_n=filters.get("top_n", plan.limit or 10),
+                top_n=top_n,
             )
-            summary = f"{filters['year']}年各送达省份 delivery_distance 填充率已返回，最低前十省份已排序。"
+            summary = f"{filters['year']}年各送达省份 delivery_distance 填充率已返回，最低前{top_n}省份已排序。"
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
@@ -2119,23 +2154,24 @@ class LogisticsDataQaService:
                 table_rows=data,
                 calculation_logic=[
                     "填充率 = delivery_distance 非空任务数 / 该送达省份全部任务数。",
-                    "当前结果按填充率升序输出，便于直接查看最低前十省份。",
+                    f"当前结果按填充率升序输出，便于直接查看最低前{top_n}省份。",
                 ],
                 data_scope={"table": "dwd_logistics_ship_task", **filters},
                 warnings=warnings,
             )
 
         if plan.query_key == "sys_parse_success_rate_by_carrier":
+            top_n = filters.get("top_n", plan.limit or 10)
             data = self.repository.sys_parse_success_rate_by_carrier(
                 year=filters["year"],
-                top_n=filters.get("top_n", plan.limit or 10),
+                top_n=top_n,
             )
             rows = [
-                {"bucket": "top10", **row} for row in data["top10"]
+                {"bucket": f"top{top_n}", **row} for row in data["top_rows"]
             ] + [
-                {"bucket": "bottom10", **row} for row in data["bottom10"]
+                {"bucket": f"bottom{top_n}", **row} for row in data["bottom_rows"]
             ]
-            summary = f"{filters['year']}年按承运商统计的送货单解析成功率前十和后十结果已返回。"
+            summary = f"{filters['year']}年按承运商统计的送货单解析成功率前{top_n}和后{top_n}结果已返回。"
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
@@ -2143,7 +2179,7 @@ class LogisticsDataQaService:
                 table_rows=rows,
                 calculation_logic=[
                     "解析成功率 = project_name 能按当前正式规则解析总车数的任务数 / 全部任务数。",
-                    "同一承运商分别给出解析成功率前十和后十结果，便于同时看最佳与最差。",
+                    f"同一承运商分别给出解析成功率前{top_n}和后{top_n}结果，便于同时看最佳与最差。",
                 ],
                 data_scope={"table": "dwd_logistics_ship_task", **filters},
                 warnings=warnings,
@@ -2291,12 +2327,13 @@ class LogisticsDataQaService:
             )
 
         if plan.query_key == "sys_signedfor_rate_by_carrier":
-            data = self.repository.sys_signedfor_rate_by_carrier(year=filters["year"])
-            summary = f"{filters['year']}年承运商 SIGNEDFOR 签收率已返回前十和后十结果。"
+            top_n = filters.get("top_n", plan.limit or 10)
+            data = self.repository.sys_signedfor_rate_by_carrier(year=filters["year"], top_n=top_n)
+            summary = f"{filters['year']}年承运商 SIGNEDFOR 签收率已返回前{top_n}和后{top_n}结果。"
             rows = [
-                {"bucket": "top10", **row} for row in data["top10"]
+                {"bucket": f"top{top_n}", **row} for row in data["top_rows"]
             ] + [
-                {"bucket": "bottom10", **row} for row in data["bottom10"]
+                {"bucket": f"bottom{top_n}", **row} for row in data["bottom_rows"]
             ]
             return self._build_result(
                 answer_summary=summary,

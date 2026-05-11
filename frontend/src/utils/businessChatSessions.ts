@@ -206,7 +206,8 @@ export function removeBusinessChatSession(sessionId: string): BusinessChatSessio
     return getBusinessChatSession(nextSummary.id) || createBlankBusinessChatSession()
   }
   clearActiveBusinessChatSessionId()
-  emitBusinessChatSessionUpdated()
+  // 删除唯一会话时不能先广播“空列表”状态，否则布局页和聊天页监听器会同时 ensure 并抢先创建一个新会话；
+  // 这里直接创建唯一兜底会话，由 createBlankBusinessChatSession 负责统一设置激活 ID 和广播更新。
   return createBlankBusinessChatSession()
 }
 
