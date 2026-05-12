@@ -20,6 +20,7 @@ class LogisticsLlmUnderstandingResult(BaseModel):
         "ranking",
         "comparison",
         "detail",
+        "composite",
         "clarification",
         "unsupported",
         "unknown",

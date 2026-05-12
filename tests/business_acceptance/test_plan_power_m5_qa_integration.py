@@ -103,7 +103,8 @@ def test_plan_bom_qa_answers_power_prediction_for_real_order(live_db_session, qa
     assert response.result_table.rows
     assert {"功率档", "预测比例"}.issubset(set(response.result_table.columns))
     assert response.presentation is not None
-    assert response.presentation.table_spec is not None
+    assert response.presentation.display_type == "narrative"
+    assert response.presentation.table_spec is None
 
 
 def test_plan_bom_qa_recommends_suppliers_by_target_ratio(live_db_session, qa_service) -> None:

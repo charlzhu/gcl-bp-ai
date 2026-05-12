@@ -97,6 +97,13 @@ class LogisticsDataQaPlanner:
         "运费多少",
         "运输费用",
     )
+    SYS_TOTAL_FEE_FIELD_FILTER_ALIASES = {
+        # 2026 系统总费用里，“经营计划”是扩充部门字段值，不是旧的锁定特殊口径。
+        "经营计划部": ("expand_dept", "经营计划部"),
+        "经营计划": ("expand_dept", "经营计划"),
+        # “刘娟”是委托人字段值，可与扩充部门等其他字段叠加过滤。
+        "刘娟": ("entrusted_person", "刘娟"),
+    }
     REMARK_SUPPORTED_KEYWORDS = ("倒运", "中转", "换车", "压车", "放空")
     REMARK_FEE_RATIO_KEYWORDS = ("倒运", "中转")
     ASSIST_SUPPORTED_QUERY_KEYS = {
@@ -118,6 +125,7 @@ class LogisticsDataQaPlanner:
         "sys_driver_phone_name_consistency",
         "sys_driver_id_phone_consistency",
         "sys_special_total_fee",
+        "composite_decomposed",
     }
 
     def __init__(self, *, slot_extractor: LogisticsSlotExtractor | None = None) -> None:
@@ -166,11 +174,10 @@ class LogisticsDataQaPlanner:
                 clarification_reason="用户要求吨口径，但当前稳定数据链路只支持瓦数 / MW 发运量。",
             )
 
-        composite_plan = self._build_decomposable_composite_plan(compact)
-        if composite_plan is not None:
-            # 复合问题如果能被拆成多个已审计 A 类子问题，应先走拆分执行，
-            # 避免后续 C 类策略把整句误判为“历史采购方式拆分”。
-            return composite_plan
+        # 综合型问题“是否可拆、如何拆”必须由 LLM 语义理解层主导。
+        # 规则 planner 不再按关键词直接拆分，只保留吨口径、历史字段缺失等硬边界；
+        # 若 Guardrail 收到 LLM 的可信拆分候选，再由 build_plan_from_guardrail_candidate
+        # 回构白名单子计划并执行安全校验。
 
         # 不支持边界必须先于高置信 A 类候选生效。
         # 例如“预测未来 3 个月各区域发运量”虽然包含“年份+各区域+发运量”，
@@ -389,6 +396,7 @@ class LogisticsDataQaPlanner:
         company_name = self._extract_company_name(compact)
         transport_mode = self._extract_transport_mode(compact)
         procurement_type = self._extract_procurement_type(compact)
+        controlled_field_filters = self._extract_sys_total_fee_controlled_field_filters(compact)
         if (
             company_name
             and (
@@ -732,6 +740,40 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "region_name": region},
             )
 
+        unknown_field_scope_terms = self._extract_unknown_sys_total_fee_field_scope_terms(
+            compact,
+            controlled_field_filters=controlled_field_filters,
+        )
+        if year == 2026 and self._is_total_fee_question(compact) and unknown_field_scope_terms:
+            unknown_text = "、".join(unknown_field_scope_terms)
+            return LogisticsDataQaPlan(
+                intent="clarification",
+                needs_clarification=True,
+                clarification_category="field_scope_mapping",
+                clarification_questions=[
+                    f"请确认“{unknown_text}”对应哪个字段口径：扩充部门、委托人、客户、承运商、项目还是其他字段？",
+                    "字段口径确认后，系统会按该字段与已给出的时间范围叠加过滤统计用车总费用。",
+                ],
+                clarification_missing_slots=["字段口径"],
+                clarification_reason=f"问题中的“{unknown_text}”没有受控字段映射，不能默认查全量或套用其他特殊口径。",
+                clarification_template="field_scope_mapping",
+            )
+
+        if year == 2026 and self._is_total_fee_question(compact) and controlled_field_filters:
+            # 受控业务词优先解释为真实字段过滤；若同句仍残留未知范围词，上方已转澄清，避免静默丢条件。
+            filters: dict[str, Any] = {"year": year, "months": months, **controlled_field_filters}
+            if monthly_breakdown:
+                filters["monthly_breakdown"] = True
+            return LogisticsDataQaPlan(
+                intent="aggregate",
+                query_key="sys_total_fee_by_filters",
+                metrics=["total_fee"],
+                dimensions=["biz_month"] if monthly_breakdown else [],
+                filters=filters,
+                group_by=["biz_month"] if monthly_breakdown else [],
+                sort=[{"field": "biz_month", "direction": "asc"}] if monthly_breakdown else [],
+            )
+
         if year == 2026 and procurement_type and self._is_total_fee_question(compact):
             return LogisticsDataQaPlan(
                 intent="aggregate",
@@ -978,10 +1020,12 @@ class LogisticsDataQaPlanner:
             2. 只有当原始问题缺少的槽位能通过问句抽取或 LLM 结构化输出稳定补齐时，才返回 plan；
             3. 如果任何关键口径仍不明确，必须返回 None，让主链路继续保持原规则结果。
         """
+        compact = re.sub(r"\s+", "", question.strip())
+        if candidate_query_key == "composite_decomposed":
+            return self._build_composite_plan_from_llm_result(compact=compact, llm_result=llm_result)
         if candidate_query_key not in self.ASSIST_SUPPORTED_QUERY_KEYS:
             return None
 
-        compact = re.sub(r"\s+", "", question.strip())
         year = self._resolve_assist_year(compact, llm_result)
         months = self._resolve_assist_months(compact, llm_result)
         region = self._resolve_assist_region(compact, llm_result)
@@ -1147,46 +1191,125 @@ class LogisticsDataQaPlanner:
             )
         return None
 
-    def _build_decomposable_composite_plan(self, compact: str) -> LogisticsDataQaPlan | None:
-        """识别可拆分成多个确定性子查询的复合物流问题。
+    def _build_composite_plan_from_llm_result(
+        self,
+        *,
+        compact: str,
+        llm_result: LogisticsLlmUnderstandingResult,
+    ) -> LogisticsDataQaPlan | None:
+        """根据 LLM 拆分结果回构可执行的复合查询计划。
 
         参数：
             compact: 已去除空白的用户问题。
+            llm_result: Guardrail 放行的 LLM 结构化理解结果。
         返回值：
             可执行的 composite_decomposed 查询计划；无法安全拆分时返回 None。
         业务说明：
-            当前只把“历史高运费地址清单 + 2026 系统采购方式发运量”这类
-            顶层并列问题拆开执行；如果用户要求在历史高运费地址内部按采购方式拆分，
-            仍交给既有 C 类边界拒答，避免伪造历史采购方式字段。
+            LLM 负责判断顶层并列子问题和给出子计划候选；本方法只做白名单、
+            字段能力、年份来源和回指安全校验，不能再按关键词自行决定拆分。
         """
 
-        clauses = self._split_composite_clauses(compact)
-        if len(clauses) < 2:
+        if "吨" in compact and any(keyword in compact for keyword in ("发运量", "运量", "发货量")):
             return None
 
-        high_fee_clause = next((clause for clause in clauses if self._is_high_fee_address_clause(clause)), None)
-        procurement_clause = next((clause for clause in clauses if self._is_procurement_mw_clause(clause)), None)
+        decomposition = llm_result.filters if isinstance(llm_result.filters, dict) else {}
+        sub_plan_payloads = decomposition.get("sub_plans")
+        if not isinstance(sub_plan_payloads, list) or len(sub_plan_payloads) != 2:
+            # LLM 只能给出当前已审计的两个顶层独立子问；额外/重复子问一律拒绝，
+            # 避免静默丢弃用户意图造成漏答。
+            return None
+        if decomposition.get("decomposition_strategy") not in {"top_level_conjunction", "llm_top_level_conjunction"}:
+            return None
+        sub_query_keys = [payload.get("query_key") for payload in sub_plan_payloads if isinstance(payload, dict)]
+        required_query_keys = {"hist_high_fee_addresses_by_customer", "sys_mw_by_procurement_type"}
+        if set(sub_query_keys) != required_query_keys or len(sub_query_keys) != len(required_query_keys):
+            return None
+
+        high_fee_payload = self._find_llm_sub_plan_payload(
+            sub_plan_payloads,
+            query_key="hist_high_fee_addresses_by_customer",
+        )
+        procurement_payload = self._find_llm_sub_plan_payload(
+            sub_plan_payloads,
+            query_key="sys_mw_by_procurement_type",
+        )
+        if high_fee_payload is None or procurement_payload is None:
+            return None
+
+        high_fee_clause = self._extract_llm_source_clause(high_fee_payload)
+        procurement_clause = self._extract_llm_source_clause(procurement_payload)
         if not high_fee_clause or not procurement_clause:
+            return None
+        if high_fee_clause not in compact or procurement_clause not in compact:
+            # 每个 LLM 子句都必须可回溯到用户原文，防止幻觉子句补齐关键槽位。
+            return None
+        if not self._llm_source_clauses_cover_original_question(compact, [high_fee_clause, procurement_clause]):
+            # LLM 漏报第三个顶层诉求时不能静默漏答；只能覆盖寒暄、标点和连接词。
+            return None
+        if not self._is_high_fee_address_clause(high_fee_clause):
+            return None
+        if self._high_fee_clause_contains_procurement_ask(high_fee_clause):
+            # 高运费地址子句不能同时吞入采购方式发运量诉求，否则说明 LLM source_clause 过宽。
+            return None
+        if self._high_fee_clause_has_unsupported_qualifier(high_fee_clause):
+            # 当前历史高运费地址子查询不支持区域、月份、承运商等额外限定，不能静默忽略。
+            return None
+        if not self._is_procurement_mw_clause(procurement_clause):
+            return None
+        high_fee_filters = high_fee_payload.get("filters") if isinstance(high_fee_payload.get("filters"), dict) else {}
+        procurement_filters = procurement_payload.get("filters") if isinstance(procurement_payload.get("filters"), dict) else {}
+        if self._filters_have_nonempty_unsupported_keys(
+            high_fee_filters,
+            allowed_filter_keys={"year", "customer_name", "threshold_fee"},
+        ):
+            # 高运费地址子查询只支持年、客户、金额阈值；LLM 额外 filters 不能静默丢弃。
+            return None
+        if self._procurement_clause_has_unsupported_filter(procurement_clause, procurement_filters):
+            # 当前 sys_mw_by_procurement_type 仅支持全局采购方式 MW，不支持客户/区域/承运商等下推限定。
             return None
         if self._is_historical_procurement_split_request(compact, high_fee_clause, procurement_clause):
             return None
 
-        high_fee_year = self._extract_year(high_fee_clause) or self._extract_year(compact)
-        if high_fee_year not in {2023, 2024, 2025}:
+        source_high_fee_year = self._extract_year(high_fee_clause)
+        llm_high_fee_year = self._coerce_int(high_fee_filters.get("year"))
+        if source_high_fee_year not in {2023, 2024, 2025}:
             return None
-        customer_name = self._extract_high_fee_customer_name(high_fee_clause) or self._extract_customer_name(high_fee_clause)
-        if not customer_name or len(customer_name) <= 1:
+        if llm_high_fee_year is not None and llm_high_fee_year != source_high_fee_year:
             return None
-        threshold_fee = self._extract_fee_threshold_yuan(high_fee_clause) or self._extract_fee_threshold_yuan(compact)
-        if not threshold_fee:
+        high_fee_year = source_high_fee_year
+
+        source_customer_name = self._extract_high_fee_customer_name(high_fee_clause) or self._extract_customer_name(high_fee_clause)
+        llm_customer_name = str(high_fee_filters.get("customer_name") or "").strip()
+        if not source_customer_name or len(source_customer_name) <= 1:
+            return None
+        if llm_customer_name and llm_customer_name != source_customer_name:
+            return None
+        customer_name = source_customer_name
+        if self._procurement_clause_has_unsupported_filter(
+            procurement_clause,
+            procurement_filters,
+            known_customer_name=customer_name,
+        ):
+            # 采购方式子句若隐式复用历史客户名，也属于当前全局 query_key 不支持的限定。
             return None
 
-        procurement_year = self._extract_year(procurement_clause)
-        if procurement_year in {2023, 2024, 2025}:
+        source_threshold_fee = self._extract_fee_threshold_yuan(high_fee_clause)
+        llm_threshold_fee = self._coerce_int(high_fee_filters.get("threshold_fee"))
+        if not source_threshold_fee:
             return None
-        procurement_year = procurement_year or 2026
-        if procurement_year != 2026:
+        if llm_threshold_fee is not None and llm_threshold_fee != source_threshold_fee:
             return None
+        threshold_fee = source_threshold_fee
+
+        source_procurement_year = self._extract_year(procurement_clause)
+        llm_procurement_year = self._coerce_int(procurement_filters.get("year"))
+        if source_procurement_year in {2023, 2024, 2025}:
+            return None
+        if llm_procurement_year is not None and llm_procurement_year != 2026:
+            return None
+        if source_procurement_year is not None and source_procurement_year != 2026:
+            return None
+        procurement_year = 2026
 
         high_fee_plan = LogisticsDataQaPlan(
             intent="detail_list",
@@ -1213,6 +1336,8 @@ class LogisticsDataQaPlanner:
             dimensions=["section"],
             filters={
                 "decomposition_strategy": "top_level_conjunction",
+                "decomposition_source": "llm_guardrail",
+                "llm_confidence": llm_result.confidence,
                 "sub_query_keys": ["hist_high_fee_addresses_by_customer", "sys_mw_by_procurement_type"],
                 "sub_plans": [
                     {"section_label": "历史高运费收货地址", **high_fee_plan.model_dump(mode="json")},
@@ -1220,6 +1345,285 @@ class LogisticsDataQaPlanner:
                 ],
             },
         )
+
+    @staticmethod
+    def _find_llm_sub_plan_payload(sub_plan_payloads: list[Any], *, query_key: str) -> dict[str, Any] | None:
+        """从 LLM 拆分结果中查找指定 query_key 的子计划。
+
+        参数：
+            sub_plan_payloads: LLM 返回的子计划候选列表。
+            query_key: 需要匹配的受控查询键。
+        返回值：
+            匹配到的子计划字典；未匹配时返回 None。
+        """
+
+        for payload in sub_plan_payloads:
+            if isinstance(payload, dict) and payload.get("query_key") == query_key:
+                return payload
+        return None
+
+    @staticmethod
+    def _extract_llm_source_clause(payload: dict[str, Any]) -> str:
+        """提取 LLM 子计划对应的原始子句。
+
+        参数：
+            payload: 单个 LLM 子计划候选。
+        返回值：
+            去空白后的原始子句；如果没有可审计子句则返回空字符串。
+        """
+
+        source_clause = payload.get("source_clause") or payload.get("clause") or payload.get("question")
+        return re.sub(r"\s+", "", str(source_clause or "").strip())
+
+    @staticmethod
+    def _llm_source_clauses_cover_original_question(compact: str, source_clauses: list[str]) -> bool:
+        """校验 LLM 子句是否以互不重叠的原文片段覆盖全部实质诉求。
+
+        参数：
+            compact: 去空白后的原始问题。
+            source_clauses: LLM 返回且已确认出现在原文中的子句。
+        返回值：
+            若所有 source_clause 都能定位为非重叠 span，且移除后只剩寒暄、标点、连接词，返回 True。
+        业务逻辑：LLM 可以主导拆分，但不能用整句/重叠片段掩盖漏报子问。
+        """
+
+        if not compact or len(set(source_clauses)) != len(source_clauses):
+            return False
+        for clause in source_clauses:
+            if not clause or clause == compact:
+                return False
+        for index, clause in enumerate(source_clauses):
+            for other_index, other_clause in enumerate(source_clauses):
+                if index != other_index and other_clause in clause:
+                    return False
+
+        spans = LogisticsDataQaPlanner._locate_non_overlapping_source_spans(compact, source_clauses)
+        if spans is None:
+            return False
+        covered = [False] * len(compact)
+        for start, end in spans:
+            for position in range(start, end):
+                if covered[position]:
+                    return False
+                covered[position] = True
+        residue = "".join(char for position, char in enumerate(compact) if not covered[position])
+        residue = re.sub(r"[\s，,；;。.!！?？：:、]", "", residue)
+        residue = re.sub(
+            r"(?:请|帮我|帮忙|麻烦|统计一下|统计|查询|查一下|看一下|列出|并且|并|同时|另外|再|以及|和|把|将|分别|一下|的)",
+            "",
+            residue,
+        )
+        return residue == ""
+
+    @staticmethod
+    def _locate_non_overlapping_source_spans(compact: str, source_clauses: list[str]) -> list[tuple[int, int]] | None:
+        """为 LLM source_clause 寻找互不重叠的原文区间。
+
+        参数：
+            compact: 去空白后的原始问题。
+            source_clauses: LLM 子句列表。
+        返回值：
+            成功时返回 `(start, end)` 区间列表；无法找到非重叠定位时返回 None。
+        """
+
+        occurrences: list[list[tuple[int, int]]] = []
+        for clause in source_clauses:
+            clause_occurrences = [(match.start(), match.end()) for match in re.finditer(re.escape(clause), compact)]
+            if not clause_occurrences:
+                return None
+            occurrences.append(clause_occurrences)
+
+        def backtrack(index: int, selected: list[tuple[int, int]]) -> list[tuple[int, int]] | None:
+            """递归选择互不重叠的 source_clause 区间。"""
+
+            if index >= len(occurrences):
+                return selected
+            for span in occurrences[index]:
+                if all(span[1] <= chosen[0] or span[0] >= chosen[1] for chosen in selected):
+                    resolved = backtrack(index + 1, [*selected, span])
+                    if resolved is not None:
+                        return resolved
+            return None
+
+        return backtrack(0, [])
+
+    @staticmethod
+    def _high_fee_clause_contains_procurement_ask(clause: str) -> bool:
+        """判断高运费地址子句是否误吞了采购方式发运量诉求。"""
+
+        return any(keyword in clause for keyword in ("询比价", "招标", "采购方式")) and any(
+            keyword in clause for keyword in ("发运量", "运量", "发货量")
+        )
+
+    @staticmethod
+    def _high_fee_clause_has_unsupported_qualifier(clause: str) -> bool:
+        """判断历史高运费地址子句是否包含当前查询无法下推的限定。"""
+
+        if re.search(r"(?:\d{1,2}|[一二三四五六七八九十]{1,3})月", clause):
+            return True
+        unsupported_keywords = (
+            "区域",
+            "地区",
+            "华东",
+            "华南",
+            "华北",
+            "华中",
+            "西南",
+            "西北",
+            "东北",
+            "基地",
+            "园区",
+            "工厂",
+            "起运",
+            "承运商",
+            "物流公司",
+            "物流供应商",
+        )
+        return any(keyword in clause for keyword in unsupported_keywords)
+
+    @staticmethod
+    def _filters_have_nonempty_unsupported_keys(filters: dict[str, Any], *, allowed_filter_keys: set[str]) -> bool:
+        """判断 LLM filters 是否包含当前子查询无法执行的非空键。
+
+        参数：
+            filters: LLM 子计划 filters。
+            allowed_filter_keys: 当前确定性子查询真正支持的 filter key。
+        返回值：
+            发现非空且不在白名单内的 key 时返回 True。
+        """
+
+        for key, value in filters.items():
+            if key in allowed_filter_keys:
+                continue
+            if value is None or value == "" or value == [] or value == {}:
+                continue
+            return True
+        return False
+
+    @staticmethod
+    def _procurement_clause_has_unsupported_filter(
+        clause: str,
+        filters: dict[str, Any],
+        *,
+        known_customer_name: str | None = None,
+    ) -> bool:
+        """判断采购方式全局统计子句是否携带当前无法下推的额外限定。
+
+        参数：
+            clause: LLM 识别出的采购方式发运量原文子句。
+            filters: LLM 给出的采购方式子计划 filters。
+            known_customer_name: 已从同一原问题其它子句确定的客户名，用于识别无“客户”后缀的隐式限定。
+        返回值：
+            若出现客户、区域、承运商、地址、月份等全局统计不支持的限定，返回 True。
+        """
+
+        if LogisticsDataQaPlanner._filters_have_nonempty_unsupported_keys(
+            filters,
+            allowed_filter_keys={"year", "default_system_year"},
+        ):
+            return True
+        if known_customer_name and known_customer_name in clause:
+            return True
+        if LogisticsDataQaPlanner._procurement_clause_has_unsupported_business_residue(clause):
+            return True
+        if LogisticsDataQaPlanner._procurement_clause_has_leading_unsupported_qualifier(clause):
+            return True
+        if re.search(r"(?:\d{1,2}|[一二三四五六七八九十]{1,3})月", clause):
+            return True
+        unsupported_keywords = (
+            "客户",
+            "区域",
+            "地区",
+            "华东",
+            "华南",
+            "华北",
+            "华中",
+            "西南",
+            "西北",
+            "东北",
+            "省",
+            "市",
+            "基地",
+            "园区",
+            "工厂",
+            "起运",
+            "承运商",
+            "物流公司",
+            "物流供应商",
+            "收货地址",
+            "地址",
+            "项目地",
+            "这些",
+            "上述",
+            "上面",
+            "前述",
+            "该批",
+        )
+        return any(keyword in clause for keyword in unsupported_keywords)
+
+    @staticmethod
+    def _procurement_clause_has_unsupported_business_residue(clause: str) -> bool:
+        """剥离采购方式子句中的受支持词后，检查是否残留业务限定。
+
+        参数：
+            clause: 采购方式发运量原文子句。
+        返回值：
+            若剥离动作词、年份、采购方式词、发运量/MW 口径词后仍有实体残留，返回 True。
+        业务逻辑：覆盖 `询比价和海尔招标` 这类限定出现在第二个采购方式词附近的表达。
+        """
+
+        residue = clause
+        residue = re.sub(r"(?:20\d{2}|\d{2})年", "", residue)
+        residue = re.sub(r"询比价|招标|采购方式", "", residue)
+        residue = re.sub(
+            r"(?:请|帮我|帮忙|麻烦|统计一下|统计|查询|查一下|看一下|列出|并且|并|同时|另外|再|以及|和|把|将|分别|一下|的|按|以|根据|对应|发运量|运量|发货量|MW|兆瓦)",
+            "",
+            residue,
+        )
+        residue = re.sub(r"[\s，,；;。.!！?？：:、]", "", residue)
+        return residue != ""
+
+    @staticmethod
+    def _procurement_clause_has_leading_unsupported_qualifier(clause: str) -> bool:
+        """识别采购方式关键词前方无法下推的隐式限定。
+
+        参数：
+            clause: 采购方式发运量原文子句。
+        返回值：
+            若 `询比价/招标/采购方式` 前仍残留客户、地点、基地等限定文本，返回 True。
+        业务逻辑：`创维询比价发运量`、`常熟基地询比价发运量` 这类表达即使 LLM 未给 filters，也不能查全局。
+        """
+
+        match = re.search(r"询比价|招标|采购方式", clause)
+        if match is None:
+            return False
+        leading = clause[: match.start()]
+        leading = re.sub(r"(?:20\d{2}|\d{2})年", "", leading)
+        leading = re.sub(r"(?:\d{1,2}|[一二三四五六七八九十]{1,3})月", "月份", leading)
+        leading = re.sub(
+            r"(?:请|帮我|帮忙|麻烦|统计一下|统计|查询|查一下|看一下|列出|并且|并|同时|另外|再|以及|和|把|将|分别|一下|的|按|以|根据|发运量|运量|发货量|MW|兆瓦)",
+            "",
+            leading,
+        )
+        leading = re.sub(r"[\s，,；;。.!！?？：:、]", "", leading)
+        return leading != ""
+
+    @staticmethod
+    def _coerce_int(value: Any) -> int | None:
+        """把 LLM 输出中的整数槽位安全转成 int。
+
+        参数：
+            value: LLM 输出的候选值。
+        返回值：
+            可用整数；转换失败或值为空时返回 None。
+        """
+
+        if value in {None, ""}:
+            return None
+        try:
+            return int(float(value))
+        except (TypeError, ValueError):
+            return None
 
     @staticmethod
     def _split_composite_clauses(compact: str) -> list[str]:
@@ -1249,6 +1653,14 @@ class LogisticsDataQaPlanner:
         """识别仍需拒答的“在历史高运费地址内部按采购方式拆分”问法。"""
 
         if re.search(r"(?:收货地址|项目地).{0,12}按(?:询比价|招标|采购方式).{0,12}(?:拆分|分别)", compact):
+            return True
+        if re.search(
+            r"(?:这些|上述|该|此|该批|这批|前述|以上|上面|前面)(?:的)?.{0,24}"
+            r"(?:收货地址|地址|项目地|项目|结果|清单)?.{0,24}(?:询比价|招标|采购方式)",
+            compact,
+        ):
+            # 即使 LLM 给出的 procurement_clause 省略了“这些地址”等回指，
+            # 原始问题中一旦出现回指前序高运费结果集，就必须 fail-closed。
             return True
         if re.search(r"(?:这些|上述|该|此|该批|这批|前述|以上|上面|前面)(?:的)?.{0,20}(?:收货地址|地址|项目地|项目|结果|清单)", procurement_clause):
             # 采购方式子句如果回指“这些/上述/该批/上面的地址或项目地”，业务含义是
@@ -1931,10 +2343,16 @@ class LogisticsDataQaPlanner:
             and route_years
             and all(item in {2023, 2024, 2025} for item in route_years)
         ):
+            price_metric = (
+                "unit_price_per_vehicle"
+                if any(keyword in compact for keyword in ("报价", "运价", "单价", "单价/车"))
+                else "total_fee"
+            )
             filters: dict[str, Any] = {
                 "years": route_years,
                 "vehicle_type": vehicle_type,
                 "view_mode": route_view_mode,
+                "price_metric": price_metric,
             }
             if not years:
                 filters["default_year_scope_label"] = "2023-2025历史累计"
@@ -2646,6 +3064,64 @@ class LogisticsDataQaPlanner:
         # “客户华阳的总发运量”里的“的”是助词，不属于客户实体；
         # 这里只裁剪常见尾部助词，不改变中间包含“的”的真实名称。
         return customer_name.strip().rstrip("的")
+
+    def _extract_sys_total_fee_controlled_field_filters(self, question: str) -> dict[str, str]:
+        """提取 2026 系统总费用题的受控字段过滤。
+
+        参数：
+            question: 已压缩空白的用户问题。
+
+        返回值：
+            可直接写入 plan.filters 的字段过滤条件。当前只放行已经由业务确认的
+            expand_dept / entrusted_person，避免把开放词随意下推为字段。
+        """
+
+        filters: dict[str, str] = {}
+        sorted_aliases = sorted(self.SYS_TOTAL_FEE_FIELD_FILTER_ALIASES.items(), key=lambda item: len(item[0]), reverse=True)
+        for alias, (field_name, field_value) in sorted_aliases:
+            if alias in question and field_name not in filters:
+                # 同一字段命中多个别名时保留最长别名，例如“经营计划部”不能被“经营计划”覆盖。
+                filters[field_name] = field_value
+        return filters
+
+    def _extract_unknown_sys_total_fee_field_scope_terms(
+        self,
+        question: str,
+        *,
+        controlled_field_filters: dict[str, str],
+    ) -> list[str]:
+        """识别缺少字段口径的 2026 系统用车总费用范围词。
+
+        参数：
+            question: 已压缩空白的用户问题。
+            controlled_field_filters: 已识别出的受控字段过滤，命中时不再把同一词当未知项。
+
+        返回值：
+            需要用户确认字段归属的词列表；为空表示无需触发字段口径澄清。
+
+        业务说明：
+            “张三用车总费用”这类问法只给了人名/业务词，没有说明它属于委托人、
+            客户、承运商还是其他字段。系统不能猜测字段，也不能套用经营计划等旧
+            special_scope，所以这里保守返回澄清。
+        """
+
+        if "用车" not in question:
+            return []
+        metric_positions = [question.find(keyword) for keyword in self.TOTAL_FEE_KEYWORDS if keyword in question]
+        if not metric_positions:
+            return []
+        scope_text = question[: min(position for position in metric_positions if position >= 0)]
+        scope_text = re.sub(r"\d{2,4}年", "", scope_text)
+        scope_text = re.sub(r"\d{1,2}月份?", "", scope_text)
+        scope_text = scope_text.replace("用车", "")
+        for alias in self.SYS_TOTAL_FEE_FIELD_FILTER_ALIASES:
+            scope_text = scope_text.replace(alias, "")
+        for token in ("请问", "帮我", "查一下", "查询", "统计", "一下", "的", "按", "和", "及", "与"):
+            scope_text = scope_text.replace(token, "")
+        scope_text = scope_text.strip(" ：:，,。？！?")
+        if not scope_text:
+            return []
+        return [scope_text]
 
     def _extract_company_name(self, question: str) -> str | None:
         """提取 2026 系统口径下的承运商公司名。

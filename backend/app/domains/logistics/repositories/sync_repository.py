@@ -315,7 +315,10 @@ class LogisticsSyncRepository:
         limit: int,
         offset: int,
     ) -> list[dict[str, Any]]:
-        filters = ["DATE(create_time) >= :start_date"]
+        # 正式物流问答按业务提货日期统计；部分跨年任务在 2025-12 创建、2026-01 提货，
+        # 如果只按 create_time 过滤会漏同步这些 2026 正式数据。
+        biz_date_expr = "DATE(COALESCE(pickup_date, create_time))"
+        filters = [f"{biz_date_expr} >= :start_date"]
         params: dict[str, Any] = {
             "start_date": start_date,
             "limit": limit,
@@ -368,12 +371,12 @@ class LogisticsSyncRepository:
                 procurement_type, car_model, loading_trucks,
                 delivery_province, delivery_city, delivery_area, delivery_distance,
                 reconciliation_status, extra_cost_audited, base_code, del_flag,
-                DATE(create_time) AS biz_date,
+                {biz_date_expr} AS biz_date,
                 create_time AS created_at,
                 update_time AS updated_at
             FROM logistic_ship_task
             WHERE {' AND '.join(filters)}
-            ORDER BY create_time ASC, task_id ASC
+            ORDER BY {biz_date_expr} ASC, create_time ASC, task_id ASC
             LIMIT :limit OFFSET :offset
             """
         )

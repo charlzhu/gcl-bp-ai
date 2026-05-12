@@ -1474,6 +1474,7 @@ class LogisticsDataQaRepository:
         origin_place: str | None = None,
         province: str | None = None,
         city: str | None = None,
+        price_metric: str = "total_fee",
     ) -> dict[str, Any]:
         """历史线路/城市运价分析。
 
@@ -1490,11 +1491,12 @@ class LogisticsDataQaRepository:
 
         说明：
             1. 该方法服务于 Round2 的历史线路运价题族；
-            2. 统计口径固定使用历史台账 total_fee；
-            3. 如果目的地给的是城市，则优先按 city 过滤；否则按 province 过滤。
+            2. 统计口径按 price_metric 选择：报价/运价使用 unit_price_per_vehicle（单价/车），运费类默认使用 total_fee；
+            3. 如果目的地给的是城市，则优先按 city 模糊过滤；否则按 province 过滤。
         """
         filters = ["required_vehicle_type LIKE :vehicle_type"]
         params: dict[str, Any] = {"vehicle_type": f"%{vehicle_type}%"}
+        metric_column = "unit_price_per_vehicle" if price_metric == "unit_price_per_vehicle" else "total_fee"
         year_placeholders = ", ".join(f":year_{idx}" for idx, _ in enumerate(years))
         filters.append(f"biz_year IN ({year_placeholders})")
         for idx, year in enumerate(years):
@@ -1503,8 +1505,8 @@ class LogisticsDataQaRepository:
             filters.append("origin_place = :origin_place")
             params["origin_place"] = origin_place
         if city:
-            filters.append("city = :city")
-            params["city"] = city
+            filters.append("city LIKE :city")
+            params["city"] = f"%{city}%"
         elif province:
             filters.append("province = :province")
             params["province"] = province
@@ -1516,7 +1518,7 @@ class LogisticsDataQaRepository:
                     f"""
                     SELECT
                         DATE_FORMAT(biz_date, '%Y-%m') AS biz_month,
-                        ROUND(AVG(total_fee), 0) AS avg_fee,
+                        ROUND(AVG({metric_column}), 0) AS avg_fee,
                         COUNT(*) AS row_count
                     FROM dwd_logistics_hist_shipment_detail
                     WHERE {where_sql}
@@ -1535,7 +1537,7 @@ class LogisticsDataQaRepository:
                     f"""
                     SELECT
                         biz_year,
-                        ROUND(AVG(total_fee), 0) AS avg_fee,
+                        ROUND(AVG({metric_column}), 0) AS avg_fee,
                         COUNT(*) AS row_count
                     FROM dwd_logistics_hist_shipment_detail
                     WHERE {where_sql}
@@ -1545,16 +1547,29 @@ class LogisticsDataQaRepository:
                 ),
                 params,
             ).mappings().all()
-            return {"view_mode": view_mode, "items": [dict(row) for row in rows], "summary_row": None}
+            rows_by_year = {int(row["biz_year"]): dict(row) for row in rows if row.get("biz_year") is not None}
+            items: list[dict[str, Any]] = []
+            missing_years: list[int] = []
+            for requested_year in sorted({int(year) for year in years}):
+                # 用户明确要求“23/24/25 年分别”时，结果表必须逐年对齐请求年份；
+                # 某一年没有匹配记录也保留空值行，避免前端/摘要看起来像系统漏查了该年份；
+                # 输出顺序遵循 query_plan.sort 的 biz_year 升序，便于审计和图表展示稳定。
+                year_row = rows_by_year.get(int(requested_year))
+                if year_row is None:
+                    items.append({"biz_year": int(requested_year), "avg_fee": None, "row_count": 0})
+                    missing_years.append(int(requested_year))
+                else:
+                    items.append(year_row)
+            return {"view_mode": view_mode, "items": items, "summary_row": None, "missing_years": missing_years}
 
         if view_mode == "fee_extremes":
             row = self.db.execute(
                 text(
                     f"""
                     SELECT
-                        ROUND(MIN(total_fee), 0) AS min_fee,
-                        ROUND(MAX(total_fee), 0) AS max_fee,
-                        ROUND(AVG(total_fee), 0) AS avg_fee,
+                        ROUND(MIN({metric_column}), 0) AS min_fee,
+                        ROUND(MAX({metric_column}), 0) AS max_fee,
+                        ROUND(AVG({metric_column}), 0) AS avg_fee,
                         COUNT(*) AS row_count
                     FROM dwd_logistics_hist_shipment_detail
                     WHERE {where_sql}
@@ -1568,7 +1583,7 @@ class LogisticsDataQaRepository:
             text(
                 f"""
                 SELECT
-                    ROUND(AVG(total_fee), 0) AS avg_fee,
+                    ROUND(AVG({metric_column}), 0) AS avg_fee,
                     COUNT(*) AS row_count
                 FROM dwd_logistics_hist_shipment_detail
                 WHERE {where_sql}
@@ -2506,6 +2521,8 @@ class LogisticsDataQaRepository:
         special_scope: str | None = None,
         base_code: str | None = None,
         procurement_type: str | None = None,
+        expand_dept: str | None = None,
+        entrusted_person: str | None = None,
         monthly_breakdown: bool = False,
     ) -> dict[str, Any]:
         """2026 系统按过滤条件统计总运费。
@@ -2517,7 +2534,8 @@ class LogisticsDataQaRepository:
             4. 若题目限定基地，则统一按 dwd_logistics_ship_task.base_code 过滤。
             5. transport_mode 仅用于用户明确说“公路运输/铁路运输”等运输方式时过滤。
             6. procurement_type 仅用于用户明确说“招标/询比价”等系统侧采购方式时过滤。
-            7. monthly_breakdown 只控制返回是否增加按月明细，不改变总费用计算口径。
+            7. expand_dept / entrusted_person 用于业务已确认的扩充部门、委托人字段过滤。
+            8. monthly_breakdown 只控制返回是否增加按月明细，不改变总费用计算口径。
         """
         filters = ["st.biz_year = :year"]
         params: dict[str, Any] = {"year": year}
@@ -2543,6 +2561,14 @@ class LogisticsDataQaRepository:
         if procurement_type:
             filters.append("st.procurement_type = :procurement_type")
             params["procurement_type"] = procurement_type
+        if expand_dept:
+            # 经营计划等业务范围词已在 planner 受控映射为扩充部门字段，这里只做参数绑定下推。
+            filters.append("st.expand_dept = :expand_dept")
+            params["expand_dept"] = expand_dept
+        if entrusted_person:
+            # 刘娟等已确认人名按委托人字段过滤，不再通过 special_scope 锁死单一口径。
+            filters.append("st.entrusted_person = :entrusted_person")
+            params["entrusted_person"] = entrusted_person
         if base_code:
             filters.append("st.base_code = :base_code")
             params["base_code"] = base_code

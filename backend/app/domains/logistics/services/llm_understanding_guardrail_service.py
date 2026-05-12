@@ -26,6 +26,7 @@ class LogisticsLlmUnderstandingGuardrailService:
     """
 
     # 当前只允许 LLM 增强已经稳定支持的 query_key，避免扩大能力边界。
+    # composite_decomposed 只作为顶层拆分候选，最终还需 planner 回构为受控子计划。
     ASSIST_ALLOWED_QUERY_KEYS: dict[str, str] = {
         "hist_total_fee_city_rank": "ranking",
         "hist_avg_fee_by_month": "aggregate",
@@ -42,12 +43,14 @@ class LogisticsLlmUnderstandingGuardrailService:
         "sys_companies_without_tasks": "detail_list",
         "hist_plan_actual_deviation": "compare",
         "sys_special_total_fee": "aggregate",
+        "composite_decomposed": "composite",
     }
+    COMPOSITE_POLICY_ASSIST_CATEGORIES = {"high_fee_address_procurement_split"}
     GENERIC_CLARIFICATION_QUESTIONS = (
         "当前 MVP 只支持时间聚合、区域筛选、承运商排名、费用/运量统计等结构化数据问题。",
         "请补充明确的时间、指标和维度，例如“2025年华东区域总运费”或“2026年1月总发运量”。",
     )
-    ASSIST_ALLOWED_INTENTS = {"aggregate", "ranking", "comparison", "detail", "unknown"}
+    ASSIST_ALLOWED_INTENTS = {"aggregate", "ranking", "comparison", "detail", "composite", "unknown"}
 
     def __init__(
         self,
@@ -103,6 +106,11 @@ class LogisticsLlmUnderstandingGuardrailService:
 
         sampled_in = self._is_sampled_in(question)
         policy_decision = self.response_policy.match(question)
+        composite_policy_assist_allowed = (
+            policy_decision is not None
+            and policy_decision.decision_type == "unsupported"
+            and policy_decision.category in self.COMPOSITE_POLICY_ASSIST_CATEGORIES
+        )
         decision = LogisticsLlmGuardrailDecision(
             question=question,
             guardrail_enabled=self.enabled,
@@ -137,11 +145,14 @@ class LogisticsLlmUnderstandingGuardrailService:
             return decision
         decision.entered_guardrail = True
 
-        # B/C 边界一旦被正式策略命中，必须完全锁定，不允许 LLM 继续改写。
+        # B/C 边界一旦被正式策略命中，默认完全锁定，不允许 LLM 继续改写。
+        # 例外：高运费地址 + 采购方式这类“可能是两个独立子问”的旧拒答策略，
+        # 允许 LLM 先给出顶层复合拆分候选，再由 planner 做字段能力和回指安全校验。
         if policy_decision is not None:
-            decision.policy_locked = True
             decision.policy_decision_type = policy_decision.decision_type
             decision.policy_category = policy_decision.category
+        if policy_decision is not None and not composite_policy_assist_allowed:
+            decision.policy_locked = True
             decision.blocked_reason = f"policy_locked::{policy_decision.decision_type}::{policy_decision.category}"
             decision.rollback_reason = "rule_policy_locked"
             self._maybe_write_audit_log(trace_id=trace_id, decision=decision, write_audit=write_audit)
@@ -154,20 +165,21 @@ class LogisticsLlmUnderstandingGuardrailService:
             self._maybe_write_audit_log(trace_id=trace_id, decision=decision, write_audit=write_audit)
             return decision
 
-        # 规则若已经明确不支持，也不允许 LLM 反向放行。
-        if rule_plan.intent == "unsupported":
+        # 规则若已经明确不支持，也不允许 LLM 反向放行；复合拆分例外仍需后续 planner 校验。
+        if rule_plan.intent == "unsupported" and not composite_policy_assist_allowed:
             decision.blocked_reason = "rule_declared_unsupported"
             decision.rollback_reason = "rule_declared_unsupported"
             self._maybe_write_audit_log(trace_id=trace_id, decision=decision, write_audit=write_audit)
             return decision
 
-        # 只允许“通用兜底澄清”进入 A 类候选增强，专属澄清模板不允许被绕过。
-        if not rule_plan.needs_clarification:
+        # 只允许“通用兜底澄清”进入 A 类候选增强，专属澄清模板不允许被绕过；
+        # 复合拆分例外可以从旧拒答策略进入 LLM 候选，但最终必须回构成受控子查询。
+        if not rule_plan.needs_clarification and not composite_policy_assist_allowed:
             decision.blocked_reason = "rule_not_in_generic_clarification"
             decision.rollback_reason = "rule_not_generic_clarification"
             self._maybe_write_audit_log(trace_id=trace_id, decision=decision, write_audit=write_audit)
             return decision
-        if not self._is_generic_clarification(rule_plan):
+        if rule_plan.needs_clarification and not self._is_generic_clarification(rule_plan) and not composite_policy_assist_allowed:
             decision.blocked_reason = "rule_specific_clarification_locked"
             decision.rollback_reason = "rule_specific_clarification_locked"
             self._maybe_write_audit_log(trace_id=trace_id, decision=decision, write_audit=write_audit)
@@ -221,6 +233,12 @@ class LogisticsLlmUnderstandingGuardrailService:
             return decision
 
         candidate_query_key = llm_output.candidate_query_keys[0]
+        if composite_policy_assist_allowed and candidate_query_key != "composite_decomposed":
+            # 复合策略例外只允许 LLM 回答“可拆为受控复合问题”，不能借 unsupported 边界改写成其它 A 类能力。
+            decision.blocked_reason = "composite_policy_requires_composite_candidate"
+            decision.rollback_reason = "composite_policy_requires_composite_candidate"
+            self._maybe_write_audit_log(trace_id=trace_id, decision=decision, write_audit=write_audit)
+            return decision
         if candidate_query_key not in self.allowed_query_key_whitelist:
             decision.blocked_reason = "llm_query_key_not_allowlisted"
             decision.rollback_reason = "candidate_not_allowlisted"

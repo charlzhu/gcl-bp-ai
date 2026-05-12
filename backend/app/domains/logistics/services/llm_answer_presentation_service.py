@@ -250,6 +250,9 @@ class LogisticsLlmAnswerPresentationService:
         display_type = self._resolve_display_type(question=question, result=result, status_code=status_code)
         title = self._build_title(result=result, status_code=status_code)
         answer = result.answer_summary or result.status.message if result.status else result.answer_summary
+        requested_display = self._detect_requested_display(question)
+        # 默认采用纯文字叙事，只有业务员明确要求表格/图表/指标卡时，才把结构化组件放进 presentation。
+        # 原始 result_table 仍保留在响应根节点，便于审计和后续导出能力复用，但不再强制占用主回答界面。
         presentation = LogisticsDataQaPresentation(
             display_type=display_type,
             title=title,
@@ -264,14 +267,16 @@ class LogisticsLlmAnswerPresentationService:
                 columns=list(result.result_table.columns),
                 rows=list(result.result_table.rows),
             )
-            if result.result_table.rows
+            if display_type in {"table", "mixed"} and result.result_table.rows
             else None,
-            cards=self._build_cards(question=question, result=result),
+            cards=self._build_cards(question=question, result=result)
+            if display_type in {"summary_cards", "mixed"}
+            else [],
             caveats=self._build_caveats(result),
             debug={
                 "status_code": status_code,
                 "query_key": result.query_plan.query_key,
-                "requested_display": self._detect_requested_display(question),
+                "requested_display": requested_display,
             },
         )
         chart_spec = self._build_chart_spec(question=question, result=result, display_type=display_type)
@@ -363,18 +368,21 @@ class LogisticsLlmAnswerPresentationService:
             "1.4 图表类回答的 answer 只做展示说明，例如“已按月份整理为折线图，具体数值见图表和表格”，不要在 answer/highlights 中复述或推导多组数字。\n"
             "2. status_code 必须原样返回，不得把 clarification/unsupported/empty/error 改成 success。\n"
             "3. 不得把 B/C 问题包装成可回答结论。\n"
-            "4. 用户要求饼图/折线图/柱状图/表格时，如果结构化数据支持，必须优先输出对应 chart_spec/table_spec；数据不支持时选择 narrative 或 table。\n"
+            "4. 未明确要求表格、图表或指标卡时，display_type 必须使用 narrative，chart_spec/table_spec/cards 必须为空；不要固定输出“指标卡/明细数据/对比图”。\n"
+            "4.1 用户明确要求饼图/折线图/柱状图/图表时，如果结构化数据支持，才输出对应 chart_spec；数据不支持时选择 narrative。\n"
+            "4.2 用户明确要求表格/明细表/清单表/导出时，才输出 table_spec；用户只是说“统计/列出/汇总/合计”时优先用文字回答。\n"
+            "4.3 用户明确要求指标卡/卡片时，才输出 cards。\n"
             "5. chart_spec 必须使用字段 chart_type，不要使用 type；chart_type 只能是 line、bar 或 pie。\n"
             "5.1 chart_spec 的 x_axis、y_axis、series.field 必须使用 result_table.columns 里的后端原始字段名，不要改成中文字段名。\n"
             "5.2 chart_spec.data 必须原样使用 result_table.rows；series 里的每个点必须是 {\"x\": row[x_axis], \"y\": row[field]}，不要省略 data。\n"
             "6. 技术词如 query_key、slot、planner、guardrail 不要出现在主展示，只能放 debug。\n"
             "7. OK 状态下不要生成 follow_up 追问；clarification 状态才生成 follow_up。\n"
             "8. caveats 只能摘录输入中的 calculation_logic/data_scope/warnings，不要自行汇总缺失记录数或新增口径数字。\n"
-            "9. 输出必须是单个 JSON 对象，不要 markdown。\n"
+            "9. 输出必须是单个 JSON 对象，不要在 JSON 外包 markdown。answer 字段可以使用清晰的 Markdown 段落、加粗和列表。\n"
             "JSON 字段：status_code,display_type,title,answer,highlights,chart_spec,table_spec,cards,follow_up,unsupported_explanation,caveats,debug。\n"
             "chart_spec 示例：{\"chart_type\":\"line\",\"title\":\"...\",\"x_axis\":\"biz_month\",\"y_axis\":[\"shipment_mw\"],\"series\":[{\"name\":\"发运量\",\"field\":\"shipment_mw\",\"data\":[{\"x\":\"2026-01\",\"y\":864.728}]}],\"unit\":\"MW\",\"data\":[...]}\n"
             "display_type 只能是 narrative,summary_cards,table,line_chart,bar_chart,pie_chart,mixed,clarification,unsupported,empty_result,error。\n"
-            "文风：简洁、专业、自然，像业务助手，不要固定套模板。"
+            "文风：专业、温馨、清晰，先给结论，再给依据；像可靠的业务助手，不要固定套模板。"
         )
 
     def _build_user_prompt(self, *, question: str, result: LogisticsDataQaResult) -> str:
@@ -459,8 +467,9 @@ class LogisticsLlmAnswerPresentationService:
         ):
             return fallback, "llm_text_number_hallucination"
 
+        requested_display = self._detect_requested_display(question)
         table_payload = payload.get("table_spec")
-        if isinstance(table_payload, dict):
+        if display_type in {"table", "mixed"} and requested_display == "table" and isinstance(table_payload, dict):
             table_spec = LogisticsDataQaTableSpec(
                 columns=[item for item in table_payload.get("columns", []) if isinstance(item, str)],
                 rows=[row for row in table_payload.get("rows", []) if isinstance(row, dict)],
@@ -473,7 +482,7 @@ class LogisticsLlmAnswerPresentationService:
             presentation.table_spec = fallback.table_spec
 
         cards_payload = payload.get("cards")
-        if isinstance(cards_payload, list):
+        if display_type in {"summary_cards", "mixed"} and requested_display == "summary_cards" and isinstance(cards_payload, list):
             cards: list[LogisticsDataQaPresentationCard] = []
             for item in cards_payload:
                 if not isinstance(item, dict) or "label" not in item:
@@ -493,7 +502,7 @@ class LogisticsLlmAnswerPresentationService:
             presentation.cards = fallback.cards
 
         chart_payload = payload.get("chart_spec")
-        if isinstance(chart_payload, dict):
+        if display_type in {"line_chart", "bar_chart", "pie_chart", "mixed"} and requested_display in {"line_chart", "bar_chart", "pie_chart"} and isinstance(chart_payload, dict):
             chart_spec = self._normalize_chart_payload(chart_payload)
             if chart_spec and self._chart_spec_is_safe(chart_spec=chart_spec, result=result):
                 presentation.chart_spec = chart_spec
@@ -547,14 +556,10 @@ class LogisticsLlmAnswerPresentationService:
             return requested
         if requested in {"line_chart", "bar_chart"} and self._can_build_chart(result):
             return requested
-        if requested == "table":
+        if requested == "table" and result.result_table.rows:
             return "table"
-        if requested == "summary_cards":
+        if requested == "summary_cards" and self._build_cards(question=question, result=result):
             return "summary_cards"
-        if len(result.result_table.rows) == 1 and self._build_cards(question=question, result=result):
-            return "summary_cards"
-        if len(result.result_table.rows) > 1:
-            return "mixed"
         return "narrative"
 
     def _detect_requested_display(self, question: str) -> str | None:
@@ -564,11 +569,11 @@ class LogisticsLlmAnswerPresentationService:
             return "pie_chart"
         if re.search(r"折线图|趋势图|看趋势|趋势", question):
             return "line_chart"
-        if re.search(r"柱状图|柱形图|条形图", question):
+        if re.search(r"柱状图|柱形图|条形图|对比图|图表", question):
             return "bar_chart"
-        if re.search(r"表格|列出来|明细|清单", question):
+        if re.search(r"表格|表格展示|汇总表|明细表|数据表|清单表|列表|excel|Excel|导出", question):
             return "table"
-        if re.search(r"汇总|总结|概览|合计", question):
+        if re.search(r"指标卡|卡片|概览卡|汇总卡|数据卡", question):
             return "summary_cards"
         return None
 
@@ -1003,7 +1008,8 @@ class LogisticsLlmAnswerPresentationService:
 
         requested = self._detect_requested_display(question)
         if requested is None:
-            return False
+            # 用户没有明确要求图表/表格/指标卡时，LLM 不能主动切换到结构化展示。
+            return display_type in {"summary_cards", "table", "line_chart", "bar_chart", "pie_chart", "mixed"}
         if requested in {"line_chart", "bar_chart", "pie_chart"}:
             can_build = self._can_build_pie_chart(result) if requested == "pie_chart" else self._can_build_chart(result)
             if can_build:

@@ -57,6 +57,7 @@ class LogisticsLlmUnderstandingService:
         "hist_plan_actual_deviation": "按区域统计计划发运件数与实际发运件数偏差率。",
         "sys_special_total_fee": "2026 系统数据中，按特殊业务口径统计总费用。",
         "carrier_metric_ranking": "按承运商统计指定指标并排名，例如运量、运费、车次、签收率或单瓦成本。",
+        "composite_decomposed": "综合型问题的顶层 LLM 拆分结果；必须在 filters.sub_plans 中给出独立子问题、query_key、source_clause 和 filters，后端只回构受控子查询。",
     }
     B_CLARIFICATION_HINT_KEYWORDS = ("最近", "近期", "最差", "异常", "有没有问题", "哪些有问题", "分别是多少")
 
@@ -184,6 +185,13 @@ class LogisticsLlmUnderstandingService:
             "- “最近物流成本是不是变高了？” -> clarification，优先追问时间范围，以及按总费用、单瓦成本还是签收率判断。\n"
             "- “华东区域2025年各省发运量分别是多少” -> clarification，优先追问按 MW 还是件数统计，并确认是否按省份拆分展示。\n"
             "- “华东发运有没有异常？” -> clarification，优先追问异常按什么标准定义，例如签收率、费用偏离还是计划达成率。\n"
+            "综合型问题拆分要求：\n"
+            "- 当一个问题包含多个可独立回答的顶层子问时，可以选择 composite_decomposed；这一步必须由你基于语义判断，不要照抄关键词。\n"
+            "- composite_decomposed 只表示拆分意图，不表示最终答案；后端会按白名单重新校验和计算。\n"
+            "- filters.decomposition_strategy 必须为 top_level_conjunction。\n"
+            "- filters.sub_plans 必须是数组，每项包含 source_clause、query_key、intent、metrics、dimensions、filters。\n"
+            "- 当前可用于子计划的已审计示例：hist_high_fee_addresses_by_customer（历史客户高运费收货地址），sys_mw_by_procurement_type（2026 采购方式发运量 MW）。\n"
+            "- 如果第二个子问明显回指“这些地址/上述地址/上面的地址”等前一个子结果，或用户明确要求吨口径，不要输出 composite_decomposed，应输出 clarification/unsupported。\n"
             "JSON 字段必须包含：normalized_question,intent,metrics,dimensions,filters,time_range,source_scope,candidate_query_keys,normalized_terms,needs_clarification,clarification_questions,unsupported_reason,confidence"
         )
 
@@ -226,7 +234,7 @@ class LogisticsLlmUnderstandingService:
             confidence = 0.0
 
         intent = payload.get("intent", "unknown")
-        if intent not in {"aggregate", "ranking", "comparison", "detail", "clarification", "unsupported", "unknown"}:
+        if intent not in {"aggregate", "ranking", "comparison", "detail", "composite", "clarification", "unsupported", "unknown"}:
             intent = "unknown"
 
         source_scope = payload.get("source_scope", "unknown")

@@ -120,7 +120,7 @@
                 <span v-for="text in message.presentation.highlights" :key="text">{{ text }}</span>
               </div>
 
-              <div v-if="message.presentation.chart" class="presentation-chart" data-testid="result-chart">
+              <div v-if="shouldShowPresentationChart(message)" class="presentation-chart" data-testid="result-chart">
                 <div class="presentation-chart__title">
                   {{ buildChartTitle(message.presentation.chart) }}
                 </div>
@@ -492,6 +492,9 @@ interface ResultSummaryItem {
 type AssistantResultLayoutClass = 'ai-response-card--narrative' | 'ai-response-card--data' | 'ai-response-card--chart'
 
 const pieChartColors = ['#2f7a4a', '#60a5fa', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b']
+const chartDisplayTypes = new Set(['line_chart', 'bar_chart', 'pie_chart', 'mixed'])
+const tableDisplayTypes = new Set(['table', 'comparison_table', 'mixed'])
+const cardDisplayTypes = new Set(['summary_cards', 'mixed'])
 
 const question = ref('')
 const activeSession = ref<BusinessChatSession | null>(null)
@@ -901,7 +904,7 @@ function adaptLogisticsResult(data: LogisticsDataQaResult): UnifiedResult {
     highlights: filterBusinessTexts(dedupeBusinessTexts(presentation?.highlights || [], [answer])),
     cards: localizeCards(presentation?.cards || []),
     chart: normalizeChart(presentation?.chart_spec || null),
-    table: presentation?.table_spec || data.result_table || null,
+    table: resolvePresentationTable(presentation),
     followUps: localizeFollowUps(presentation?.follow_up?.questions || data.clarification_questions || []),
     suggestions: filterBusinessTexts(unsupported?.suggestions || data.query_plan?.unsupported_suggestions || []),
     caveats: filterBusinessTexts(presentation?.caveats || []),
@@ -921,11 +924,16 @@ function adaptPlanBomResult(data: PlanBomQaResponse): UnifiedResult {
     highlights: filterBusinessTexts(dedupeBusinessTexts(presentation?.highlights || [], [answer])),
     cards: [],
     chart: null,
-    table: presentation?.table_spec || data.result_table || null,
+    table: resolvePresentationTable(presentation),
     followUps: localizeFollowUps(followUp?.questions || []),
     suggestions: filterBusinessTexts(unsupported?.suggestions || []),
     caveats: filterBusinessTexts((presentation as Record<string, any> | null | undefined)?.caveats || []),
   })
+}
+
+/** 只尊重后端 presentation 明确编排的表格，不再因原始 result_table 存在而固定展示“明细数据”。 */
+function resolvePresentationTable(presentation: { table_spec?: UnifiedTable | null } | null | undefined): UnifiedTable | null {
+  return presentation?.table_spec || null
 }
 
 /** 补齐展示默认值，避免字段缺失导致页面异常。 */
@@ -1679,13 +1687,13 @@ function buildResultSummaryItems(message: BusinessChatMessage): ResultSummaryIte
   if (!presentation) return []
   const items: ResultSummaryItem[] = []
   const table = getAssistantResultTable(message)
-  if (table?.rows.length) {
+  if (shouldShowResultTable(message) && table?.rows.length) {
     items.push({ label: '行明细', value: String(table.rows.length) })
   }
-  if (presentation.cards.length) {
+  if (shouldShowMetricCards(message)) {
     items.push({ label: '项指标', value: String(presentation.cards.length) })
   }
-  if (presentation.chart) {
+  if (shouldShowPresentationChart(message) && presentation.chart) {
     items.push({ label: '图表', value: formatChartTypeLabel(presentation.chart.chart_type) })
   }
   return items
@@ -1693,22 +1701,28 @@ function buildResultSummaryItems(message: BusinessChatMessage): ResultSummaryIte
 
 /** 判断助手回复应采用叙事、数据还是图表布局；只控制 UI 层，不改变后端业务结果。 */
 function resolveAssistantResultLayout(message: BusinessChatMessage): AssistantResultLayoutClass {
-  const presentation = message.presentation as UnifiedResult | null | undefined
-  if (presentation?.chart) return 'ai-response-card--chart'
-  if (getAssistantResultTable(message)?.rows.length || presentation?.cards.length) return 'ai-response-card--data'
+  if (shouldShowPresentationChart(message)) return 'ai-response-card--chart'
+  if (shouldShowResultTable(message) || shouldShowMetricCards(message)) return 'ai-response-card--data'
   return 'ai-response-card--narrative'
 }
 
 /** 指标卡只在后端返回卡片且当前布局需要数据摘要时展示。 */
 function shouldShowMetricCards(message: BusinessChatMessage): boolean {
   const presentation = message.presentation as UnifiedResult | null | undefined
-  return Boolean(presentation?.cards.length)
+  return Boolean(presentation && cardDisplayTypes.has(presentation.displayType) && presentation.cards.length)
 }
 
-/** 获取当前助手消息的可见明细表，兼容已保存的旧会话原始表格。 */
+/** 图表只在后端按用户显式图表意图返回 chart display_type 时展示。 */
+function shouldShowPresentationChart(message: BusinessChatMessage): boolean {
+  const presentation = message.presentation as UnifiedResult | null | undefined
+  return Boolean(presentation?.chart && chartDisplayTypes.has(presentation.displayType))
+}
+
+/** 获取当前助手消息的可见明细表，只展示后端 presentation 明确编排的表格。 */
 function getAssistantResultTable(message: BusinessChatMessage): UnifiedTable | null {
   const presentation = message.presentation as UnifiedResult | null | undefined
-  return normalizeTable(presentation?.table || null)
+  if (!presentation || !tableDisplayTypes.has(presentation.displayType)) return null
+  return normalizeTable(presentation.table || null)
 }
 
 /** 表格只在后端返回有效列和行时展示，避免空表占据叙事型回答空间。 */
@@ -1855,7 +1869,7 @@ function resolveAssistantReplyKicker(message: BusinessChatMessage): string {
 /** 展示类型中文化，便于把后端 display_type 作为轻量徽标呈现。 */
 function formatDisplayTypeLabel(displayType?: string) {
   const mapping: Record<string, string> = {
-    narrative: '摘要',
+    narrative: '文字说明',
     summary_cards: '指标卡',
     table: '表格',
     line_chart: '折线图',

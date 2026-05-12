@@ -116,7 +116,7 @@ class PlanBomAnswerPresentationService:
             title=self._build_title(response),
             answer=response.answer_summary,
             highlights=self._build_highlights(response),
-            table_spec=response.result_table if response.result_table.rows else None,
+            table_spec=response.result_table if display_type in {"table", "comparison_table", "mixed"} and response.result_table.rows else None,
             caveats=caveats,
             debug={"presentation_source": "deterministic", "status_code": response.status.code},
         )
@@ -150,11 +150,28 @@ class PlanBomAnswerPresentationService:
             return "empty_result"
         if response.status.code == "EXECUTION_ERROR":
             return "error"
-        if response.nlu.intent in {"cross_order_material_compare", "bom_version_compare", "material_consistency_check"}:
-            return "comparison_table"
-        if response.result_table.rows:
+        requested_display = self._detect_requested_display(response.question)
+        # 业务员未明确要求表格/明细时，默认只输出文字说明；结构化明细仍保留在 response.result_table 供审计和导出扩展使用。
+        if requested_display == "table" and response.result_table.rows:
+            if response.nlu.intent in {"cross_order_material_compare", "bom_version_compare", "material_consistency_check"}:
+                return "comparison_table"
             return "table"
         return "narrative"
+
+    @staticmethod
+    def _detect_requested_display(question: str) -> str | None:
+        """识别用户是否明确要求结构化展示。
+
+        参数：
+            question: 用户原始问题。
+
+        返回：
+            当前计划 BOM 前端只支持表格类结构化展示；未命中时返回 None。
+        """
+
+        if re.search(r"表格|表格展示|明细表|清单表|数据表|列表|excel|Excel|导出", question or ""):
+            return "table"
+        return None
 
     @staticmethod
     def _build_title(response: PlanBomQaResponse) -> str:
@@ -276,8 +293,9 @@ class PlanBomAnswerPresentationService:
         display_type = str(payload.get("display_type") or fallback.display_type)
         if display_type not in self.DISPLAY_TYPES:
             return None, "llm_display_type_invalid"
-        if display_type != fallback.display_type and response.classification in {"B", "C"}:
-            return None, "llm_status_boundary_changed"
+        if display_type != fallback.display_type:
+            # 展示形式由确定性层根据用户显式意图裁决，LLM 只优化文字，不能主动加表格或取消用户要求的表格。
+            return None, "llm_display_type_changed"
         table_payload = payload.get("table_spec")
         table_spec = fallback.table_spec
         if table_payload is not None:
@@ -363,7 +381,9 @@ class PlanBomAnswerPresentationService:
         return (
             "你是计划 BOM 问答的答案表达层，只能优化文字和展示编排。\n"
             "不能新增订单、物料、版本、规格、用量或供应商；不能把追问/拒答包装成可答。\n"
-            "输出 JSON，字段可包含 display_type,title,answer,highlights,table_spec,caveats。"
+            "未明确要求表格/明细/清单/导出时，display_type 必须保持 narrative，table_spec 必须为空；不要固定展示明细数据。\n"
+            "answer 可以使用清晰 Markdown 段落、加粗和列表，语气要专业、温馨、清晰，先给结论再说明依据。\n"
+            "输出单个 JSON，字段可包含 display_type,title,answer,highlights,table_spec,caveats。"
         )
 
     @staticmethod

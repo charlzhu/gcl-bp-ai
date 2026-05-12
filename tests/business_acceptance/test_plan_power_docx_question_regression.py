@@ -101,7 +101,7 @@ def _assert_ok_table_response(response, *, expected_intent: str | None = None) -
         assert response.nlu.intent == expected_intent
     assert response.result_table.rows
     assert response.presentation is not None
-    assert response.presentation.table_spec is not None
+    assert response.presentation.display_type in {"narrative", "table", "comparison_table"}
 
 
 def _assert_power_recommendation_response(
