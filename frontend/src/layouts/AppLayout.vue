@@ -21,11 +21,17 @@
           <template #title>
             <el-icon><ChatDotRound /></el-icon>
             <span>智能问答</span>
+            <button
+              type="button"
+              class="chat-title-new-button"
+              data-testid="nav-new-chat"
+              aria-label="新建会话"
+              @click.stop="createNewChatFromMenuTitle"
+            >
+              <span class="new-chat-symbol">+</span>
+              <span>新建会话</span>
+            </button>
           </template>
-          <el-menu-item index="chat-new" class="chat-new-item" data-testid="nav-new-chat">
-            <span class="new-chat-symbol">+</span>
-            <span>新建对话</span>
-          </el-menu-item>
           <el-menu-item
             v-for="session in chatSessions"
             :key="session.id"
@@ -155,14 +161,20 @@ function refreshChatSessions() {
   activeChatSessionId.value = getActiveBusinessChatSessionId() || session.id
 }
 
+/** 在智能问答一级菜单标题旁新建或聚焦空白会话。 */
+function createNewChatFromMenuTitle() {
+  closeSessionMenu()
+  const session = createOrFocusBlankBusinessChatSession()
+  activeChatSessionId.value = session.id
+  chatSessions.value = listBusinessChatSessions()
+  router.push('/smart-chat')
+}
+
 /** 处理主菜单和二级会话菜单点击。 */
 function handleMenuSelect(index: string) {
   closeSessionMenu()
   if (index === 'chat-new') {
-    const session = createOrFocusBlankBusinessChatSession()
-    activeChatSessionId.value = session.id
-    chatSessions.value = listBusinessChatSessions()
-    router.push('/smart-chat')
+    createNewChatFromMenuTitle()
     return
   }
   if (index.startsWith('chat:')) {
@@ -384,14 +396,39 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, var(--accent-blue), var(--accent-violet));
 }
 
-.chat-new-item {
-  color: #4b5563;
+/* 新建会话按钮随智能问答菜单标题展示，避免挤占二级会话列表首位。 */
+.chat-title-new-button {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0 8px;
+  border: 1px solid rgba(5, 117, 230, 0.22);
+  border-radius: 999px;
+  background: rgba(5, 117, 230, 0.08);
+  color: var(--accent-blue);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
+}
+
+.chat-title-new-button:hover {
+  border-color: rgba(5, 117, 230, 0.38);
+  background: rgba(5, 117, 230, 0.14);
+  transform: translateY(-1px);
 }
 
 .new-chat-symbol {
-  width: 16px;
-  color: var(--accent-blue);
-  font-size: 18px;
+  color: currentColor;
+  font-size: 14px;
   line-height: 1;
 }
 

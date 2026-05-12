@@ -561,8 +561,19 @@ class LogisticsDataQaRepository:
         payload["total_fee_share_pct"] = round(total_fee / denominator * 100, 2) if denominator else None
         return payload
 
-    def hist_carrier_kpi_by_year(self, *, year: int) -> dict[str, Any]:
+    def hist_carrier_kpi_by_year(
+        self,
+        *,
+        year: int,
+        region_name: str | None = None,
+        city: str | None = None,
+    ) -> dict[str, Any]:
         """历史年度承运商 KPI 统计。
+
+        参数：
+            year: 业务年份；
+            region_name: 可选区域过滤，例如“西北”。为空时统计全年全区域。
+            city: 可选目的城市过滤。为空时不限制城市。
 
         返回：
             1. 各承运商的发运量 MW；
@@ -571,24 +582,39 @@ class LogisticsDataQaRepository:
 
         说明：
             1. 发运量默认按瓦数口径，折算为 MW；
-            2. 占比基于当年全部承运商的总发运量；
-            3. 统一兼容“承运商 / 物流公司 / 物流供应商”问法。
+            2. 占比基于当前查询范围内全部承运商的总发运量；
+            3. 统一兼容“承运商 / 物流公司 / 物流供应商”问法；
+            4. 区域/城市过滤必须下推到总量分母和明细分子，避免范围题退回全国口径。
         """
+
+        params: dict[str, Any] = {"year": year}
+        filters = [
+            "biz_year = :year",
+            "logistics_company_name IS NOT NULL",
+            "TRIM(logistics_company_name) <> ''",
+        ]
+        if region_name:
+            filters.append("region_name = :region_name")
+            params["region_name"] = region_name
+        if city:
+            # 城市来自 planner 受控槽位，只通过参数绑定进入 SQL，不能拼接用户输入。
+            filters.append("city = :city")
+            params["city"] = city
+        where_clause = " AND ".join(filters)
+
         total_shipment_mw = self.db.execute(
             text(
-                """
+                f"""
                 SELECT ROUND(SUM(actual_watt) / 1000000, 3)
                 FROM dwd_logistics_hist_shipment_detail
-                WHERE biz_year = :year
-                  AND logistics_company_name IS NOT NULL
-                  AND TRIM(logistics_company_name) <> ''
+                WHERE {where_clause}
                 """
             ),
-            {"year": year},
+            params,
         ).scalar()
         rows = self.db.execute(
             text(
-                """
+                f"""
                 SELECT
                     logistics_company_name AS carrier_name,
                     ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw,
@@ -596,22 +622,18 @@ class LogisticsDataQaRepository:
                         100 * SUM(actual_watt) / NULLIF((
                             SELECT SUM(actual_watt)
                             FROM dwd_logistics_hist_shipment_detail
-                            WHERE biz_year = :year
-                              AND logistics_company_name IS NOT NULL
-                              AND TRIM(logistics_company_name) <> ''
+                            WHERE {where_clause}
                         ), 0),
                         2
                     ) AS shipment_share_pct,
                     ROUND(SUM(total_fee), 0) AS total_fee
                 FROM dwd_logistics_hist_shipment_detail
-                WHERE biz_year = :year
-                  AND logistics_company_name IS NOT NULL
-                  AND TRIM(logistics_company_name) <> ''
+                WHERE {where_clause}
                 GROUP BY logistics_company_name
                 ORDER BY shipment_mw DESC, total_fee DESC, logistics_company_name ASC
                 """
             ),
-            {"year": year},
+            params,
         ).mappings().all()
         return {
             "total_shipment_mw": total_shipment_mw,
@@ -1310,7 +1332,8 @@ class LogisticsDataQaRepository:
         include_extra_fee: bool = False,
         transport_mode: str | None = None,
         carrier_name: str | None = None,
-    ) -> dict[str, Any]:
+        monthly_breakdown: bool = False,
+    ) -> dict[str, Any] | list[dict[str, Any]]:
         """历史单瓦运输成本。
 
         参数：
@@ -1320,11 +1343,13 @@ class LogisticsDataQaRepository:
             include_extra_fee: 是否把 extra_fee 一并纳入分子。
             transport_mode: 可选运输方式过滤，公路/铁路会合并同义写法。
             carrier_name: 可选承运商简称，按物流公司名称模糊匹配。
+            monthly_breakdown: 是否按业务月份分组返回月度明细。
 
         说明：
             1. `单瓦价` 默认按 total_fee / actual_watt；
-            2. 当业务明确要求“(运费+额外费用)/总W数”时，再纳入 extra_fee。
-            3. 承运商过滤只用于已通过 planner 校验的历史承运商别名题族。
+            2. 当业务明确要求“(运费+额外费用)/总W数”时，再纳入 extra_fee；
+            3. 承运商过滤只用于已通过 planner 校验的历史承运商别名题族；
+            4. 用户要求 1-12 月/按月时，仓储层直接按月份分组，避免服务层拿年度总计伪造成月表。
         """
         filters = ["biz_year = :year", "actual_watt IS NOT NULL", "actual_watt <> 0"]
         params: dict[str, Any] = {"year": year}
@@ -1343,6 +1368,26 @@ class LogisticsDataQaRepository:
             params["carrier_name"] = f"%{carrier_name}%"
         numerator_sql = "SUM(total_fee)" if not include_extra_fee else "SUM(total_fee) + SUM(COALESCE(extra_fee, 0))"
         where_sql = " AND ".join(filters)
+        if monthly_breakdown:
+            rows = self.db.execute(
+                text(
+                    f"""
+                    SELECT
+                        DATE_FORMAT(biz_date, '%Y-%m') AS biz_month,
+                        ROUND({numerator_sql}, 0) AS total_fee_amount,
+                        ROUND(SUM(COALESCE(extra_fee, 0)), 0) AS extra_fee_amount,
+                        ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw,
+                        ROUND(({numerator_sql}) / NULLIF(SUM(actual_watt), 0), 8) AS unit_fee_per_watt
+                    FROM dwd_logistics_hist_shipment_detail
+                    WHERE {where_sql}
+                      AND biz_date IS NOT NULL
+                    GROUP BY DATE_FORMAT(biz_date, '%Y-%m')
+                    ORDER BY biz_month ASC
+                    """
+                ),
+                params,
+            ).mappings().all()
+            return [dict(row) for row in rows]
         row = self.db.execute(
             text(
                 f"""
@@ -1358,6 +1403,67 @@ class LogisticsDataQaRepository:
             params,
         ).mappings().first()
         return dict(row or {})
+
+    def hist_city_mw_rank(
+        self,
+        *,
+        year: int,
+        top_n: int,
+        region_name: str | None = None,
+        province: str | None = None,
+    ) -> dict[str, Any]:
+        """历史城市发运量 TopN 排名。
+
+        参数：
+            year: 统计年份。
+            top_n: 返回城市数量上限。
+            region_name: 可选大区过滤，例如“华东”。
+            province: 可选省份过滤，例如“安徽”。
+
+        返回：
+            包含统计范围、筛选后城市发运量总和和城市排名明细。
+
+        说明：
+            1. 城市发运量按 actual_watt 汇总后折算为 MW；
+            2. 区域/省份过滤先下推，再按城市分组排序，防止 TopN 使用全国口径；
+            3. 仅统计城市字段非空的历史台账记录。
+        """
+        filters = [
+            "biz_year = :year",
+            "city IS NOT NULL",
+            "TRIM(city) <> ''",
+        ]
+        params: dict[str, Any] = {"year": year, "limit_value": int(top_n)}
+        scope_parts = [f"{year}年"]
+        if region_name:
+            filters.append("region_name = :region_name")
+            params["region_name"] = region_name
+            scope_parts.append(f"{region_name}区域")
+        if province:
+            filters.append("province = :province")
+            params["province"] = province
+            scope_parts.append(f"{province}省")
+        where_sql = " AND ".join(filters)
+        rows = self.db.execute(
+            text(
+                f"""
+                SELECT
+                    city,
+                    ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw
+                FROM dwd_logistics_hist_shipment_detail
+                WHERE {where_sql}
+                GROUP BY city
+                ORDER BY shipment_mw DESC, city ASC
+                LIMIT :limit_value
+                """
+            ),
+            params,
+        ).mappings().all()
+        return {
+            "total_shipment_mw": round(sum(float(row["shipment_mw"] or 0) for row in rows), 3),
+            "items": [dict(row) for row in rows],
+            "scope_label": "".join(scope_parts),
+        }
 
     def hist_route_pricing_analysis(
         self,
@@ -1784,14 +1890,26 @@ class LogisticsDataQaRepository:
         ).scalar()
         return {"shipment_count": total}
 
-    def hist_customer_mw(self, *, customer_name: str, year: int | None = None) -> dict[str, Any]:
+    def hist_customer_mw(
+        self,
+        *,
+        customer_name: str,
+        year: int | None = None,
+        months: list[int] | None = None,
+    ) -> dict[str, Any]:
         """历史客户发运量 MW。
+
+        参数：
+            customer_name: 从业务问题中抽取的客户简称或全称。
+            year: 可选统计年份；为空时默认 2023-2025 历史累计。
+            months: 可选月份过滤，支持“1月/1-12月”等问法。
 
         口径说明：
             1. 当前客户名存在“项目后缀/客诉组件”等变体；
-            2. 为尽量贴近业务问法，这里先按前缀 LIKE 做归并；
-            3. 同时返回命中的客户名列表，便于外层输出 warning。
-            4. 当 year 为空时，默认按 2023–2025 历史累计统计。
+            2. 为尽量贴近业务问法，这里按包含匹配做归并；
+            3. 同时返回命中的客户名列表，便于外层输出 warning；
+            4. 当 year 为空时，默认按 2023–2025 历史累计统计；
+            5. 月份过滤只在用户明确给出月份时下推，不影响年度全量问题。
         """
         filters = ["customer_name LIKE :customer_name"]
         params: dict[str, Any] = {"customer_name": f"%{customer_name}%"}
@@ -1801,7 +1919,14 @@ class LogisticsDataQaRepository:
         else:
             filters.insert(0, "biz_year = :year")
             params["year"] = year
-            scope_label = f"{year}年"
+            if months:
+                month_text = "、".join(f"{int(month)}月" for month in months)
+                scope_label = f"{year}年{month_text}"
+            else:
+                scope_label = f"{year}年"
+        if months:
+            month_placeholders = ", ".join(str(int(month)) for month in months)
+            filters.append(f"MONTH(biz_date) IN ({month_placeholders})")
         where_sql = " AND ".join(filters)
         rows = self.db.execute(
             text(

@@ -561,6 +561,9 @@ class LogisticsDataQaService:
         warnings: list[str] = []
         filters = plan.filters
 
+        if plan.query_key == "composite_decomposed":
+            return self._execute_composite_decomposed_plan(question, plan)
+
         if plan.query_key == "hist_total_fee_city_rank":
             data = self.repository.hist_total_fee_city_rank(
                 year=filters["year"],
@@ -1015,13 +1018,27 @@ class LogisticsDataQaService:
             )
 
         if plan.query_key == "hist_carrier_kpi_by_year":
-            data = self.repository.hist_carrier_kpi_by_year(year=filters["year"])
+            # 城市是本 query_key 的可选筛选条件；只有用户明确给出城市时才下推，
+            # 这样既避免丢失用户给出的城市范围，也兼容只支持 region_name 的既有测试替身。
+            carrier_kpi_kwargs: dict[str, Any] = {
+                "year": filters["year"],
+                "region_name": filters.get("region_name"),
+            }
+            if filters.get("city"):
+                carrier_kpi_kwargs["city"] = filters["city"]
+            data = self.repository.hist_carrier_kpi_by_year(**carrier_kpi_kwargs)
             view_mode = filters.get("view_mode", "full_kpi")
+            scope_parts = []
+            if filters.get("region_name"):
+                scope_parts.append(f"{filters['region_name']}区域")
+            if filters.get("city"):
+                scope_parts.append(f"{filters['city']}城市")
+            scope_text = "".join(scope_parts)
             if view_mode == "fee_only":
-                summary = f"{filters['year']}年各物流承运商年度运输费用已汇总返回。"
+                summary = f"{filters['year']}年{scope_text}各物流承运商年度运输费用已汇总返回。"
             else:
                 summary = (
-                    f"{filters['year']}年各物流承运商的发运量、占比和运费总额已汇总返回。"
+                    f"{filters['year']}年{scope_text}各物流承运商的发运量、占比和运费总额已汇总返回。"
                 )
             return self._build_result(
                 answer_summary=summary,
@@ -1030,7 +1047,7 @@ class LogisticsDataQaService:
                 table_rows=data["items"],
                 calculation_logic=[
                     "承运量默认按历史 actual_watt 汇总后折算为 MW。",
-                    "承运量占比 = 当前承运商 shipment_mw / 全部承运商 shipment_mw。",
+                    "承运量占比 = 当前承运商 shipment_mw / 当前查询范围内全部承运商 shipment_mw。",
                     "运费总额按历史 total_fee 汇总。",
                 ],
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
@@ -1252,8 +1269,26 @@ class LogisticsDataQaService:
                 include_extra_fee=filters.get("include_extra_fee", False),
                 transport_mode=filters.get("transport_mode"),
                 carrier_name=filters.get("carrier_name"),
+                monthly_breakdown=bool(filters.get("monthly_breakdown")),
             )
             scope_label = filters.get("province") or filters.get("transport_mode") or filters.get("carrier_name") or ""
+            if filters.get("monthly_breakdown"):
+                # 用户明确要求 1-12 月或按月展示时，保留月份粒度，避免服务层把已下推的 monthly_breakdown 压平成总计行。
+                monthly_rows = data if isinstance(data, list) else data.get("monthly_rows", [])
+                summary = f"{filters['year']}年{scope_label}按月单瓦运输成本已返回。"
+                return self._build_result(
+                    answer_summary=summary,
+                    plan=plan,
+                    table_columns=["biz_month", "total_fee_amount", "extra_fee_amount", "shipment_mw", "unit_fee_per_watt"],
+                    table_rows=monthly_rows,
+                    calculation_logic=[
+                        "月度单瓦价默认按当月 total_fee / actual_watt。",
+                        "当问题明确要求“运费+额外费用”时，再把当月 extra_fee 一并纳入分子。",
+                        "月份粒度按历史台账 biz_date 对应 YYYY-MM 返回。",
+                    ],
+                    data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+                    warnings=warnings,
+                )
             summary = (
                 f"{filters['year']}年{scope_label}单瓦运输成本为"
                 f"{data.get('unit_fee_per_watt') or 0}元/瓦。"
@@ -1266,6 +1301,28 @@ class LogisticsDataQaService:
                 calculation_logic=[
                     "单瓦价默认按 total_fee / actual_watt。",
                     "当问题明确要求“运费+额外费用”时，再把 extra_fee 一并纳入分子。",
+                ],
+                data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+                warnings=warnings,
+            )
+
+        if plan.query_key == "hist_city_mw_rank":
+            data = self.repository.hist_city_mw_rank(
+                year=filters["year"],
+                top_n=int(filters.get("top_n") or plan.limit or 10),
+                region_name=filters.get("region_name"),
+                province=filters.get("province"),
+            )
+            scope_label = data.get("scope_label") or f"{filters['year']}年"
+            summary = f"{scope_label}城市发运量前{int(filters.get('top_n') or plan.limit or 10)}名已按 MW 返回。"
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=["city", "shipment_mw"],
+                table_rows=data.get("items") or [],
+                calculation_logic=[
+                    "历史城市发运量按 actual_watt 汇总后除以 1,000,000 折算为 MW。",
+                    "当问题给出区域或省份时，先下推对应过滤条件，再按城市分组排序。",
                 ],
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
                 warnings=warnings,
@@ -1517,21 +1574,29 @@ class LogisticsDataQaService:
             data = self.repository.hist_customer_mw(
                 year=filters.get("year"),
                 customer_name=filters["customer_name"],
+                months=filters.get("months"),
             )
             matched_names = data.get("matched_customer_names", [])
             if len(matched_names) > 1:
                 warnings.append(f"当前按客户名前缀归并，命中了 {len(matched_names)} 个客户名变体。")
             summary = f"{data['scope_label']}{filters['customer_name']}总发运量为{data['shipment_mw'] or 0}MW。"
+            calculation_logic = [
+                "历史发运量 MW 使用 actual_watt 汇总后除以 1,000,000。",
+                "客户名按业务问法做前缀归并，以兼容同一项目的名称变体。",
+            ]
+            if filters.get("year") is None:
+                # 只有用户确实未给年份时，才展示历史累计默认口径；避免明确年月问题出现误导性风险提示。
+                calculation_logic.append("未给年份时默认按 2023–2025 历史台账累计统计。")
+            elif filters.get("months"):
+                calculation_logic.append("已按用户给出的年份和月份过滤统计。")
+            else:
+                calculation_logic.append("已按用户给出的年份过滤统计。")
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
-                table_columns=["shipment_mw"],
+                table_columns=["scope_label", "shipment_mw"],
                 table_rows=[data],
-                calculation_logic=[
-                    "历史发运量 MW 使用 actual_watt 汇总后除以 1,000,000。",
-                    "客户名按业务问法做前缀归并，以兼容同一项目的名称变体。",
-                    "未给年份时默认按 2023–2025 历史台账累计统计。",
-                ],
+                calculation_logic=calculation_logic,
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
                 warnings=warnings,
             )
@@ -2031,6 +2096,8 @@ class LogisticsDataQaService:
             )
 
         if plan.query_key == "sys_extra_fee_summary":
+            if filters.get("detail_warning") == "extra_fee_project_reason_unfixed":
+                warnings.append("额外费用项目/原因明细口径尚未固化，本次先返回可审计的额外费用总额。")
             data = self.repository.sys_extra_fee_summary(
                 year=filters["year"],
                 months=filters.get("months"),
@@ -2447,6 +2514,86 @@ class LogisticsDataQaService:
             warnings.append(plan.unsupported_reason)
         warnings.extend(plan.unsupported_suggestions)
         return warnings
+
+    def _execute_composite_decomposed_plan(self, question: str, plan: LogisticsDataQaPlan) -> LogisticsDataQaResult:
+        """执行复合问题拆分计划，并把多个子查询结果合并成一个前端响应。
+
+        参数：
+            question: 原始用户问题，用于结果审计和 data_scope 追溯。
+            plan: composite_decomposed 总计划，filters.sub_plans 内保存受控子计划。
+        返回值：
+            合并后的物流问答结果；如果任一子计划越界，则保守返回不支持。
+        """
+
+        sub_plan_payloads = plan.filters.get("sub_plans") or []
+        sub_results: list[dict[str, Any]] = []
+        merged_rows: list[dict[str, Any]] = []
+        merged_columns: list[str] = ["section"]
+        calculation_logic = [
+            "先识别顶层并列子问题，再把每个子问题映射到既有受控 query_key。",
+            "每个子查询独立执行仓储层确定性统计，最终仅在表达层合并结果，不做跨来源二次推理。",
+        ]
+        warnings = [
+            f"已将复合问题拆成 {len(sub_plan_payloads)} 个可独立审计的子问题分别查询后合并返回。",
+            "历史高运费地址使用 2023-2025 历史台账口径；2026 系统侧采购方式发运量使用正式系统采购方式字段，两者不做跨源混算。",
+        ]
+        answer_parts: list[str] = []
+
+        for raw_sub_plan in sub_plan_payloads:
+            # section_label 只用于合并展示，不属于 LogisticsDataQaPlan schema；构造前先移除。
+            sub_plan_dict = dict(raw_sub_plan)
+            section_label = str(sub_plan_dict.pop("section_label", "子查询"))
+            sub_plan = LogisticsDataQaPlan(**sub_plan_dict)
+            sub_result = self._execute_plan(question, sub_plan)
+            sub_results.append(
+                {
+                    "section": section_label,
+                    "query_key": sub_plan.query_key,
+                    "filters": sub_plan.filters,
+                    "row_count": len(sub_result.result_table.rows),
+                    "answer_summary": sub_result.answer_summary,
+                    "supported": sub_result.supported,
+                    "needs_clarification": sub_result.needs_clarification,
+                    "data_scope": sub_result.data_scope,
+                }
+            )
+            if sub_result.needs_clarification or not sub_result.supported:
+                return self._build_result(
+                    answer_summary=f"复合问题中的“{section_label}”子问题暂不能直接回答，请先补充口径或拆开单独提问。",
+                    plan=plan,
+                    table_columns=[],
+                    table_rows=[],
+                    calculation_logic=calculation_logic,
+                    data_scope={"question": question, "composite": {"sub_results": sub_results}},
+                    warnings=warnings + sub_result.warnings,
+                    supported=False,
+                )
+            answer_parts.append(sub_result.answer_summary)
+            calculation_logic.extend([f"【{section_label}】{item}" for item in sub_result.calculation_logic])
+            warnings.extend(sub_result.warnings)
+            for column in sub_result.result_table.columns:
+                if column not in merged_columns:
+                    merged_columns.append(column)
+            for row in sub_result.result_table.rows:
+                merged_rows.append({"section": section_label, **row})
+
+        summary = f"已将问题拆成 {len(sub_results)} 个子问题分别查询：" + "；".join(answer_parts)
+        return self._build_result(
+            answer_summary=summary,
+            plan=plan,
+            table_columns=merged_columns,
+            table_rows=merged_rows,
+            calculation_logic=calculation_logic,
+            data_scope={
+                "question": question,
+                "composite": {
+                    "strategy": plan.filters.get("decomposition_strategy"),
+                    "sub_result_count": len(sub_results),
+                    "sub_results": sub_results,
+                },
+            },
+            warnings=warnings,
+        )
 
     def _build_result(
         self,

@@ -280,6 +280,22 @@ def test_app_layout_uses_chatgpt_like_neutral_shell_and_richer_palette() -> None
     assert "--accent-coral" in styles
 
 
+def test_app_layout_places_new_chat_button_after_smart_chat_title() -> None:
+    """新建会话入口应放在“智能问答”一级菜单标题后，而不是作为二级菜单项占用会话列表位置。"""
+    layout = (FRONTEND / "layouts" / "AppLayout.vue").read_text(encoding="utf-8")
+    template = layout.split("<script setup", 1)[0]
+
+    smart_chat_title_index = template.index("<span>智能问答</span>")
+    new_chat_button_index = template.index('data-testid="nav-new-chat"')
+    session_list_index = template.index('v-for="session in chatSessions"')
+
+    assert smart_chat_title_index < new_chat_button_index < session_list_index
+    assert 'class="chat-title-new-button"' in template
+    assert '@click.stop="createNewChatFromMenuTitle"' in template
+    assert '<el-menu-item index="chat-new"' not in template
+    assert "function createNewChatFromMenuTitle" in layout
+
+
 def test_business_chat_assistant_response_layout_is_adaptive_not_fixed_template() -> None:
     """智能问答回复应按问题结果动态选择叙事、数据、图表或追问布局，而非永远固定指标卡+结论+明细。"""
     chat = (FRONTEND / "views" / "business-chat" / "BusinessChatPage.vue").read_text(encoding="utf-8")

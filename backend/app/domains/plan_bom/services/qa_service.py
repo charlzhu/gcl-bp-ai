@@ -361,6 +361,30 @@ class PlanBomQaService:
             )
         )
 
+    @staticmethod
+    def _infer_single_model_code_from_power_candidates(candidates: list[Any]) -> str | None:
+        """从未确认订单候选中提取唯一版型编码。
+
+        参数：
+            candidates: M4 返回的候选订单列表，元素可以是 dataclass、Pydantic 或字典。
+        返回：
+            当所有可识别候选只指向同一个 `NTxx-xxGDF` 版型时返回该版型；否则返回 None。
+        业务逻辑：显式配置 no-BOM 评估只可借用“唯一一致的版型线索”，不能在多版型候选中替业务员硬选订单。
+        """
+
+        model_codes: set[str] = set()
+        for candidate in candidates or []:
+            if isinstance(candidate, dict):
+                raw_values = [candidate.get("order_name"), candidate.get("raw_file_name")]
+            else:
+                raw_values = [getattr(candidate, "order_name", None), getattr(candidate, "raw_file_name", None)]
+            for raw_value in raw_values:
+                text = str(raw_value or "")
+                match = re.search(r"NT[0-9A-Z]+[-/][0-9A-Z]+GDF", text, flags=re.IGNORECASE)
+                if match:
+                    model_codes.add(match.group(0).upper().replace("/", "-"))
+        return next(iter(model_codes)) if len(model_codes) == 1 else None
+
     def _power_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:
         """处理计划 BOM 功率预测 / 供应商推荐问答。
 
@@ -389,6 +413,20 @@ class PlanBomQaService:
                 benchmark=benchmark,
                 explicit_configuration=explicit_configuration,
             )
+            fallback_model_code = nlu.slots.get("model") or self._infer_single_model_code_from_power_candidates(
+                getattr(resolution, "candidates", [])
+            )
+            if resolution.status == CANDIDATE_REQUIRED_STATUS and explicit_configuration and fallback_model_code:
+                # 业务员有时会把不可靠短尾号和完整计划搭配一起写入问题。
+                # 若订单候选未确认，但显式配置 + 版型已经足够让 M4/M3 做 no-BOM 评估，
+                # 则转为“显式输入配置”路径，避免把可安全计算的问题降级为候选追问。
+                explicit_resolution = self.power_config_resolver.resolve_explicit_configuration(
+                    model_code=fallback_model_code,
+                    configuration=explicit_configuration,
+                )
+                if explicit_resolution.status != CANDIDATE_REQUIRED_STATUS:
+                    explicit_resolution.warnings.append("已忽略未确认订单候选，按显式输入配置执行 no-BOM 功率推荐。")
+                    resolution = explicit_resolution
         else:
             resolution = self.power_config_resolver.resolve_explicit_configuration(
                 model_code=nlu.slots.get("model"),
@@ -1271,7 +1309,7 @@ class PlanBomQaService:
             列名列表。
         """
 
-        return ["order_no", "order_name", "version_no", "material_category", "material_name", "description", "sap_code", "standard_usage", "unit", "source_file"]
+        return ["material_category", "material_name", "description", "standard_usage", "unit"]
 
     @staticmethod
     def _compare_columns() -> list[str]:

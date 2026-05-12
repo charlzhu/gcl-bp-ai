@@ -9,9 +9,13 @@ from __future__ import annotations
 
 from backend.app.db.session import SessionLocal
 from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
-from backend.app.domains.logistics.schemas.llm_understanding import LogisticsLlmUnderstandingResult
+from backend.app.domains.logistics.schemas.llm_understanding import (
+    LogisticsLlmGuardrailDecision,
+    LogisticsLlmUnderstandingResult,
+)
 from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
 from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
+from backend.app.domains.logistics.services.llm_answer_presentation_service import LogisticsLlmAnswerPresentationService
 
 
 def test_region_transport_total_quantity_is_supported() -> None:
@@ -364,6 +368,104 @@ def test_year_only_total_mw_is_supported_without_extra_clarification() -> None:
     assert not result.needs_clarification
     assert "2023年" in result.answer_summary
     assert "MW" in result.answer_summary
+
+
+
+def test_explicit_two_digit_year_customer_mw_does_not_show_missing_year_caveat() -> None:
+    """验证客户发运量问题中的“24年”按 2024 年处理且不展示未给年份提示。
+
+    参数：无。
+    返回值：无；通过断言验证 planner 年份槽位、service 计算说明和 presentation 风险提示。
+    业务逻辑：用户已经明确给出 24 年时，答案必须标明 2024 年口径，不能再提示“未给年份默认历史累计”。
+    """
+
+    class _FakeDb:
+        """测试用空数据库会话，只承接历史快照写入的提交/回滚调用。"""
+
+        def commit(self) -> None:
+            """提交历史快照；测试场景无需真实落库。"""
+
+        def rollback(self) -> None:
+            """回滚历史快照；测试场景无需真实落库。"""
+
+    class _FakeQueryLogRepository:
+        """测试用查询日志仓库，避免回归用例依赖真实 sys_query_log。"""
+
+        def write_query_log(self, db, payload) -> int:  # noqa: ANN001
+            """返回假的日志 ID，证明主查询链路已走完。"""
+            return 1
+
+    class _NoopGuardrailService:
+        """测试用 Guardrail，保持规则 planner 结果不被 LLM 候选改写。"""
+
+        def evaluate(self, *, question, rule_plan, trace_id=None, write_audit=False):  # noqa: ANN001, ARG002
+            """构造 off 状态决策，让 service 使用规则计划继续执行。"""
+            return LogisticsLlmGuardrailDecision(
+                question=question,
+                rule_intent=rule_plan.intent,
+                rule_query_key=rule_plan.query_key,
+                rule_needs_clarification=rule_plan.needs_clarification,
+                rule_supported=rule_plan.intent not in {"clarification", "unsupported"},
+                final_intent=rule_plan.intent,
+                final_query_key=rule_plan.query_key,
+                final_needs_clarification=rule_plan.needs_clarification,
+                final_supported=rule_plan.intent not in {"clarification", "unsupported"},
+            )
+
+        def write_audit_log(self, *, trace_id, decision) -> None:  # noqa: ANN001, ARG002
+            """测试场景不写 Guardrail 审计日志。"""
+
+    class _FakeLogisticsRepository:
+        """测试用物流仓库，只实现本用例需要的客户历史发运量查询。"""
+
+        def hist_customer_mw(self, *, year, customer_name, months=None):  # noqa: ANN001
+            """返回固定 2024 年客户发运量，用于隔离表达口径 bug。"""
+            assert year == 2024
+            assert customer_name == "华润新能源（皮山）有限公司"
+            assert months is None
+            return {
+                "scope_label": "2024年",
+                "shipment_mw": 480.413,
+                "matched_customer_names": ["华润新能源（皮山）有限公司", "华润新能源（皮山）有限公司项目部"],
+                "row_count": 8,
+            }
+
+    question = "华润新能源（皮山）有限公司 项目 24年发运量是多少"
+    plan = LogisticsDataQaPlanner().build_plan(question)
+
+    assert plan.query_key == "hist_customer_mw"
+    assert not plan.needs_clarification
+    assert plan.filters == {"year": 2024, "months": None, "customer_name": "华润新能源（皮山）有限公司"}
+
+    service = LogisticsDataQaService(
+        db=_FakeDb(),
+        repository=_FakeLogisticsRepository(),
+        query_log_repository=_FakeQueryLogRepository(),
+        guardrail_service=_NoopGuardrailService(),
+        answer_presentation_service=LogisticsLlmAnswerPresentationService(
+            enabled=True,
+            base_url=None,
+            api_key=None,
+            model="",
+        ),
+    )
+    result = service.query(LogisticsDataQaQueryRequest(question=question), trace_id="explicit-two-digit-year")
+    visible_text = "\n".join(
+        [
+            result.answer_summary,
+            *(result.calculation_logic or []),
+            *(result.warnings or []),
+            *((result.presentation.caveats if result.presentation else []) or []),
+        ]
+    )
+
+    assert not result.needs_clarification
+    assert "2024年" in result.answer_summary
+    assert "未给年份" not in visible_text
+    assert "2023–2025" not in visible_text
+    assert "2023-2025" not in visible_text
+    assert result.result_table.rows[0]["scope_label"] == "2024年"
+    assert "scope_label" in result.result_table.columns
 
 
 
