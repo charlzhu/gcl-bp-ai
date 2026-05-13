@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
 from backend.app.db.session import get_db
+from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
 from backend.app.domains.logistics.services.import_service import LogisticsHistoryImportService
 from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
 from backend.app.domains.logistics.services.nl2query_service import LogisticsNL2QueryService
@@ -278,14 +279,20 @@ def get_query_planning_v2_service(
 
 def get_query_planning_v2_shadow_report_service(
     service: QueryPlanningV2Service = Depends(get_query_planning_v2_service),
+    db: Session = Depends(get_db),
 ) -> QueryPlanningV2ShadowReportService:
-    """Query Planning V2 shadow 对比报表服务依赖。
+    """Query Planning V2 shadow / gray 对比报表服务依赖。
 
     参数：
         service: 已构造的 Query Planning V2 统一服务。
+        db: 当前数据库会话；仅用于 Phase 5 只读 sys_query_log 灰度报表。
 
     返回：
-        只回放 shadow query_plan、不执行正式查询的报表服务。
+        可回放 shadow query_plan，并可只读聚合真实 sys_query_log 的报表服务。
     """
 
-    return QueryPlanningV2ShadowReportService(planning_service=service)
+    return QueryPlanningV2ShadowReportService(
+        planning_service=service,
+        query_log_repository=LogisticsQueryRepository(),
+        db=db,
+    )

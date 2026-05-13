@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import text
@@ -351,6 +352,73 @@ class LogisticsQueryRepository:
         total = int(db.execute(count_sql, params).scalar() or 0)
         rows = db.execute(sql, params).mappings().all()
         return [dict(row) for row in rows], total
+
+    def list_query_logs_for_query_planning_gray(
+        self,
+        db: Session,
+        *,
+        domain: str = "all",
+        limit: int = 200,
+        days: int = 7,
+    ) -> list[dict[str, Any]]:
+        """读取 Query Planning V2 Phase 5 灰度报表所需的真实查询日志。
+
+        参数：
+            db: SQLAlchemy Session。
+            domain: 业务域过滤，支持 all / logistics / plan_bom。
+            limit: 最大读取条数，方法内部强制限制在 1 到 500 之间。
+            days: 最近多少天，方法内部强制限制在 1 到 365 之间。
+
+        返回：
+            最近查询日志列表，仅包含灰度报表需要的只读字段。
+
+        业务逻辑：
+            该方法只读取 `sys_query_log`，不重新执行 Data QA / BOM QA，也不解析或执行
+            `query_plan_v2_shadow`。所有动态条件均使用绑定参数，避免把 domain / limit 拼进 SQL。
+        """
+
+        normalized_limit = max(1, min(int(limit or 200), 500))
+        normalized_days = max(1, min(int(days or 7), 365))
+        params: dict[str, Any] = {
+            "limit": normalized_limit,
+            "days": normalized_days,
+            "created_after": datetime.now(UTC).replace(tzinfo=None) - timedelta(days=normalized_days),
+        }
+        where_parts = ["created_at >= :created_after"]
+        normalized_domain = domain if domain in {"logistics", "plan_bom", "all"} else "all"
+
+        if normalized_domain == "logistics":
+            where_parts.append("query_type = :query_type")
+            params["query_type"] = "DATA_QA"
+        elif normalized_domain == "plan_bom":
+            where_parts.append("query_type = :query_type")
+            params["query_type"] = "PLAN_BOM_QA"
+        else:
+            where_parts.append("query_type IN (:query_type_logistics, :query_type_plan_bom)")
+            params["query_type_logistics"] = "DATA_QA"
+            params["query_type_plan_bom"] = "PLAN_BOM_QA"
+
+        sql_template = """
+            SELECT
+                id,
+                trace_id,
+                query_type,
+                question_text,
+                request_payload,
+                route_type,
+                metric_type,
+                result_count,
+                status,
+                message,
+                created_at
+            FROM sys_query_log
+            WHERE __WHERE_CLAUSE__
+            ORDER BY created_at DESC, id DESC
+            LIMIT :limit
+            """
+        sql = text(sql_template.replace("__WHERE_CLAUSE__", " AND ".join(where_parts)))
+        rows = db.execute(sql, params).mappings().all()
+        return [dict(row) for row in rows]
 
     def get_query_log_detail(
         self,

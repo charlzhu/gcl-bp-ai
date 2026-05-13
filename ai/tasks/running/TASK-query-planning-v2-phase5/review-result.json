@@ -1,0 +1,13 @@
+{
+  "passed": true,
+  "blocker_issues": [],
+  "security_concerns": [],
+  "logic_errors": [],
+  "non_blocking_issues": [
+    "Phase 5 灰度报表会读取 sys_query_log.request_payload 中正式快照的 query_result.query_plan / response_meta.metric_type 来做 query_key 一致性对比；该读取仍为只读日志元数据，不重新执行 QA，也不暴露 raw_payload。",
+    "后续若从内部诊断扩大到普通用户权限，可进一步对 question_text / trace_id 做脱敏或更严格截断。"
+  ],
+  "reviewer_summary": "独立 reviewer 结论为 passed=true，无阻塞问题。按建议补强了 /query-planning/v2/shadow-report/logs 内部保护路由测试，并把 formal/shadow query_key 单侧缺失计入 mismatch 风险桶，避免高估 query_key_match_rate。",
+  "test_assessment": "Focused 5 passed；tests/unit/query_planning 22 passed；python -m pytest tests -q 204 passed, 2 warnings；compile PASS；static scan PASS；ruff 当前环境未安装，记录为非阻断。",
+  "scope_assessment": "本轮修改限定在 Query Planning V2 Phase 5.1–5.3 scoped 文件：只读 sys_query_log 灰度读取、gray log report service、受保护接口和对应测试。未修改物流 Data QA / Plan BOM QA 正式主链路。"
+}

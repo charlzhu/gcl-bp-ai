@@ -1,0 +1,59 @@
+# Query Planning V2 Phase 5.1–5.3 测试日志
+
+## 1. Focused：Phase 5 灰度日志报表 + 路由注册/内部保护
+
+```text
+$ python -m pytest tests/unit/query_planning/test_query_planning_phase5_gray_log_report.py tests/unit/query_planning/test_query_planning_endpoint_registration.py -q
+.....                                                                    [100%]
+5 passed in 1.06s
+```
+
+## 2. Query Planning V2 单元回归
+
+```text
+$ python -m pytest tests/unit/query_planning -q
+......................                                                   [100%]
+22 passed in 0.97s
+```
+
+## 3. Full regression
+
+```text
+$ python -m pytest tests -q
+........................................................................ [ 35%]
+........................................................................ [ 70%]
+............................................................             [100%]
+=============================== warnings summary ===============================
+tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
+  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Unknown extension is not supported and will be removed
+    ws_parser.bind_all()
+
+tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
+  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Conditional Formatting extension is not supported and will be removed
+    ws_parser.bind_all()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+204 passed, 2 warnings in 26.10s
+```
+
+warning 来源：`openpyxl` 读取 xlsm 扩展/条件格式，属于既有非阻断 warning。
+
+## 4. Compile / syntax
+
+```text
+$ python -m compileall -q backend/app/api/deps.py backend/app/domains/logistics/repositories/query_repository.py backend/app/domains/query_planning tests/unit/query_planning/test_query_planning_phase5_gray_log_report.py tests/unit/query_planning/test_query_planning_endpoint_registration.py
+COMPILE=PASS
+```
+
+## 5. Static scan
+
+```text
+STATIC_SCAN_FINDINGS= {'hardcoded_secret': [], 'shell_injection': [], 'eval_exec': [], 'pickle': [], 'sql_string_format': []}
+STATIC_SCAN=PASS
+```
+
+## 6. Ruff
+
+```text
+RUFF=SKIPPED: python module ruff is not installed in current environment
+```
