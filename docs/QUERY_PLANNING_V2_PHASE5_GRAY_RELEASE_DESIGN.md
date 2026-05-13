@@ -1,6 +1,6 @@
 # Query Planning V2 Phase 5 灰度接入设计
 
-> 本文是 Query Planning V2 的 Phase 5 灰度接入设计，不直接修改现有物流 Data QA / Plan BOM QA 主链路。  
+> 本文是 Query Planning V2 的 Phase 5 灰度接入设计，不直接修改现有物流 Data QA / Plan BOM QA 主链路。
 > 当前基线：Phase 1/2 审计与设计文档、Phase 3 诊断接口、Phase 4 shadow 日志接入与 10 类 shadow 报表已完成，并已提交为 `[verified] feat: add query planning v2 shadow diagnostics`。
 
 ## 1. 目标
