@@ -24,6 +24,10 @@ from backend.app.domains.plan_bom.services.power_prediction_engine import PowerP
 from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
 from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
 from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
+from backend.app.domains.query_planning.services.logistics_adapter import LogisticsQueryPlanningAdapter
+from backend.app.domains.query_planning.services.plan_bom_adapter import PlanBomQueryPlanningAdapter
+from backend.app.domains.query_planning.services.query_planning_v2_service import QueryPlanningV2Service
+from backend.app.domains.query_planning.services.shadow_report_service import QueryPlanningV2ShadowReportService
 from backend.app.repositories.logistics_query_repo import InMemoryLogisticsQueryRepository
 from backend.app.repositories.task_repo import InMemoryTaskRepository
 from backend.app.services.chat_service import ChatService
@@ -196,6 +200,30 @@ def require_plan_power_write_access(
         )
 
 
+def require_query_planning_internal_access(
+    settings: Settings = Depends(get_settings),
+) -> None:
+    """Query Planning V2 内部诊断接口的临时环境保护。
+
+    参数：
+        settings: 当前应用配置，用于判断运行环境。
+
+    返回：
+        无返回值。非生产环境允许内部诊断；生产环境在正式用户/权限模块接入前阻断访问。
+
+    业务说明：
+        Query Planning V2 Phase 4 仍处于 shadow 诊断阶段，接口会暴露规划、槽位和 Guardrail
+        审计信息。为避免生产环境误暴露内部诊断面，先用环境门禁 fail closed，后续由正式用户
+        权限模块接管，不引入临时 token。
+    """
+
+    if settings.app_env == "prod":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Query Planning V2 内部诊断接口需要用户权限模块授权后才能在生产环境访问。",
+        )
+
+
 def get_plan_power_model_service(
     db: Session = Depends(get_db),
 ) -> PowerModelService:
@@ -226,3 +254,38 @@ def get_plan_bom_qa_service(
         power_prediction_engine=engine,
         power_recommendation_service=PowerRecommendationService(db, engine=engine),
     )
+
+
+def get_query_planning_v2_service(
+    db: Session = Depends(get_db),
+) -> QueryPlanningV2Service:
+    """Query Planning V2 诊断服务依赖。
+
+    说明：
+        1. 只为内部诊断接口生成 shadow query_plan_v2；
+        2. 物流侧只实例化规则 planner adapter；
+        3. BOM 侧只注入 NLU Center adapter，不调用 PlanBomQaService.ask。
+    """
+
+    plan_bom_repository = PlanBomQueryRepository(db)
+    return QueryPlanningV2Service(
+        logistics_adapter=LogisticsQueryPlanningAdapter(),
+        plan_bom_adapter=PlanBomQueryPlanningAdapter(
+            nlu_service=PlanBomNluCenterService(repository=plan_bom_repository),
+        ),
+    )
+
+
+def get_query_planning_v2_shadow_report_service(
+    service: QueryPlanningV2Service = Depends(get_query_planning_v2_service),
+) -> QueryPlanningV2ShadowReportService:
+    """Query Planning V2 shadow 对比报表服务依赖。
+
+    参数：
+        service: 已构造的 Query Planning V2 统一服务。
+
+    返回：
+        只回放 shadow query_plan、不执行正式查询的报表服务。
+    """
+
+    return QueryPlanningV2ShadowReportService(planning_service=service)

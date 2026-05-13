@@ -1,0 +1,1375 @@
+diff --git a/backend/app/api/deps.py b/backend/app/api/deps.py
+index 9fa2cff..b3bfdb2 100644
+--- a/backend/app/api/deps.py
++++ b/backend/app/api/deps.py
+@@ -24,6 +24,9 @@ from backend.app.domains.plan_bom.services.power_prediction_engine import PowerP
+ from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
+ from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
+ from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
++from backend.app.domains.query_planning.services.logistics_adapter import LogisticsQueryPlanningAdapter
++from backend.app.domains.query_planning.services.plan_bom_adapter import PlanBomQueryPlanningAdapter
++from backend.app.domains.query_planning.services.query_planning_v2_service import QueryPlanningV2Service
+ from backend.app.repositories.logistics_query_repo import InMemoryLogisticsQueryRepository
+ from backend.app.repositories.task_repo import InMemoryTaskRepository
+ from backend.app.services.chat_service import ChatService
+@@ -226,3 +229,23 @@ def get_plan_bom_qa_service(
+         power_prediction_engine=engine,
+         power_recommendation_service=PowerRecommendationService(db, engine=engine),
+     )
++
++
++def get_query_planning_v2_service(
++    db: Session = Depends(get_db),
++) -> QueryPlanningV2Service:
++    """Query Planning V2 诊断服务依赖。
++
++    说明：
++        1. 只为内部诊断接口生成 shadow query_plan_v2；
++        2. 物流侧只实例化规则 planner adapter；
++        3. BOM 侧只注入 NLU Center adapter，不调用 PlanBomQaService.ask。
++    """
++
++    plan_bom_repository = PlanBomQueryRepository(db)
++    return QueryPlanningV2Service(
++        logistics_adapter=LogisticsQueryPlanningAdapter(),
++        plan_bom_adapter=PlanBomQueryPlanningAdapter(
++            nlu_service=PlanBomNluCenterService(repository=plan_bom_repository),
++        ),
++    )
+diff --git a/backend/app/api/router.py b/backend/app/api/router.py
+index b746dc9..5b873f9 100644
+--- a/backend/app/api/router.py
++++ b/backend/app/api/router.py
+@@ -3,6 +3,7 @@ from fastapi import APIRouter
+ from backend.app.api.v1 import chat, etl, health, logistics_data, logistics_query, system
+ from backend.app.domains.logistics.api import router as logistics_domain_router
+ from backend.app.domains.plan_bom.api import router as plan_bom_domain_router
++from backend.app.domains.query_planning.api import router as query_planning_domain_router
+ 
+ api_router = APIRouter()
+ api_router.include_router(health.router, tags=["Health"])
+@@ -13,3 +14,4 @@ api_router.include_router(logistics_data.router, tags=["Logistics Data"])
+ api_router.include_router(chat.router, tags=["Chat"])
+ api_router.include_router(logistics_domain_router.router, prefix="/logistics", tags=["Logistics Domain"])
+ api_router.include_router(plan_bom_domain_router.router, prefix="/plan-bom", tags=["Plan BOM Domain"])
++api_router.include_router(query_planning_domain_router, prefix="/query-planning", tags=["Query Planning V2"])
+diff --git a/backend/app/domains/query_planning/__init__.py b/backend/app/domains/query_planning/__init__.py
+new file mode 100644
+index 0000000..a528947
+--- /dev/null
++++ b/backend/app/domains/query_planning/__init__.py
+@@ -0,0 +1,7 @@
++"""Query Planning V2 领域包。
++
++本包只提供业务员问题进入正式查询前的 shadow 诊断计划能力，
++不替代物流 / BOM 现有主链路，也不执行 SQL 或事实查询。
++"""
++
++from __future__ import annotations
+diff --git a/backend/app/domains/query_planning/api/__init__.py b/backend/app/domains/query_planning/api/__init__.py
+new file mode 100644
+index 0000000..59e1df1
+--- /dev/null
++++ b/backend/app/domains/query_planning/api/__init__.py
+@@ -0,0 +1,10 @@
++from __future__ import annotations
++
++from fastapi import APIRouter
++
++from backend.app.domains.query_planning.api.endpoints import query_plan_v2
++
++router = APIRouter()
++router.include_router(query_plan_v2.router, tags=["Query Planning V2"])
++
++__all__ = ["router"]
+diff --git a/backend/app/domains/query_planning/api/endpoints/__init__.py b/backend/app/domains/query_planning/api/endpoints/__init__.py
+new file mode 100644
+index 0000000..bdec2fc
+--- /dev/null
++++ b/backend/app/domains/query_planning/api/endpoints/__init__.py
+@@ -0,0 +1,3 @@
++from __future__ import annotations
++
++__all__: list[str] = []
+diff --git a/backend/app/domains/query_planning/api/endpoints/query_plan_v2.py b/backend/app/domains/query_planning/api/endpoints/query_plan_v2.py
+new file mode 100644
+index 0000000..87e5ffd
+--- /dev/null
++++ b/backend/app/domains/query_planning/api/endpoints/query_plan_v2.py
+@@ -0,0 +1,37 @@
++from __future__ import annotations
++
++from fastapi import APIRouter, Depends, Request
++
++from backend.app.api.deps import get_query_planning_v2_service
++from backend.app.domains.query_planning.schemas.query_plan_v2 import QueryPlanningV2DiagnoseRequest
++from backend.app.domains.query_planning.services.query_planning_v2_service import QueryPlanningV2Service
++from backend.app.schemas.common import ApiResponse
++
++router = APIRouter()
++
++
++@router.post("/v2/diagnose", response_model=ApiResponse)
++def diagnose_query_plan_v2(
++    payload: QueryPlanningV2DiagnoseRequest,
++    request: Request,
++    service: QueryPlanningV2Service = Depends(get_query_planning_v2_service),
++) -> ApiResponse:
++    """Query Planning V2 内部诊断入口。
++
++    说明：
++        1. 该接口只输出 shadow query_plan_v2，不替代物流 / BOM 正式问答入口；
++        2. 服务只调用规则 planner 或 NLU Center，不执行 SQL、不查数、不生成最终业务答案；
++        3. 默认写入 JSONL 审计日志，便于后续回放和灰度对比。
++    """
++
++    trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
++    plan = service.plan(
++        question=payload.question,
++        domain=payload.domain,
++        trace_id=trace_id,
++        write_audit=payload.write_audit,
++    )
++    return ApiResponse.success(plan.model_dump(mode="json"), trace_id=trace_id)
++
++
++__all__ = ["router"]
+diff --git a/backend/app/domains/query_planning/schemas/__init__.py b/backend/app/domains/query_planning/schemas/__init__.py
+new file mode 100644
+index 0000000..8a6ac9b
+--- /dev/null
++++ b/backend/app/domains/query_planning/schemas/__init__.py
+@@ -0,0 +1,23 @@
++from __future__ import annotations
++
++from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++    QueryPlanningV2AuditInfo,
++    QueryPlanningV2DiagnoseRequest,
++    QueryPlanningV2ExecutionPolicy,
++    QueryPlanningV2GuardrailDecision,
++    QueryPlanningV2Plan,
++    QueryPlanningV2Slots,
++    QueryPlanningV2Strategy,
++    QueryPlanningV2SubQuery,
++)
++
++__all__ = [
++    "QueryPlanningV2AuditInfo",
++    "QueryPlanningV2DiagnoseRequest",
++    "QueryPlanningV2ExecutionPolicy",
++    "QueryPlanningV2GuardrailDecision",
++    "QueryPlanningV2Plan",
++    "QueryPlanningV2Slots",
++    "QueryPlanningV2Strategy",
++    "QueryPlanningV2SubQuery",
++]
+diff --git a/backend/app/domains/query_planning/schemas/query_plan_v2.py b/backend/app/domains/query_planning/schemas/query_plan_v2.py
+new file mode 100644
+index 0000000..0707ebf
+--- /dev/null
++++ b/backend/app/domains/query_planning/schemas/query_plan_v2.py
+@@ -0,0 +1,277 @@
++from __future__ import annotations
++
++from typing import Any, Literal
++
++from pydantic import BaseModel, ConfigDict, Field, model_validator
++
++QueryPlanningV2Strategy = Literal[
++    "DIRECT_RETRIEVAL",
++    "HYDE_RETRIEVAL",
++    "QUERY_DECOMPOSITION",
++    "QUERY_REWRITE_SIMPLIFY",
++    "CLARIFY",
++    "NO_ANSWER",
++    "UNSUPPORTED",
++]
++
++
++class QueryPlanningV2Slots(BaseModel):
++    """Query Planning V2 统一槽位结构。
++
++    参数：
++        metrics: 指标槽位，如 shipment_mw、total_fee。
++        dimensions: 维度槽位，如 carrier、year。
++        filters: 过滤条件，只承载受控字段和值，不承载 SQL。
++        group_by: 分组字段。
++        sort: 排序字段和方向。
++        limit: 结果条数限制。
++        entities: 领域实体槽位，供订单、客户、供应商等实体归一化使用。
++
++    返回：
++        可审计、可回放的查询槽位快照。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    metrics: list[str] = Field(default_factory=list)
++    dimensions: list[str] = Field(default_factory=list)
++    filters: dict[str, Any] = Field(default_factory=dict)
++    group_by: list[str] = Field(default_factory=list)
++    sort: list[dict[str, Any]] = Field(default_factory=list)
++    limit: int | None = None
++    entities: dict[str, Any] = Field(default_factory=dict)
++
++
++class QueryPlanningV2ExecutionPolicy(BaseModel):
++    """Query Planning V2 执行安全策略。
++
++    参数：
++        shadow_only: 是否仅 shadow 诊断。Phase 3 默认只 shadow。
++        executable: 是否可由既有受控 service/repository 执行。
++        retrieval_only: 是否仅可用于检索增强，不能进入结构化查询。
++        llm_can_execute: LLM 是否允许执行查询；必须恒为 False。
++        sql_generation_allowed: 是否允许生成 SQL；必须恒为 False。
++        allowed_query_keys: 可执行白名单 query_key。
++        allowed_services: 可调用的受控服务名。
++
++    返回：
++        策略路由后的安全边界说明。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    shadow_only: bool = True
++    executable: bool = False
++    retrieval_only: bool = False
++    llm_can_execute: bool = False
++    sql_generation_allowed: bool = False
++    allowed_query_keys: list[str] = Field(default_factory=list)
++    allowed_services: list[str] = Field(default_factory=list)
++
++    @model_validator(mode="after")
++    def enforce_llm_and_sql_denied(self) -> "QueryPlanningV2ExecutionPolicy":
++        """强制关闭 LLM 执行和 SQL 生成能力。
++
++        参数：无。
++        返回：归一化后的执行策略。
++        业务逻辑：Query Planning V2 只规划，不让 LLM 查数或生成 SQL。
++        """
++
++        self.llm_can_execute = False
++        self.sql_generation_allowed = False
++        self.shadow_only = True
++        return self
++
++
++class QueryPlanningV2GuardrailDecision(BaseModel):
++    """统一 Guardrail 决策摘要。
++
++    参数：
++        guardrail_enabled: 是否进入 Guardrail 流程。
++        guardrail_mode: Guardrail 模式，如 rule、shadow、assist。
++        final_source: 最终采用来源，Phase 3 通常为 rule / nlu_center / fail_closed。
++        policy_locked: 是否被安全策略锁定，不能被 LLM 改写。
++        accepted: 候选是否被接纳。
++        blocked_reason: 拦截原因。
++        notes: 可读审计说明。
++        raw_decision: 原领域 Guardrail / NLU 决策快照。
++
++    返回：
++        可写入 query_plan 的 Guardrail 决策摘要。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    guardrail_enabled: bool = True
++    guardrail_mode: str = "rule"
++    final_source: str = "rule"
++    policy_locked: bool = True
++    accepted: bool = True
++    blocked_reason: str | None = None
++    notes: list[str] = Field(default_factory=list)
++    raw_decision: dict[str, Any] = Field(default_factory=dict)
++
++
++class QueryPlanningV2AuditInfo(BaseModel):
++    """Query Planning V2 审计信息。
++
++    参数：
++        trace_id: 请求追踪号。
++        audit_logged: 本次计划是否已写入审计日志。
++        audit_log_path: JSONL 审计日志路径。
++        audit_message: 写日志失败等非阻断说明。
++
++    返回：
++        计划回放和问题定位所需的最小审计信息。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    trace_id: str | None = None
++    audit_logged: bool = False
++    audit_log_path: str | None = None
++    audit_message: str | None = None
++
++
++class QueryPlanningV2SubQuery(BaseModel):
++    """Query Planning V2 受控子查询。
++
++    参数：
++        sub_query_id: 子查询稳定 ID。
++        source_clause: 子查询可回溯的原问题片段。
++        domain: 子查询所属领域，默认继承物流。
++        intent: 子查询意图。
++        query_key: 子查询白名单 query_key。
++        slots: 子查询槽位。
++        executable: 是否可由受控 service 执行。
++        merge_policy: 合并策略说明。
++        guardrail_notes: 子查询 Guardrail 说明。
++
++    返回：
++        QUERY_DECOMPOSITION 策略下的受控子查询。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    sub_query_id: str
++    source_clause: str
++    domain: str = "logistics"
++    intent: str | None = None
++    query_key: str | None = None
++    slots: QueryPlanningV2Slots = Field(default_factory=QueryPlanningV2Slots)
++    executable: bool = False
++    merge_policy: str | None = None
++    guardrail_notes: list[str] = Field(default_factory=list)
++
++
++class QueryPlanningV2Plan(BaseModel):
++    """Query Planning V2 统一查询计划。
++
++    参数：
++        schema_version: 稳定 schema 版本。
++        domain: 问题所属业务域。
++        original_question: 用户原始问题，必须保留。
++        strategy: 策略枚举。
++        intent: 受控意图。
++        query_key: 白名单 query_key，不允许自由 SQL。
++        slots: 统一槽位结构。
++        rewritten_question: 改写问题，仅可辅助检索 / planner，不覆盖原问题。
++        hyde_text: HYDE 假设文本，仅可辅助检索，不能作为事实答案。
++        sub_queries: 受控子查询列表。
++        clarification_questions: 澄清问题。
++        no_answer_reason: 无答案原因。
++        unsupported_reason: 不支持原因。
++        guardrail_decision: Guardrail 决策。
++        execution_policy: 执行安全策略。
++        rule_plan: 原规则 planner / NLU 结果快照。
++        llm_result: LLM 候选快照。
++        audit: 审计信息。
++        warnings: 非阻断警告。
++
++    返回：
++        正式查询前的 shadow query_plan_v2 JSON。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    schema_version: str = "query_plan_v2.0"
++    domain: str
++    original_question: str
++    strategy: QueryPlanningV2Strategy
++    intent: str | None = None
++    query_key: str | None = None
++    slots: QueryPlanningV2Slots = Field(default_factory=QueryPlanningV2Slots)
++    rewritten_question: str | None = None
++    hyde_text: str | None = None
++    sub_queries: list[QueryPlanningV2SubQuery] = Field(default_factory=list)
++    clarification_questions: list[str] = Field(default_factory=list)
++    no_answer_reason: str | None = None
++    unsupported_reason: str | None = None
++    guardrail_decision: QueryPlanningV2GuardrailDecision = Field(default_factory=QueryPlanningV2GuardrailDecision)
++    execution_policy: QueryPlanningV2ExecutionPolicy = Field(default_factory=QueryPlanningV2ExecutionPolicy)
++    rule_plan: dict[str, Any] = Field(default_factory=dict)
++    llm_result: dict[str, Any] = Field(default_factory=dict)
++    audit: QueryPlanningV2AuditInfo = Field(default_factory=QueryPlanningV2AuditInfo)
++    warnings: list[str] = Field(default_factory=list)
++
++    @model_validator(mode="after")
++    def enforce_strategy_policy(self) -> "QueryPlanningV2Plan":
++        """按策略强制归一执行边界。
++
++        参数：无。
++        返回：归一化后的 query_plan。
++        业务逻辑：HYDE、改写、澄清和拒答均不能进入结构化执行；DIRECT / DECOMPOSE
++        也只能由白名单 query_key 和既有受控服务执行。
++        """
++
++        policy = self.execution_policy
++        policy.llm_can_execute = False
++        policy.sql_generation_allowed = False
++        if self.query_key and self.query_key not in policy.allowed_query_keys:
++            policy.allowed_query_keys.append(self.query_key)
++
++        if self.strategy == "HYDE_RETRIEVAL":
++            policy.retrieval_only = True
++            policy.executable = False
++        elif self.strategy in {"QUERY_REWRITE_SIMPLIFY", "CLARIFY", "NO_ANSWER", "UNSUPPORTED"}:
++            policy.executable = False
++            if self.strategy != "QUERY_REWRITE_SIMPLIFY":
++                policy.retrieval_only = False
++        elif self.strategy == "DIRECT_RETRIEVAL":
++            policy.retrieval_only = False
++            policy.executable = bool(self.query_key)
++        elif self.strategy == "QUERY_DECOMPOSITION":
++            policy.retrieval_only = False
++            policy.executable = bool(self.sub_queries or self.query_key == "composite_decomposed")
++        return self
++
++
++class QueryPlanningV2DiagnoseRequest(BaseModel):
++    """Query Planning V2 诊断请求。
++
++    参数：
++        question: 用户原始问题。
++        domain: 可选业务域；不填时服务按轻量规则路由。
++        write_audit: 是否写入 JSONL 审计日志。
++
++    返回：
++        诊断接口请求模型。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    question: str = Field(..., min_length=1, description="业务员自然语言问题")
++    domain: str | None = Field(default=None, description="可选业务域：logistics / plan_bom")
++    write_audit: bool = Field(default=True, description="是否写入 Query Planning V2 JSONL 审计日志")
++
++
++__all__ = [
++    "QueryPlanningV2AuditInfo",
++    "QueryPlanningV2DiagnoseRequest",
++    "QueryPlanningV2ExecutionPolicy",
++    "QueryPlanningV2GuardrailDecision",
++    "QueryPlanningV2Plan",
++    "QueryPlanningV2Slots",
++    "QueryPlanningV2Strategy",
++    "QueryPlanningV2SubQuery",
++]
+diff --git a/backend/app/domains/query_planning/services/__init__.py b/backend/app/domains/query_planning/services/__init__.py
+new file mode 100644
+index 0000000..0a63458
+--- /dev/null
++++ b/backend/app/domains/query_planning/services/__init__.py
+@@ -0,0 +1,15 @@
++from __future__ import annotations
++
++from backend.app.domains.query_planning.services.logistics_adapter import LogisticsQueryPlanningAdapter
++from backend.app.domains.query_planning.services.plan_bom_adapter import PlanBomQueryPlanningAdapter
++from backend.app.domains.query_planning.services.query_plan_v2_audit_writer import QueryPlanV2AuditWriter
++from backend.app.domains.query_planning.services.query_planning_v2_service import QueryPlanningV2Service
++from backend.app.domains.query_planning.services.strategy_router import QueryPlanningV2StrategyRouter
++
++__all__ = [
++    "LogisticsQueryPlanningAdapter",
++    "PlanBomQueryPlanningAdapter",
++    "QueryPlanV2AuditWriter",
++    "QueryPlanningV2Service",
++    "QueryPlanningV2StrategyRouter",
++]
+diff --git a/backend/app/domains/query_planning/services/logistics_adapter.py b/backend/app/domains/query_planning/services/logistics_adapter.py
+new file mode 100644
+index 0000000..7d0aefc
+--- /dev/null
++++ b/backend/app/domains/query_planning/services/logistics_adapter.py
+@@ -0,0 +1,132 @@
++from __future__ import annotations
++
++from typing import Any
++
++from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
++from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
++from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++    QueryPlanningV2GuardrailDecision,
++    QueryPlanningV2Plan,
++    QueryPlanningV2Slots,
++    QueryPlanningV2SubQuery,
++)
++
++
++class LogisticsQueryPlanningAdapter:
++    """物流 Query Planning V2 适配器。
++
++    说明：
++        1. 复用现有 LogisticsDataQaPlanner 产出的白名单 query_key；
++        2. 不调用 LogisticsDataQaService.query，因此不会执行 SQL / 写正式查询历史 / 生成最终答案；
++        3. 只把现有规则计划包装成统一 query_plan_v2，用于 Phase 3 shadow 诊断。
++    """
++
++    def __init__(self, planner: LogisticsDataQaPlanner | Any | None = None) -> None:
++        """初始化物流适配器。
++
++        参数：
++            planner: 可注入的物流规则 planner；测试场景可传 fake planner。
++        返回：无返回值。
++        """
++
++        self.planner = planner or LogisticsDataQaPlanner()
++
++    def build_candidate(self, question: str, *, trace_id: str | None = None) -> QueryPlanningV2Plan:
++        """构建物流领域 query_plan_v2 候选。
++
++        参数：
++            question: 用户原始问题。
++            trace_id: 可选追踪号。
++        返回：
++            物流领域统一 query_plan_v2。
++        业务逻辑：只复用 planner 的受控结果，不触发正式 Data QA 主链路执行。
++        """
++
++        rule_plan: LogisticsDataQaPlan = self.planner.build_plan(question)
++        strategy = self._strategy_from_rule_plan(rule_plan)
++        sub_queries = self._sub_queries_from_rule_plan(rule_plan)
++        clarification_questions = list(rule_plan.clarification_questions or [])
++        if strategy == "CLARIFY" and not clarification_questions:
++            clarification_questions = ["当前问题缺少可执行查询条件，请补充时间、指标、维度或业务对象后再查询。"]
++
++        plan = QueryPlanningV2Plan(
++            domain="logistics",
++            original_question=question,
++            strategy=strategy,
++            intent=rule_plan.intent,
++            query_key=rule_plan.query_key,
++            slots=QueryPlanningV2Slots(
++                metrics=list(rule_plan.metrics or []),
++                dimensions=list(rule_plan.dimensions or []),
++                filters=dict(rule_plan.filters or {}),
++                group_by=list(rule_plan.group_by or []),
++                sort=list(rule_plan.sort or []),
++                limit=rule_plan.limit,
++            ),
++            sub_queries=sub_queries,
++            clarification_questions=clarification_questions,
++            unsupported_reason=rule_plan.unsupported_reason,
++            guardrail_decision=QueryPlanningV2GuardrailDecision(
++                guardrail_enabled=True,
++                guardrail_mode="rule",
++                final_source="rule",
++                policy_locked=True,
++                accepted=True,
++                notes=["复用物流规则 planner 结果；Phase 3 不执行 Data QA 查询。"],
++            ),
++            rule_plan=rule_plan.model_dump(mode="json"),
++        )
++        plan.audit.trace_id = trace_id
++        return plan
++
++    @staticmethod
++    def _strategy_from_rule_plan(rule_plan: LogisticsDataQaPlan) -> str:
++        """根据物流规则计划推导初始策略。"""
++
++        if rule_plan.intent == "unsupported" or rule_plan.unsupported_reason:
++            return "UNSUPPORTED"
++        if rule_plan.needs_clarification or rule_plan.intent == "clarification":
++            return "CLARIFY"
++        if rule_plan.query_key == "composite_decomposed":
++            return "QUERY_DECOMPOSITION"
++        if rule_plan.query_key:
++            return "DIRECT_RETRIEVAL"
++        return "CLARIFY"
++
++    def _sub_queries_from_rule_plan(self, rule_plan: LogisticsDataQaPlan) -> list[QueryPlanningV2SubQuery]:
++        """从 composite_decomposed 规则计划中提取受控子查询。"""
++
++        if rule_plan.query_key != "composite_decomposed":
++            return []
++        raw_sub_plans = (rule_plan.filters or {}).get("sub_plans")
++        if not isinstance(raw_sub_plans, list):
++            return []
++        sub_queries: list[QueryPlanningV2SubQuery] = []
++        for index, item in enumerate(raw_sub_plans, start=1):
++            if not isinstance(item, dict):
++                continue
++            filters = item.get("filters") if isinstance(item.get("filters"), dict) else {}
++            sub_queries.append(
++                QueryPlanningV2SubQuery(
++                    sub_query_id=f"logistics_sub_{index}",
++                    source_clause=str(item.get("source_clause") or item.get("section_label") or f"sub_{index}"),
++                    domain="logistics",
++                    intent=item.get("intent"),
++                    query_key=item.get("query_key"),
++                    slots=QueryPlanningV2Slots(
++                        metrics=list(item.get("metrics") or []),
++                        dimensions=list(item.get("dimensions") or []),
++                        filters=dict(filters),
++                        group_by=list(item.get("group_by") or []),
++                        sort=list(item.get("sort") or []),
++                        limit=item.get("limit"),
++                    ),
++                    executable=bool(item.get("query_key")),
++                    merge_policy="按 section_label 分区展示并保持子查询独立结果。",
++                    guardrail_notes=["子查询来自现有 composite_decomposed 受控计划。"],
++                )
++            )
++        return sub_queries
++
++
++__all__ = ["LogisticsQueryPlanningAdapter"]
+diff --git a/backend/app/domains/query_planning/services/plan_bom_adapter.py b/backend/app/domains/query_planning/services/plan_bom_adapter.py
+new file mode 100644
+index 0000000..c7079ce
+--- /dev/null
++++ b/backend/app/domains/query_planning/services/plan_bom_adapter.py
+@@ -0,0 +1,117 @@
++from __future__ import annotations
++
++from typing import Any
++
++from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate
++from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++    QueryPlanningV2GuardrailDecision,
++    QueryPlanningV2Plan,
++    QueryPlanningV2Slots,
++)
++
++
++class PlanBomQueryPlanningAdapter:
++    """计划 BOM Query Planning V2 适配器。
++
++    说明：
++        1. 只调用 PlanBomNluCenterService.understand，复用已有 NLU / Guardrail；
++        2. 不调用 PlanBomQaService.ask，避免查数、写历史或生成最终答案；
++        3. Phase 3 默认 use_llm=False，先以规则 NLU shadow 诊断为主。
++    """
++
++    def __init__(self, nlu_service: Any) -> None:
++        """初始化 BOM 适配器。
++
++        参数：
++            nlu_service: 计划 BOM NLU Center 或测试 fake service。
++        返回：无返回值。
++        """
++
++        self.nlu_service = nlu_service
++
++    def build_candidate(
++        self,
++        question: str,
++        *,
++        trace_id: str | None = None,
++    ) -> QueryPlanningV2Plan:
++        """构建计划 BOM 领域 query_plan_v2 候选。
++
++        参数：
++            question: 用户原始问题。
++            trace_id: 可选追踪号。
++        返回：
++            计划 BOM 统一 query_plan_v2。
++        """
++
++        candidate: PlanBomNluCandidate = self.nlu_service.understand(question, use_llm=False)
++        strategy = self._strategy_from_candidate(candidate)
++        query_key = self._query_key_from_candidate(candidate, strategy)
++        clarification_questions = self._clarification_questions(candidate) if strategy == "CLARIFY" else []
++        unsupported_reason = "当前计划 BOM 数据源暂不支持该类问题。" if strategy == "UNSUPPORTED" else None
++
++        plan = QueryPlanningV2Plan(
++            domain="plan_bom",
++            original_question=question,
++            strategy=strategy,
++            intent=candidate.intent,
++            query_key=query_key,
++            slots=QueryPlanningV2Slots(filters=dict(candidate.slots or {})),
++            clarification_questions=clarification_questions,
++            unsupported_reason=unsupported_reason,
++            guardrail_decision=QueryPlanningV2GuardrailDecision(
++                guardrail_enabled=True,
++                guardrail_mode=candidate.provider_mode,
++                final_source="nlu_center",
++                policy_locked=True,
++                accepted=True,
++                notes=list(candidate.guardrail_notes or []) + ["Phase 3 仅调用 NLU Center，不执行 PlanBomQaService.ask。"],
++                raw_decision={
++                    "provider_mode": candidate.provider_mode,
++                    "confidence": candidate.confidence,
++                    "missing_slots": list(candidate.missing_slots or []),
++                },
++            ),
++            rule_plan=candidate.model_dump(mode="json"),
++        )
++        plan.audit.trace_id = trace_id
++        return plan
++
++    @staticmethod
++    def _strategy_from_candidate(candidate: PlanBomNluCandidate) -> str:
++        """根据 BOM NLU 候选推导初始策略。"""
++
++        if candidate.intent == "unsupported":
++            return "UNSUPPORTED"
++        if candidate.intent == "clarification" or candidate.missing_slots:
++            return "CLARIFY"
++        return "DIRECT_RETRIEVAL"
++
++    @staticmethod
++    def _query_key_from_candidate(candidate: PlanBomNluCandidate, strategy: str) -> str | None:
++        """把 BOM intent 映射到受控 query_key。
++
++        当前 Plan BOM 主链路以 intent 驱动受控 service；Phase 3 先保留 intent 作为
++        可执行 key 的候选，不引入新的自由 query_key。
++        """
++
++        if strategy != "DIRECT_RETRIEVAL":
++            return None
++        return candidate.intent
++
++    @staticmethod
++    def _clarification_questions(candidate: PlanBomNluCandidate) -> list[str]:
++        """按缺失槽位生成确定性澄清问题。"""
++
++        missing = set(candidate.missing_slots or [])
++        questions: list[str] = []
++        if "order_id" in missing:
++            questions.append("请补充订单号、BOM 文件名或客户实例，以便缩窄到明确的计划 BOM。")
++        if "target_power_ratio" in missing:
++            questions.append("请补充目标功率档位及比例，例如“620W 占比 60%”。")
++        if not questions:
++            questions.append("当前计划 BOM 问题缺少可执行条件，请补充订单、版本、物料或目标功率等信息。")
++        return questions
++
++
++__all__ = ["PlanBomQueryPlanningAdapter"]
+diff --git a/backend/app/domains/query_planning/services/query_plan_v2_audit_writer.py b/backend/app/domains/query_planning/services/query_plan_v2_audit_writer.py
+new file mode 100644
+index 0000000..12eb3ce
+--- /dev/null
++++ b/backend/app/domains/query_planning/services/query_plan_v2_audit_writer.py
+@@ -0,0 +1,62 @@
++from __future__ import annotations
++
++import json
++from datetime import UTC, datetime
++from pathlib import Path
++from typing import Any
++
++from backend.app.domains.query_planning.schemas.query_plan_v2 import QueryPlanningV2Plan
++
++
++class QueryPlanV2AuditWriter:
++    """Query Planning V2 JSONL 审计写入器。
++
++    说明：
++        1. Phase 3 独立诊断接口先写 JSONL，不改数据库表结构；
++        2. 写入失败不影响主接口返回，只在 query_plan.audit 中标记；
++        3. 日志只保存规划结果，不保存密钥、不执行 SQL。
++    """
++
++    def __init__(self, path: str | Path | None = None) -> None:
++        """初始化审计写入器。
++
++        参数：
++            path: JSONL 日志路径，默认 data/logs/query_planning_v2_audit.jsonl。
++        返回：无返回值。
++        """
++
++        self.path = Path(path or "data/logs/query_planning_v2_audit.jsonl")
++
++    def write(self, *, plan: QueryPlanningV2Plan, trace_id: str | None = None) -> QueryPlanningV2Plan:
++        """写入单条 query_plan_v2 审计日志。
++
++        参数：
++            plan: 已生成的 Query Planning V2 计划。
++            trace_id: 请求追踪号。
++        返回：
++            带 audit 写入状态的新计划。
++        业务逻辑：使用 JSONL 方便灰度回放和 diff，不阻塞正式问答链路。
++        """
++
++        updated = plan.model_copy(deep=True)
++        updated.audit.trace_id = trace_id or updated.audit.trace_id
++        try:
++            self.path.parent.mkdir(parents=True, exist_ok=True)
++            updated.audit.audit_logged = True
++            updated.audit.audit_log_path = str(self.path)
++            updated.audit.audit_message = None
++            payload: dict[str, Any] = {
++                "logged_at": datetime.now(UTC).isoformat(),
++                "trace_id": updated.audit.trace_id,
++                "query_plan": updated.model_dump(mode="json"),
++            }
++            with self.path.open("a", encoding="utf-8") as handle:
++                handle.write(json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str) + "\n")
++        except Exception as exc:  # noqa: BLE001
++            updated.audit.audit_logged = False
++            updated.audit.audit_log_path = str(self.path)
++            updated.audit.audit_message = f"Query Planning V2 审计日志写入失败：{exc}"
++        return updated
++
++
++__all__ = ["QueryPlanV2AuditWriter"]
+diff --git a/backend/app/domains/query_planning/services/query_planning_v2_service.py b/backend/app/domains/query_planning/services/query_planning_v2_service.py
+new file mode 100644
+index 0000000..c7da1c7
+--- /dev/null
++++ b/backend/app/domains/query_planning/services/query_planning_v2_service.py
+@@ -0,0 +1,134 @@
++from __future__ import annotations
++
++from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++    QueryPlanningV2GuardrailDecision,
++    QueryPlanningV2Plan,
++)
++from backend.app.domains.query_planning.services.logistics_adapter import LogisticsQueryPlanningAdapter
++from backend.app.domains.query_planning.services.plan_bom_adapter import PlanBomQueryPlanningAdapter
++from backend.app.domains.query_planning.services.query_plan_v2_audit_writer import QueryPlanV2AuditWriter
++from backend.app.domains.query_planning.services.strategy_router import QueryPlanningV2StrategyRouter
++
++
++class QueryPlanningV2Service:
++    """Query Planning V2 统一服务。
++
++    说明：
++        1. 位于业务员原始问题进入正式检索 / SQL / RAG 之前；
++        2. 通过领域 adapter 复用现有物流 planner 和 BOM NLU Center；
++        3. Phase 3 只输出 shadow query_plan，不替换正式主链路。
++    """
++
++    def __init__(
++        self,
++        *,
++        logistics_adapter: LogisticsQueryPlanningAdapter,
++        plan_bom_adapter: PlanBomQueryPlanningAdapter,
++        audit_writer: QueryPlanV2AuditWriter | None = None,
++        strategy_router: QueryPlanningV2StrategyRouter | None = None,
++    ) -> None:
++        """初始化统一服务。
++
++        参数：
++            logistics_adapter: 物流领域适配器。
++            plan_bom_adapter: 计划 BOM 领域适配器。
++            audit_writer: JSONL 审计写入器。
++            strategy_router: 策略路由器。
++        返回：无返回值。
++        """
++
++        self.logistics_adapter = logistics_adapter
++        self.plan_bom_adapter = plan_bom_adapter
++        self.audit_writer = audit_writer or QueryPlanV2AuditWriter()
++        self.strategy_router = strategy_router or QueryPlanningV2StrategyRouter()
++
++    def plan(
++        self,
++        *,
++        question: str,
++        domain: str | None = None,
++        trace_id: str | None = None,
++        write_audit: bool = True,
++    ) -> QueryPlanningV2Plan:
++        """生成 Query Planning V2 shadow 计划。
++
++        参数：
++            question: 用户原始问题。
++            domain: 可选业务域；缺省时轻量判断物流 / 计划 BOM。
++            trace_id: 请求追踪号。
++            write_audit: 是否写入 JSONL 审计。
++        返回：
++            统一 query_plan_v2。
++        业务逻辑：只规划和记录，不执行正式查询，不生成最终业务答案。
++        """
++
++        resolved_domain = self._resolve_domain(question, domain)
++        if resolved_domain == "logistics":
++            candidate = self.logistics_adapter.build_candidate(question, trace_id=trace_id)
++        elif resolved_domain == "plan_bom":
++            candidate = self.plan_bom_adapter.build_candidate(question, trace_id=trace_id)
++        else:
++            candidate = self._fail_closed_plan(question=question, domain=resolved_domain, trace_id=trace_id)
++
++        routed = self.strategy_router.route(candidate)
++        routed.audit.trace_id = trace_id
++        if write_audit:
++            return self.audit_writer.write(plan=routed, trace_id=trace_id)
++        return routed
++
++    @staticmethod
++    def _resolve_domain(question: str, domain: str | None) -> str:
++        """解析业务域。
++
++        参数：
++            question: 用户原始问题。
++            domain: 调用方显式领域。
++        返回：
++            logistics、plan_bom 或 unknown。
++        """
++
++        normalized_domain = (domain or "").strip().lower().replace("-", "_")
++        if normalized_domain in {"logistics", "plan_bom"}:
++            return normalized_domain
++        if normalized_domain:
++            return "unknown"
++        compact = "".join(question.split()).lower()
++        if any(keyword in compact for keyword in ("bom", "订单", "评审", "玻璃", "焊带", "汇流条", "接线盒", "功率")):
++            return "plan_bom"
++        if any(keyword in compact for keyword in ("物流", "发运", "发货", "承运", "运费", "车辆", "司机")):
++            return "logistics"
++        return "unknown"
++
++    @staticmethod
++    def _fail_closed_plan(*, question: str, domain: str, trace_id: str | None) -> QueryPlanningV2Plan:
++        """未知领域 fail closed 到澄清。
++
++        参数：
++            question: 用户原始问题。
++            domain: 解析后的未知领域。
++            trace_id: 追踪号。
++        返回：
++            CLARIFY 策略计划。
++        """
++
++        plan = QueryPlanningV2Plan(
++            domain=domain or "unknown",
++            original_question=question,
++            strategy="CLARIFY",
++            intent="clarification",
++            clarification_questions=["请明确问题属于物流数据问答还是计划 BOM 问答，并补充关键查询条件。"],
++            guardrail_decision=QueryPlanningV2GuardrailDecision(
++                guardrail_enabled=True,
++                guardrail_mode="fail_closed",
++                final_source="fail_closed",
++                policy_locked=True,
++                accepted=False,
++                blocked_reason="无法确定业务域，未进入任何正式查询链路。",
++                notes=["未知领域必须澄清，不能默认套用物流或 BOM 口径。"],
++            ),
++        )
++        plan.audit.trace_id = trace_id
++        return plan
++
++
++__all__ = ["QueryPlanningV2Service"]
+diff --git a/backend/app/domains/query_planning/services/strategy_router.py b/backend/app/domains/query_planning/services/strategy_router.py
+new file mode 100644
+index 0000000..d3b7203
+--- /dev/null
++++ b/backend/app/domains/query_planning/services/strategy_router.py
+@@ -0,0 +1,76 @@
++from __future__ import annotations
++
++from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++    QueryPlanningV2ExecutionPolicy,
++    QueryPlanningV2Plan,
++)
++
++
++class QueryPlanningV2StrategyRouter:
++    """Query Planning V2 策略路由器。
++
++    说明：
++        1. 只基于既有规则 plan / NLU 候选 / Guardrail 结果做安全归类；
++        2. 不调用数据库、不执行查询、不生成 SQL；
++        3. 采用 fail closed：无法确定时回到 CLARIFY。
++    """
++
++    def route(self, plan: QueryPlanningV2Plan) -> QueryPlanningV2Plan:
++        """根据计划字段确定最终策略。
++
++        参数：
++            plan: adapter 产出的候选 query_plan。
++        返回：
++            已归一 strategy 和 execution_policy 的 query_plan。
++        业务逻辑：拒答/澄清优先于可执行查询；复合拆分优先于普通 DIRECT。
++        """
++
++        routed = plan.model_copy(deep=True)
++        strategy = self._decide_strategy(routed)
++        routed.strategy = strategy
++        if strategy == "CLARIFY" and not routed.clarification_questions:
++            routed.clarification_questions = ["当前问题缺少可执行查询条件，请补充业务域、时间、指标、维度或实体信息。"]
++        routed.execution_policy = self._policy_for(routed)
++        # 重新触发 schema 层策略校验，确保 HYDE / 拒答等安全边界不会被调用方覆盖。
++        return QueryPlanningV2Plan.model_validate(routed.model_dump(mode="json"))
++
++    def _decide_strategy(self, plan: QueryPlanningV2Plan) -> str:
++        """按安全优先级判断策略。"""
++
++        if plan.unsupported_reason or plan.intent == "unsupported" or plan.strategy == "UNSUPPORTED":
++            return "UNSUPPORTED"
++        if plan.no_answer_reason or plan.strategy == "NO_ANSWER":
++            return "NO_ANSWER"
++        if plan.clarification_questions or plan.intent == "clarification":
++            return "CLARIFY"
++        if plan.query_key == "composite_decomposed" or plan.sub_queries:
++            return "QUERY_DECOMPOSITION"
++        if plan.query_key:
++            return "DIRECT_RETRIEVAL"
++        if plan.hyde_text:
++            return "HYDE_RETRIEVAL"
++        if plan.rewritten_question:
++            return "QUERY_REWRITE_SIMPLIFY"
++        return "CLARIFY"
++
++    def _policy_for(self, plan: QueryPlanningV2Plan) -> QueryPlanningV2ExecutionPolicy:
++        """为策略生成最小安全执行策略。"""
++
++        allowed_query_keys = []
++        if plan.query_key:
++            allowed_query_keys.append(plan.query_key)
++        for sub_query in plan.sub_queries:
++            if sub_query.query_key and sub_query.query_key not in allowed_query_keys:
++                allowed_query_keys.append(sub_query.query_key)
++        policy = QueryPlanningV2ExecutionPolicy(allowed_query_keys=allowed_query_keys)
++        if plan.strategy in {"DIRECT_RETRIEVAL", "QUERY_DECOMPOSITION"}:
++            policy.executable = bool(plan.query_key)
++        elif plan.strategy == "HYDE_RETRIEVAL":
++            policy.retrieval_only = True
++            policy.executable = False
++        else:
++            policy.executable = False
++        return policy
++
++
++__all__ = ["QueryPlanningV2StrategyRouter"]
+diff --git a/tests/unit/query_planning/test_query_plan_v2_schema.py b/tests/unit/query_planning/test_query_plan_v2_schema.py
+new file mode 100644
+index 0000000..49b21f8
+--- /dev/null
++++ b/tests/unit/query_planning/test_query_plan_v2_schema.py
+@@ -0,0 +1,86 @@
++from __future__ import annotations
++
++import pytest
++from pydantic import ValidationError
++
++from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++    QueryPlanningV2ExecutionPolicy,
++    QueryPlanningV2Plan,
++    QueryPlanningV2Slots,
++    QueryPlanningV2SubQuery,
++)
++
++
++def test_query_plan_v2_direct_plan_is_stable_json_and_shadow_by_default() -> None:
++    """DIRECT 查询计划必须可序列化且默认只 shadow，不允许 LLM 执行。"""
++    plan = QueryPlanningV2Plan(
++        domain="logistics",
++        original_question="2025年各承运商发运量是多少？",
++        strategy="DIRECT_RETRIEVAL",
++        intent="aggregate",
++        query_key="hist_mw_by_carrier",
++        slots=QueryPlanningV2Slots(metrics=["shipment_mw"], dimensions=["carrier"], filters={"year": 2025}),
++    )
++
++    payload = plan.model_dump(mode="json")
++
++    assert payload["schema_version"] == "query_plan_v2.0"
++    assert payload["domain"] == "logistics"
++    assert payload["original_question"] == "2025年各承运商发运量是多少？"
++    assert payload["strategy"] == "DIRECT_RETRIEVAL"
++    assert payload["slots"]["filters"] == {"year": 2025}
++    assert payload["execution_policy"]["shadow_only"] is True
++    assert payload["execution_policy"]["llm_can_execute"] is False
++    assert payload["execution_policy"]["sql_generation_allowed"] is False
++
++
++def test_query_plan_v2_rejects_unknown_strategy() -> None:
++    """strategy 只能取受控枚举值，避免调用方注入自由策略。"""
++    with pytest.raises(ValidationError):
++        QueryPlanningV2Plan(
++            domain="logistics",
++            original_question="测试问题",
++            strategy="FREE_SQL",  # type: ignore[arg-type]
++        )
++
++
++def test_hyde_plan_is_retrieval_only_and_not_executable() -> None:
++    """HYDE 只能做检索增强，不能进入结构化 SQL 执行。"""
++    plan = QueryPlanningV2Plan(
++        domain="logistics",
++        original_question="物流成本偏高的可能原因有哪些？",
++        strategy="HYDE_RETRIEVAL",
++        intent="semantic_retrieval",
++        hyde_text="可检索物流成本、额外费用、线路报价和承运商表现等说明文档。",
++        execution_policy=QueryPlanningV2ExecutionPolicy(executable=True, retrieval_only=False),
++    )
++
++    assert plan.execution_policy.retrieval_only is True
++    assert plan.execution_policy.executable is False
++    assert plan.execution_policy.sql_generation_allowed is False
++
++
++def test_execution_policy_forces_shadow_only_and_denies_llm_sql() -> None:
++    """即使调用方传入危险开关，schema 也必须强制回到 shadow 安全边界。"""
++    policy = QueryPlanningV2ExecutionPolicy(
++        shadow_only=False,
++        llm_can_execute=True,
++        sql_generation_allowed=True,
++    )
++
++    assert policy.shadow_only is True
++    assert policy.llm_can_execute is False
++    assert policy.sql_generation_allowed is False
++
++
++def test_sub_query_forbids_unknown_sql_fields() -> None:
++    """子查询结构不允许携带 raw_sql 等自由执行字段。"""
++    with pytest.raises(ValidationError):
++        QueryPlanningV2SubQuery(
++            sub_query_id="sub_1",
++            source_clause="2025年各承运商发运量",
++            intent="aggregate",
++            query_key="hist_mw_by_carrier",
++            executable=True,
++            raw_sql="select * from sys_query_log",  # type: ignore[call-arg]
++        )
+diff --git a/tests/unit/query_planning/test_query_planning_adapters.py b/tests/unit/query_planning/test_query_planning_adapters.py
+new file mode 100644
+index 0000000..2ad26cb
+--- /dev/null
++++ b/tests/unit/query_planning/test_query_planning_adapters.py
+@@ -0,0 +1,126 @@
++from __future__ import annotations
++
++import json
++from pathlib import Path
++from typing import Any
++
++from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
++from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate
++from backend.app.domains.query_planning.schemas.query_plan_v2 import QueryPlanningV2Plan
++from backend.app.domains.query_planning.services.logistics_adapter import LogisticsQueryPlanningAdapter
++from backend.app.domains.query_planning.services.plan_bom_adapter import PlanBomQueryPlanningAdapter
++from backend.app.domains.query_planning.services.query_plan_v2_audit_writer import QueryPlanV2AuditWriter
++from backend.app.domains.query_planning.services.query_planning_v2_service import QueryPlanningV2Service
++
++
++class _FakeLogisticsPlanner:
++    """测试用物流 planner，只返回受控 plan，不执行查询。"""
++
++    def __init__(self, plan: LogisticsDataQaPlan) -> None:
++        self.plan = plan
++        self.questions: list[str] = []
++
++    def build_plan(self, question: str) -> LogisticsDataQaPlan:
++        self.questions.append(question)
++        return self.plan
++
++
++class _FakePlanBomNluService:
++    """测试用 BOM NLU，只返回候选理解，不查数。"""
++
++    def __init__(self, candidate: PlanBomNluCandidate) -> None:
++        self.candidate = candidate
++        self.calls: list[dict[str, Any]] = []
++
++    def understand(self, question: str, *, use_llm: bool = True) -> PlanBomNluCandidate:
++        self.calls.append({"question": question, "use_llm": use_llm})
++        return self.candidate
++
++
++def test_logistics_adapter_outputs_direct_query_plan_without_executing_data_qa() -> None:
++    """物流 adapter 应包装现有规则 plan，输出统一 query_plan_v2。"""
++    rule_plan = LogisticsDataQaPlan(
++        intent="aggregate",
++        query_key="hist_mw_by_carrier",
++        metrics=["shipment_mw"],
++        dimensions=["carrier"],
++        filters={"year": 2025},
++    )
++    planner = _FakeLogisticsPlanner(rule_plan)
++
++    plan = LogisticsQueryPlanningAdapter(planner=planner).build_candidate("2025年各承运商发运量是多少？", trace_id="t-log")
++
++    assert isinstance(plan, QueryPlanningV2Plan)
++    assert planner.questions == ["2025年各承运商发运量是多少？"]
++    assert plan.domain == "logistics"
++    assert plan.original_question == "2025年各承运商发运量是多少？"
++    assert plan.strategy == "DIRECT_RETRIEVAL"
++    assert plan.query_key == "hist_mw_by_carrier"
++    assert plan.slots.metrics == ["shipment_mw"]
++    assert plan.slots.filters == {"year": 2025}
++    assert plan.rule_plan["query_key"] == "hist_mw_by_carrier"
++    assert plan.guardrail_decision.final_source == "rule"
++
++
++def test_plan_bom_adapter_outputs_clarify_plan_and_does_not_enable_llm_by_default() -> None:
++    """BOM adapter 仅调用 NLU Center 的受控理解，缺槽时输出 CLARIFY。"""
++    candidate = PlanBomNluCandidate(
++        question="这个订单玻璃是什么？",
++        intent="single_order_material_specs",
++        slots={"material_category": ["玻璃"]},
++        missing_slots=["order_id"],
++        confidence=0.58,
++        provider_mode="rule",
++        guardrail_notes=["规则层完成初始意图和槽位抽取。"],
++    )
++    nlu = _FakePlanBomNluService(candidate)
++
++    plan = PlanBomQueryPlanningAdapter(nlu_service=nlu).build_candidate("这个订单玻璃是什么？", trace_id="t-bom")
++
++    assert nlu.calls == [{"question": "这个订单玻璃是什么？", "use_llm": False}]
++    assert plan.domain == "plan_bom"
++    assert plan.strategy == "CLARIFY"
++    assert plan.intent == "single_order_material_specs"
++    assert plan.query_key is None
++    assert plan.clarification_questions
++    assert plan.slots.filters["material_category"] == ["玻璃"]
++    assert plan.guardrail_decision.policy_locked is True
++    assert plan.execution_policy.llm_can_execute is False
++
++
++def test_query_planning_service_routes_and_writes_jsonl_audit(tmp_path: Path) -> None:
++    """统一服务应路由领域 adapter，并把 shadow query_plan_v2 写入 JSONL 审计。"""
++    audit_path = tmp_path / "query_planning_v2_audit.jsonl"
++    logistics_adapter = LogisticsQueryPlanningAdapter(
++        planner=_FakeLogisticsPlanner(
++            LogisticsDataQaPlan(
++                intent="aggregate",
++                query_key="hist_mw_by_carrier",
++                metrics=["shipment_mw"],
++                dimensions=["carrier"],
++                filters={"year": 2025},
++            )
++        )
++    )
++    bom_adapter = PlanBomQueryPlanningAdapter(
++        nlu_service=_FakePlanBomNluService(
++            PlanBomNluCandidate(question="订单001玻璃", intent="single_order_material_specs", slots={"order_tail_no": ["001"]})
++        )
++    )
++    service = QueryPlanningV2Service(
++        logistics_adapter=logistics_adapter,
++        plan_bom_adapter=bom_adapter,
++        audit_writer=QueryPlanV2AuditWriter(path=audit_path),
++    )
++
++    plan = service.plan(question="2025年各承运商发运量是多少？", domain="logistics", trace_id="trace-001")
++
++    assert plan.strategy == "DIRECT_RETRIEVAL"
++    assert plan.audit.trace_id == "trace-001"
++    assert audit_path.exists()
++    text = audit_path.read_text(encoding="utf-8")
++    assert "trace-001" in text
++    assert "DIRECT_RETRIEVAL" in text
++    audit_line = json.loads(text.strip().splitlines()[0])
++    assert audit_line["query_plan"]["audit"]["audit_logged"] is True
++    assert audit_line["query_plan"]["audit"]["audit_log_path"] == str(audit_path)
+diff --git a/tests/unit/query_planning/test_query_planning_endpoint_registration.py b/tests/unit/query_planning/test_query_planning_endpoint_registration.py
+new file mode 100644
+index 0000000..d59ec7b
+--- /dev/null
++++ b/tests/unit/query_planning/test_query_planning_endpoint_registration.py
+@@ -0,0 +1,12 @@
++from __future__ import annotations
++
++from backend.app.api.router import api_router
++
++
++def test_query_planning_v2_diagnose_route_is_registered() -> None:
++    """内部诊断接口必须注册，但不替换物流/BOM正式问答入口。"""
++    paths = {route.path for route in api_router.routes}
++
++    assert "/query-planning/v2/diagnose" in paths
++    assert "/logistics/data-qa/query" in paths
++    assert "/plan-bom/qa/ask" in paths
+diff --git a/tests/unit/query_planning/test_strategy_router.py b/tests/unit/query_planning/test_strategy_router.py
+new file mode 100644
+index 0000000..fc45198
+--- /dev/null
++++ b/tests/unit/query_planning/test_strategy_router.py
+@@ -0,0 +1,107 @@
++from __future__ import annotations
++
++from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++    QueryPlanningV2Plan,
++    QueryPlanningV2Slots,
++    QueryPlanningV2SubQuery,
++)
++from backend.app.domains.query_planning.services.strategy_router import QueryPlanningV2StrategyRouter
++
++
++def _route(plan: QueryPlanningV2Plan) -> QueryPlanningV2Plan:
++    """调用策略路由器并返回更新后的计划。"""
++    return QueryPlanningV2StrategyRouter().route(plan)
++
++
++def test_strategy_router_keeps_unsupported_before_rewrite_or_hyde() -> None:
++    """规则层 C 类边界必须优先，不能被 rewrite / HYDE 放行。"""
++    plan = QueryPlanningV2Plan(
++        domain="logistics",
++        original_question="预测未来三个月各区域发运量。",
++        strategy="QUERY_REWRITE_SIMPLIFY",
++        intent="unsupported",
++        query_key="hist_mw_by_region",
++        rewritten_question="统计未来三个月各区域发运量。",
++        hyde_text="未来发运量预测可能涉及历史趋势。",
++        unsupported_reason="当前数据源不支持未来预测。",
++    )
++
++    routed = _route(plan)
++
++    assert routed.strategy == "UNSUPPORTED"
++    assert routed.execution_policy.executable is False
++    assert routed.execution_policy.llm_can_execute is False
++
++
++def test_strategy_router_keeps_clarify_before_direct() -> None:
++    """缺槽澄清优先于白名单 query_key，避免乱查。"""
++    plan = QueryPlanningV2Plan(
++        domain="plan_bom",
++        original_question="这个订单玻璃是什么？",
++        strategy="DIRECT_RETRIEVAL",
++        intent="single_order_material_specs",
++        query_key="single_order_material_specs",
++        clarification_questions=["请补充订单号、BOM 文件名或客户实例。"],
++    )
++
++    routed = _route(plan)
++
++    assert routed.strategy == "CLARIFY"
++    assert routed.execution_policy.executable is False
++
++
++def test_strategy_router_routes_composite_before_direct() -> None:
++    """composite_decomposed 必须走复合计划路径，不能被普通 DIRECT 吞掉。"""
++    plan = QueryPlanningV2Plan(
++        domain="logistics",
++        original_question="统计24年高运费地址，并列出询比价和招标发运量。",
++        strategy="DIRECT_RETRIEVAL",
++        intent="composite",
++        query_key="composite_decomposed",
++        sub_queries=[
++            QueryPlanningV2SubQuery(
++                sub_query_id="sub_1",
++                source_clause="24年高运费地址",
++                intent="detail_list",
++                query_key="hist_high_fee_addresses_by_customer",
++                slots=QueryPlanningV2Slots(filters={"year": 2024}),
++                executable=True,
++            )
++        ],
++    )
++
++    routed = _route(plan)
++
++    assert routed.strategy == "QUERY_DECOMPOSITION"
++    assert routed.execution_policy.executable is True
++    assert routed.execution_policy.sql_generation_allowed is False
++    assert "composite_decomposed" in routed.execution_policy.allowed_query_keys
++    assert "hist_high_fee_addresses_by_customer" in routed.execution_policy.allowed_query_keys
++
++
++def test_strategy_router_routes_direct_when_query_key_is_plain_whitelist_key() -> None:
++    """普通白名单 query_key 且槽位完整时进入 DIRECT_RETRIEVAL。"""
++    plan = QueryPlanningV2Plan(
++        domain="logistics",
++        original_question="2025年各承运商发运量是多少？",
++        strategy="CLARIFY",
++        intent="aggregate",
++        query_key="hist_mw_by_carrier",
++        slots=QueryPlanningV2Slots(filters={"year": 2025}),
++    )
++
++    routed = _route(plan)
++
++    assert routed.strategy == "DIRECT_RETRIEVAL"
++    assert routed.execution_policy.executable is True
++
++
++def test_strategy_router_unknown_plan_fails_closed_to_clarify() -> None:
++    """无法分类的问题必须 fail closed 到澄清。"""
++    plan = QueryPlanningV2Plan(domain="unknown", original_question="帮我看看这个情况", strategy="DIRECT_RETRIEVAL")
++
++    routed = _route(plan)
++
++    assert routed.strategy == "CLARIFY"
++    assert routed.clarification_questions
++    assert routed.execution_policy.executable is False

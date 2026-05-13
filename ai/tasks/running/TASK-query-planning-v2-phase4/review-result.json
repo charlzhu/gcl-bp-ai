@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "补充 TestClient 级别测试，直接验证 /query-planning/v2/diagnose 和 /query-planning/v2/shadow-report 在 app_env=prod 时返回 403，避免只覆盖依赖函数。",
+    "补充 shadow 报表使用真实 QueryPlanningV2ShadowReportService 但注入可观测 adapter/repository 的测试，证明默认 10 类用例不调用正式 Data QA/BOM QA、不写审计、不生成最终答案。",
+    "补充 query_log_repository.write_query_log 和 shadow snapshot 构建异常场景测试，证明物流与 BOM 的 sys_query_log 写入失败均不阻塞主链路。"
+  ],
+  "summary": "已审查 scoped patch 与测试日志，未发现阻塞性安全或逻辑问题，生产诊断接口在 prod 环境被拒绝且未引入临时 token，shadow 元数据写入不改变正式结果；未修改任何文件。"
+}

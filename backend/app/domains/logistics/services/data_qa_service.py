@@ -25,6 +25,7 @@ from backend.app.domains.logistics.schemas.llm_understanding import (
     LogisticsLlmGuardrailDecision,
     LogisticsLlmUnderstandingResult,
 )
+from backend.app.domains.query_planning.services.shadow_snapshot_builder import QueryPlanningV2ShadowSnapshotBuilder
 from backend.app.services.qa_trace import QaTraceRecorder
 
 logger = logging.getLogger(__name__)
@@ -59,6 +60,7 @@ class LogisticsDataQaService:
         self.clarification_assist_service = clarification_assist_service or LogisticsLlmClarificationAssistService()
         self.unsupported_assist_service = unsupported_assist_service or LogisticsLlmUnsupportedAssistService()
         self.answer_presentation_service = answer_presentation_service or LogisticsLlmAnswerPresentationService()
+        self.query_plan_shadow_builder = QueryPlanningV2ShadowSnapshotBuilder()
 
     def query(
         self,
@@ -506,6 +508,12 @@ class LogisticsDataQaService:
             query_result_snapshot["query_type"] = "data_qa"
             query_result_snapshot["execution_mode"] = "data_qa"
             query_result_snapshot["item_count"] = len(result.result_table.rows)
+            query_plan_v2_shadow = self.query_plan_shadow_builder.build_logistics_snapshot(
+                question=question,
+                result=result,
+                trace_id=trace_id,
+                guardrail_decision=guardrail_decision,
+            )
             payload_snapshot = {
                 "question": question,
                 "request_payload": {"question": question},
@@ -519,7 +527,11 @@ class LogisticsDataQaService:
                     "trace_ready": bool(trace_id),
                     "result_count": len(result.result_table.rows),
                     "guardrail": guardrail_decision.model_dump(mode="json") if guardrail_decision else None,
+                    "query_plan_v2_strategy": query_plan_v2_shadow.get("strategy"),
+                    "query_plan_v2_query_key": query_plan_v2_shadow.get("query_key"),
+                    "query_plan_v2_shadow_ready": True,
                 },
+                "query_plan_v2_shadow": query_plan_v2_shadow,
                 "query_result": query_result_snapshot,
             }
             log_id = self.query_log_repository.write_query_log(

@@ -1,0 +1,108 @@
+# TASK-query-planning-v2-phase4 测试日志
+
+## RED
+
+命令：
+```bash
+python -m pytest tests/unit/query_planning/test_query_planning_phase4.py -q
+```
+
+结果：按 TDD 预期失败，缺少内部访问保护依赖函数。
+```text
+ImportError: cannot import name 'require_query_planning_internal_access' from 'backend.app.api.deps'
+1 error in 1.08s
+```
+
+## GREEN / Focused
+
+命令：
+```bash
+python -m pytest tests/unit/query_planning/test_query_planning_phase4.py -q
+```
+
+结果：
+```text
+....                                                                     [100%]
+4 passed in 1.03s
+```
+
+命令：
+```bash
+python -m pytest tests/unit/query_planning -q
+```
+
+结果：
+```text
+..................                                                       [100%]
+18 passed in 1.02s
+```
+
+命令：
+```bash
+python -m pytest tests/unit/query_planning tests/business_acceptance/test_plan_power_m2_model_versioning.py::test_plan_power_write_access_allows_non_prod_and_blocks_prod_until_user_permission_module -q
+```
+
+结果：
+```text
+...................                                                      [100%]
+19 passed in 0.98s
+```
+
+## Compile
+
+命令：
+```bash
+python -m compileall -q backend/app/api/deps.py backend/app/domains/query_planning backend/app/domains/logistics/services/data_qa_service.py backend/app/domains/plan_bom/services/qa_service.py
+```
+
+结果：通过，无输出。
+
+## Static scan
+
+命令：
+```bash
+git diff -- backend/app/api/deps.py backend/app/domains/query_planning backend/app/domains/logistics/services/data_qa_service.py backend/app/domains/plan_bom/services/qa_service.py tests/unit/query_planning \
+  | grep '^+' \
+  | grep -iE "(api_key|secret|password|token|passwd)\s*=\s*['\"][^'\"]{6,}['\"]"
+
+git diff -- backend/app/api/deps.py backend/app/domains/query_planning backend/app/domains/logistics/services/data_qa_service.py backend/app/domains/plan_bom/services/qa_service.py tests/unit/query_planning \
+  | grep '^+' \
+  | grep -E "os\.system\(|subprocess.*shell=True|\beval\(|\bexec\(|pickle\.loads?\(|execute\(f\"|\.format\(.*SELECT|\.format\(.*INSERT"
+```
+
+结果：无命中。
+
+命令：
+```bash
+python -m ruff check backend/app/api/deps.py backend/app/domains/query_planning backend/app/domains/logistics/services/data_qa_service.py backend/app/domains/plan_bom/services/qa_service.py tests/unit/query_planning
+```
+
+结果：当前环境未安装 ruff，未作为阻塞项。
+```text
+/opt/anaconda3/bin/python: No module named ruff
+```
+
+## Full regression
+
+命令：
+```bash
+python -m pytest tests -q
+```
+
+结果：
+```text
+........................................................................ [ 37%]
+........................................................................ [ 75%]
+................................................                         [100%]
+=============================== warnings summary ===============================
+tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
+  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Unknown extension is not supported and will be removed
+    ws_parser.bind_all()
+
+tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
+  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Conditional Formatting extension is not supported and will be removed
+    ws_parser.bind_all()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+192 passed, 2 warnings in 26.76s
+```

@@ -28,6 +28,7 @@ from backend.app.domains.plan_bom.services.power_config_resolver_service import 
 from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine, PowerPredictionError, PowerPredictionResult
 from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService, PowerRecommendationResult
 from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
+from backend.app.domains.query_planning.services.shadow_snapshot_builder import QueryPlanningV2ShadowSnapshotBuilder
 from backend.app.services.qa_trace import QaTraceRecorder
 
 
@@ -83,6 +84,7 @@ class PlanBomQaService:
             engine=self.power_prediction_engine,
         )
         self.query_log_repository = query_log_repository or LogisticsQueryRepository()
+        self.query_plan_shadow_builder = QueryPlanningV2ShadowSnapshotBuilder()
 
     def ask(self, question: str, *, use_llm: bool = True, trace_id: str | None = None) -> PlanBomQaResponse:
         """回答计划 BOM 自然语言问题。
@@ -1206,6 +1208,11 @@ class PlanBomQaService:
             query_result_snapshot["execution_mode"] = "plan_bom_qa"
             query_result_snapshot["item_count"] = result_count
             status_payload = response.status.model_dump(mode="json")
+            query_plan_v2_shadow = self.query_plan_shadow_builder.build_plan_bom_snapshot(
+                question=question,
+                response=response,
+                trace_id=trace_id,
+            )
             payload_snapshot = {
                 "question": question,
                 "request_payload": {"question": question, "domain": "plan_bom"},
@@ -1219,7 +1226,11 @@ class PlanBomQaService:
                     "trace_ready": bool(trace_id),
                     "classification": response.classification,
                     "result_count": result_count,
+                    "query_plan_v2_strategy": query_plan_v2_shadow.get("strategy"),
+                    "query_plan_v2_query_key": query_plan_v2_shadow.get("query_key"),
+                    "query_plan_v2_shadow_ready": True,
                 },
+                "query_plan_v2_shadow": query_plan_v2_shadow,
                 "query_result": query_result_snapshot,
             }
             log_id = self.query_log_repository.write_query_log(

@@ -1,0 +1,50 @@
+## RED (expected before implementation)
+python -m pytest tests/unit/query_planning -q
+Result observed before implementation: 3 collection errors: ModuleNotFoundError backend.app.domains.query_planning
+
+## GREEN focused unit tests
+.............                                                            [100%]
+13 passed in 1.64s
+
+## Existing logistics LLM-led composite regression
+...................                                                      [100%]
+19 passed in 1.35s
+
+## Existing logistics field clarification regression
+......                                                                   [100%]
+6 passed in 0.49s
+
+## Backend compile check
+compileall: OK
+
+## Static safety scan for new query_planning domain
+STATIC_SCAN=PASS no free SQL execution patterns in backend/app/domains/query_planning
+
+## Full regression
+python -m pytest tests -q
+187 passed, 2 warnings in 29.26s
+## GREEN focused unit tests after reviewer hardening
+..............                                                           [100%]
+14 passed in 1.01s
+
+## Full regression after reviewer hardening
+........................................................................ [ 38%]
+........................................................................ [ 76%]
+............................................                             [100%]
+=============================== warnings summary ===============================
+tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
+  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Unknown extension is not supported and will be removed
+    ws_parser.bind_all()
+
+tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
+  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Conditional Formatting extension is not supported and will be removed
+    ws_parser.bind_all()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+188 passed, 2 warnings in 26.49s
+
+## Backend compile check after reviewer hardening
+compileall: OK
+
+## Static safety scan after reviewer hardening
+STATIC_SCAN=PASS no free SQL execution patterns in backend/app/domains/query_planning
