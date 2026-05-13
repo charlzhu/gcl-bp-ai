@@ -120,6 +120,18 @@ class LogisticsDataQaUnsupportedExplanation(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
 
 
+class LogisticsDataQaCaveatItem(BaseModel):
+    """分级口径提醒。
+
+    返回：
+        level: 提醒等级，info 放入数据口径折叠区，warning 轻提示，danger 醒目提示；
+        text: 面向业务用户的提醒文本。
+    """
+
+    level: Literal["info", "warning", "danger"] = "info"
+    text: str
+
+
 class LogisticsDataQaPresentation(BaseModel):
     """答案表达层 / 展示编排层输出。
 
@@ -132,6 +144,7 @@ class LogisticsDataQaPresentation(BaseModel):
         follow_up: B 类追问配置；
         unsupported_explanation: C 类解释配置；
         caveats: 数据范围和口径提醒；
+        caveat_items: 分级数据口径和风险提醒，兼容 caveats；
         debug: 只供折叠或开发排查使用。
     """
 
@@ -157,6 +170,7 @@ class LogisticsDataQaPresentation(BaseModel):
     follow_up: LogisticsDataQaFollowUp | None = None
     unsupported_explanation: LogisticsDataQaUnsupportedExplanation | None = None
     caveats: list[str] = Field(default_factory=list)
+    caveat_items: list[LogisticsDataQaCaveatItem] = Field(default_factory=list)
     debug: dict[str, Any] = Field(default_factory=dict)
 
 

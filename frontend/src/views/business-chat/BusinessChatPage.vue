@@ -72,7 +72,7 @@
               <span class="typing-indicator">
                 <span /><span /><span />
               </span>
-              <span class="loading-text">{{ message.content ? 'AI 正在生成回答' : '正在理解问题并查询数据' }}</span>
+              <span class="loading-text" aria-label="AI 正在生成回答">{{ resolveLoadingText(message) }}</span>
             </div>
 
             <div v-if="message.error" class="error" data-testid="message-error">{{ message.error }}</div>
@@ -104,6 +104,35 @@
                   data-testid="result-answer"
                   v-html="renderBusinessMarkdown(message.presentation.answer)"
                 />
+                <div v-if="shouldShowSecondaryActions(message)" class="answer-secondary-actions" data-testid="answer-secondary-actions">
+                  <el-button
+                    size="small"
+                    round
+                    plain
+                    :disabled="!hasAssistantBasis(message)"
+                    @click="toggleAssistantBasisDetails(message)"
+                  >
+                    查看数据依据
+                  </el-button>
+                  <el-button
+                    size="small"
+                    round
+                    plain
+                    :disabled="!getAssistantAuditTable(message)?.rows.length"
+                    @click="toggleAssistantTable(message)"
+                  >
+                    {{ isAssistantTableExpanded(message) ? '收起明细' : '展开明细' }}
+                  </el-button>
+                  <el-button
+                    size="small"
+                    round
+                    plain
+                    :disabled="!getAssistantAuditTable(message)?.rows.length"
+                    @click="exportAssistantTableToExcel(message)"
+                  >
+                    导出 Excel
+                  </el-button>
+                </div>
                 <div v-if="buildResultSummaryItems(message).length" class="result-summary-strip">
                   <span
                     v-for="item in buildResultSummaryItems(message)"
@@ -357,12 +386,30 @@
                 <span v-for="item in message.presentation.suggestions" :key="item">{{ item }}</span>
               </div>
 
-              <div v-if="message.presentation.caveats.length" class="result-caveats">
-                <div class="section-label">口径与风险提示</div>
-                <div v-for="item in message.presentation.caveats" :key="item" class="result-caveats__item">
-                  {{ item }}
+              <div v-if="getCaveatItemsByLevel(message, 'danger').length" class="result-caveats result-caveats--danger">
+                <div class="section-label">重要风险</div>
+                <div v-for="item in getCaveatItemsByLevel(message, 'danger')" :key="item.text" class="result-caveats__item">
+                  {{ item.text }}
                 </div>
               </div>
+
+              <div v-if="getCaveatItemsByLevel(message, 'warning').length" class="result-caveats result-caveats--warning">
+                <div class="section-label">数据提醒</div>
+                <div v-for="item in getCaveatItemsByLevel(message, 'warning')" :key="item.text" class="result-caveats__item">
+                  {{ item.text }}
+                </div>
+              </div>
+
+              <details
+                v-if="getCaveatItemsByLevel(message, 'info').length"
+                class="result-caveats result-caveats--info"
+                :open="isAssistantBasisExpanded(message)"
+              >
+                <summary>数据口径</summary>
+                <div v-for="item in getCaveatItemsByLevel(message, 'info')" :key="item.text" class="result-caveats__item">
+                  {{ item.text }}
+                </div>
+              </details>
             </div>
           </div>
         </article>
@@ -435,6 +482,12 @@ interface UnifiedResult {
   followUps: string[]
   suggestions: string[]
   caveats: string[]
+  caveatItems: CaveatItem[]
+}
+
+interface CaveatItem {
+  level: 'info' | 'warning' | 'danger'
+  text: string
 }
 
 interface UnifiedChart {
@@ -499,6 +552,9 @@ const cardDisplayTypes = new Set(['summary_cards', 'mixed'])
 const question = ref('')
 const activeSession = ref<BusinessChatSession | null>(null)
 const conversationRef = ref<HTMLElement | null>(null)
+const expandedBasisMessageIds = ref<Set<string>>(new Set())
+const expandedTableMessageIds = ref<Set<string>>(new Set())
+const collapsedTableMessageIds = ref<Set<string>>(new Set())
 
 const examples = [
   { domain: '物流', mode: 'logistics' as BusinessChatDomain, text: '2024年江苏省各城市总费用排名前五？' },
@@ -716,6 +772,7 @@ async function submitQuestion(input?: string) {
       await streamLogisticsDataQaQuery(
         { question: text },
         {
+          onMeta: (meta) => updateAssistantStreamMeta(sessionId, assistantId, meta),
           onDelta: (chunk) => updateAssistantStreamingContent(sessionId, assistantId, chunk),
           onDone: (streamData) => {
             const data = ((streamData as any)?.data || streamData) as LogisticsDataQaResult
@@ -736,6 +793,7 @@ async function submitQuestion(input?: string) {
       await streamPlanBomQuestion(
         { question: text },
         {
+          onMeta: (meta) => updateAssistantStreamMeta(sessionId, assistantId, meta),
           onDelta: (chunk) => updateAssistantStreamingContent(sessionId, assistantId, chunk),
           onDone: (streamData) => {
             const data = ((streamData as any)?.data || streamData) as PlanBomQaResponse
@@ -841,7 +899,27 @@ function updateAssistantStreamingContent(sessionId: string, messageId: string, c
     if (!target || !target.loading) return
     target.content = `${target.content || ''}${chunk}`
     target.status = 'streaming'
+    ;(target as any).streamStage = 'streaming'
   })
+}
+
+/** 根据后端 meta 事件推进“理解问题 / 查询数据 / 组织回答”的阶段感。 */
+function updateAssistantStreamMeta(sessionId: string, messageId: string, meta: Record<string, any>) {
+  mutateSession(sessionId, (session) => {
+    const target = session.messages.find((message) => message.id === messageId)
+    if (!target || !target.loading) return
+    const stage = String(meta?.stage || '')
+    ;(target as any).streamStage = stage === 'received' ? 'querying' : stage === 'deterministic_result_ready' ? 'organizing' : stage
+  })
+}
+
+/** 根据当前流式阶段展示更有过程感的加载文案。 */
+function resolveLoadingText(message: BusinessChatMessage) {
+  const stage = String((message as any).streamStage || '')
+  if (stage === 'querying') return '正在查询数据'
+  if (stage === 'organizing') return '正在组织回答'
+  if (stage === 'streaming' || message.content) return '正在生成回答'
+  return '正在理解问题'
 }
 
 /** 完成指定窗口内的助手消息，保证切换窗口后结果仍写回原窗口。 */
@@ -860,11 +938,12 @@ function completeAssistantMessage(
     const target = session.messages.find((message) => message.id === messageId)
     if (!target) return
     target.loading = false
-    target.content = input.content
+    target.content = input.content || target.content || input.presentation.answer || ''
     target.domain = input.domain
     target.status = input.status
     target.presentation = input.presentation as Record<string, any>
     target.rawResponse = input.rawResponse
+    ;(target as any).streamStage = 'done'
   })
 }
 
@@ -908,6 +987,7 @@ function adaptLogisticsResult(data: LogisticsDataQaResult): UnifiedResult {
     followUps: localizeFollowUps(presentation?.follow_up?.questions || data.clarification_questions || []),
     suggestions: filterBusinessTexts(unsupported?.suggestions || data.query_plan?.unsupported_suggestions || []),
     caveats: filterBusinessTexts(presentation?.caveats || []),
+    caveatItems: normalizeCaveatItems((presentation as Record<string, any> | null | undefined)?.caveat_items, presentation?.caveats || []),
   })
 }
 
@@ -928,6 +1008,7 @@ function adaptPlanBomResult(data: PlanBomQaResponse): UnifiedResult {
     followUps: localizeFollowUps(followUp?.questions || []),
     suggestions: filterBusinessTexts(unsupported?.suggestions || []),
     caveats: filterBusinessTexts((presentation as Record<string, any> | null | undefined)?.caveats || []),
+    caveatItems: normalizeCaveatItems((presentation as Record<string, any> | null | undefined)?.caveat_items, (presentation as Record<string, any> | null | undefined)?.caveats || []),
   })
 }
 
@@ -949,7 +1030,46 @@ function normalizeResult(value: Partial<UnifiedResult>): UnifiedResult {
     followUps: value.followUps || [],
     suggestions: value.suggestions || [],
     caveats: value.caveats || [],
+    caveatItems: normalizeCaveatItems(value.caveatItems, value.caveats || []),
   }
+}
+
+/**
+ * 归一化后端分级口径提醒。
+ *
+ * 参数：
+ *   caveatItems: 后端新协议返回的分级口径提醒；
+ *   caveats: 旧协议普通口径提醒，用作 info 级兜底。
+ *
+ * 返回：
+ *   去重后的 CaveatItem 数组。前端只展示业务可读文本，不暴露技术字段。
+ */
+function normalizeCaveatItems(caveatItems?: CaveatItem[] | null, caveats: string[] = []): CaveatItem[] {
+  const candidates: CaveatItem[] = []
+  if (Array.isArray(caveatItems)) {
+    caveatItems.forEach((item) => {
+      const text = String((item as CaveatItem)?.text || '').trim()
+      if (!text || !filterBusinessTexts([text]).length) return
+      candidates.push({
+        level: normalizeCaveatLevel((item as CaveatItem)?.level),
+        text,
+      })
+    })
+  }
+  filterBusinessTexts(caveats).forEach((text) => candidates.push({ level: 'info', text }))
+
+  const seen = new Set<string>()
+  return candidates.filter((item) => {
+    const key = `${item.level}:${normalizeBusinessText(item.text)}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+/** 将异常或历史等级兜底到 info，避免前端渲染未知风险等级。 */
+function normalizeCaveatLevel(level: unknown): CaveatItem['level'] {
+  return level === 'warning' || level === 'danger' ? level : 'info'
 }
 
 /** 归一化后端图表配置，缺少必要字段时不渲染图表。 */
@@ -1718,17 +1838,106 @@ function shouldShowPresentationChart(message: BusinessChatMessage): boolean {
   return Boolean(presentation?.chart && chartDisplayTypes.has(presentation.displayType))
 }
 
-/** 获取当前助手消息的可见明细表，只展示后端 presentation 明确编排的表格。 */
-function getAssistantResultTable(message: BusinessChatMessage): UnifiedTable | null {
-  const presentation = message.presentation as UnifiedResult | null | undefined
-  if (!presentation || !tableDisplayTypes.has(presentation.displayType)) return null
-  return normalizeTable(presentation.table || null)
+/**
+ * 判断是否展示二级操作。
+ *
+ * 参数：message 当前助手消息。
+ * 返回：存在数据口径或审计明细时返回 true，把结构化结果放到主回答下方的次级入口。
+ */
+function shouldShowSecondaryActions(message: BusinessChatMessage): boolean {
+  return Boolean(message.presentation && (hasAssistantBasis(message) || getAssistantAuditTable(message)?.rows.length))
 }
 
-/** 表格只在后端返回有效列和行时展示，避免空表占据叙事型回答空间。 */
+/** 判断当前回答是否有可展开的数据口径。 */
+function hasAssistantBasis(message: BusinessChatMessage): boolean {
+  return getCaveatItemsByLevel(message, 'info').length > 0
+}
+
+/** 判断“数据口径”折叠区是否由二级按钮展开。 */
+function isAssistantBasisExpanded(message: BusinessChatMessage): boolean {
+  return expandedBasisMessageIds.value.has(message.id)
+}
+
+/** 切换“查看数据依据”折叠区，只影响 UI 展开状态，不改变后端事实。 */
+function toggleAssistantBasisDetails(message: BusinessChatMessage) {
+  expandedBasisMessageIds.value = toggleMessageIdSet(expandedBasisMessageIds.value, message.id)
+}
+
+/** 按等级读取口径提醒；没有新协议 caveatItems 时兼容旧 caveats。 */
+function getCaveatItemsByLevel(message: BusinessChatMessage, level: CaveatItem['level']): CaveatItem[] {
+  const presentation = message.presentation as UnifiedResult | null | undefined
+  if (!presentation) return []
+  const safeCaveatItems = Array.isArray(presentation.caveatItems) ? presentation.caveatItems : []
+  const items = safeCaveatItems.length ? safeCaveatItems : normalizeCaveatItems([], Array.isArray(presentation.caveats) ? presentation.caveats : [])
+  return items.filter((item) => item.level === level)
+}
+
+/** 获取审计/导出可用的明细表；叙事回答默认不展示，但仍保留给用户手动展开和导出。 */
+function getAssistantAuditTable(message: BusinessChatMessage): UnifiedTable | null {
+  const presentation = message.presentation as UnifiedResult | null | undefined
+  const presentationTable = normalizeTable(presentation?.table || null)
+  if (presentationTable) return presentationTable
+  const rawResponse = message.rawResponse as Record<string, any> | null | undefined
+  return normalizeTable((rawResponse?.result_table || rawResponse?.data?.result_table || null) as UnifiedTable | null)
+}
+
+/** 判断明细表当前是否应展开；显式表格问题默认展开，普通叙事问题需用户点击“展开明细”。 */
+function isAssistantTableExpanded(message: BusinessChatMessage): boolean {
+  if (collapsedTableMessageIds.value.has(message.id)) return false
+  const presentation = message.presentation as UnifiedResult | null | undefined
+  const hasRows = Boolean(getAssistantAuditTable(message)?.rows.length)
+  if (presentation && tableDisplayTypes.has(presentation.displayType) && hasRows) return true
+  return expandedTableMessageIds.value.has(message.id)
+}
+
+/** 切换明细展开状态，支持显式表格回答收起、叙事回答手动展开。 */
+function toggleAssistantTable(message: BusinessChatMessage) {
+  if (!getAssistantAuditTable(message)?.rows.length) return
+  if (isAssistantTableExpanded(message)) {
+    const nextExpanded = new Set(expandedTableMessageIds.value)
+    nextExpanded.delete(message.id)
+    expandedTableMessageIds.value = nextExpanded
+    collapsedTableMessageIds.value = addMessageIdToSet(collapsedTableMessageIds.value, message.id)
+    return
+  }
+  expandedTableMessageIds.value = addMessageIdToSet(expandedTableMessageIds.value, message.id)
+  collapsedTableMessageIds.value = removeMessageIdFromSet(collapsedTableMessageIds.value, message.id)
+}
+
+/** 获取当前助手消息的可见明细表；默认只在显式表格或用户手动展开时返回。 */
+function getAssistantResultTable(message: BusinessChatMessage): UnifiedTable | null {
+  const presentation = message.presentation as UnifiedResult | null | undefined
+  if (!presentation || !isAssistantTableExpanded(message)) return null
+  if (tableDisplayTypes.has(presentation.displayType)) return getAssistantAuditTable(message)
+  return expandedTableMessageIds.value.has(message.id) ? getAssistantAuditTable(message) : null
+}
+
+/** 表格只在后端返回有效列和行且当前允许展开时展示，避免空表占据叙事型回答空间。 */
 function shouldShowResultTable(message: BusinessChatMessage): boolean {
   const table = getAssistantResultTable(message)
   return Boolean(table?.columns.length && table.rows.length)
+}
+
+/** 切换 Set 中的消息 ID，返回新 Set 以触发 Vue 响应式更新。 */
+function toggleMessageIdSet(source: Set<string>, messageId: string): Set<string> {
+  const next = new Set(source)
+  if (next.has(messageId)) next.delete(messageId)
+  else next.add(messageId)
+  return next
+}
+
+/** 向消息 ID Set 添加一项，返回新 Set 以触发 Vue 响应式更新。 */
+function addMessageIdToSet(source: Set<string>, messageId: string): Set<string> {
+  const next = new Set(source)
+  next.add(messageId)
+  return next
+}
+
+/** 从消息 ID Set 移除一项，返回新 Set 以触发 Vue 响应式更新。 */
+function removeMessageIdFromSet(source: Set<string>, messageId: string): Set<string> {
+  const next = new Set(source)
+  next.delete(messageId)
+  return next
 }
 
 /**
@@ -1741,7 +1950,7 @@ function shouldShowResultTable(message: BusinessChatMessage): boolean {
  *   无返回值；浏览器侧触发 xlsx 文件下载。
  */
 function exportAssistantTableToExcel(message: BusinessChatMessage) {
-  const table = getAssistantResultTable(message)
+  const table = getAssistantAuditTable(message)
   if (!table?.columns.length || !table.rows.length) {
     ElMessage.warning('当前回答没有可导出的明细数据')
     return
@@ -2330,6 +2539,27 @@ onBeforeUnmount(() => {
   word-break: break-word;
 }
 
+.answer-secondary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+
+.answer-secondary-actions :deep(.el-button) {
+  margin-left: 0;
+  border-color: #d7e5ee;
+  background: #ffffff;
+  color: #475569;
+  font-size: 12px;
+}
+
+.answer-secondary-actions :deep(.el-button:not(.is-disabled):hover) {
+  border-color: var(--brand-logo-blue, #3071b9);
+  color: var(--brand-logo-blue, #3071b9);
+  background: #f1f7ff;
+}
+
 .assistant-prose {
   white-space: normal;
 }
@@ -2750,6 +2980,40 @@ onBeforeUnmount(() => {
   border-radius: var(--radius-md);
   background: #fffaf0;
   padding: 12px 14px;
+}
+
+.result-caveats--info {
+  border-color: #e2e8f0;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.result-caveats--info summary {
+  cursor: pointer;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.result-caveats--info .result-caveats__item {
+  margin-top: 6px;
+  color: #64748b;
+}
+
+.result-caveats--warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.result-caveats--danger {
+  border-color: #fecaca;
+  background: #fff1f2;
+}
+
+.result-caveats--danger .section-label,
+.result-caveats--danger .result-caveats__item {
+  color: #b91c1c;
 }
 
 .result-caveats__item {

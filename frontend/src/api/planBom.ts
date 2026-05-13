@@ -151,6 +151,7 @@ export interface PlanBomQaResponse {
     follow_up?: Record<string, any> | null
     unsupported_explanation?: Record<string, any> | null
     caveats?: string[]
+    caveat_items?: Array<{ level?: 'info' | 'warning' | 'danger'; text?: string }>
     debug?: Record<string, any>
   } | null
   nlu?: Record<string, any>

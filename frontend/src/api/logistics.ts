@@ -106,6 +106,10 @@ export interface LogisticsDataQaPresentation {
     suggestions?: string[]
   } | null
   caveats?: string[]
+  caveat_items?: Array<{
+    level?: 'info' | 'warning' | 'danger'
+    text?: string
+  }>
   debug?: Record<string, any>
 }
 

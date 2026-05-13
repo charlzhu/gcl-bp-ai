@@ -10,6 +10,7 @@ from openai import OpenAI
 from backend.app.core.config import settings
 from backend.app.domains.logistics.schemas.data_qa import (
     LogisticsDataQaChartSpec,
+    LogisticsDataQaCaveatItem,
     LogisticsDataQaFollowUp,
     LogisticsDataQaPresentation,
     LogisticsDataQaPresentationCard,
@@ -201,6 +202,8 @@ class LogisticsLlmAnswerPresentationService:
                 "presentation_source": "deterministic",
                 "trace_id": trace_id,
                 "fallback_reason": None,
+                "requested_display": self._detect_requested_display(question),
+                "final_display_type": fallback.display_type,
                 "llm_model_name": self.model or None,
                 "llm_model_source": self.model_source,
             }
@@ -228,6 +231,8 @@ class LogisticsLlmAnswerPresentationService:
                 "presentation_source": "llm",
                 "trace_id": trace_id,
                 "fallback_reason": None,
+                "requested_display": self._detect_requested_display(question),
+                "final_display_type": normalized.display_type,
                 "llm_model_name": self.model,
                 "llm_model_source": self.model_source,
             }
@@ -249,8 +254,9 @@ class LogisticsLlmAnswerPresentationService:
         status_code = result.status.code if result.status else self._resolve_status_code(result)
         display_type = self._resolve_display_type(question=question, result=result, status_code=status_code)
         title = self._build_title(result=result, status_code=status_code)
-        answer = result.answer_summary or result.status.message if result.status else result.answer_summary
+        answer = self._build_deterministic_answer(question=question, result=result, status_code=status_code)
         requested_display = self._detect_requested_display(question)
+        caveats = self._build_caveats(result)
         # 默认采用纯文字叙事，只有业务员明确要求表格/图表/指标卡时，才把结构化组件放进 presentation。
         # 原始 result_table 仍保留在响应根节点，便于审计和后续导出能力复用，但不再强制占用主回答界面。
         presentation = LogisticsDataQaPresentation(
@@ -272,11 +278,17 @@ class LogisticsLlmAnswerPresentationService:
             cards=self._build_cards(question=question, result=result)
             if display_type in {"summary_cards", "mixed"}
             else [],
-            caveats=self._build_caveats(result),
+            caveats=caveats,
+            caveat_items=self._build_caveat_items(
+                result=result,
+                status_code=status_code,
+                caveats=caveats,
+            ),
             debug={
                 "status_code": status_code,
                 "query_key": result.query_plan.query_key,
                 "requested_display": requested_display,
+                "final_display_type": display_type,
             },
         )
         chart_spec = self._build_chart_spec(question=question, result=result, display_type=display_type)
@@ -379,7 +391,8 @@ class LogisticsLlmAnswerPresentationService:
             "7. OK 状态下不要生成 follow_up 追问；clarification 状态才生成 follow_up。\n"
             "8. caveats 只能摘录输入中的 calculation_logic/data_scope/warnings，不要自行汇总缺失记录数或新增口径数字。\n"
             "9. 输出必须是单个 JSON 对象，不要在 JSON 外包 markdown。answer 字段可以使用清晰的 Markdown 段落、加粗和列表。\n"
-            "JSON 字段：status_code,display_type,title,answer,highlights,chart_spec,table_spec,cards,follow_up,unsupported_explanation,caveats,debug。\n"
+            "JSON 字段：status_code,display_type,title,answer,highlights,chart_spec,table_spec,cards,follow_up,unsupported_explanation,caveats,caveat_items,debug。\n"
+            "caveat_items 的每项格式为 {\"level\":\"info|warning|danger\",\"text\":\"...\"}，只能来自 calculation_logic/data_scope/warnings。\n"
             "chart_spec 示例：{\"chart_type\":\"line\",\"title\":\"...\",\"x_axis\":\"biz_month\",\"y_axis\":[\"shipment_mw\"],\"series\":[{\"name\":\"发运量\",\"field\":\"shipment_mw\",\"data\":[{\"x\":\"2026-01\",\"y\":864.728}]}],\"unit\":\"MW\",\"data\":[...]}\n"
             "display_type 只能是 narrative,summary_cards,table,line_chart,bar_chart,pie_chart,mixed,clarification,unsupported,empty_result,error。\n"
             "文风：专业、温馨、清晰，先给结论，再给依据；像可靠的业务助手，不要固定套模板。"
@@ -454,15 +467,28 @@ class LogisticsLlmAnswerPresentationService:
             answer=str(payload.get("answer") or fallback.answer),
             highlights=self._normalize_string_list(payload.get("highlights")) or fallback.highlights,
             caveats=self._normalize_string_list(payload.get("caveats")) or fallback.caveats,
+            caveat_items=self._normalize_caveat_items(payload.get("caveat_items")) or fallback.caveat_items,
             debug=payload.get("debug") if isinstance(payload.get("debug"), dict) else {},
         )
         if self._visible_text_has_technical_leak(
-            [presentation.title, presentation.answer, *presentation.highlights, *presentation.caveats]
+            [
+                presentation.title,
+                presentation.answer,
+                *presentation.highlights,
+                *presentation.caveats,
+                *[item.text for item in presentation.caveat_items],
+            ]
         ):
             # LLM 表达层面向业务用户，不能把表名、字段名、SQL 或内部 query_key 暴露到主展示。
             return fallback, "llm_technical_visible_leak"
         if not self._text_numbers_are_safe(
-            [presentation.title, presentation.answer, *presentation.highlights, *presentation.caveats],
+            [
+                presentation.title,
+                presentation.answer,
+                *presentation.highlights,
+                *presentation.caveats,
+                *[item.text for item in presentation.caveat_items],
+            ],
             result=result,
         ):
             return fallback, "llm_text_number_hallucination"
@@ -588,7 +614,8 @@ class LogisticsLlmAnswerPresentationService:
             return "查询成功，但暂无数据"
         if status_code == "EXECUTION_ERROR":
             return "当前查询失败"
-        return "查询结果"
+        metric_label = self._label(result.query_plan.metrics[0]) if result.query_plan.metrics else ""
+        return f"{metric_label}分析结果" if metric_label else "物流数据分析结果"
 
     def _build_highlights(
         self,
@@ -612,14 +639,6 @@ class LogisticsLlmAnswerPresentationService:
         """
 
         highlights: list[str] = []
-        if (
-            status_code == "OK"
-            and result.result_table.rows
-            and display_type not in {"line_chart", "bar_chart", "pie_chart", "table", "mixed"}
-        ):
-            highlights.append(f"本次返回 {len(result.result_table.rows)} 行结果。")
-        if result.warnings:
-            highlights.extend(result.warnings[:2])
         return self._dedupe_text_items(highlights, base_texts=[answer])[:4]
 
     def _build_caveats(self, result: LogisticsDataQaResult) -> list[str]:
@@ -633,6 +652,33 @@ class LogisticsLlmAnswerPresentationService:
             if scope:
                 caveats.append(scope)
         return caveats[:5]
+
+    def _build_caveat_items(
+        self,
+        *,
+        result: LogisticsDataQaResult,
+        status_code: str,
+        caveats: list[str],
+    ) -> list[LogisticsDataQaCaveatItem]:
+        """构建兼容 caveats 的分级口径提醒。"""
+
+        items: list[LogisticsDataQaCaveatItem] = [
+            LogisticsDataQaCaveatItem(level="info", text=item)
+            for item in caveats
+            if item
+        ]
+        for warning in result.warnings[:5]:
+            if not warning:
+                continue
+            items.append(
+                LogisticsDataQaCaveatItem(
+                    level="danger" if self._is_danger_caveat(warning) else "warning",
+                    text=warning,
+                )
+            )
+        if status_code == "EXECUTION_ERROR" and result.status and result.status.message:
+            items.append(LogisticsDataQaCaveatItem(level="danger", text=result.status.message))
+        return self._dedupe_caveat_items(items)[:8]
 
     def _build_cards(
         self,
@@ -885,8 +931,6 @@ class LogisticsLlmAnswerPresentationService:
         """校验主文案未新增后端不存在的数值。"""
 
         allowed = self._collect_backend_number_tokens(result) | self._collect_context_number_tokens(result)
-        if not allowed:
-            return True
         for text in texts:
             for token in self._extract_number_tokens(text):
                 if token not in allowed:
@@ -1260,6 +1304,7 @@ class LogisticsLlmAnswerPresentationService:
             base_texts=[presentation.answer, presentation.title],
         )
         presentation.caveats = self._dedupe_text_items(presentation.caveats)
+        presentation.caveat_items = self._dedupe_caveat_items(presentation.caveat_items)
 
     def _find_presentation_hygiene_issue(
         self,
@@ -1361,6 +1406,46 @@ class LogisticsLlmAnswerPresentationService:
         if not isinstance(value, list):
             return []
         return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+    def _normalize_caveat_items(self, value: Any) -> list[LogisticsDataQaCaveatItem]:
+        """清洗 LLM 返回的分级口径提醒。"""
+
+        if not isinstance(value, list):
+            return []
+        items: list[LogisticsDataQaCaveatItem] = []
+        for item in value:
+            if not isinstance(item, dict):
+                continue
+            text = str(item.get("text") or "").strip()
+            level = str(item.get("level") or "info")
+            if not text or level not in {"info", "warning", "danger"}:
+                continue
+            items.append(LogisticsDataQaCaveatItem(level=level, text=text))  # type: ignore[arg-type]
+        return self._dedupe_caveat_items(items)
+
+    def _dedupe_caveat_items(self, items: list[LogisticsDataQaCaveatItem]) -> list[LogisticsDataQaCaveatItem]:
+        """按提醒文本去重，同时保留更高风险等级。"""
+
+        rank = {"info": 0, "warning": 1, "danger": 2}
+        deduped: dict[str, LogisticsDataQaCaveatItem] = {}
+        for item in items:
+            key = self._normalize_text_for_dedupe(item.text)
+            if not key:
+                continue
+            existing = deduped.get(key)
+            if existing is None or rank[item.level] > rank[existing.level]:
+                deduped[key] = item
+        return list(deduped.values())
+
+    def _is_danger_caveat(self, text: str) -> bool:
+        """判断提醒是否需要在前端按醒目风险展示。"""
+
+        value = text or ""
+        # “异常值归入其他”属于普通口径兜底说明，不代表查询失败或结果不可用；
+        # danger 只保留给会让结果不可用、严重缺失或执行失败的风险，避免普通回答被大红框打断。
+        if re.search(r"异常值归入[“\"]?其他[”\"]?", value):
+            return False
+        return bool(re.search(r"失败|错误|严重|高风险|无法|中断|结果不可用|数据异常|系统异常|计算异常", value))
 
     def _summarize_scope(self, data_scope: dict[str, Any]) -> str:
         """把数据范围简要转换成业务可读提醒。"""

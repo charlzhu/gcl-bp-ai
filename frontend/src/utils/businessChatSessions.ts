@@ -396,6 +396,124 @@ function persistBusinessChatSessionData(session: BusinessChatSession) {
   }
 }
 
+const persistablePresentationKeys = new Set([
+  'displayType',
+  'display_type',
+  'title',
+  'answer',
+  'highlights',
+  'cards',
+  'chart',
+  'chart_spec',
+  'table',
+  'table_spec',
+  'followUps',
+  'follow_up',
+  'suggestions',
+  'caveats',
+  'caveatItems',
+  'caveat_items',
+])
+
+/**
+ * 归一化助手消息中可持久化的展示协议。
+ *
+ * 参数：value 前端已适配后的 presentation。
+ * 返回：仅包含页面重放需要的展示字段；没有有效字段时返回 null。
+ * 说明：会话历史只保存业务可见展示字段，避免把后端调试、链路追踪等内部信息写入浏览器本地存储。
+ */
+function normalizeMessagePresentation(value: unknown): Record<string, any> | null {
+  if (!isPlainObject(value)) return null
+  const next: Record<string, any> = {}
+  persistablePresentationKeys.forEach((key) => {
+    if (!(key in value)) return
+    const normalized = normalizePersistablePresentationValue(value[key])
+    if (normalized !== undefined) next[key] = normalized
+  })
+  return Object.keys(next).length ? next : null
+}
+
+/**
+ * 归一化可持久化展示值。
+ *
+ * 参数：value 展示字段原始值。
+ * 返回：适合 JSON 持久化的基础类型、数组或普通对象。
+ */
+function normalizePersistablePresentationValue(value: unknown): any {
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  if (Array.isArray(value)) return value.map(normalizePersistablePresentationValue).filter((item) => item !== undefined)
+  if (!isPlainObject(value)) return undefined
+  const next: Record<string, any> = {}
+  Object.entries(value).forEach(([key, entry]) => {
+    if (key === 'debug' || key === 'trace' || key === 'planner' || key === 'guardrail' || key === 'sql') return
+    const normalized = normalizePersistablePresentationValue(entry)
+    if (normalized !== undefined) next[key] = normalized
+  })
+  return next
+}
+
+/**
+ * 归一化助手消息中可持久化的原始响应。
+ *
+ * 参数：value 后端返回的原始业务响应。
+ * 返回：仅包含安全明细表的最小对象；无可用明细时返回 null。
+ * 说明：聊天历史不能持久化完整响应，避免内部规划、调试字段和大对象泄露；
+ *       但需要保留 result_table 供“展开明细”和“导出 Excel”二级操作使用。
+ */
+function normalizeMessageRawResponse(value: unknown): Record<string, any> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const raw = value as Record<string, any>
+  const safeResultTable = normalizeSafeResultTable(raw.result_table)
+  if (!safeResultTable) return null
+  return { result_table: safeResultTable }
+}
+
+/**
+ * 白名单保留结果明细表。
+ *
+ * 参数：value 候选表格对象。
+ * 返回：只含 columns/rows 的表格；没有行数据时返回 null。
+ */
+function normalizeSafeResultTable(value: unknown): { columns: string[]; rows: Array<Record<string, string | number | boolean | null>> } | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const raw = value as Record<string, unknown>
+  if (!Array.isArray(raw.rows)) return null
+  const rawRows = raw.rows.filter(isPlainObject)
+  if (!rawRows.length) return null
+
+  const rawColumns = Array.isArray(raw.columns) ? raw.columns : Object.keys(rawRows[0] || {})
+  const columns = rawColumns
+    .map((column) => String(column || '').trim())
+    .filter((column, index, source) => Boolean(column) && source.indexOf(column) === index)
+  if (!columns.length) return null
+
+  const rows = rawRows.map((row) => {
+    const next: Record<string, string | number | boolean | null> = {}
+    columns.forEach((column) => {
+      next[column] = normalizeSafeResultCell(row[column])
+    })
+    return next
+  })
+  return { columns, rows }
+}
+
+/** 判断候选值是否为普通对象。 */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+/**
+ * 归一化可持久化的表格单元格。
+ *
+ * 参数：value 原始单元格值。
+ * 返回：浏览器本地安全保存和导出的基础类型。
+ */
+function normalizeSafeResultCell(value: unknown): string | number | boolean | null {
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value
+  if (value === undefined) return ''
+  return String(value)
+}
+
 /**
  * 规范化消息并移除不参与展示的原始接口大对象。
  */
@@ -408,9 +526,9 @@ function normalizeMessage(value: unknown): BusinessChatMessage | null {
     content: raw.content,
     domain: raw.domain,
     status: typeof raw.status === 'string' ? raw.status : undefined,
-    presentation: raw.presentation && typeof raw.presentation === 'object' && !Array.isArray(raw.presentation) ? raw.presentation : null,
+    presentation: normalizeMessagePresentation(raw.presentation),
     createdAt: raw.createdAt,
-    rawResponse: null,
+    rawResponse: normalizeMessageRawResponse(raw.rawResponse),
     loading: Boolean(raw.loading),
     error: typeof raw.error === 'string' ? raw.error : undefined,
   }
