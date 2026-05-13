@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from backend.app.db.session import SessionLocal
 from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
 from backend.app.domains.logistics.schemas.llm_understanding import (
@@ -16,6 +18,36 @@ from backend.app.domains.logistics.schemas.llm_understanding import (
 from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
 from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
 from backend.app.domains.logistics.services.llm_answer_presentation_service import LogisticsLlmAnswerPresentationService
+
+
+def test_sys_extra_fee_summary_uses_ship_product_amount_source() -> None:
+    """验证 2026 年 1 月额外费用使用发运产品明细金额口径。
+
+    参数：无。
+    返回值：无；通过断言验证 planner 路由、金额和贡献记录数。
+    业务逻辑：额外费用金额应来自 ship_product.extra_cost；assign_detail.extra_cost 是派车明细侧费用，
+    不能混入本题的额外费用总额，否则会把 2026 年 1 月从 143,013 元放大到 157,551 元。
+    """
+
+    question = "2026年1月份额外费用产生多少钱，分别是什么项目？什么原因产生的？"
+    plan = LogisticsDataQaPlanner().build_plan(question)
+
+    assert plan.query_key == "sys_extra_fee_summary"
+    assert not plan.needs_clarification
+    assert plan.filters == {
+        "year": 2026,
+        "months": [1],
+        "detail_warning": "extra_fee_project_reason_unfixed",
+    }
+
+    with SessionLocal() as db:
+        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question))
+
+    assert not result.needs_clarification
+    assert "143,013.00元" in result.answer_summary
+    assert result.result_table.rows == [
+        {"extra_fee_amount": Decimal("143013.00"), "task_count": 7, "detail_count": 7}
+    ]
 
 
 def test_region_transport_total_quantity_is_supported() -> None:

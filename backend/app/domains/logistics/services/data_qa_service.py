@@ -1215,6 +1215,20 @@ class LogisticsDataQaService:
                 scope_parts.append("、".join(str(item) for item in filters["regions"]))
             else:
                 scope_parts.append("各区域")
+            if not data and filters.get("carrier_name"):
+                # 用户明确指定承运商时，空结果必须解释为“该承运商未命中”，不能降级展示全承运商汇总。
+                carrier_label = str(filters["carrier_name"])
+                region_label = "、".join(str(item) for item in filters.get("regions") or ["各区域"])
+                summary = f"{filters['year']}年未找到承运商“{carrier_label}”在{region_label}的发运量记录，未返回全承运商汇总。"
+                return self._build_result(
+                    answer_summary=summary,
+                    plan=plan,
+                    table_columns=["region_name", "shipment_mw"],
+                    table_rows=[],
+                    calculation_logic=["历史发运量按已入库的实际发运瓦数汇总后折算为 MW，并按区域分组。"],
+                    data_scope={"business_scope": "历史物流发运量", **filters},
+                    warnings=warnings + [f"未在历史物流台账中找到承运商“{carrier_label}”匹配记录。"],
+                )
             summary = f"{''.join(scope_parts)}发运量汇总已按区域拆分返回。"
             return self._build_result(
                 answer_summary=summary,
@@ -2142,8 +2156,8 @@ class LogisticsDataQaService:
                 plan=plan,
                 table_columns=["extra_fee_amount", "task_count", "detail_count"],
                 table_rows=[data],
-                calculation_logic=["额外费用按 dwd_logistics_assign_detail.extra_cost 汇总，并按主任务年月和基地过滤。"],
-                data_scope={"tables": ["dwd_logistics_ship_task", "dwd_logistics_assign_detail"], **filters},
+                calculation_logic=["额外费用按 dwd_logistics_ship_product.extra_cost 汇总，并按主任务年月和基地过滤。"],
+                data_scope={"tables": ["dwd_logistics_ship_task", "dwd_logistics_ship_product"], **filters},
                 warnings=warnings,
             )
 

@@ -1,0 +1,7 @@
+[verified] feat: add query planning v2 optional meta and fix bom compare
+
+- expose Query Planning V2 lightweight response meta behind request/config/prod gates
+- keep raw payload, SQL, business data and final answer text out of optional meta
+- allow Plan BOM table compare to expand ambiguous order-tail candidates in controlled compare scenarios
+- preserve single-order ambiguity clarification
+- prefer business presentation text for Plan BOM stream fallback and fix presentation helper instance methods

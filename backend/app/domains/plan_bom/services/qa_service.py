@@ -6,12 +6,15 @@ import re
 from typing import Any
 
 from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
-from backend.app.domains.plan_bom.constants import CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
+from backend.app.domains.plan_bom.constants import CANDIDATE_SCOPE_ORDER_IDENTITY, CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
 from backend.app.domains.plan_bom.models import PlanBomHeader, PlanBomMaterialLine
 from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
 from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate, PlanBomQaResponse, PlanBomQaStatus, PlanBomTableSpec
 from backend.app.domains.plan_bom.schemas.query import (
+    PlanBomCandidate,
     PlanBomCompareQueryRequest,
+    PlanBomCompareResponse,
+    PlanBomCompareSideContext,
     PlanBomCompareSideRequest,
     PlanBomDetailQueryRequest,
 )
@@ -291,13 +294,23 @@ class PlanBomQaService:
             right = PlanBomCompareSideRequest(order_no=tails[1])
         else:
             return self._clarification_response(question=question, nlu=nlu)
-        result = self.query_service.compare(
-            PlanBomCompareQueryRequest(left=left, right=right, material_categories=categories, candidate_limit=20)
-        )
+        compare_payload = PlanBomCompareQueryRequest(left=left, right=right, material_categories=categories, candidate_limit=20)
+        result = self.query_service.compare(compare_payload)
         if result.status.code != "OK" or not result.compare_ready:
+            expanded_response = self._expanded_candidate_compare_response(
+                question=question,
+                nlu=nlu,
+                payload=compare_payload,
+                candidate_result=result,
+            )
+            if expanded_response:
+                return expanded_response
             return self._non_ok_query_response(question=question, nlu=nlu, raw=result.model_dump(mode="json"))
         rows: list[dict[str, Any]] = []
+        description_only = self._is_description_compare_question(question)
         for item in result.changed:
+            if description_only and "description" not in item.changed_fields:
+                continue
             rows.append(self._compare_changed_row(item.model_dump(mode="json")))
         for item in result.only_left:
             rows.append(self._compare_single_side_row(item.model_dump(mode="json"), side="仅左侧"))
@@ -315,6 +328,309 @@ class PlanBomQaService:
                 raw_result=result.model_dump(mode="json"),
             )
         )
+
+    def _expanded_candidate_compare_response(
+        self,
+        *,
+        question: str,
+        nlu: PlanBomNluCandidate,
+        payload: PlanBomCompareQueryRequest,
+        candidate_result: PlanBomCompareResponse,
+    ) -> PlanBomQaResponse | None:
+        """把跨订单 compare 的单侧多业务实例候选展开为多组确定性对比。
+
+        参数：
+            question: 原始问题；
+            nlu: 已完成槽位抽取的 NLU 候选；
+            payload: 初次 compare 请求；
+            candidate_result: 初次 compare 返回的候选态结果。
+
+        返回：
+            若可安全展开，则返回 A 类对比表；否则返回 None，继续沿用候选追问兜底。
+
+        业务逻辑：
+            用户明确要求“订单 A 和订单 B 的规格描述有什么不一样，并用表格统计”时，短订单号 B
+            可能对应多个真实业务实例。此时不能随机选择其中一个，也不应把内部 `order_identity`
+            暴露成泛化追问；安全做法是把多业务实例逐个与已确定的另一侧做确定性 compare，
+            在表格中保留左右实例名称和版本，业务员可直接看到每个候选实例的差异。
+        """
+
+        candidates = list(candidate_result.candidates or [])
+        if not self._can_expand_compare_candidates(nlu=nlu, candidate_result=candidate_result, candidates=candidates):
+            return None
+
+        pair_rows: list[dict[str, Any]] = []
+        compared_pairs: list[dict[str, Any]] = []
+        pair_summaries: list[dict[str, Any]] = []
+        warnings: list[str] = []
+        ambiguous_side = candidate_result.candidate_side
+        assert ambiguous_side in {"left", "right"}
+        description_only = self._is_description_compare_question(question)
+
+        for candidate in candidates:
+            expanded_payload = self._expanded_compare_payload_for_candidate(
+                original_payload=payload,
+                candidate_result=candidate_result,
+                candidate=candidate,
+            )
+            if expanded_payload is None:
+                return None
+            pair_result = self.query_service.compare(expanded_payload)
+            pair_summary = self._expanded_pair_summary(pair_result)
+            pair_summaries.append(pair_summary)
+            if pair_result.status.code != "OK" or not pair_result.compare_ready or not pair_result.left or not pair_result.right:
+                warnings.append(
+                    f"候选 {self._compare_side_label(candidate)} 未能完成对比：{pair_result.status.message}"
+                )
+                continue
+
+            left_label = self._compare_side_label(pair_result.left)
+            right_label = self._compare_side_label(pair_result.right)
+            pair_label = f"{left_label} ↔ {right_label}"
+            compared_pairs.append(
+                {
+                    "compare_pair": pair_label,
+                    "left_order_identity_key": pair_result.left.order_identity_key,
+                    "left_file_instance_key": pair_result.left.file_instance_key,
+                    "left_order_no": pair_result.left.order_no,
+                    "left_version_no": pair_result.left.version_no,
+                    "right_order_identity_key": pair_result.right.order_identity_key,
+                    "right_file_instance_key": pair_result.right.file_instance_key,
+                    "right_order_no": pair_result.right.order_no,
+                    "right_version_no": pair_result.right.version_no,
+                }
+            )
+            pair_rows.extend(
+                self._compare_rows_for_pair(
+                    pair_result=pair_result,
+                    pair_label=pair_label,
+                    left_label=left_label,
+                    right_label=right_label,
+                    description_only=description_only,
+                )
+            )
+
+        if not compared_pairs:
+            return None
+
+        left_count = len(candidates) if ambiguous_side == "left" else 1
+        right_count = len(candidates) if ambiguous_side == "right" else 1
+        answer = (
+            f"已展开{self._compare_side_name(ambiguous_side)}侧 {len(candidates)} 个业务实例并完成 "
+            f"{len(compared_pairs)} 组 BOM 核心材料规格差异对比，生成 {len(pair_rows)} 条差异记录。"
+        )
+        if warnings:
+            answer += f"其中 {len(warnings)} 个候选未完成对比，已在风险提示中列出。"
+        return self._with_presentation(
+            PlanBomQaResponse(
+                question=question,
+                classification="A",
+                status=PlanBomQaStatus(code="OK", message="对比成功"),
+                nlu=nlu,
+                answer_summary=answer,
+                result_table=PlanBomTableSpec(columns=self._expanded_compare_columns(), rows=pair_rows),
+                raw_result={
+                    "expanded_compare": True,
+                    "expanded_side": ambiguous_side,
+                    "left_candidate_count": left_count,
+                    "right_candidate_count": right_count,
+                    "compared_pairs": compared_pairs,
+                    "pair_summaries": pair_summaries,
+                    "source_candidate_result": candidate_result.model_dump(mode="json"),
+                },
+                warnings=warnings,
+            )
+        )
+
+    @staticmethod
+    def _can_expand_compare_candidates(
+        *,
+        nlu: PlanBomNluCandidate,
+        candidate_result: PlanBomCompareResponse,
+        candidates: list[PlanBomCandidate],
+    ) -> bool:
+        """判断 compare 候选态是否允许自动展开为多组对比。
+
+        只有跨订单材料对比、单侧业务实例候选且候选数受控时才展开；版本、文件实例或单订单查询
+        仍 fail closed，避免替业务员选择比较基线。
+        """
+
+        if nlu.intent != "cross_order_material_compare":
+            return False
+        if candidate_result.status.code != "CANDIDATE_REQUIRED":
+            return False
+        if candidate_result.candidate_scope != CANDIDATE_SCOPE_ORDER_IDENTITY:
+            return False
+        if candidate_result.candidate_side not in {"left", "right"}:
+            return False
+        candidate_truncated = bool(candidate_result.status.extras.get("candidate_truncated")) or bool(
+            (candidate_result.response_meta or {}).get("candidate_truncated")
+        )
+        if candidate_truncated or int(candidate_result.candidate_total_hint or 0) > len(candidates):
+            return False
+        if not candidates or len(candidates) > 20:
+            return False
+        return True
+
+    def _expanded_compare_payload_for_candidate(
+        self,
+        *,
+        original_payload: PlanBomCompareQueryRequest,
+        candidate_result: PlanBomCompareResponse,
+        candidate: PlanBomCandidate,
+    ) -> PlanBomCompareQueryRequest | None:
+        """构造单个候选实例对应的精确 compare 请求。"""
+
+        candidate_side = self._compare_side_request_from_candidate(candidate)
+        if candidate_result.candidate_side == "right":
+            if not candidate_result.left:
+                return None
+            left_side = self._compare_side_request_from_context(candidate_result.left)
+            right_side = candidate_side
+        else:
+            if not candidate_result.right:
+                return None
+            left_side = candidate_side
+            right_side = self._compare_side_request_from_context(candidate_result.right)
+        return PlanBomCompareQueryRequest(
+            left=left_side,
+            right=right_side,
+            material_categories=original_payload.material_categories,
+            candidate_limit=original_payload.candidate_limit,
+        )
+
+    @staticmethod
+    def _compare_side_request_from_candidate(candidate: PlanBomCandidate) -> PlanBomCompareSideRequest:
+        """从候选列表项生成精确 compare 单侧请求。"""
+
+        return PlanBomCompareSideRequest(
+            order_identity_key=candidate.order_identity_key,
+            file_instance_key=candidate.file_instance_key,
+            version_no=candidate.version_no,
+        )
+
+    @staticmethod
+    def _compare_side_request_from_context(context: PlanBomCompareSideContext) -> PlanBomCompareSideRequest:
+        """从已解析 compare 上下文生成精确 compare 单侧请求。"""
+
+        return PlanBomCompareSideRequest(
+            order_identity_key=context.order_identity_key,
+            file_instance_key=context.file_instance_key,
+            version_no=context.version_no,
+        )
+
+    @staticmethod
+    def _compare_side_label(side: PlanBomCandidate | PlanBomCompareSideContext) -> str:
+        """生成业务可读的 compare 单侧实例标签。"""
+
+        display = side.order_display_label or side.order_name or side.order_no
+        if side.version_no:
+            return f"{display}（版本 {side.version_no}）"
+        return display
+
+    @staticmethod
+    def _compare_side_name(side: str) -> str:
+        """把 compare 内部侧别转换为中文说明。"""
+
+        return "左" if side == "left" else "右"
+
+    @staticmethod
+    def _is_description_compare_question(question: str) -> bool:
+        """判断用户是否明确只关注规格描述差异。
+
+        参数：
+            question: 原始问题文本。
+
+        返回：
+            命中“规格描述/描述”时返回 True，用于避免把用量、备注等非描述字段变化混入描述差异表。
+        """
+
+        text = question or ""
+        return "规格描述" in text or "描述" in text
+
+    def _compare_rows_for_pair(
+        self,
+        *,
+        pair_result: PlanBomCompareResponse,
+        pair_label: str,
+        left_label: str,
+        right_label: str,
+        description_only: bool = False,
+    ) -> list[dict[str, Any]]:
+        """把单组 compare 结果转换为带实例信息的表格行。"""
+
+        rows: list[dict[str, Any]] = []
+        for item in pair_result.changed:
+            if description_only and "description" not in item.changed_fields:
+                continue
+            rows.append(
+                self._compare_pair_row(
+                    self._compare_changed_row(item.model_dump(mode="json")),
+                    pair_label=pair_label,
+                    left_label=left_label,
+                    right_label=right_label,
+                )
+            )
+        for item in pair_result.only_left:
+            rows.append(
+                self._compare_pair_row(
+                    self._compare_single_side_row(item.model_dump(mode="json"), side="仅左侧"),
+                    pair_label=pair_label,
+                    left_label=left_label,
+                    right_label=right_label,
+                )
+            )
+        for item in pair_result.only_right:
+            rows.append(
+                self._compare_pair_row(
+                    self._compare_single_side_row(item.model_dump(mode="json"), side="仅右侧"),
+                    pair_label=pair_label,
+                    left_label=left_label,
+                    right_label=right_label,
+                )
+            )
+        return rows
+
+    @staticmethod
+    def _compare_pair_row(
+        row: dict[str, Any],
+        *,
+        pair_label: str,
+        left_label: str,
+        right_label: str,
+    ) -> dict[str, Any]:
+        """为差异行补充比较组和左右业务实例信息。"""
+
+        return {
+            "compare_pair": pair_label,
+            "diff_type": row.get("diff_type"),
+            "material_category": row.get("material_category"),
+            "left_instance": left_label,
+            "left_order": row.get("left_order"),
+            "left_description": row.get("left_description"),
+            "right_instance": right_label,
+            "right_order": row.get("right_order"),
+            "right_description": row.get("right_description"),
+            "changed_fields": row.get("changed_fields"),
+        }
+
+    @staticmethod
+    def _expanded_pair_summary(pair_result: PlanBomCompareResponse) -> dict[str, Any]:
+        """生成单组 compare 的轻量追溯摘要，避免 raw_result 写入过大的明细快照。"""
+
+        return {
+            "status_code": pair_result.status.code,
+            "status_message": pair_result.status.message,
+            "compare_ready": pair_result.compare_ready,
+            "left_order_no": pair_result.left.order_no if pair_result.left else None,
+            "left_version_no": pair_result.left.version_no if pair_result.left else None,
+            "right_order_no": pair_result.right.order_no if pair_result.right else None,
+            "right_version_no": pair_result.right.version_no if pair_result.right else None,
+            "changed_count": len(pair_result.changed),
+            "only_left_count": len(pair_result.only_left),
+            "only_right_count": len(pair_result.only_right),
+            "same_count": len(pair_result.same),
+        }
 
     def _presence_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:
         """处理某类物料是否存在或缺失查询。
@@ -957,10 +1273,10 @@ class PlanBomQaService:
                 nlu=nlu,
                 answer_summary=(
                     "已识别到非核心材料："
-                    f"{'、'.join(labels)}。当前计划 BOM QA detail/compare 主链路支持玻璃、间隙贴膜、焊带/互联条、汇流条、接线盒五类材料；"
-                    "请确认是否改问核心五类材料，或需要后续扩展非核心材料查询口径。"
+                    f"{'、'.join(labels)}。当前计划 BOM 智能问答优先支持玻璃、间隙贴膜、焊带/互联条、汇流条、接线盒五类材料；"
+                    "请确认是否改问这些核心材料，或说明你希望扩展到哪类非核心材料。"
                 ),
-                warnings=["非核心材料已被 Guardrail 拦截，未进入核心五类查询 schema。"],
+                warnings=["当前材料不在已支持的核心材料范围内，暂不进入明细查询。"],
                 raw_result={"non_core_material_category": categories, "supported_categories": list(CORE_MATERIAL_CATEGORIES)},
             )
         )
@@ -1038,16 +1354,38 @@ class PlanBomQaService:
         """
 
         missing = nlu.missing_slots or ["order_id", "material_category"]
+        missing_text = "、".join(self._business_missing_slot_label(slot) for slot in missing)
         return self._with_presentation(
             PlanBomQaResponse(
                 question=question,
                 classification="B",
                 status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="需要补充关键信息后继续查询", severity="warning"),
                 nlu=nlu,
-                answer_summary=f"当前问题缺少或存在歧义的槽位：{', '.join(missing)}。请补充订单、版本、材料或查询范围。",
+                answer_summary=(
+                    "我理解你想查询计划 BOM 信息，但当前还缺少足够的业务条件。"
+                    f"请补充：{missing_text}。补充后我会继续按订单、版本和材料范围整理结果。"
+                ),
                 raw_result=raw or {},
             )
         )
+
+    @staticmethod
+    def _business_missing_slot_label(slot: str) -> str:
+        """把内部缺失项名称转换为业务可读说明。"""
+
+        mapping = {
+            "order_id": "订单号、订单尾号或订单范围",
+            "order_tail_no": "订单尾号或更完整的订单号",
+            "material_category": "材料范围，例如玻璃、焊带、汇流条或接线盒",
+            "compare_orders": "需要对比的订单",
+            "candidate": "更完整订单号或具体文件实例",
+            "order_identity": "项目名、客户或文件名等订单识别信息",
+            "bom_version": "BOM 版本",
+            "target_power_ratio": "目标功率档比例",
+            "power_configuration": "功率预测所需配置",
+            "supported_material_category": "当前要查询的核心材料范围",
+        }
+        return mapping.get(slot, "更明确的查询条件")
 
     def _empty_response(self, *, question: str, nlu: PlanBomNluCandidate, reason: str, raw: dict[str, Any] | None = None) -> PlanBomQaResponse:
         """构造空结果响应。
@@ -1338,6 +1676,27 @@ class PlanBomQaService:
         """
 
         return ["diff_type", "material_category", "left_order", "left_description", "right_order", "right_description", "changed_fields"]
+
+    @staticmethod
+    def _expanded_compare_columns() -> list[str]:
+        """返回多候选展开对比表列。
+
+        返回：
+            列名列表；相比普通 compare 多出比较组和左右业务实例，避免短订单号多实例时丢失上下文。
+        """
+
+        return [
+            "compare_pair",
+            "diff_type",
+            "material_category",
+            "left_instance",
+            "left_order",
+            "left_description",
+            "right_instance",
+            "right_order",
+            "right_description",
+            "changed_fields",
+        ]
 
     @staticmethod
     def _item_row(item: dict[str, Any]) -> dict[str, Any]:

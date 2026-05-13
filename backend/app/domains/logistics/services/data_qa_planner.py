@@ -3143,14 +3143,20 @@ class LogisticsDataQaPlanner:
             可交给历史明细表 logistics_company_name 做模糊匹配的承运商简称。
 
         说明：
-            该方法只承接样例题和现有台账中可验证的“晶茂物流/苏州晶茂物流/英赋嘉”简称，
-            不把所有带“物流”的短语都强行解释成承运商，避免扩大 A 类边界。
+            该方法只承接样例题、现有台账中可验证的承运商简称，以及业务反馈中明确点名的高置信承运商别名，
+            不把所有带“物流”的短语都强行解释成承运商，避免把“历史物流/区域物流”等泛词误当承运商。
         """
 
-        if "晶茂" in question:
-            return "晶茂"
-        if "英赋嘉" in question:
-            return "英赋嘉"
+        # 仅维护窄口径白名单：返回简称交给仓储层 LIKE 匹配，兼容“京东物流/京东快运”等存储差异。
+        carrier_aliases = {
+            "晶茂": "晶茂",
+            "英赋嘉": "英赋嘉",
+            "京东物流": "京东",
+            "京东": "京东",
+        }
+        for alias, normalized_name in carrier_aliases.items():
+            if alias in question:
+                return normalized_name
         return None
 
     def _extract_province_list(self, question: str) -> list[str]:

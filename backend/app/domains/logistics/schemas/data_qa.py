@@ -13,6 +13,10 @@ class LogisticsDataQaQueryRequest(BaseModel):
     """
 
     question: str = Field(..., min_length=1, description="物流数据问答问题")
+    include_query_plan_v2_meta: bool = Field(
+        default=False,
+        description="是否在非生产且开关开启时返回 Query Planning V2 shadow 轻量审计 meta；默认关闭。",
+    )
 
 
 class LogisticsDataQaStatus(BaseModel):

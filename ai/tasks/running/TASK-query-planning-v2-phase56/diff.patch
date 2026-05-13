@@ -1,0 +1,1874 @@
+diff --git a/backend/.env.example b/backend/.env.example
+index ba9779c..8c8f7f5 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -72,3 +72,9 @@ LLM_ANSWER_PRESENTATION_ENABLED=true
+ LLM_ANSWER_PRESENTATION_MODEL=qwen-plus
+ LLM_ANSWER_PRESENTATION_TIMEOUT=30
+ LLM_ANSWER_PRESENTATION_MAX_RETRIES=1
++
++# =========================
++# Query Planning V2 响应 meta 暴露配置
++# =========================
++# 默认关闭；仅非生产环境且请求体 include_query_plan_v2_meta=true 时返回轻量审计 meta。
++QUERY_PLANNING_V2_RESPONSE_META_ENABLED=false
+diff --git a/backend/app/core/config.py b/backend/app/core/config.py
+index 20459f0..4270a0b 100644
+--- a/backend/app/core/config.py
++++ b/backend/app/core/config.py
+@@ -68,6 +68,7 @@ class Settings(BaseSettings):
+     llm_answer_presentation_model: str = ""
+     llm_answer_presentation_timeout: float = 6.0
+     llm_answer_presentation_max_retries: int = 0
++    query_planning_v2_response_meta_enabled: bool = False
+ 
+     model_config = SettingsConfigDict(
+         env_file=Path(__file__).resolve().parent.parent.parent / ".env",
+@@ -393,6 +394,10 @@ class Settings(BaseSettings):
+     def LLM_ANSWER_PRESENTATION_MAX_RETRIES(self) -> int:
+         return self.llm_answer_presentation_max_retries
+ 
++    @property
++    def QUERY_PLANNING_V2_RESPONSE_META_ENABLED(self) -> bool:
++        return self.query_planning_v2_response_meta_enabled
++
+ 
+ @lru_cache
+ def get_settings() -> Settings:
+diff --git a/backend/app/domains/logistics/api/endpoints/data_qa.py b/backend/app/domains/logistics/api/endpoints/data_qa.py
+index 719ebd1..2166069 100644
+--- a/backend/app/domains/logistics/api/endpoints/data_qa.py
++++ b/backend/app/domains/logistics/api/endpoints/data_qa.py
+@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
+ from backend.app.api.deps import get_logistics_data_qa_service
+ from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
+ from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
++from backend.app.domains.query_planning.services.response_meta_exposure_service import QueryPlanningV2ResponseMetaExposureService
+ from backend.app.schemas.common import ApiResponse
+ from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService, build_json_line_event
+ 
+@@ -20,7 +21,16 @@ def logistics_data_qa_query(
+     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
+     try:
+         result = service.query(payload, trace_id=trace_id)
+-        return ApiResponse.success(result, trace_id=trace_id)
++        result_payload = result.model_dump(mode="json")
++        query_plan_v2_meta = QueryPlanningV2ResponseMetaExposureService().build_logistics_meta(
++            requested=payload.include_query_plan_v2_meta,
++            question=payload.question,
++            result=result,
++            trace_id=trace_id,
++        )
++        if query_plan_v2_meta:
++            result_payload["query_plan_v2_meta"] = query_plan_v2_meta
++        return ApiResponse.success(result_payload, trace_id=trace_id)
+     except Exception as exc:  # noqa: BLE001
+         # 物流数据问答正式页需要把错误态也纳入查询历史，便于业务回看。
+         service.write_error_log(question=payload.question, trace_id=trace_id, message=str(exc))
+@@ -80,6 +90,14 @@ def logistics_data_qa_query_stream(
+                 deterministic_payload=result_payload,
+                 streamed_answer=final_answer,
+             )
++            query_plan_v2_meta = QueryPlanningV2ResponseMetaExposureService().build_logistics_meta(
++                requested=payload.include_query_plan_v2_meta,
++                question=payload.question,
++                result=result,
++                trace_id=trace_id,
++            )
++            if query_plan_v2_meta:
++                final_payload["query_plan_v2_meta"] = query_plan_v2_meta
+             yield build_json_line_event(
+                 "done",
+                 {"trace_id": trace_id, "domain": "logistics", "answer": final_answer, "data": final_payload},
+diff --git a/backend/app/domains/logistics/schemas/data_qa.py b/backend/app/domains/logistics/schemas/data_qa.py
+index ba01068..d016fd8 100644
+--- a/backend/app/domains/logistics/schemas/data_qa.py
++++ b/backend/app/domains/logistics/schemas/data_qa.py
+@@ -13,6 +13,10 @@ class LogisticsDataQaQueryRequest(BaseModel):
+     """
+ 
+     question: str = Field(..., min_length=1, description="物流数据问答问题")
++    include_query_plan_v2_meta: bool = Field(
++        default=False,
++        description="是否在非生产且开关开启时返回 Query Planning V2 shadow 轻量审计 meta；默认关闭。",
++    )
+ 
+ 
+ class LogisticsDataQaStatus(BaseModel):
+diff --git a/backend/app/domains/plan_bom/api/endpoints/qa.py b/backend/app/domains/plan_bom/api/endpoints/qa.py
+index 3b5e0d1..1ed9e57 100644
+--- a/backend/app/domains/plan_bom/api/endpoints/qa.py
++++ b/backend/app/domains/plan_bom/api/endpoints/qa.py
+@@ -1,17 +1,72 @@
+ from __future__ import annotations
+ 
++import re
++
+ from fastapi import APIRouter, Depends, Request
+ from fastapi.responses import StreamingResponse
+ 
+ from backend.app.api.deps import get_plan_bom_qa_service
+ from backend.app.domains.plan_bom.schemas.qa import PlanBomQaRequest
+ from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
++from backend.app.domains.query_planning.services.response_meta_exposure_service import QueryPlanningV2ResponseMetaExposureService
+ from backend.app.schemas.common import ApiResponse
+ from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService, build_json_line_event
+ 
+ router = APIRouter()
+ 
+ 
++def _plan_bom_fallback_has_technical_leak(answer: str) -> bool:
++    """检查计划 BOM 流式兜底候选是否包含前端不可见的技术痕迹。"""
++
++    patterns = (
++        r"槽位",
++        r"字段",
++        r"表定义",
++        r"库定义",
++        r"数据库",
++        r"\bSQL\b",
++        r"\bquery(?:[-_ ]?(?:plan|key)|_key)?\b",
++        r"\bqueryKey\b",
++        r"\bplanner\b",
++        r"\bguard\s*rail\b",
++        r"\bguardrail\b",
++        r"\braw_result\b",
++        r"\bschema\b",
++        r"\bLLM\b",
++        r"\b[a-z]+_[a-z0-9_]+\b",
++    )
++    return any(re.search(pattern, answer or "", flags=re.I) for pattern in patterns)
++
++
++def _resolve_plan_bom_stream_fallback_answer(result_payload: dict) -> str:
++    """解析 Plan BOM 流式回答的确定性兜底文案。
++
++    参数：
++        result_payload: `PlanBomQaResponse.model_dump` 后的确定性响应快照。
++
++    返回：
++        可直接流式输出给业务员的安全兜底文本。
++
++    业务逻辑：
++        Plan BOM 的 `answer_summary` 可能携带槽位名等内部口径；若展示层已经生成
++        `presentation.answer`，流式降级应优先使用业务化表达，避免前端看到内部术语。
++    """
++
++    presentation = result_payload.get("presentation") if isinstance(result_payload, dict) else None
++    candidates: list[str] = []
++    if isinstance(presentation, dict) and presentation.get("answer"):
++        candidates.append(str(presentation["answer"]))
++    if isinstance(result_payload, dict) and result_payload.get("answer_summary"):
++        candidates.append(str(result_payload["answer_summary"]))
++    status = result_payload.get("status") if isinstance(result_payload, dict) else None
++    if isinstance(status, dict) and status.get("message"):
++        candidates.append(str(status["message"]))
++    for candidate in candidates:
++        if candidate and not _plan_bom_fallback_has_technical_leak(candidate):
++            return candidate
++    return "当前计划 BOM 查询已完成，我会基于已导入的数据整理结论；请查看下方数据依据。"
++
++
+ @router.post("/ask", response_model=ApiResponse)
+ def ask_plan_bom(
+     payload: PlanBomQaRequest,
+@@ -30,7 +85,16 @@ def ask_plan_bom(
+     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", payload.trace_id or ""))
+     try:
+         result = service.ask(payload.question, use_llm=True, trace_id=trace_id)
+-        return ApiResponse.success(result.model_dump(mode="json"), trace_id=trace_id)
++        result_payload = result.model_dump(mode="json")
++        query_plan_v2_meta = QueryPlanningV2ResponseMetaExposureService().build_plan_bom_meta(
++            requested=payload.include_query_plan_v2_meta,
++            question=payload.question,
++            response=result,
++            trace_id=trace_id,
++        )
++        if query_plan_v2_meta:
++            result_payload["query_plan_v2_meta"] = query_plan_v2_meta
++        return ApiResponse.success(result_payload, trace_id=trace_id)
+     except Exception as exc:  # noqa: BLE001
+         # 计划 BOM 问答与物流问答使用同一张 sys_query_log；异常也要留存，便于业务回看失败问题。
+         service.write_error_log(question=payload.question, trace_id=trace_id, message=str(exc))
+@@ -71,11 +135,12 @@ def ask_plan_bom_stream(
+                 },
+             )
+             chunks: list[str] = []
++            fallback_answer = _resolve_plan_bom_stream_fallback_answer(result_payload)
+             for chunk in stream_service.stream_answer(
+                 domain="plan_bom",
+                 question=payload.question,
+                 deterministic_payload=result_payload,
+-                fallback_answer=result_payload.get("answer_summary"),
++                fallback_answer=fallback_answer,
+             ):
+                 chunks.append(chunk)
+                 yield build_json_line_event("delta", {"text": chunk})
+@@ -85,6 +150,14 @@ def ask_plan_bom_stream(
+                 deterministic_payload=result_payload,
+                 streamed_answer=final_answer,
+             )
++            query_plan_v2_meta = QueryPlanningV2ResponseMetaExposureService().build_plan_bom_meta(
++                requested=payload.include_query_plan_v2_meta,
++                question=payload.question,
++                response=result,
++                trace_id=trace_id,
++            )
++            if query_plan_v2_meta:
++                final_payload["query_plan_v2_meta"] = query_plan_v2_meta
+             yield build_json_line_event(
+                 "done",
+                 {"trace_id": trace_id, "domain": "plan_bom", "answer": final_answer, "data": final_payload},
+@@ -107,4 +180,4 @@ def ask_plan_bom_stream(
+     )
+ 
+ 
+-__all__ = ["router"]
++__all__ = ["router", "_resolve_plan_bom_stream_fallback_answer"]
+diff --git a/backend/app/domains/plan_bom/schemas/qa.py b/backend/app/domains/plan_bom/schemas/qa.py
+index 958aec7..5170b0a 100644
+--- a/backend/app/domains/plan_bom/schemas/qa.py
++++ b/backend/app/domains/plan_bom/schemas/qa.py
+@@ -116,6 +116,10 @@ class PlanBomQaRequest(BaseModel):
+ 
+     question: str = Field(..., min_length=1, description="计划 BOM 自然语言问题")
+     trace_id: str | None = None
++    include_query_plan_v2_meta: bool = Field(
++        default=False,
++        description="是否在非生产且开关开启时返回 Query Planning V2 shadow 轻量审计 meta；默认关闭。",
++    )
+ 
+ 
+ class PlanBomQaResponse(BaseModel):
+diff --git a/backend/app/domains/plan_bom/services/answer_presentation_service.py b/backend/app/domains/plan_bom/services/answer_presentation_service.py
+index 8114aa9..5710eee 100644
+--- a/backend/app/domains/plan_bom/services/answer_presentation_service.py
++++ b/backend/app/domains/plan_bom/services/answer_presentation_service.py
+@@ -7,6 +7,7 @@ from typing import Any
+ from openai import OpenAI
+ 
+ from backend.app.core.config import settings
++from backend.app.domains.plan_bom.constants import MATERIAL_CATEGORY_LABELS
+ from backend.app.domains.plan_bom.schemas.qa import PlanBomPresentation, PlanBomQaResponse, PlanBomTableSpec
+ 
+ 
+@@ -32,6 +33,50 @@ class PlanBomAnswerPresentationService:
+         "error",
+     }
+     POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation"}
++    TECHNICAL_VISIBLE_PATTERNS = (
++        r"槽位",
++        r"字段",
++        r"表定义",
++        r"库定义",
++        r"数据库",
++        r"\bSQL\b",
++        r"\bsql\b",
++        r"\bquery(?:[-_ ]?plan|_key)?\b",
++        r"\bqueryKey\b",
++        r"\bplanner\b",
++        r"\bguard\s*rail\b",
++        r"\bguardrail\b",
++        r"\bdebug\b",
++        r"\braw_result\b",
++        r"\bschema\b",
++        r"\bLLM\b",
++        r"\b[a-z]+_[a-z0-9_]+\b",
++    )
++    FOLLOW_UP_TEXT_MAP = {
++        "order_id": "请补充要查询或对比的订单号、订单尾号，或明确订单范围。",
++        "order_tail_no": "请补充订单尾号或更完整的订单号。",
++        "material_category": "请确认要看的材料范围，例如玻璃、焊带、汇流条或接线盒。",
++        "compare_orders": "请补充需要放在一起比较的订单。",
++        "candidate": "当前条件命中多个订单实例，请补充更完整订单号或确认具体文件实例。",
++        "order_identity": "当前条件命中多个订单实例，请补充项目名、客户或文件名来缩小范围。",
++        "bom_version": "请确认要查看或对比的 BOM 版本。",
++        "target_power_ratio": "请补充目标功率档比例，例如 620W 50%、625W 50%。",
++        "power_configuration": "请补充功率预测所需配置，例如玻璃、线缆、标板或供应商。",
++        "supported_material_category": "请确认是否改查玻璃、间隙贴膜、焊带、汇流条或接线盒。",
++    }
++    INTENT_LABELS = {
++        "single_order_material_specs": "单订单材料规格查询",
++        "specific_material_query": "指定材料规格查询",
++        "multi_order_material_table": "多订单材料清单查询",
++        "scope_material_list": "范围材料清单查询",
++        "batch_export_table": "批量清单查询",
++        "cross_order_material_compare": "跨订单材料差异对比",
++        "bom_version_compare": "BOM 版本差异对比",
++        "material_consistency_check": "材料一致性核查",
++        "material_presence_check": "物料存在性检查",
++        "plan_power_prediction": "计划 BOM 功率预测",
++        "plan_power_supplier_recommendation": "供应商功率匹配推荐",
++    }
+ 
+     def __init__(
+         self,
+@@ -106,15 +151,15 @@ class PlanBomAnswerPresentationService:
+ 
+         display_type = self._resolve_display_type(response)
+         caveats = [
+-            "所有订单、物料、版本和规格均来自已导入的计划 BOM 结构化数据。",
+-            "LLM 只允许优化表达，不作为查数或改写结果来源。",
++            "回答依据为当前系统已导入的计划 BOM 数据；未导入或未匹配到的订单版本不会参与本次结论。",
++            "规格、供应商、用量等信息按源 BOM 记录原样展示；如需核对，可展开数据依据查看明细。",
+         ]
+         if response.nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
+-            caveats.append("功率预测数值来自后端确定性功率模型；LLM、前端和 Excel 宏均不参与计算。")
++            caveats.append("功率预测结果按已生效的功率模型版本计算，前端展示不会重新计算。")
+         presentation = PlanBomPresentation(
+             display_type=display_type,
+             title=self._build_title(response),
+-            answer=response.answer_summary,
++            answer=self._build_deterministic_answer(response),
+             highlights=self._build_highlights(response),
+             table_spec=response.result_table if display_type in {"table", "comparison_table", "mixed"} and response.result_table.rows else None,
+             caveats=caveats,
+@@ -122,16 +167,201 @@ class PlanBomAnswerPresentationService:
+         )
+         if response.classification == "B":
+             presentation.follow_up = {
+-                "questions": response.nlu.missing_slots,
++                "questions": self._build_follow_up_questions(response),
+                 "examples": self._build_follow_up_examples(response),
+             }
+         if response.classification == "C":
+             presentation.unsupported_explanation = {
+-                "reason": response.answer_summary,
+-                "suggestions": ["请补充可定位的订单、BOM 版本、材料类别，或提供功率倒推规则后再问。"],
++                "reason": presentation.answer,
++                "suggestions": ["请补充可定位的订单、BOM 版本、材料类别，或提供业务规则后再问。"],
+             }
+         return presentation
+ 
++    def _build_deterministic_answer(self, response: PlanBomQaResponse) -> str:
++        """生成不依赖 LLM 的业务化主回答。
++
++        参数：
++            response: 确定性 BOM QA 响应。
++
++        返回：
++            面向业务员的自然语言答案，不暴露槽位名、字段名、表名或内部实现词。
++        """
++
++        if response.classification == "B" or response.status.code == "CLARIFICATION_REQUIRED":
++            return self._build_clarification_answer(response)
++        if response.classification == "A" and response.status.code == "OK":
++            return self._build_success_answer(response)
++        if response.status.code == "EMPTY_RESULT":
++            return self._build_empty_answer(response)
++        if response.status.code == "UNSUPPORTED_QUESTION" or response.classification == "C":
++            return self._build_unsupported_answer(response)
++        return self._safe_business_text(response.answer_summary) or "我已完成本次计划 BOM 查询，请查看下方结果和数据依据。"
++
++    def _build_clarification_answer(self, response: PlanBomQaResponse) -> str:
++        """生成业务化追问说明。"""
++
++        intent_label = self.INTENT_LABELS.get(response.nlu.intent, "计划 BOM 查询")
++        missing_labels = self._missing_slot_labels(response)
++        missing_text = "、".join(missing_labels) if missing_labels else "订单、版本或材料范围"
++        return (
++            f"我先判断了一下，你是在问“{intent_label}”。这类问题需要先明确要查询或对比的范围，"
++            "再到已导入的计划 BOM 数据里定位对应订单和版本，最后才能逐项整理规格差异或材料明细。\n\n"
++            f"目前还不能直接给出完整结果，主要是缺少：{missing_text}。"
++            "请补充这些业务条件后继续提问，我会按订单维度把结论和明细依据一起整理出来。"
++        )
++
++    def _build_success_answer(self, response: PlanBomQaResponse) -> str:
++        """生成已答结果的完整业务叙事。"""
++
++        safe_summary = self._safe_business_text(response.answer_summary)
++        intro = f"查到了。{safe_summary}" if safe_summary else "查到了。我已根据当前计划 BOM 数据完成这次查询。"
++        process = (
++            "我先根据你的问题定位订单、版本和材料范围，再从当前已导入的计划 BOM 数据中提取匹配记录，"
++            "最后只基于这些记录整理结论，不对未出现的规格、供应商或用量做推测。"
++        )
++        rows = response.result_table.rows or []
++        if not rows:
++            return f"{intro}\n\n{process}\n\n本次没有需要展开的明细记录。"
++
++        if len(rows) <= 5:
++            row_lines = self._format_small_result_rows(rows)
++            if row_lines:
++                return (
++                    f"{intro}\n\n{process}\n\n本次结果共涉及 {len(rows)} 条记录，关键内容如下：\n"
++                    + "\n".join(f"- {line}" for line in row_lines)
++                    + "\n\n如需进一步核对来源，可展开数据依据或导出明细。"
++                )
++        return (
++            f"{intro}\n\n{process}\n\n本次结果共涉及 {len(rows)} 条记录。为避免正文过长，我先保留核心结论；"
++            "你可以点击展开明细查看每条订单、材料和规格。"
++        )
++
++    def _build_empty_answer(self, response: PlanBomQaResponse) -> str:
++        """生成空结果业务说明。"""
++
++        reason = self._safe_business_text(response.status.message) or self._safe_business_text(response.answer_summary)
++        reason_text = f"原因是：{reason}" if reason else "当前条件下没有命中可用记录。"
++        return (
++            "我先按你的问题定位了订单、版本和材料范围，再在当前已导入的计划 BOM 数据中核对匹配记录。"
++            f"最后没有找到可以支撑结论的结果，{reason_text}。"
++            "你可以换一个订单号、补充更明确的版本，或扩大材料范围后再查。"
++        )
++
++    def _build_unsupported_answer(self, response: PlanBomQaResponse) -> str:
++        """生成暂不支持问题的业务说明。"""
++
++        safe_summary = self._safe_business_text(response.answer_summary)
++        detail = safe_summary or "当前问题需要额外业务规则或尚未导入的数据支持，不能只凭现有计划 BOM 数据直接判断。"
++        return (
++            f"这个问题暂时不能直接给出可靠结论。{detail}\n\n"
++            "我先确认了当前问题需要的判断依据，再核对系统里已有的计划 BOM 信息；目前缺少可用于判断的业务规则或数据来源，"
++            "所以不会强行生成答案。你可以补充规则、订单版本或材料范围后继续。"
++        )
++
++    def _format_small_result_rows(self, rows: list[dict[str, Any]]) -> list[str]:
++        """把五行以内的小结果转成业务化短句。"""
++
++        lines: list[str] = []
++        for row in rows:
++            parts: list[str] = []
++            for key, value in row.items():
++                if value is None or value == "":
++                    continue
++                label = self._business_column_label(str(key))
++                if not label:
++                    continue
++                text_value = self._business_value(value)
++                if not text_value or self._visible_text_has_technical_leak(text_value):
++                    continue
++                parts.append(f"{label}：{text_value}")
++                if len(parts) >= 4:
++                    break
++            if parts:
++                lines.append("；".join(parts))
++        return lines
++
++    def _missing_slot_labels(self, response: PlanBomQaResponse) -> list[str]:
++        """把内部缺失项转换成业务可读名称。"""
++
++        labels: list[str] = []
++        for slot in response.nlu.missing_slots or ["order_id", "material_category"]:
++            text = self.FOLLOW_UP_TEXT_MAP.get(slot, "请补充更明确的查询条件。")
++            label = re.sub(r"^请补充|^请确认", "", text).strip("。")
++            if label and label not in labels:
++                labels.append(label)
++        return labels
++
++    def _build_follow_up_questions(self, response: PlanBomQaResponse) -> list[str]:
++        """生成业务化追问按钮文案。"""
++
++        questions: list[str] = []
++        for slot in response.nlu.missing_slots or ["order_id", "material_category"]:
++            text = self.FOLLOW_UP_TEXT_MAP.get(slot, "请补充更明确的查询条件后继续。")
++            if text not in questions:
++                questions.append(text)
++        return questions
++
++    @classmethod
++    def _business_column_label(cls, key: str) -> str:
++        """把结果列名转换成业务展示名，未知内部列不展示。"""
++
++        raw = (key or "").strip()
++        lowered = raw.lower()
++        mapping = {
++            "order_id": "订单",
++            "order_no": "订单",
++            "order_tail_no": "订单尾号",
++            "order": "订单",
++            "order_name": "项目",
++            "material_category": "材料",
++            "material_name": "物料名称",
++            "material_spec": "规格",
++            "spec": "规格",
++            "specification": "规格",
++            "description": "规格描述",
++            "supplier_name": "供应商",
++            "version_no": "版本",
++            "bom_version": "版本",
++            "revision_version": "版本",
++            "quantity": "数量",
++            "qty": "数量",
++            "unit": "单位",
++            "compare_pair": "对比项",
++            "left_instance": "左侧订单",
++            "right_instance": "右侧订单",
++            "left_description": "左侧规格",
++            "right_description": "右侧规格",
++            "compare_status": "对比结果",
++            "diff_summary": "差异说明",
++        }
++        if lowered in mapping:
++            return mapping[lowered]
++        if cls._visible_text_has_technical_leak(raw):
++            return ""
++        return raw
++
++    @staticmethod
++    def _business_value(value: Any) -> str:
++        """把内部枚举值转换成业务可读值。"""
++
++        text = str(value).strip()
++        return MATERIAL_CATEGORY_LABELS.get(text, text)
++
++    @classmethod
++    def _safe_business_text(cls, text: str | None) -> str:
++        """返回不含技术痕迹的业务文本；不安全则置空。"""
++
++        value = str(text or "").strip()
++        if not value or cls._visible_text_has_technical_leak(value):
++            return ""
++        return value
++
++    @classmethod
++    def _visible_text_has_technical_leak(cls, text: str) -> bool:
++        """判断可见文案是否包含技术字段、表名、内部编排信息或英文蛇形字段名。"""
++
++        return any(re.search(pattern, text or "", flags=re.I) for pattern in cls.TECHNICAL_VISIBLE_PATTERNS)
++
+     def _resolve_display_type(self, response: PlanBomQaResponse) -> str:
+         """根据状态解析展示类型。
+ 
+@@ -196,8 +426,7 @@ class PlanBomAnswerPresentationService:
+             return "当前 BOM 数据暂不能直接回答"
+         return "计划 BOM 问题待确认"
+ 
+-    @staticmethod
+-    def _build_highlights(response: PlanBomQaResponse) -> list[str]:
++    def _build_highlights(self, response: PlanBomQaResponse) -> list[str]:
+         """生成关键结论。
+ 
+         参数：
+@@ -207,20 +436,25 @@ class PlanBomAnswerPresentationService:
+             关键结论列表。
+         """
+ 
+-        highlights = [response.status.message]
++        highlights = []
++        status_message = self._safe_business_text(response.status.message)
++        if status_message:
++            highlights.append(status_message)
+         if response.result_table.rows:
+-            highlights.append(f"返回 {len(response.result_table.rows)} 条结构化记录。")
+-        if response.nlu.slots.get("material_category"):
+-            highlights.append(f"材料范围：{', '.join(response.nlu.slots['material_category'])}")
++            highlights.append(f"命中 {len(response.result_table.rows)} 条 BOM 记录。")
++        material_values = response.nlu.slots.get("material_category")
++        if material_values:
++            material_labels = [self._business_value(item) for item in material_values]
++            highlights.append(f"材料范围：{', '.join(material_labels)}")
+         if response.nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
+             model_code = response.raw_result.get("bom_config_resolution", {}).get("model_code")
+             if model_code:
+-                highlights.append(f"功率模型版型：{model_code}")
++                highlights.append(f"功率版型：{model_code}")
+             if response.raw_result.get("power_prediction", {}).get("supplier_name"):
+                 highlights.append(f"供应商：{response.raw_result['power_prediction']['supplier_name']}")
+             if response.raw_result.get("power_recommendation", {}).get("recommendations"):
+                 highlights.append(f"推荐供应商数：{len(response.raw_result['power_recommendation']['recommendations'])}")
+-        return highlights
++        return [item for item in highlights if not self._visible_text_has_technical_leak(item)]
+ 
+     @staticmethod
+     def _build_follow_up_examples(response: PlanBomQaResponse) -> list[str]:
+@@ -307,16 +541,22 @@ class PlanBomAnswerPresentationService:
+                 return None, "llm_table_changed"
+             table_spec = candidate
+         answer = str(payload.get("answer") or fallback.answer)
++        title = str(payload.get("title") or fallback.title)
++        highlights = [str(item) for item in payload.get("highlights") or fallback.highlights]
++        caveats = [str(item) for item in payload.get("caveats") or fallback.caveats]
++        visible_text = "\n".join([title, answer, *highlights, *caveats])
++        if self._visible_text_has_technical_leak(visible_text):
++            return None, "llm_visible_technical_leak"
+         if not self._answer_mentions_only_existing_values(answer, response):
+             return None, "llm_answer_contains_unverified_value"
+         return (
+             PlanBomPresentation(
+                 display_type=display_type,
+-                title=str(payload.get("title") or fallback.title),
++                title=title,
+                 answer=answer,
+-                highlights=[str(item) for item in payload.get("highlights") or fallback.highlights],
++                highlights=highlights,
+                 table_spec=table_spec,
+-                caveats=[str(item) for item in payload.get("caveats") or fallback.caveats],
++                caveats=caveats,
+                 follow_up=fallback.follow_up,
+                 unsupported_explanation=fallback.unsupported_explanation,
+                 debug=dict(fallback.debug),
+@@ -381,13 +621,13 @@ class PlanBomAnswerPresentationService:
+         return (
+             "你是计划 BOM 问答的答案表达层，只能优化文字和展示编排。\n"
+             "不能新增订单、物料、版本、规格、用量或供应商；不能把追问/拒答包装成可答。\n"
++            "面向业务员的可见回答中，禁止出现槽位、字段、表名、库名、SQL、query、schema、guardrail、debug、LLM 或英文蛇形命名等技术词。\n"
+             "未明确要求表格/明细/清单/导出时，display_type 必须保持 narrative，table_spec 必须为空；不要固定展示明细数据。\n"
+-            "answer 可以使用清晰 Markdown 段落、加粗和列表，语气要专业、温馨、清晰，先给结论再说明依据。\n"
++            "answer 可以使用清晰 Markdown 段落、加粗和列表，语气要专业、温馨、清晰，先给结论，再说明查询思路和依据。\n"
+             "输出单个 JSON，字段可包含 display_type,title,answer,highlights,table_spec,caveats。"
+         )
+ 
+-    @staticmethod
+-    def _build_user_prompt(response: PlanBomQaResponse, fallback: PlanBomPresentation) -> str:
++    def _build_user_prompt(self, response: PlanBomQaResponse, fallback: PlanBomPresentation) -> str:
+         """构造表达层用户提示词。
+ 
+         参数：
+@@ -398,13 +638,32 @@ class PlanBomAnswerPresentationService:
+             JSON 上下文文本。
+         """
+ 
+-        return json.dumps(
+-            {
+-                "deterministic_response": response.model_dump(mode="json", exclude={"presentation"}),
+-                "allowed_table_spec": fallback.table_spec.model_dump(mode="json") if fallback.table_spec else None,
++        public_context = {
++            "用户原问题": response.question,
++            "状态": response.status.message,
++            "业务结论草稿": fallback.answer,
++            "展示形式": fallback.display_type,
++            "关键结论": fallback.highlights,
++            "数据口径": fallback.caveats,
++            "结果表": {
++                "columns": [self._business_column_label(column) for column in response.result_table.columns],
++                "rows": [
++                    {
++                        self._business_column_label(str(key)): self._business_value(value)
++                        for key, value in row.items()
++                        if self._business_column_label(str(key)) and value is not None and value != ""
++                    }
++                    for row in response.result_table.rows[:30]
++                ],
++                "total_rows": len(response.result_table.rows),
+             },
+-            ensure_ascii=False,
+-        )
++            "表达要求": [
++                "先给结论，再说明你按什么业务顺序核对。",
++                "只能使用这里给出的事实，不补充外部信息。",
++                "不要出现槽位、字段、表名、库名或英文蛇形命名。",
++            ],
++        }
++        return json.dumps(public_context, ensure_ascii=False, default=str)
+ 
+ 
+ __all__ = ["PlanBomAnswerPresentationService"]
+diff --git a/backend/app/domains/plan_bom/services/qa_service.py b/backend/app/domains/plan_bom/services/qa_service.py
+index cfe95d7..91dd4f9 100644
+--- a/backend/app/domains/plan_bom/services/qa_service.py
++++ b/backend/app/domains/plan_bom/services/qa_service.py
+@@ -6,12 +6,15 @@ import re
+ from typing import Any
+ 
+ from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
+-from backend.app.domains.plan_bom.constants import CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
++from backend.app.domains.plan_bom.constants import CANDIDATE_SCOPE_ORDER_IDENTITY, CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
+ from backend.app.domains.plan_bom.models import PlanBomHeader, PlanBomMaterialLine
+ from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
+ from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate, PlanBomQaResponse, PlanBomQaStatus, PlanBomTableSpec
+ from backend.app.domains.plan_bom.schemas.query import (
++    PlanBomCandidate,
+     PlanBomCompareQueryRequest,
++    PlanBomCompareResponse,
++    PlanBomCompareSideContext,
+     PlanBomCompareSideRequest,
+     PlanBomDetailQueryRequest,
+ )
+@@ -291,13 +294,23 @@ class PlanBomQaService:
+             right = PlanBomCompareSideRequest(order_no=tails[1])
+         else:
+             return self._clarification_response(question=question, nlu=nlu)
+-        result = self.query_service.compare(
+-            PlanBomCompareQueryRequest(left=left, right=right, material_categories=categories, candidate_limit=20)
+-        )
++        compare_payload = PlanBomCompareQueryRequest(left=left, right=right, material_categories=categories, candidate_limit=20)
++        result = self.query_service.compare(compare_payload)
+         if result.status.code != "OK" or not result.compare_ready:
++            expanded_response = self._expanded_candidate_compare_response(
++                question=question,
++                nlu=nlu,
++                payload=compare_payload,
++                candidate_result=result,
++            )
++            if expanded_response:
++                return expanded_response
+             return self._non_ok_query_response(question=question, nlu=nlu, raw=result.model_dump(mode="json"))
+         rows: list[dict[str, Any]] = []
++        description_only = self._is_description_compare_question(question)
+         for item in result.changed:
++            if description_only and "description" not in item.changed_fields:
++                continue
+             rows.append(self._compare_changed_row(item.model_dump(mode="json")))
+         for item in result.only_left:
+             rows.append(self._compare_single_side_row(item.model_dump(mode="json"), side="仅左侧"))
+@@ -316,6 +329,309 @@ class PlanBomQaService:
+             )
+         )
+ 
++    def _expanded_candidate_compare_response(
++        self,
++        *,
++        question: str,
++        nlu: PlanBomNluCandidate,
++        payload: PlanBomCompareQueryRequest,
++        candidate_result: PlanBomCompareResponse,
++    ) -> PlanBomQaResponse | None:
++        """把跨订单 compare 的单侧多业务实例候选展开为多组确定性对比。
++
++        参数：
++            question: 原始问题；
++            nlu: 已完成槽位抽取的 NLU 候选；
++            payload: 初次 compare 请求；
++            candidate_result: 初次 compare 返回的候选态结果。
++
++        返回：
++            若可安全展开，则返回 A 类对比表；否则返回 None，继续沿用候选追问兜底。
++
++        业务逻辑：
++            用户明确要求“订单 A 和订单 B 的规格描述有什么不一样，并用表格统计”时，短订单号 B
++            可能对应多个真实业务实例。此时不能随机选择其中一个，也不应把内部 `order_identity`
++            暴露成泛化追问；安全做法是把多业务实例逐个与已确定的另一侧做确定性 compare，
++            在表格中保留左右实例名称和版本，业务员可直接看到每个候选实例的差异。
++        """
++
++        candidates = list(candidate_result.candidates or [])
++        if not self._can_expand_compare_candidates(nlu=nlu, candidate_result=candidate_result, candidates=candidates):
++            return None
++
++        pair_rows: list[dict[str, Any]] = []
++        compared_pairs: list[dict[str, Any]] = []
++        pair_summaries: list[dict[str, Any]] = []
++        warnings: list[str] = []
++        ambiguous_side = candidate_result.candidate_side
++        assert ambiguous_side in {"left", "right"}
++        description_only = self._is_description_compare_question(question)
++
++        for candidate in candidates:
++            expanded_payload = self._expanded_compare_payload_for_candidate(
++                original_payload=payload,
++                candidate_result=candidate_result,
++                candidate=candidate,
++            )
++            if expanded_payload is None:
++                return None
++            pair_result = self.query_service.compare(expanded_payload)
++            pair_summary = self._expanded_pair_summary(pair_result)
++            pair_summaries.append(pair_summary)
++            if pair_result.status.code != "OK" or not pair_result.compare_ready or not pair_result.left or not pair_result.right:
++                warnings.append(
++                    f"候选 {self._compare_side_label(candidate)} 未能完成对比：{pair_result.status.message}"
++                )
++                continue
++
++            left_label = self._compare_side_label(pair_result.left)
++            right_label = self._compare_side_label(pair_result.right)
++            pair_label = f"{left_label} ↔ {right_label}"
++            compared_pairs.append(
++                {
++                    "compare_pair": pair_label,
++                    "left_order_identity_key": pair_result.left.order_identity_key,
++                    "left_file_instance_key": pair_result.left.file_instance_key,
++                    "left_order_no": pair_result.left.order_no,
++                    "left_version_no": pair_result.left.version_no,
++                    "right_order_identity_key": pair_result.right.order_identity_key,
++                    "right_file_instance_key": pair_result.right.file_instance_key,
++                    "right_order_no": pair_result.right.order_no,
++                    "right_version_no": pair_result.right.version_no,
++                }
++            )
++            pair_rows.extend(
++                self._compare_rows_for_pair(
++                    pair_result=pair_result,
++                    pair_label=pair_label,
++                    left_label=left_label,
++                    right_label=right_label,
++                    description_only=description_only,
++                )
++            )
++
++        if not compared_pairs:
++            return None
++
++        left_count = len(candidates) if ambiguous_side == "left" else 1
++        right_count = len(candidates) if ambiguous_side == "right" else 1
++        answer = (
++            f"已展开{self._compare_side_name(ambiguous_side)}侧 {len(candidates)} 个业务实例并完成 "
++            f"{len(compared_pairs)} 组 BOM 核心材料规格差异对比，生成 {len(pair_rows)} 条差异记录。"
++        )
++        if warnings:
++            answer += f"其中 {len(warnings)} 个候选未完成对比，已在风险提示中列出。"
++        return self._with_presentation(
++            PlanBomQaResponse(
++                question=question,
++                classification="A",
++                status=PlanBomQaStatus(code="OK", message="对比成功"),
++                nlu=nlu,
++                answer_summary=answer,
++                result_table=PlanBomTableSpec(columns=self._expanded_compare_columns(), rows=pair_rows),
++                raw_result={
++                    "expanded_compare": True,
++                    "expanded_side": ambiguous_side,
++                    "left_candidate_count": left_count,
++                    "right_candidate_count": right_count,
++                    "compared_pairs": compared_pairs,
++                    "pair_summaries": pair_summaries,
++                    "source_candidate_result": candidate_result.model_dump(mode="json"),
++                },
++                warnings=warnings,
++            )
++        )
++
++    @staticmethod
++    def _can_expand_compare_candidates(
++        *,
++        nlu: PlanBomNluCandidate,
++        candidate_result: PlanBomCompareResponse,
++        candidates: list[PlanBomCandidate],
++    ) -> bool:
++        """判断 compare 候选态是否允许自动展开为多组对比。
++
++        只有跨订单材料对比、单侧业务实例候选且候选数受控时才展开；版本、文件实例或单订单查询
++        仍 fail closed，避免替业务员选择比较基线。
++        """
++
++        if nlu.intent != "cross_order_material_compare":
++            return False
++        if candidate_result.status.code != "CANDIDATE_REQUIRED":
++            return False
++        if candidate_result.candidate_scope != CANDIDATE_SCOPE_ORDER_IDENTITY:
++            return False
++        if candidate_result.candidate_side not in {"left", "right"}:
++            return False
++        candidate_truncated = bool(candidate_result.status.extras.get("candidate_truncated")) or bool(
++            (candidate_result.response_meta or {}).get("candidate_truncated")
++        )
++        if candidate_truncated or int(candidate_result.candidate_total_hint or 0) > len(candidates):
++            return False
++        if not candidates or len(candidates) > 20:
++            return False
++        return True
++
++    def _expanded_compare_payload_for_candidate(
++        self,
++        *,
++        original_payload: PlanBomCompareQueryRequest,
++        candidate_result: PlanBomCompareResponse,
++        candidate: PlanBomCandidate,
++    ) -> PlanBomCompareQueryRequest | None:
++        """构造单个候选实例对应的精确 compare 请求。"""
++
++        candidate_side = self._compare_side_request_from_candidate(candidate)
++        if candidate_result.candidate_side == "right":
++            if not candidate_result.left:
++                return None
++            left_side = self._compare_side_request_from_context(candidate_result.left)
++            right_side = candidate_side
++        else:
++            if not candidate_result.right:
++                return None
++            left_side = candidate_side
++            right_side = self._compare_side_request_from_context(candidate_result.right)
++        return PlanBomCompareQueryRequest(
++            left=left_side,
++            right=right_side,
++            material_categories=original_payload.material_categories,
++            candidate_limit=original_payload.candidate_limit,
++        )
++
++    @staticmethod
++    def _compare_side_request_from_candidate(candidate: PlanBomCandidate) -> PlanBomCompareSideRequest:
++        """从候选列表项生成精确 compare 单侧请求。"""
++
++        return PlanBomCompareSideRequest(
++            order_identity_key=candidate.order_identity_key,
++            file_instance_key=candidate.file_instance_key,
++            version_no=candidate.version_no,
++        )
++
++    @staticmethod
++    def _compare_side_request_from_context(context: PlanBomCompareSideContext) -> PlanBomCompareSideRequest:
++        """从已解析 compare 上下文生成精确 compare 单侧请求。"""
++
++        return PlanBomCompareSideRequest(
++            order_identity_key=context.order_identity_key,
++            file_instance_key=context.file_instance_key,
++            version_no=context.version_no,
++        )
++
++    @staticmethod
++    def _compare_side_label(side: PlanBomCandidate | PlanBomCompareSideContext) -> str:
++        """生成业务可读的 compare 单侧实例标签。"""
++
++        display = side.order_display_label or side.order_name or side.order_no
++        if side.version_no:
++            return f"{display}（版本 {side.version_no}）"
++        return display
++
++    @staticmethod
++    def _compare_side_name(side: str) -> str:
++        """把 compare 内部侧别转换为中文说明。"""
++
++        return "左" if side == "left" else "右"
++
++    @staticmethod
++    def _is_description_compare_question(question: str) -> bool:
++        """判断用户是否明确只关注规格描述差异。
++
++        参数：
++            question: 原始问题文本。
++
++        返回：
++            命中“规格描述/描述”时返回 True，用于避免把用量、备注等非描述字段变化混入描述差异表。
++        """
++
++        text = question or ""
++        return "规格描述" in text or "描述" in text
++
++    def _compare_rows_for_pair(
++        self,
++        *,
++        pair_result: PlanBomCompareResponse,
++        pair_label: str,
++        left_label: str,
++        right_label: str,
++        description_only: bool = False,
++    ) -> list[dict[str, Any]]:
++        """把单组 compare 结果转换为带实例信息的表格行。"""
++
++        rows: list[dict[str, Any]] = []
++        for item in pair_result.changed:
++            if description_only and "description" not in item.changed_fields:
++                continue
++            rows.append(
++                self._compare_pair_row(
++                    self._compare_changed_row(item.model_dump(mode="json")),
++                    pair_label=pair_label,
++                    left_label=left_label,
++                    right_label=right_label,
++                )
++            )
++        for item in pair_result.only_left:
++            rows.append(
++                self._compare_pair_row(
++                    self._compare_single_side_row(item.model_dump(mode="json"), side="仅左侧"),
++                    pair_label=pair_label,
++                    left_label=left_label,
++                    right_label=right_label,
++                )
++            )
++        for item in pair_result.only_right:
++            rows.append(
++                self._compare_pair_row(
++                    self._compare_single_side_row(item.model_dump(mode="json"), side="仅右侧"),
++                    pair_label=pair_label,
++                    left_label=left_label,
++                    right_label=right_label,
++                )
++            )
++        return rows
++
++    @staticmethod
++    def _compare_pair_row(
++        row: dict[str, Any],
++        *,
++        pair_label: str,
++        left_label: str,
++        right_label: str,
++    ) -> dict[str, Any]:
++        """为差异行补充比较组和左右业务实例信息。"""
++
++        return {
++            "compare_pair": pair_label,
++            "diff_type": row.get("diff_type"),
++            "material_category": row.get("material_category"),
++            "left_instance": left_label,
++            "left_order": row.get("left_order"),
++            "left_description": row.get("left_description"),
++            "right_instance": right_label,
++            "right_order": row.get("right_order"),
++            "right_description": row.get("right_description"),
++            "changed_fields": row.get("changed_fields"),
++        }
++
++    @staticmethod
++    def _expanded_pair_summary(pair_result: PlanBomCompareResponse) -> dict[str, Any]:
++        """生成单组 compare 的轻量追溯摘要，避免 raw_result 写入过大的明细快照。"""
++
++        return {
++            "status_code": pair_result.status.code,
++            "status_message": pair_result.status.message,
++            "compare_ready": pair_result.compare_ready,
++            "left_order_no": pair_result.left.order_no if pair_result.left else None,
++            "left_version_no": pair_result.left.version_no if pair_result.left else None,
++            "right_order_no": pair_result.right.order_no if pair_result.right else None,
++            "right_version_no": pair_result.right.version_no if pair_result.right else None,
++            "changed_count": len(pair_result.changed),
++            "only_left_count": len(pair_result.only_left),
++            "only_right_count": len(pair_result.only_right),
++            "same_count": len(pair_result.same),
++        }
++
+     def _presence_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:
+         """处理某类物料是否存在或缺失查询。
+ 
+@@ -957,10 +1273,10 @@ class PlanBomQaService:
+                 nlu=nlu,
+                 answer_summary=(
+                     "已识别到非核心材料："
+-                    f"{'、'.join(labels)}。当前计划 BOM QA detail/compare 主链路支持玻璃、间隙贴膜、焊带/互联条、汇流条、接线盒五类材料；"
+-                    "请确认是否改问核心五类材料，或需要后续扩展非核心材料查询口径。"
++                    f"{'、'.join(labels)}。当前计划 BOM 智能问答优先支持玻璃、间隙贴膜、焊带/互联条、汇流条、接线盒五类材料；"
++                    "请确认是否改问这些核心材料，或说明你希望扩展到哪类非核心材料。"
+                 ),
+-                warnings=["非核心材料已被 Guardrail 拦截，未进入核心五类查询 schema。"],
++                warnings=["当前材料不在已支持的核心材料范围内，暂不进入明细查询。"],
+                 raw_result={"non_core_material_category": categories, "supported_categories": list(CORE_MATERIAL_CATEGORIES)},
+             )
+         )
+@@ -1038,17 +1354,39 @@ class PlanBomQaService:
+         """
+ 
+         missing = nlu.missing_slots or ["order_id", "material_category"]
++        missing_text = "、".join(self._business_missing_slot_label(slot) for slot in missing)
+         return self._with_presentation(
+             PlanBomQaResponse(
+                 question=question,
+                 classification="B",
+                 status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="需要补充关键信息后继续查询", severity="warning"),
+                 nlu=nlu,
+-                answer_summary=f"当前问题缺少或存在歧义的槽位：{', '.join(missing)}。请补充订单、版本、材料或查询范围。",
++                answer_summary=(
++                    "我理解你想查询计划 BOM 信息，但当前还缺少足够的业务条件。"
++                    f"请补充：{missing_text}。补充后我会继续按订单、版本和材料范围整理结果。"
++                ),
+                 raw_result=raw or {},
+             )
+         )
+ 
++    @staticmethod
++    def _business_missing_slot_label(slot: str) -> str:
++        """把内部缺失项名称转换为业务可读说明。"""
++
++        mapping = {
++            "order_id": "订单号、订单尾号或订单范围",
++            "order_tail_no": "订单尾号或更完整的订单号",
++            "material_category": "材料范围，例如玻璃、焊带、汇流条或接线盒",
++            "compare_orders": "需要对比的订单",
++            "candidate": "更完整订单号或具体文件实例",
++            "order_identity": "项目名、客户或文件名等订单识别信息",
++            "bom_version": "BOM 版本",
++            "target_power_ratio": "目标功率档比例",
++            "power_configuration": "功率预测所需配置",
++            "supported_material_category": "当前要查询的核心材料范围",
++        }
++        return mapping.get(slot, "更明确的查询条件")
++
+     def _empty_response(self, *, question: str, nlu: PlanBomNluCandidate, reason: str, raw: dict[str, Any] | None = None) -> PlanBomQaResponse:
+         """构造空结果响应。
+ 
+@@ -1339,6 +1677,27 @@ class PlanBomQaService:
+ 
+         return ["diff_type", "material_category", "left_order", "left_description", "right_order", "right_description", "changed_fields"]
+ 
++    @staticmethod
++    def _expanded_compare_columns() -> list[str]:
++        """返回多候选展开对比表列。
++
++        返回：
++            列名列表；相比普通 compare 多出比较组和左右业务实例，避免短订单号多实例时丢失上下文。
++        """
++
++        return [
++            "compare_pair",
++            "diff_type",
++            "material_category",
++            "left_instance",
++            "left_order",
++            "left_description",
++            "right_instance",
++            "right_order",
++            "right_description",
++            "changed_fields",
++        ]
++
+     @staticmethod
+     def _item_row(item: dict[str, Any]) -> dict[str, Any]:
+         """转换 detail item 为表格行。
+diff --git a/backend/app/domains/query_planning/services/__init__.py b/backend/app/domains/query_planning/services/__init__.py
+index 8d81a99..a3c5315 100644
+--- a/backend/app/domains/query_planning/services/__init__.py
++++ b/backend/app/domains/query_planning/services/__init__.py
+@@ -4,6 +4,7 @@ from backend.app.domains.query_planning.services.logistics_adapter import Logist
+ from backend.app.domains.query_planning.services.plan_bom_adapter import PlanBomQueryPlanningAdapter
+ from backend.app.domains.query_planning.services.query_plan_v2_audit_writer import QueryPlanV2AuditWriter
+ from backend.app.domains.query_planning.services.query_planning_v2_service import QueryPlanningV2Service
++from backend.app.domains.query_planning.services.response_meta_exposure_service import QueryPlanningV2ResponseMetaExposureService
+ from backend.app.domains.query_planning.services.shadow_report_service import QueryPlanningV2ShadowReportService
+ from backend.app.domains.query_planning.services.shadow_snapshot_builder import QueryPlanningV2ShadowSnapshotBuilder
+ from backend.app.domains.query_planning.services.strategy_router import QueryPlanningV2StrategyRouter
+@@ -12,6 +13,7 @@ __all__ = [
+     "LogisticsQueryPlanningAdapter",
+     "PlanBomQueryPlanningAdapter",
+     "QueryPlanV2AuditWriter",
++    "QueryPlanningV2ResponseMetaExposureService",
+     "QueryPlanningV2Service",
+     "QueryPlanningV2ShadowReportService",
+     "QueryPlanningV2ShadowSnapshotBuilder",
+diff --git a/backend/app/domains/query_planning/services/response_meta_exposure_service.py b/backend/app/domains/query_planning/services/response_meta_exposure_service.py
+new file mode 100644
+index 0000000..ca494e3
+--- /dev/null
++++ b/backend/app/domains/query_planning/services/response_meta_exposure_service.py
+@@ -0,0 +1,192 @@
++from __future__ import annotations
++
++import logging
++from typing import Any
++
++from backend.app.core.config import settings
++from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaResult
++from backend.app.domains.logistics.schemas.llm_understanding import LogisticsLlmGuardrailDecision
++from backend.app.domains.plan_bom.schemas.qa import PlanBomQaResponse
++from backend.app.domains.query_planning.services.shadow_snapshot_builder import QueryPlanningV2ShadowSnapshotBuilder
++
++logger = logging.getLogger(__name__)
++
++
++class QueryPlanningV2ResponseMetaExposureService:
++    """构建可选暴露到正式响应中的 Query Planning V2 轻量 meta。
++
++    说明：
++        1. 本服务只在请求显式开启、feature flag 开启且非生产环境时返回 meta；
++        2. 生产环境在正式用户权限模块接入前一律 fail-closed；
++        3. meta 只包含 strategy / query_key / comparison / risk_tags 等审计摘要；
++        4. 不暴露原始问题、完整 trace、request_payload、query_result、raw_result 或完整 query_plan_v2_shadow。
++    """
++
++    SAFE_COMPARISON_KEYS = (
++        "schema_version",
++        "domain",
++        "formal_status",
++        "formal_intent",
++        "formal_query_key",
++        "formal_result_count",
++        "shadow_strategy",
++        "shadow_query_key",
++        "query_key_matched",
++        "matched",
++        "risk_tags",
++        "guardrail_status",
++        "shadow_only",
++        "llm_can_execute",
++        "sql_generation_allowed",
++    )
++
++    def __init__(self, builder: QueryPlanningV2ShadowSnapshotBuilder | None = None) -> None:
++        """初始化响应 meta 暴露服务。
++
++        参数：
++            builder: shadow 快照构建器，测试可注入。
++        返回：无返回值。
++        """
++
++        self.builder = builder or QueryPlanningV2ShadowSnapshotBuilder()
++
++    def should_expose(self, *, requested: bool) -> bool:
++        """判断当前请求是否允许暴露 Query Planning V2 meta。
++
++        参数：
++            requested: 请求体中是否显式要求返回 meta。
++        返回：
++            True 表示允许返回轻量 meta；False 表示必须隐藏。
++        业务逻辑：生产环境未接入正式权限模块前 fail-closed，避免用临时 header/token 绕过。
++        """
++
++        if not requested:
++            return False
++        if not bool(getattr(settings, "query_planning_v2_response_meta_enabled", False)):
++            return False
++        app_env = str(getattr(settings, "app_env", "local") or "local").strip().lower()
++        return app_env not in {"prod", "production"}
++
++    def build_logistics_meta(
++        self,
++        *,
++        requested: bool,
++        question: str,
++        result: LogisticsDataQaResult,
++        trace_id: str | None = None,
++        guardrail_decision: LogisticsLlmGuardrailDecision | None = None,
++    ) -> dict[str, Any] | None:
++        """为物流正式响应构建可选 Query Planning V2 meta。
++
++        参数：
++            requested: 请求体是否显式开启 meta。
++            question: 用户原始问题，仅用于构建 shadow 快照，最终不会暴露。
++            result: 已完成的物流正式响应。
++            trace_id: 请求追踪号。
++            guardrail_decision: 可选 Guardrail 决策，通常正式 API 响应阶段为空。
++        返回：
++            允许暴露时返回安全 meta；否则返回 None。
++        """
++
++        if not self.should_expose(requested=requested):
++            return None
++        try:
++            snapshot = self.builder.build_logistics_snapshot(
++                question=question,
++                result=result,
++                trace_id=trace_id,
++                guardrail_decision=guardrail_decision,
++            )
++            return self.build_from_shadow_snapshot(
++                snapshot=snapshot,
++                trace_id=trace_id,
++                history_log_id=result.history_log_id,
++            )
++        except Exception as exc:  # noqa: BLE001
++            logger.warning("build logistics query_plan_v2 response meta failed: %s", exc)
++            return None
++
++    def build_plan_bom_meta(
++        self,
++        *,
++        requested: bool,
++        question: str,
++        response: PlanBomQaResponse,
++        trace_id: str | None = None,
++    ) -> dict[str, Any] | None:
++        """为计划 BOM 正式响应构建可选 Query Planning V2 meta。
++
++        参数：
++            requested: 请求体是否显式开启 meta。
++            question: 用户原始问题，仅用于构建 shadow 快照，最终不会暴露。
++            response: 已完成的 BOM 正式响应。
++            trace_id: 请求追踪号。
++        返回：
++            允许暴露时返回安全 meta；否则返回 None。
++        """
++
++        if not self.should_expose(requested=requested):
++            return None
++        try:
++            snapshot = self.builder.build_plan_bom_snapshot(
++                question=question,
++                response=response,
++                trace_id=trace_id,
++            )
++            return self.build_from_shadow_snapshot(snapshot=snapshot, trace_id=trace_id)
++        except Exception as exc:  # noqa: BLE001
++            logger.warning("build plan bom query_plan_v2 response meta failed: %s", exc)
++            return None
++
++    @classmethod
++    def build_from_shadow_snapshot(
++        cls,
++        *,
++        snapshot: dict[str, Any],
++        trace_id: str | None = None,
++        history_log_id: int | None = None,
++    ) -> dict[str, Any]:
++        """从完整 shadow 快照中提取可暴露的轻量 meta。
++
++        参数：
++            snapshot: 完整 query_plan_v2_shadow 快照。
++            trace_id: 请求追踪号。
++            history_log_id: 可选查询历史 ID。
++        返回：
++            可放入正式响应 `query_plan_v2_meta` 的安全摘要。
++        """
++
++        comparison = snapshot.get("comparison") if isinstance(snapshot.get("comparison"), dict) else {}
++        safe_comparison = {key: comparison.get(key) for key in cls.SAFE_COMPARISON_KEYS if key in comparison}
++        risk_tags = cls._safe_list(snapshot.get("risk_tags") or safe_comparison.get("risk_tags"))
++        policy = snapshot.get("execution_policy") if isinstance(snapshot.get("execution_policy"), dict) else {}
++        return {
++            "schema_version": "query_plan_v2.response_meta.v1",
++            "enabled": True,
++            "domain": snapshot.get("domain") or safe_comparison.get("domain"),
++            "trace_id": trace_id,
++            "history_log_id": history_log_id,
++            "strategy": snapshot.get("strategy") or safe_comparison.get("shadow_strategy"),
++            "query_key": snapshot.get("query_key") or safe_comparison.get("shadow_query_key"),
++            "intent": snapshot.get("intent"),
++            "matched": safe_comparison.get("matched"),
++            "risk_tags": risk_tags,
++            "comparison": safe_comparison,
++            "shadow_only": policy.get("shadow_only", safe_comparison.get("shadow_only", True)),
++            "llm_can_execute": policy.get("llm_can_execute", safe_comparison.get("llm_can_execute", False)),
++            "sql_generation_allowed": policy.get(
++                "sql_generation_allowed",
++                safe_comparison.get("sql_generation_allowed", False),
++            ),
++        }
++
++    @staticmethod
++    def _safe_list(value: Any) -> list[str]:
++        """把风险标签转换为字符串列表。"""
++
++        if not isinstance(value, list):
++            return []
++        return [str(item) for item in value if str(item)]
++
++
++__all__ = ["QueryPlanningV2ResponseMetaExposureService"]
+diff --git a/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md b/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
+index 7fd5e41..b23247e 100644
+--- a/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
++++ b/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
+@@ -412,10 +412,13 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
+ 
+ **要点**：
+ 
+-- 默认关闭。
+-- 不暴露完整 trace。
++- 默认关闭，必须同时满足 `include_query_plan_v2_meta=true` 与 `QUERY_PLANNING_V2_RESPONSE_META_ENABLED=true` 才返回。
++- 生产环境在正式用户权限模块接入前 fail-closed，即使请求参数和 feature flag 同时开启也不返回。
++- 不新增临时 token/header，不恢复任何 `X-Plan-Power-Admin-Token` 类绕过方式。
++- 不暴露完整 trace、原始问题、`request_payload`、`query_result`、`raw_result` 或完整 `query_plan_v2_shadow`。
++- 仅暴露安全轻量摘要：`schema_version`、`domain`、`trace_id`、`history_log_id`、`strategy`、`query_key`、`intent`、`matched`、`risk_tags`、`comparison`、执行策略安全布尔值。
+ - 不改变 `answer`、`status`、`table`。
+-- 生产环境需正式权限和开关双重控制。
++- meta 构建失败必须 fail-soft：正式问答仍按原结果返回，只是不附加 `query_plan_v2_meta`。
+ 
+ ### Task 5.7：验收材料
+ 
+@@ -467,7 +470,7 @@ npm run build
+ - hardcoded secret / token / password；
+ - shell injection；
+ - eval/exec；
+-- pickle；
++- 不安全二进制反序列化；
+ - SQL 字符串拼接；
+ - 临时 token/header 复活；
+ - raw SQL / LLM SQL 执行通路。
+diff --git a/tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py b/tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py
+new file mode 100644
+index 0000000..d501538
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py
+@@ -0,0 +1,141 @@
++from __future__ import annotations
++
++import pytest
++
++from backend.app.db.session import SessionLocal
++from backend.app.domains.plan_bom.models import PlanBomHeader
++from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
++from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate
++from backend.app.domains.plan_bom.schemas.query import PlanBomCandidate, PlanBomCompareResponse, PlanBomStatus
++from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
++from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
++from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
++from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
++
++
++@pytest.fixture()
++def live_db_session():
++    """连接当前项目真实 BOM 数据库，用真实订单尾号复现多候选 compare 问题。"""
++    session = SessionLocal()
++    try:
++        try:
++            session.query(PlanBomHeader).limit(1).all()
++        except Exception as exc:  # pragma: no cover - 本地无验收库时跳过。
++            pytest.skip(f"当前环境无法连接真实 BOM 数据库，跳过计划 BOM compare 验收：{exc}")
++        yield session
++    finally:
++        session.close()
++
++
++@pytest.fixture()
++def qa_service(live_db_session) -> PlanBomQaService:
++    """构造关闭 LLM 的计划 BOM QA 服务，只验证确定性 NLU + 查询链路。"""
++    repository = PlanBomQueryRepository(live_db_session)
++    return PlanBomQaService(
++        repository=repository,
++        query_service=PlanBomQueryService(repository=repository),
++        nlu_service=PlanBomNluCenterService(repository=repository, base_url="", api_key="", model=""),
++        presentation_service=PlanBomAnswerPresentationService(enabled=False, base_url="", api_key="", model=""),
++    )
++
++
++def _require_tail_headers(session, tail: str) -> list[PlanBomHeader]:
++    """读取真实库中包含指定尾号的有效 BOM 头；不存在时跳过而不是伪造数据。"""
++    headers = (
++        session.query(PlanBomHeader)
++        .filter(PlanBomHeader.is_active == 1, PlanBomHeader.order_no.contains(tail))
++        .order_by(PlanBomHeader.order_no.asc(), PlanBomHeader.order_name.asc(), PlanBomHeader.version_no.asc())
++        .all()
++    )
++    if not headers:
++        pytest.skip(f"当前真实 BOM 数据缺少订单尾号 {tail}，无法复现本次业务问题。")
++    return headers
++
++
++def test_table_compare_expands_multi_candidate_order_tail_without_clarification(live_db_session, qa_service) -> None:
++    """两个订单尾号做规格差异表时，多业务实例尾号应全部展开对比，而不是追问内部 order_identity。"""
++    _require_tail_headers(live_db_session, "00067")
++    right_headers = _require_tail_headers(live_db_session, "00106")
++    if len({header.order_identity_key for header in right_headers}) < 2:
++        pytest.skip("当前真实 BOM 数据中的 00106 未形成多业务实例候选，无法复现本次缺陷。")
++
++    response = qa_service.ask(
++        "订单00067和订单00106玻璃、间隙贴膜、焊带、汇流条、接线盒的规格描述有什么不一样，并用表格统计出来",
++        use_llm=False,
++    )
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.intent == "cross_order_material_compare"
++    assert "order_identity" not in response.nlu.missing_slots
++    assert response.result_table.rows
++    assert {"compare_pair", "left_instance", "right_instance", "left_description", "right_description"}.issubset(
++        set(response.result_table.columns)
++    )
++    assert response.raw_result.get("expanded_compare") is True
++    assert response.raw_result.get("right_candidate_count", 0) >= 2
++    assert len(response.raw_result.get("compared_pairs") or []) >= 2
++
++
++def test_single_ambiguous_order_tail_still_requires_business_instance_confirmation(qa_service, live_db_session) -> None:
++    """单订单查询没有对比展开语义时，仍需确认业务实例，避免静默选错候选。"""
++    right_headers = _require_tail_headers(live_db_session, "00106")
++    if len({header.order_identity_key for header in right_headers}) < 2:
++        pytest.skip("当前真实 BOM 数据中的 00106 未形成多业务实例候选，无法验证单订单保护。")
++
++    response = qa_service.ask("订单00106玻璃规格描述是什么", use_llm=False)
++
++    assert response.classification == "B"
++    assert response.status.code == "CLARIFICATION_REQUIRED"
++    assert response.result_table.rows == []
++    assert any(slot in response.nlu.missing_slots for slot in ("order_identity", "candidate"))
++
++
++def test_truncated_compare_candidate_list_is_not_partially_expanded() -> None:
++    """候选被截断时不能只展开前 N 个候选，否则会把不完整对比伪装成完整答案。"""
++    nlu = PlanBomNluCandidate(
++        question="订单A和订单B玻璃规格描述有什么不一样",
++        intent="cross_order_material_compare",
++        slots={"order_tail_no": ["00001", "00002"]},
++        missing_slots=[],
++        confidence=1.0,
++    )
++    candidate = PlanBomCandidate(
++        order_identity_key="identity-1",
++        file_instance_key="file-1",
++        order_no="GCL-TEST-00002",
++        order_display_label="测试客户-00002",
++        order_name="测试客户-00002",
++        version_no="A0",
++        effective_date="2026-01-01",
++        source_type="EXCEL",
++        source_tag="fixture",
++        match_reason="order_no_like",
++    )
++    candidate_result = PlanBomCompareResponse(
++        query_type="plan_bom_candidate_list",
++        domain="plan_bom",
++        execution_mode="direct",
++        status=PlanBomStatus(
++            code="CANDIDATE_REQUIRED",
++            message="right 侧命中多个业务实例，请先选择。",
++            severity="warning",
++            extras={"candidate_truncated": True},
++        ),
++        result_explanation={},
++        response_meta={"candidate_truncated": True},
++        candidate_scope="order_identity",
++        candidate_side="right",
++        candidates=[candidate],
++        candidate_total_hint=21,
++        compare_ready=False,
++    )
++
++    assert (
++        PlanBomQaService._can_expand_compare_candidates(
++            nlu=nlu,
++            candidate_result=candidate_result,
++            candidates=candidate_result.candidates,
++        )
++        is False
++    )
+diff --git a/tests/unit/query_planning/test_query_planning_phase56_response_meta.py b/tests/unit/query_planning/test_query_planning_phase56_response_meta.py
+new file mode 100644
+index 0000000..5b48ef2
+--- /dev/null
++++ b/tests/unit/query_planning/test_query_planning_phase56_response_meta.py
+@@ -0,0 +1,378 @@
++from __future__ import annotations
++
++import asyncio
++import json
++from copy import deepcopy
++from types import SimpleNamespace
++from typing import Any
++
++from backend.app.domains.logistics.api.endpoints import data_qa as logistics_data_qa_endpoint
++from backend.app.domains.logistics.api.endpoints.data_qa import logistics_data_qa_query
++from backend.app.domains.logistics.schemas.data_qa import (
++    LogisticsDataQaPlan,
++    LogisticsDataQaQueryRequest,
++    LogisticsDataQaResult,
++    LogisticsDataQaStatus,
++    LogisticsDataQaTable,
++)
++from backend.app.domains.plan_bom.api.endpoints import qa as plan_bom_qa_endpoint
++from backend.app.domains.plan_bom.api.endpoints.qa import ask_plan_bom
++from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate, PlanBomQaRequest, PlanBomQaResponse, PlanBomQaStatus
++from backend.app.domains.query_planning.services import response_meta_exposure_service
++
++
++class _FakeRequest:
++    """模拟 FastAPI Request，仅提供 state.trace_id。"""
++
++    def __init__(self, trace_id: str = "trace-p56") -> None:
++        self.state = SimpleNamespace(trace_id=trace_id, request_id=trace_id)
++
++
++class _FakeLogisticsQaService:
++    """返回固定物流结果，避免测试触发真实查询。"""
++
++    def __init__(self, result: LogisticsDataQaResult) -> None:
++        self.result = result
++        self.seen_payloads: list[LogisticsDataQaQueryRequest] = []
++
++    def query(self, payload: LogisticsDataQaQueryRequest, *, trace_id: str | None = None) -> LogisticsDataQaResult:
++        self.seen_payloads.append(payload)
++        self.result.history_log_id = 8801
++        self.result.history_ready = True
++        return self.result
++
++    def write_error_log(self, *, question: str, trace_id: str | None, message: str) -> int:  # pragma: no cover
++        raise AssertionError("测试不应进入错误日志分支")
++
++
++class _FakePlanBomQaService:
++    """返回固定 BOM 结果，避免测试触发真实查询。"""
++
++    def __init__(self, response: PlanBomQaResponse) -> None:
++        self.response = response
++        self.seen_questions: list[str] = []
++
++    def ask(self, question: str, *, use_llm: bool = True, trace_id: str | None = None) -> PlanBomQaResponse:
++        self.seen_questions.append(question)
++        return self.response
++
++    def write_error_log(self, *, question: str, trace_id: str | None, message: str) -> int:  # pragma: no cover
++        raise AssertionError("测试不应进入错误日志分支")
++
++
++class _FakeBusinessAnswerStreamService:
++    """流式答案表达测试替身，不触发真实 LLM。"""
++
++    def stream_answer(
++        self,
++        *,
++        domain: str,
++        question: str,
++        deterministic_payload: dict[str, Any],
++        fallback_answer: str | None = None,
++    ):
++        yield fallback_answer or deterministic_payload.get("answer_summary") or "流式兜底答案"
++
++    def apply_streamed_answer(
++        self,
++        *,
++        domain: str,
++        deterministic_payload: dict[str, Any],
++        streamed_answer: str,
++    ) -> dict[str, Any]:
++        payload = deepcopy(deterministic_payload)
++        payload["answer_summary"] = streamed_answer or payload.get("answer_summary")
++        return payload
++
++
++class _BrokenShadowSnapshotBuilder:
++    """用于验证响应 meta 构建失败时 fail-soft。"""
++
++    def build_logistics_snapshot(self, **kwargs: Any) -> dict[str, Any]:
++        raise RuntimeError("broken shadow snapshot")
++
++    def build_plan_bom_snapshot(self, **kwargs: Any) -> dict[str, Any]:
++        raise RuntimeError("broken shadow snapshot")
++
++
++async def _collect_stream_events(streaming_response: Any) -> list[dict[str, Any]]:
++    """消费 StreamingResponse 的 NDJSON 事件。"""
++
++    chunks: list[str] = []
++    async for chunk in streaming_response.body_iterator:
++        chunks.append(chunk.decode("utf-8") if isinstance(chunk, bytes) else str(chunk))
++    return [json.loads(line) for line in "".join(chunks).splitlines() if line]
++
++
++def _done_event(events: list[dict[str, Any]]) -> dict[str, Any]:
++    """提取流式响应 done 事件。"""
++
++    for event in events:
++        if event.get("event") == "done":
++            return event
++    raise AssertionError("streaming response missing done event")
++
++
++def _logistics_result() -> LogisticsDataQaResult:
++    """构造可直答的物流结果。"""
++
++    return LogisticsDataQaResult(
++        answer_summary="已统计 2025 年各承运商发运量。",
++        result_table=LogisticsDataQaTable(columns=["承运商", "发运量"], rows=[{"承运商": "A", "发运量": 1}]),
++        query_plan=LogisticsDataQaPlan(
++            intent="aggregate",
++            query_key="hist_mw_by_carrier",
++            metrics=["shipment_mw"],
++            dimensions=["carrier"],
++            filters={"year": 2025},
++        ),
++        status=LogisticsDataQaStatus(code="OK", message="查询成功", success=True),
++    )
++
++
++def _plan_bom_response() -> PlanBomQaResponse:
++    """构造可直答的 BOM 结果。"""
++
++    return PlanBomQaResponse(
++        question="订单 ABC 的玻璃是什么？",
++        classification="A",
++        status=PlanBomQaStatus(code="OK", message="查询成功", success=True),
++        nlu=PlanBomNluCandidate(
++            question="订单 ABC 的玻璃是什么？",
++            intent="single_order_material_specs",
++            slots={"order_id": "ABC", "material_category": ["玻璃"]},
++            confidence=0.91,
++            provider_mode="rule",
++        ),
++        answer_summary="已查询订单 ABC 的玻璃规格。",
++    )
++
++
++def _assert_safe_query_plan_meta(meta: dict[str, Any], *, domain: str) -> None:
++    """校验可暴露 meta 只包含轻量审计摘要，不包含 raw payload 或完整 trace。"""
++
++    assert meta["schema_version"] == "query_plan_v2.response_meta.v1"
++    assert meta["domain"] == domain
++    assert meta["enabled"] is True
++    assert meta["shadow_only"] is True
++    assert meta["llm_can_execute"] is False
++    assert meta["sql_generation_allowed"] is False
++    assert "strategy" in meta
++    assert "comparison" in meta
++    assert "risk_tags" in meta
++
++    forbidden_keys = {
++        "query_plan_v2_shadow",
++        "request_payload",
++        "query_result",
++        "trace_events",
++        "raw_result",
++        "original_question",
++        "question",
++        "answer_summary",
++    }
++    assert forbidden_keys.isdisjoint(meta.keys())
++    assert forbidden_keys.isdisjoint(meta["comparison"].keys())
++
++
++def test_logistics_query_plan_v2_meta_is_hidden_by_default(monkeypatch) -> None:
++    """默认关闭时，正式物流响应不应暴露 query_plan_v2_meta。"""
++
++    monkeypatch.setattr(response_meta_exposure_service.settings, "query_planning_v2_response_meta_enabled", True, raising=False)
++    monkeypatch.setattr(response_meta_exposure_service.settings, "app_env", "local", raising=False)
++
++    api_response = logistics_data_qa_query(
++        LogisticsDataQaQueryRequest(question="2025年各承运商发运量是多少？"),
++        _FakeRequest(),
++        _FakeLogisticsQaService(_logistics_result()),
++    )
++
++    data = api_response.data
++    assert isinstance(data, dict)
++    assert "query_plan_v2_meta" not in data
++    assert data["answer_summary"] == "已统计 2025 年各承运商发运量。"
++    assert data["status"]["code"] == "OK"
++    assert data["result_table"]["rows"] == [{"承运商": "A", "发运量": 1}]
++
++
++def test_logistics_query_plan_v2_meta_can_be_exposed_when_flag_and_request_enabled(monkeypatch) -> None:
++    """非生产环境中，开关和请求参数同时开启时才暴露轻量 meta。"""
++
++    monkeypatch.setattr(response_meta_exposure_service.settings, "query_planning_v2_response_meta_enabled", True, raising=False)
++    monkeypatch.setattr(response_meta_exposure_service.settings, "app_env", "local", raising=False)
++
++    api_response = logistics_data_qa_query(
++        LogisticsDataQaQueryRequest(
++            question="2025年各承运商发运量是多少？",
++            include_query_plan_v2_meta=True,
++        ),
++        _FakeRequest("trace-p56-logistics"),
++        _FakeLogisticsQaService(_logistics_result()),
++    )
++
++    data = api_response.data
++    assert isinstance(data, dict)
++    meta = data["query_plan_v2_meta"]
++    _assert_safe_query_plan_meta(meta, domain="logistics")
++    assert meta["trace_id"] == "trace-p56-logistics"
++    assert meta["history_log_id"] == 8801
++    assert meta["strategy"] == "DIRECT_RETRIEVAL"
++    assert meta["comparison"]["formal_query_key"] == "hist_mw_by_carrier"
++    assert meta["comparison"]["shadow_query_key"] == "hist_mw_by_carrier"
++    assert meta["comparison"]["matched"] is True
++
++
++def test_query_plan_v2_meta_stays_hidden_when_feature_flag_is_off(monkeypatch) -> None:
++    """即使请求参数显式开启，只要 feature flag 关闭，正式响应也不能暴露 meta。"""
++
++    monkeypatch.setattr(response_meta_exposure_service.settings, "query_planning_v2_response_meta_enabled", False, raising=False)
++    monkeypatch.setattr(response_meta_exposure_service.settings, "app_env", "local", raising=False)
++
++    api_response = logistics_data_qa_query(
++        LogisticsDataQaQueryRequest(
++            question="2025年各承运商发运量是多少？",
++            include_query_plan_v2_meta=True,
++        ),
++        _FakeRequest("trace-p56-flag-off"),
++        _FakeLogisticsQaService(_logistics_result()),
++    )
++
++    assert isinstance(api_response.data, dict)
++    assert "query_plan_v2_meta" not in api_response.data
++
++
++def test_query_plan_v2_meta_hides_in_production_alias(monkeypatch) -> None:
++    """生产环境别名也必须 fail-closed，避免环境命名差异导致 meta 暴露。"""
++
++    monkeypatch.setattr(response_meta_exposure_service.settings, "query_planning_v2_response_meta_enabled", True, raising=False)
++    monkeypatch.setattr(response_meta_exposure_service.settings, "app_env", "Production", raising=False)
++
++    service = response_meta_exposure_service.QueryPlanningV2ResponseMetaExposureService()
++
++    assert service.should_expose(requested=True) is False
++
++
++def test_query_plan_v2_meta_build_failure_is_fail_soft(monkeypatch) -> None:
++    """shadow meta 构建异常时，正式响应仍成功且不附加 meta。"""
++
++    monkeypatch.setattr(response_meta_exposure_service.settings, "query_planning_v2_response_meta_enabled", True, raising=False)
++    monkeypatch.setattr(response_meta_exposure_service.settings, "app_env", "local", raising=False)
++    monkeypatch.setattr(
++        response_meta_exposure_service,
++        "QueryPlanningV2ShadowSnapshotBuilder",
++        lambda: _BrokenShadowSnapshotBuilder(),
++    )
++
++    api_response = logistics_data_qa_query(
++        LogisticsDataQaQueryRequest(
++            question="2025年各承运商发运量是多少？",
++            include_query_plan_v2_meta=True,
++        ),
++        _FakeRequest("trace-p56-fail-soft"),
++        _FakeLogisticsQaService(_logistics_result()),
++    )
++
++    assert isinstance(api_response.data, dict)
++    assert api_response.data["answer_summary"] == "已统计 2025 年各承运商发运量。"
++    assert api_response.data["status"]["code"] == "OK"
++    assert "query_plan_v2_meta" not in api_response.data
++
++
++def test_logistics_stream_done_payload_exposes_query_plan_v2_meta_when_enabled(monkeypatch) -> None:
++    """物流流式 done payload 与同步接口保持同样的可选 meta 语义。"""
++
++    monkeypatch.setattr(response_meta_exposure_service.settings, "query_planning_v2_response_meta_enabled", True, raising=False)
++    monkeypatch.setattr(response_meta_exposure_service.settings, "app_env", "local", raising=False)
++    monkeypatch.setattr(logistics_data_qa_endpoint, "BusinessAnswerStreamService", _FakeBusinessAnswerStreamService)
++
++    streaming_response = logistics_data_qa_endpoint.logistics_data_qa_query_stream(
++        LogisticsDataQaQueryRequest(
++            question="2025年各承运商发运量是多少？",
++            include_query_plan_v2_meta=True,
++        ),
++        _FakeRequest("trace-p56-logistics-stream"),
++        _FakeLogisticsQaService(_logistics_result()),
++    )
++    done = _done_event(asyncio.run(_collect_stream_events(streaming_response)))
++
++    meta = done["data"]["data"]["query_plan_v2_meta"]
++    _assert_safe_query_plan_meta(meta, domain="logistics")
++    assert meta["trace_id"] == "trace-p56-logistics-stream"
++    assert meta["comparison"]["matched"] is True
++
++
++def test_plan_bom_stream_done_payload_hides_query_plan_v2_meta_in_prod(monkeypatch) -> None:
++    """BOM 流式 done payload 在生产环境同样 fail-closed。"""
++
++    monkeypatch.setattr(response_meta_exposure_service.settings, "query_planning_v2_response_meta_enabled", True, raising=False)
++    monkeypatch.setattr(response_meta_exposure_service.settings, "app_env", "prod", raising=False)
++    monkeypatch.setattr(plan_bom_qa_endpoint, "BusinessAnswerStreamService", _FakeBusinessAnswerStreamService)
++
++    streaming_response = plan_bom_qa_endpoint.ask_plan_bom_stream(
++        PlanBomQaRequest(
++            question="订单 ABC 的玻璃是什么？",
++            include_query_plan_v2_meta=True,
++        ),
++        _FakeRequest("trace-p56-bom-stream-prod"),
++        _FakePlanBomQaService(_plan_bom_response()),
++    )
++    done = _done_event(asyncio.run(_collect_stream_events(streaming_response)))
++
++    assert "query_plan_v2_meta" not in done["data"]["data"]
++    assert done["data"]["data"]["status"]["code"] == "OK"
++
++
++def test_plan_bom_query_plan_v2_meta_can_be_exposed_without_raw_payload(monkeypatch) -> None:
++    """BOM 响应显式开启时也只暴露安全摘要，不泄露 raw_result/trace。"""
++
++    monkeypatch.setattr(response_meta_exposure_service.settings, "query_planning_v2_response_meta_enabled", True, raising=False)
++    monkeypatch.setattr(response_meta_exposure_service.settings, "app_env", "dev", raising=False)
++
++    api_response = ask_plan_bom(
++        PlanBomQaRequest(
++            question="订单 ABC 的玻璃是什么？",
++            include_query_plan_v2_meta=True,
++            trace_id="trace-p56-bom-request",
++        ),
++        _FakeRequest("trace-p56-bom"),
++        _FakePlanBomQaService(_plan_bom_response()),
++    )
++
++    data = api_response.data
++    assert isinstance(data, dict)
++    meta = data["query_plan_v2_meta"]
++    _assert_safe_query_plan_meta(meta, domain="plan_bom")
++    assert meta["trace_id"] == "trace-p56-bom"
++    assert meta["strategy"] == "DIRECT_RETRIEVAL"
++    assert meta["comparison"]["formal_query_key"] == "single_order_material_specs"
++    assert data["answer_summary"] == "已查询订单 ABC 的玻璃规格。"
++    assert data["status"]["code"] == "OK"
++
++
++def test_query_plan_v2_meta_is_fail_closed_in_prod_even_when_requested(monkeypatch) -> None:
++    """生产环境未接入正式权限模块前必须 fail-closed，不能因请求参数暴露 meta。"""
++
++    monkeypatch.setattr(response_meta_exposure_service.settings, "query_planning_v2_response_meta_enabled", True, raising=False)
++    monkeypatch.setattr(response_meta_exposure_service.settings, "app_env", "prod", raising=False)
++
++    logistics_response = logistics_data_qa_query(
++        LogisticsDataQaQueryRequest(
++            question="2025年各承运商发运量是多少？",
++            include_query_plan_v2_meta=True,
++        ),
++        _FakeRequest("trace-prod-logistics"),
++        _FakeLogisticsQaService(_logistics_result()),
++    )
++    bom_response = ask_plan_bom(
++        PlanBomQaRequest(
++            question="订单 ABC 的玻璃是什么？",
++            include_query_plan_v2_meta=True,
++        ),
++        _FakeRequest("trace-prod-bom"),
++        _FakePlanBomQaService(_plan_bom_response()),
++    )
++
++    assert isinstance(logistics_response.data, dict)
++    assert isinstance(bom_response.data, dict)
++    assert "query_plan_v2_meta" not in logistics_response.data
++    assert "query_plan_v2_meta" not in bom_response.data

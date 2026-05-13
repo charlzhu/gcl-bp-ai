@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
 
@@ -3243,35 +3243,43 @@ class LogisticsDataQaRepository:
         months: list[int] | None = None,
         base_code: str | None = None,
     ) -> dict[str, Any]:
-        """2026 额外费用总额。
+        """查询系统物流额外费用总额。
 
-        说明：
-            当前额外费用按 assign_detail.extra_cost 汇总，月份和基地按主任务过滤。
+        参数：
+            year: 业务年份。
+            months: 可选月份列表；传入后按提货日期优先、业务日期兜底过滤。
+            base_code: 可选基地编码。
+        返回值：
+            包含额外费用金额、贡献任务数和贡献产品明细数的字典。
+        业务逻辑：
+            “额外费用”金额以发运产品明细 dwd_logistics_ship_product.extra_cost 为准；
+            dwd_logistics_assign_detail.extra_cost 是派车/分配明细侧费用，不能混作本题金额来源。
         """
 
-        filters = ["st.biz_year = :year"]
+        filters = ["st.biz_year = :year", "COALESCE(sp.extra_cost, 0) <> 0"]
         params: dict[str, Any] = {"year": year}
         if months:
-            month_sql = ", ".join(str(int(month)) for month in months)
-            filters.append(f"MONTH(COALESCE(st.pickup_date, st.biz_date)) IN ({month_sql})")
+            normalized_months = [int(month) for month in months]
+            filters.append("MONTH(COALESCE(st.pickup_date, st.biz_date)) IN :months")
+            params["months"] = normalized_months
         if base_code:
             filters.append("st.base_code = :base_code")
             params["base_code"] = base_code
         where_sql = " AND ".join(filters)
-        row = self.db.execute(
-            text(
-                f"""
-                SELECT
-                    ROUND(SUM(COALESCE(ad.extra_cost, 0)), 2) AS extra_fee_amount,
-                    COUNT(DISTINCT st.task_id) AS task_count,
-                    COUNT(ad.id) AS detail_count
-                FROM dwd_logistics_ship_task st
-                LEFT JOIN dwd_logistics_assign_detail ad ON ad.ship_task_id = st.task_id
-                WHERE {where_sql}
-                """
-            ),
-            params,
-        ).mappings().first()
+        statement = text(
+            f"""
+            SELECT
+                COALESCE(ROUND(SUM(sp.extra_cost), 2), 0) AS extra_fee_amount,
+                COUNT(DISTINCT st.task_id) AS task_count,
+                COUNT(sp.source_id) AS detail_count
+            FROM dwd_logistics_ship_task st
+            JOIN dwd_logistics_ship_product sp ON sp.task_id = st.task_id
+            WHERE {where_sql}
+            """
+        )
+        if months:
+            statement = statement.bindparams(bindparam("months", expanding=True))
+        row = self.db.execute(statement, params).mappings().first()
         return dict(row or {})
 
     def sys_task_count_ranking(self, *, year: int, dimension: str, top_n: int = 10) -> list[dict[str, Any]]:

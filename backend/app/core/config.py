@@ -68,6 +68,7 @@ class Settings(BaseSettings):
     llm_answer_presentation_model: str = ""
     llm_answer_presentation_timeout: float = 6.0
     llm_answer_presentation_max_retries: int = 0
+    query_planning_v2_response_meta_enabled: bool = False
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parent.parent.parent / ".env",
@@ -392,6 +393,10 @@ class Settings(BaseSettings):
     @property
     def LLM_ANSWER_PRESENTATION_MAX_RETRIES(self) -> int:
         return self.llm_answer_presentation_max_retries
+
+    @property
+    def QUERY_PLANNING_V2_RESPONSE_META_ENABLED(self) -> bool:
+        return self.query_planning_v2_response_meta_enabled
 
 
 @lru_cache

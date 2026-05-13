@@ -116,6 +116,10 @@ class PlanBomQaRequest(BaseModel):
 
     question: str = Field(..., min_length=1, description="计划 BOM 自然语言问题")
     trace_id: str | None = None
+    include_query_plan_v2_meta: bool = Field(
+        default=False,
+        description="是否在非生产且开关开启时返回 Query Planning V2 shadow 轻量审计 meta；默认关闭。",
+    )
 
 
 class PlanBomQaResponse(BaseModel):

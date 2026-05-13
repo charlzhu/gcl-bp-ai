@@ -412,10 +412,13 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
 
 **要点**：
 
-- 默认关闭。
-- 不暴露完整 trace。
+- 默认关闭，必须同时满足 `include_query_plan_v2_meta=true` 与 `QUERY_PLANNING_V2_RESPONSE_META_ENABLED=true` 才返回。
+- 生产环境在正式用户权限模块接入前 fail-closed，即使请求参数和 feature flag 同时开启也不返回。
+- 不新增临时 token/header，不恢复任何 `X-Plan-Power-Admin-Token` 类绕过方式。
+- 不暴露完整 trace、原始问题、`request_payload`、`query_result`、`raw_result` 或完整 `query_plan_v2_shadow`。
+- 仅暴露安全轻量摘要：`schema_version`、`domain`、`trace_id`、`history_log_id`、`strategy`、`query_key`、`intent`、`matched`、`risk_tags`、`comparison`、执行策略安全布尔值。
 - 不改变 `answer`、`status`、`table`。
-- 生产环境需正式权限和开关双重控制。
+- meta 构建失败必须 fail-soft：正式问答仍按原结果返回，只是不附加 `query_plan_v2_meta`。
 
 ### Task 5.7：验收材料
 
@@ -467,7 +470,7 @@ npm run build
 - hardcoded secret / token / password；
 - shell injection；
 - eval/exec；
-- pickle；
+- 不安全二进制反序列化；
 - SQL 字符串拼接；
 - 临时 token/header 复活；
 - raw SQL / LLM SQL 执行通路。

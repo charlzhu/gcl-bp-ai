@@ -4,6 +4,7 @@ from fastapi.responses import StreamingResponse
 from backend.app.api.deps import get_logistics_data_qa_service
 from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
 from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
+from backend.app.domains.query_planning.services.response_meta_exposure_service import QueryPlanningV2ResponseMetaExposureService
 from backend.app.schemas.common import ApiResponse
 from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService, build_json_line_event
 
@@ -20,7 +21,16 @@ def logistics_data_qa_query(
     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
     try:
         result = service.query(payload, trace_id=trace_id)
-        return ApiResponse.success(result, trace_id=trace_id)
+        result_payload = result.model_dump(mode="json")
+        query_plan_v2_meta = QueryPlanningV2ResponseMetaExposureService().build_logistics_meta(
+            requested=payload.include_query_plan_v2_meta,
+            question=payload.question,
+            result=result,
+            trace_id=trace_id,
+        )
+        if query_plan_v2_meta:
+            result_payload["query_plan_v2_meta"] = query_plan_v2_meta
+        return ApiResponse.success(result_payload, trace_id=trace_id)
     except Exception as exc:  # noqa: BLE001
         # 物流数据问答正式页需要把错误态也纳入查询历史，便于业务回看。
         service.write_error_log(question=payload.question, trace_id=trace_id, message=str(exc))
@@ -80,6 +90,14 @@ def logistics_data_qa_query_stream(
                 deterministic_payload=result_payload,
                 streamed_answer=final_answer,
             )
+            query_plan_v2_meta = QueryPlanningV2ResponseMetaExposureService().build_logistics_meta(
+                requested=payload.include_query_plan_v2_meta,
+                question=payload.question,
+                result=result,
+                trace_id=trace_id,
+            )
+            if query_plan_v2_meta:
+                final_payload["query_plan_v2_meta"] = query_plan_v2_meta
             yield build_json_line_event(
                 "done",
                 {"trace_id": trace_id, "domain": "logistics", "answer": final_answer, "data": final_payload},
