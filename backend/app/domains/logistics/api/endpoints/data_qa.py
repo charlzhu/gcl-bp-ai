@@ -61,11 +61,16 @@ def logistics_data_qa_query_stream(
                 },
             )
             chunks: list[str] = []
+            fallback_answer = result_payload.get("answer_summary")
+            presentation = result_payload.get("presentation")
+            if isinstance(presentation, dict) and presentation.get("answer"):
+                # 流式表达的降级文本优先使用展示层已增强的 narrative，避免 LLM 不可用时退回潦草摘要。
+                fallback_answer = presentation.get("answer")
             for chunk in stream_service.stream_answer(
                 domain="logistics",
                 question=payload.question,
                 deterministic_payload=result_payload,
-                fallback_answer=result_payload.get("answer_summary"),
+                fallback_answer=fallback_answer,
             ):
                 chunks.append(chunk)
                 yield build_json_line_event("delta", {"text": chunk})

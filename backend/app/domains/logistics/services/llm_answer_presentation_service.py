@@ -617,6 +617,127 @@ class LogisticsLlmAnswerPresentationService:
         metric_label = self._label(result.query_plan.metrics[0]) if result.query_plan.metrics else ""
         return f"{metric_label}分析结果" if metric_label else "物流数据分析结果"
 
+    def _build_deterministic_answer(
+        self,
+        *,
+        question: str,
+        result: LogisticsDataQaResult,
+        status_code: str,
+    ) -> str:
+        """构建确定性自然语言主回答。
+
+        参数：
+            question: 用户原始问题，用于识别是否为排名/TopN 等需要逐项表达的问法。
+            result: 后端确定性查询结果，所有事实和数字只能从这里读取。
+            status_code: 当前查询状态。
+
+        返回：
+            面向业务用户的自然语言回答。该回答不重新计算指标，只复述 answer_summary
+            和 result_table 中已经存在的行值，作为 LLM 不可用或被安全降级时的高质量兜底。
+        """
+
+        fallback = result.answer_summary or (result.status.message if result.status else "")
+        if status_code != "OK":
+            return fallback or "当前查询已完成，请查看结构化结果。"
+        ranking_answer = self._build_ranking_narrative_answer(question=question, result=result, fallback=fallback)
+        if ranking_answer:
+            return ranking_answer
+        return fallback or "当前查询已完成，请查看结构化结果。"
+
+    def _build_ranking_narrative_answer(
+        self,
+        *,
+        question: str,
+        result: LogisticsDataQaResult,
+        fallback: str,
+    ) -> str | None:
+        """为排名/TopN 小表结果生成更丰富的确定性叙事。
+
+        业务逻辑：
+            排名类问题如果只返回一句总计，会显得潦草；这里在不改变事实的前提下，
+            直接按后端已经排序好的 result_table.rows 逐项复述维度和值，让回答更像专业助手。
+            不做占比、差额、平均等任何派生计算。
+        """
+
+        rows = list(result.result_table.rows)
+        if len(rows) < 2 or not self._is_ranking_question_or_plan(question=question, result=result):
+            return None
+        dimension_column = self._choose_narrative_dimension_column(result.result_table.columns, rows=rows)
+        metric_column = self._choose_narrative_metric_column(result=result, dimension_column=dimension_column)
+        if not dimension_column or not metric_column:
+            return None
+        detail_lines: list[str] = []
+        for index, row in enumerate(rows[:8]):
+            dimension_value = row.get(dimension_column)
+            metric_value = row.get(metric_column)
+            if dimension_value is None or metric_value is None or not self._is_number(metric_value):
+                continue
+            ordinal = self._chinese_ordinal(index)
+            value_text = self._format_metric_value(metric_column, metric_value)
+            detail_lines.append(f"- {ordinal}：{dimension_value}，{self._label(metric_column)}{value_text}。")
+        if not detail_lines:
+            return None
+        first_dimension = rows[0].get(dimension_column)
+        opening = f"查到了。{fallback}" if fallback else "查到了。"
+        body = "\n".join(detail_lines)
+        closing = ""
+        if first_dimension:
+            closing = f"\n\n从当前返回的排序看，{first_dimension}位列首位；下方明细保留了完整依据，方便你继续展开查看或导出。"
+        return f"{opening}\n\n按当前返回的排序，结果依次是：\n{body}{closing}"
+
+    def _is_ranking_question_or_plan(self, *, question: str, result: LogisticsDataQaResult) -> bool:
+        """判断当前问题或查询计划是否属于排名/TopN 场景。"""
+
+        if re.search(r"排名|排行|前[一二三四五六七八九十\d]+|后[一二三四五六七八九十\d]+|top\s*\d*|Top\s*\d*|最高|最低|最大|最小", question or "", flags=re.I):
+            return True
+        return bool(result.query_plan.limit and result.query_plan.sort)
+
+    def _choose_narrative_dimension_column(self, columns: list[str], *, rows: list[dict[str, Any]]) -> str:
+        """选择排名叙事里的维度字段，如城市、客户、承运商等。"""
+
+        preferred = ["城市", "city", "province", "省份", "region_name", "区域", "customer_name", "客户", "carrier_name", "承运商", "company_name", "公司"]
+        for column in preferred:
+            if column in columns:
+                return column
+        for column in columns:
+            if any(row.get(column) is not None and not self._is_number(row.get(column)) for row in rows):
+                return column
+        return columns[0] if columns else ""
+
+    def _choose_narrative_metric_column(self, *, result: LogisticsDataQaResult, dimension_column: str) -> str:
+        """选择排名叙事里的主指标字段。"""
+
+        columns = list(result.result_table.columns)
+        rows = list(result.result_table.rows)
+        numeric_columns = [
+            column
+            for column in columns
+            if column != dimension_column and any(self._is_number(row.get(column)) for row in rows)
+        ]
+        for metric in result.query_plan.metrics:
+            if metric in numeric_columns:
+                return metric
+        preferred = ["总运费", "总费用", "total_fee", "shipment_mw", "发运量", "shipment_watt", "车次", "trip_count", "shipment_trip_count"]
+        for column in preferred:
+            if column in numeric_columns:
+                return column
+        return numeric_columns[0] if numeric_columns else ""
+
+    def _format_metric_value(self, column: str, value: Any) -> str:
+        """把 result_table 中的指标值转换为业务可读格式，不改变数值。"""
+
+        value_text = str(value).strip()
+        unit = self._infer_unit(column)
+        if unit and self._is_number(value) and not value_text.endswith(unit):
+            return f"{value_text}{unit}"
+        return value_text
+
+    def _chinese_ordinal(self, index: int) -> str:
+        """把列表序号转换成中文名次，避免主文案出现额外阿拉伯数字。"""
+
+        names = ["第一名", "第二名", "第三名", "第四名", "第五名", "第六名", "第七名", "第八名"]
+        return names[index] if 0 <= index < len(names) else "后续"
+
     def _build_highlights(
         self,
         *,
@@ -1473,15 +1594,15 @@ class LogisticsLlmAnswerPresentationService:
     def _infer_unit(self, column: str) -> str | None:
         """按字段名推断单位。"""
 
-        if "mw" in column:
+        if "mw" in column.lower() or "兆瓦" in column:
             return "MW"
-        if "watt" in column and "per" not in column:
+        if ("watt" in column.lower() or "瓦" in column) and "per" not in column.lower() and "每" not in column:
             return "W"
-        if "fee" in column and "per_watt" not in column:
+        if ("fee" in column.lower() and "per_watt" not in column.lower()) or "运费" in column or "费用" in column or "金额" in column:
             return "元"
-        if "rate" in column or "ratio" in column or "share" in column:
+        if "rate" in column.lower() or "ratio" in column.lower() or "share" in column.lower() or "率" in column or "比例" in column or "占比" in column:
             return "%"
-        if "count" in column or "trip" in column:
+        if "count" in column.lower() or "trip" in column.lower() or "车次" in column or "次数" in column:
             return "次"
         return None
 
