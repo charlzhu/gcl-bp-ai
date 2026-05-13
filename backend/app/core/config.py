@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     llm_answer_presentation_timeout: float = 6.0
     llm_answer_presentation_max_retries: int = 0
     query_planning_v2_response_meta_enabled: bool = False
+    logistics_query_planner_v2_enabled: bool = False
+    logistics_query_planner_v2_mode: Literal["off", "shadow", "assist"] = "shadow"
+    logistics_query_planner_v2_min_confidence: float = 0.9
+    logistics_query_planner_v2_allowed_query_keys: list[str] = Field(default_factory=list)
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parent.parent.parent / ".env",
@@ -76,6 +80,41 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @field_validator("logistics_query_planner_v2_mode", mode="before")
+    @classmethod
+    def _normalize_logistics_query_planner_v2_mode(cls, value: object) -> object:
+        """归一化物流 Query Planner V2 模式配置。"""
+        if value is None:
+            return "off"
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"", "disabled"}:
+                return "off"
+            return normalized
+        return value
+
+    @field_validator("logistics_query_planner_v2_allowed_query_keys", mode="before")
+    @classmethod
+    def _parse_logistics_query_planner_v2_allowed_query_keys(cls, value: object) -> object:
+        """解析物流 Query Planner V2 query_key 白名单，兼容 JSON 数组和逗号分隔写法。"""
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return []
+            if raw.startswith("["):
+                try:
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except Exception:  # noqa: BLE001
+                    pass
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        return value
 
     @field_validator("llm_guardrail_mode", mode="before")
     @classmethod

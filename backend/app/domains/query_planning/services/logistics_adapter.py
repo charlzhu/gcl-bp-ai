@@ -4,6 +4,7 @@ from typing import Any
 
 from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
 from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
+from backend.app.domains.logistics.services.query_planner_v2 import LogisticsQueryPlannerV2, LogisticsQueryPlannerV2Fallback
 from backend.app.domains.query_planning.schemas.query_plan_v2 import (
     QueryPlanningV2GuardrailDecision,
     QueryPlanningV2Plan,
@@ -21,15 +22,23 @@ class LogisticsQueryPlanningAdapter:
         3. 只把现有规则计划包装成统一 query_plan_v2，用于 Phase 3 shadow 诊断。
     """
 
-    def __init__(self, planner: LogisticsDataQaPlanner | Any | None = None) -> None:
+    def __init__(
+        self,
+        planner: LogisticsDataQaPlanner | Any | None = None,
+        planner_v2: LogisticsQueryPlannerV2 | Any | None = None,
+    ) -> None:
         """初始化物流适配器。
 
         参数：
             planner: 可注入的物流规则 planner；测试场景可传 fake planner。
+            planner_v2: 可注入的新物流 Query Planner V2；默认随配置 shadow 开关启用。
         返回：无返回值。
         """
 
         self.planner = planner or LogisticsDataQaPlanner()
+        self.planner_v2 = planner_v2 or LogisticsQueryPlannerV2(
+            fallback=LogisticsQueryPlannerV2Fallback(legacy_planner=self.planner)
+        )
 
     def build_candidate(self, question: str, *, trace_id: str | None = None) -> QueryPlanningV2Plan:
         """构建物流领域 query_plan_v2 候选。
@@ -41,6 +50,9 @@ class LogisticsQueryPlanningAdapter:
             物流领域统一 query_plan_v2。
         业务逻辑：只复用 planner 的受控结果，不触发正式 Data QA 主链路执行。
         """
+
+        if self._should_use_planner_v2():
+            return self.planner_v2.build_shadow_plan(question, trace_id=trace_id)
 
         rule_plan: LogisticsDataQaPlan = self.planner.build_plan(question)
         strategy = self._strategy_from_rule_plan(rule_plan)
@@ -78,6 +90,18 @@ class LogisticsQueryPlanningAdapter:
         )
         plan.audit.trace_id = trace_id
         return plan
+
+    def _should_use_planner_v2(self) -> bool:
+        """判断是否启用新的物流 Query Planner V2 shadow 编排。
+
+        参数：无。
+        返回：
+            True 表示调用 LLM QueryPlan candidate + Validator；False 表示沿用旧规则 planner 包装。
+        业务逻辑：默认配置关闭，因此不会影响正式物流 QA 或既有诊断链路。
+        """
+
+        should_use = getattr(self.planner_v2, "should_use", None)
+        return bool(callable(should_use) and should_use())
 
     @staticmethod
     def _strategy_from_rule_plan(rule_plan: LogisticsDataQaPlan) -> str:

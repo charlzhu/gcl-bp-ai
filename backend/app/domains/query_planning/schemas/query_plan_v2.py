@@ -22,7 +22,10 @@ class QueryPlanningV2Slots(BaseModel):
         metrics: 指标槽位，如 shipment_mw、total_fee。
         dimensions: 维度槽位，如 carrier、year。
         filters: 过滤条件，只承载受控字段和值，不承载 SQL。
+        time_range: 时间范围快照，保留 LLM 候选或后端归一后的年份/月度范围。
         group_by: 分组字段。
+        aggregations: 聚合算子槽位，如 avg、sum、count。
+        compare_mode: 对比或趋势模式，如 year_compare、monthly_trend。
         sort: 排序字段和方向。
         limit: 结果条数限制。
         entities: 领域实体槽位，供订单、客户、供应商等实体归一化使用。
@@ -36,7 +39,10 @@ class QueryPlanningV2Slots(BaseModel):
     metrics: list[str] = Field(default_factory=list)
     dimensions: list[str] = Field(default_factory=list)
     filters: dict[str, Any] = Field(default_factory=dict)
+    time_range: dict[str, Any] = Field(default_factory=dict)
     group_by: list[str] = Field(default_factory=list)
+    aggregations: list[str] = Field(default_factory=list)
+    compare_mode: str | None = None
     sort: list[dict[str, Any]] = Field(default_factory=list)
     limit: int | None = None
     entities: dict[str, Any] = Field(default_factory=dict)
@@ -183,6 +189,7 @@ class QueryPlanningV2Plan(BaseModel):
         unsupported_reason: 不支持原因。
         guardrail_decision: Guardrail 决策。
         execution_policy: 执行安全策略。
+        confidence: LLM QueryPlan 候选置信度；规则 planner 包装时可为空。
         rule_plan: 原规则 planner / NLU 结果快照。
         llm_result: LLM 候选快照。
         audit: 审计信息。
@@ -209,6 +216,7 @@ class QueryPlanningV2Plan(BaseModel):
     unsupported_reason: str | None = None
     guardrail_decision: QueryPlanningV2GuardrailDecision = Field(default_factory=QueryPlanningV2GuardrailDecision)
     execution_policy: QueryPlanningV2ExecutionPolicy = Field(default_factory=QueryPlanningV2ExecutionPolicy)
+    confidence: float | None = None
     rule_plan: dict[str, Any] = Field(default_factory=dict)
     llm_result: dict[str, Any] = Field(default_factory=dict)
     audit: QueryPlanningV2AuditInfo = Field(default_factory=QueryPlanningV2AuditInfo)

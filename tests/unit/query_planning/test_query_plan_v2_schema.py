@@ -34,6 +34,23 @@ def test_query_plan_v2_direct_plan_is_stable_json_and_shadow_by_default() -> Non
     assert payload["execution_policy"]["sql_generation_allowed"] is False
 
 
+def test_query_plan_v2_slots_preserve_llm_queryplan_time_range_and_compare_mode() -> None:
+    """统一槽位必须能承载 LLM QueryPlan 的时间范围、聚合和对比模式。"""
+    slots = QueryPlanningV2Slots(
+        metrics=["avg_fee"],
+        filters={"years": [2024, 2025], "origin_place": "合肥"},
+        aggregations=["avg"],
+        compare_mode="year_compare",
+        time_range={"years": [2024, 2025], "source_scope": "historical_2023_2025"},
+    )
+
+    payload = slots.model_dump(mode="json")
+
+    assert payload["time_range"] == {"years": [2024, 2025], "source_scope": "historical_2023_2025"}
+    assert payload["aggregations"] == ["avg"]
+    assert payload["compare_mode"] == "year_compare"
+
+
 def test_query_plan_v2_rejects_unknown_strategy() -> None:
     """strategy 只能取受控枚举值，避免调用方注入自由策略。"""
     with pytest.raises(ValidationError):
