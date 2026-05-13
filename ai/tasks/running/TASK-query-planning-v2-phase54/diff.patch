@@ -1,0 +1,1154 @@
+diff --git a/ai/tasks/running/TASK-query-planning-v2-phase54/final-acceptance.md b/ai/tasks/running/TASK-query-planning-v2-phase54/final-acceptance.md
+new file mode 100644
+index 0000000..0b42dae
+--- /dev/null
++++ b/ai/tasks/running/TASK-query-planning-v2-phase54/final-acceptance.md
+@@ -0,0 +1,137 @@
++# Query Planning V2 Phase 5.4 Final Acceptance
++
++## 1. 任务范围
++
++本轮进入 Phase 5.4：灰度指标门槛与可视化/运营验收。
++
++目标是在 Phase 5.1–5.3 已有真实 `sys_query_log` 只读灰度报表基础上，补充：
++
++1. 自动化运营验收门槛；
++2. `PASS` / `WATCH` / `BLOCKED` 判定；
++3. 阻断原因和整改建议；
++4. chart-ready KPI / 分布图数据；
++5. 不暴露完整 `request_payload`；
++6. 不改变正式物流 / BOM QA 主链路。
++
++## 2. 修改文件
++
++```text
++backend/app/domains/query_planning/services/shadow_report_service.py
++docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
++tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py
++```
++
++验收材料：
++
++```text
++ai/tasks/running/TASK-query-planning-v2-phase54/diff.patch
++ai/tasks/running/TASK-query-planning-v2-phase54/test.log
++ai/tasks/running/TASK-query-planning-v2-phase54/review-result.json
++ai/tasks/running/TASK-query-planning-v2-phase54/final-acceptance.md
++```
++
++## 3. 关键实现
++
++### 3.1 acceptance_gate
++
++`QueryPlanningV2GrayLogReport` 新增：
++
++```text
++acceptance_gate
++```
++
++包含：
++
++- `status`: `PASS` / `WATCH` / `BLOCKED`
++- `passed`
++- `eligible_for_controlled_rollout`
++- `thresholds`
++- `checks`
++- `blocking_reasons`
++- `watch_reasons`
++- `recommended_actions`
++
++默认门槛：
++
++```text
++shadow_coverage_rate >= 95%
++query_key_match_rate >= 98%
++clarify_agreement_rate >= 95%
++unsupported_agreement_rate >= 95%
++corrupt_payload_count <= 0
++unsafe_execution_policy_count <= 0
++clarify_disagreement_count <= 0
++unsupported_disagreement_count <= 0
++guardrail_blocked_count <= 0 作为 WATCH 观察项
++```
++
++### 3.2 visualization
++
++`QueryPlanningV2GrayLogReport` 新增：
++
++```text
++visualization
++```
++
++包含：
++
++- KPI 卡片：样本日志数、shadow 覆盖率、query_key 一致率、澄清一致率、拒答/无答案一致率、阻断项数量；
++- 图表数据：strategy 分布、domain 分布、正式状态分布、risk bucket 数量；
++- `raw_payload` 固定为 `None`，避免报表接口暴露完整原始日志 payload；
++- 无可比 `query_key` 时，`query_key_match_rate` KPI 显示 `N/A` / `neutral`，避免和 `acceptance_gate` 的 info 口径冲突。
++
++### 3.3 安全边界
++
++本轮保持：
++
++- 只读真实日志；
++- 不调用正式物流/BOM QA；
++- 不重新执行 `QueryPlanningV2Service.plan()`；
++- 不调用 LLM；
++- 不生成 SQL；
++- 不生成最终业务答案；
++- 不恢复临时 token/header；
++- 不替换正式主链路。
++
++## 4. TDD 与 review 返工证据
++
++RED：新增 Phase 5.4 测试后，因 `acceptance_gate` / `visualization` 不存在而失败。
++
++GREEN：实现后通过。
++
++独立 review 通过，无阻塞问题。按非阻塞建议已补强：
++
++1. 无可比 query_key 时 visualization 改为 `N/A` / `neutral`；
++2. 补充 guardrail blocked 只进入 WATCH 的测试；
++3. 补充 corrupt payload / clarify disagreement 必须 BLOCKED 的测试；
++4. 设计文档同步写入 guardrail blocked WATCH 观察口径。
++
++## 5. 验证结果
++
++```text
++Focused Phase 5.4: 6 passed
++Focused Phase 5.4 + Phase 5.1–5.3: 9 passed
++Query Planning V2 unit: 28 passed
++Full regression: 215 passed, 2 warnings
++Compile: PASS
++Static scan: PASS
++Diff check: PASS
++Ruff: SKIPPED（当前环境未安装 ruff）
++```
++
++## 6. 对现有能力影响
++
++确认：
++
++- 不破坏物流 Data QA 主链路；
++- 不破坏 Plan BOM QA 主链路；
++- 不影响 Phase 4 内置 10 类 shadow report；
++- 不影响 Phase 5.1–5.3 真实日志只读汇总接口；
++- 新字段为 additive JSON 字段，既有 summary/risk_buckets/samples 保持不变。
++
++## 7. 风险与后续建议
++
++1. 当前 `acceptance_gate` 使用固定默认阈值，后续如需运营可调，应通过正式配置模块或权限模块控制，不要引入临时 token/header。
++2. 当前 `visualization` 是后端 chart-ready 数据，尚未新增前端页面；如后续要做可视化 UI，应继续保护内部权限并避免导出完整 payload。
++3. `guardrail_blocked_count` 当前作为 WATCH 观察项，不直接阻断；若业务希望更严格，可在后续配置化为 blocker。
++4. 下一步可进入 Phase 5.5：在线 shadow 对比增强，进一步把 formal/shadow 差异摘要写入 shadow 快照。
+diff --git a/ai/tasks/running/TASK-query-planning-v2-phase54/review-result.json b/ai/tasks/running/TASK-query-planning-v2-phase54/review-result.json
+new file mode 100644
+index 0000000..fc3e3c7
+--- /dev/null
++++ b/ai/tasks/running/TASK-query-planning-v2-phase54/review-result.json
+@@ -0,0 +1,26 @@
++{
++  "passed": true,
++  "blocker_issues": [],
++  "security_concerns": [],
++  "logic_errors": [],
++  "non_blocking_issues": [
++    {
++      "issue": "query_key_match_rate KPI 在无可比 query_key 时最初显示 0.0/danger，与 acceptance_gate info/passed 口径不一致。",
++      "resolution": "已修复：无可比 query_key 时 visualization 显示 value=N/A、status=neutral，并补充 RED/GREEN 测试。"
++    },
++    {
++      "issue": "guardrail_blocked WATCH、corrupt_payload blocker、clarify_disagreement blocker 等边界测试可加强。",
++      "resolution": "已补充 guardrail WATCH、corrupt payload + clarify disagreement BLOCKED 测试。"
++    },
++    {
++      "issue": "设计文档未显式写入 guardrail_blocked_count 作为 WATCH 观察项。",
++      "resolution": "已同步补充 docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md。"
++    },
++    {
++      "issue": "query_key mismatch 当前按 >=98% 阈值容忍少量差异。",
++      "resolution": "保留该设计：Phase 5.4 是灰度运营验收，门槛与用户建议一致；B/C 边界、unsafe policy、corrupt payload 仍为零容忍。"
++    }
++  ],
++  "test_assessment": "review 后重新验证：phase54 focused 6 passed；phase54+phase5 focused 9 passed；query_planning unit 28 passed；full regression 215 passed, 2 warnings；compile PASS；static scan PASS；diff check PASS。",
++  "summary": "独立 review 无阻塞问题；已处理主要非阻塞建议并完成返工验证。"
++}
+diff --git a/backend/app/domains/query_planning/services/shadow_report_service.py b/backend/app/domains/query_planning/services/shadow_report_service.py
+index 17f4e2f..1e583d4 100644
+--- a/backend/app/domains/query_planning/services/shadow_report_service.py
++++ b/backend/app/domains/query_planning/services/shadow_report_service.py
+@@ -109,6 +109,114 @@ class QueryPlanningV2GrayLogSummary(BaseModel):
+     hyde_candidate_count: int = 0
+
+
++class QueryPlanningV2GrayAcceptanceThresholds(BaseModel):
++    """Query Planning V2 灰度运营验收门槛。
++
++    参数：
++        min_shadow_coverage_rate: shadow 写入覆盖率最低要求。
++        min_query_key_match_rate: 可比 query_key 一致率最低要求。
++        min_clarify_agreement_rate: 正式澄清与 shadow CLARIFY 一致率最低要求。
++        min_unsupported_agreement_rate: 正式拒答/无答案与 shadow 一致率最低要求。
++        max_corrupt_payload_count: 损坏日志 payload 最大允许数量。
++        max_unsafe_execution_policy_count: 危险执行策略最大允许数量。
++        max_clarify_disagreement_count: 澄清边界分歧最大允许数量。
++        max_unsupported_disagreement_count: 拒答/无答案边界分歧最大允许数量。
++        max_guardrail_blocked_count: guardrail 阻断候选最大观察数量；默认只作为观察项。
++    返回：
++        报表服务用于自动判定运营验收状态的阈值配置。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    min_shadow_coverage_rate: float = 0.95
++    min_query_key_match_rate: float = 0.98
++    min_clarify_agreement_rate: float = 0.95
++    min_unsupported_agreement_rate: float = 0.95
++    max_corrupt_payload_count: int = 0
++    max_unsafe_execution_policy_count: int = 0
++    max_clarify_disagreement_count: int = 0
++    max_unsupported_disagreement_count: int = 0
++    max_guardrail_blocked_count: int = 0
++
++
++class QueryPlanningV2GrayAcceptanceCheck(BaseModel):
++    """单个灰度验收指标判定结果。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    metric: str
++    actual: float | int | None = None
++    threshold: float | int | None = None
++    operator: str
++    passed: bool
++    severity: Literal["blocker", "warning", "info"] = "blocker"
++    message: str
++
++
++class QueryPlanningV2GrayAcceptanceGate(BaseModel):
++    """灰度运营验收总判定。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    status: Literal["PASS", "WATCH", "BLOCKED"] = "WATCH"
++    passed: bool = False
++    eligible_for_controlled_rollout: bool = False
++    thresholds: QueryPlanningV2GrayAcceptanceThresholds = Field(
++        default_factory=QueryPlanningV2GrayAcceptanceThresholds
++    )
++    checks: list[QueryPlanningV2GrayAcceptanceCheck] = Field(default_factory=list)
++    blocking_reasons: list[str] = Field(default_factory=list)
++    watch_reasons: list[str] = Field(default_factory=list)
++    recommended_actions: list[str] = Field(default_factory=list)
++
++
++class QueryPlanningV2GrayVisualizationKpiCard(BaseModel):
++    """运营看板 KPI 卡片数据。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    key: str
++    label: str
++    value: float | int | str | None = None
++    unit: str | None = None
++    status: Literal["success", "warning", "danger", "neutral"] = "neutral"
++    description: str | None = None
++
++
++class QueryPlanningV2GrayVisualizationPoint(BaseModel):
++    """运营看板图表点位数据。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    name: str
++    value: float | int
++    ratio: float | None = None
++
++
++class QueryPlanningV2GrayVisualizationChart(BaseModel):
++    """运营看板 chart-ready 图表数据。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    key: str
++    title: str
++    chart_type: Literal["bar", "pie", "line", "table"] = "bar"
++    points: list[QueryPlanningV2GrayVisualizationPoint] = Field(default_factory=list)
++
++
++class QueryPlanningV2GrayVisualization(BaseModel):
++    """Query Planning V2 灰度运营看板数据。
++
++    raw_payload 固定为 None，避免前端/接口直接暴露完整 request_payload。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    kpi_cards: list[QueryPlanningV2GrayVisualizationKpiCard] = Field(default_factory=list)
++    charts: list[QueryPlanningV2GrayVisualizationChart] = Field(default_factory=list)
++    raw_payload: None = None
++
++
+ class QueryPlanningV2GrayLogRiskItem(BaseModel):
+     """真实日志灰度报表风险项。"""
+
+@@ -161,6 +269,8 @@ class QueryPlanningV2GrayLogReport(BaseModel):
+     summary: QueryPlanningV2GrayLogSummary = Field(default_factory=QueryPlanningV2GrayLogSummary)
+     risk_buckets: dict[str, list[QueryPlanningV2GrayLogRiskItem]] = Field(default_factory=dict)
+     samples: list[QueryPlanningV2GrayLogSample] = Field(default_factory=list)
++    acceptance_gate: QueryPlanningV2GrayAcceptanceGate = Field(default_factory=QueryPlanningV2GrayAcceptanceGate)
++    visualization: QueryPlanningV2GrayVisualization = Field(default_factory=QueryPlanningV2GrayVisualization)
+
+
+ DEFAULT_QUERY_PLANNING_V2_SHADOW_CASES: tuple[QueryPlanningV2ShadowCase, ...] = (
+@@ -554,12 +664,385 @@ class QueryPlanningV2ShadowReportService:
+             )
+
+         self._finalize_rates(summary)
++        limited_samples = samples[:50]
++        acceptance_gate = self._build_acceptance_gate(summary=summary, risk_buckets=risk_buckets)
++        visualization = self._build_visualization(
++            summary=summary,
++            risk_buckets=risk_buckets,
++            acceptance_gate=acceptance_gate,
++        )
+         return QueryPlanningV2GrayLogReport(
+             scope=scope,
+             summary=summary,
+             risk_buckets=risk_buckets,
+-            samples=samples[:50],
++            samples=limited_samples,
++            acceptance_gate=acceptance_gate,
++            visualization=visualization,
++        )
++
++    @classmethod
++    def _build_acceptance_gate(
++        cls,
++        *,
++        summary: QueryPlanningV2GrayLogSummary,
++        risk_buckets: dict[str, list[QueryPlanningV2GrayLogRiskItem]],
++    ) -> QueryPlanningV2GrayAcceptanceGate:
++        """基于灰度汇总指标生成运营验收门槛结论。
++
++        参数：
++            summary: 真实日志灰度汇总指标。
++            risk_buckets: 已归类风险桶。
++        返回：
++            Query Planning V2 灰度运营验收结论。
++        业务逻辑：
++            该方法只做指标判定，不修改任何正式日志，也不重新执行查询；B/C 边界分歧、危险执行策略、
++            损坏 payload 均按阻断项处理，避免 shadow 进入受控接入时扩大风险。
++        """
++
++        thresholds = QueryPlanningV2GrayAcceptanceThresholds()
++        checks: list[QueryPlanningV2GrayAcceptanceCheck] = []
++        blocking_reasons: list[str] = []
++        watch_reasons: list[str] = []
++
++        def add_check(
++            *,
++            metric: str,
++            actual: float | int | None,
++            threshold: float | int | None,
++            operator: str,
++            passed: bool,
++            failure_reason: str | None,
++            severity: Literal["blocker", "warning", "info"] = "blocker",
++            success_message: str | None = None,
++        ) -> None:
++            message = success_message or failure_reason or f"{metric} 验收通过。"
++            if not passed and failure_reason:
++                message = failure_reason
++                if severity == "blocker":
++                    blocking_reasons.append(failure_reason)
++                elif severity == "warning":
++                    watch_reasons.append(failure_reason)
++            checks.append(
++                QueryPlanningV2GrayAcceptanceCheck(
++                    metric=metric,
++                    actual=actual,
++                    threshold=threshold,
++                    operator=operator,
++                    passed=passed,
++                    severity=severity,
++                    message=message,
++                )
++            )
++
++        add_check(
++            metric="shadow_coverage_rate",
++            actual=summary.shadow_coverage_rate,
++            threshold=thresholds.min_shadow_coverage_rate,
++            operator=">=",
++            passed=summary.shadow_coverage_rate >= thresholds.min_shadow_coverage_rate,
++            failure_reason=f"shadow_coverage_rate 未达到 {cls._format_percent(thresholds.min_shadow_coverage_rate)}",
++            success_message="shadow 覆盖率达到运营验收门槛。",
++        )
++
++        query_key_total = summary.query_key_match_count + summary.query_key_mismatch_count
++        if query_key_total:
++            add_check(
++                metric="query_key_match_rate",
++                actual=summary.query_key_match_rate,
++                threshold=thresholds.min_query_key_match_rate,
++                operator=">=",
++                passed=summary.query_key_match_rate >= thresholds.min_query_key_match_rate,
++                failure_reason=f"query_key_match_rate 未达到 {cls._format_percent(thresholds.min_query_key_match_rate)}",
++                success_message="query_key 一致率达到运营验收门槛。",
++            )
++        else:
++            add_check(
++                metric="query_key_match_rate",
++                actual=None,
++                threshold=thresholds.min_query_key_match_rate,
++                operator=">=",
++                passed=True,
++                failure_reason=None,
++                severity="info",
++                success_message="当前样本暂无可比 query_key，暂不作为阻断项。",
++            )
++
++        if summary.formal_clarify_count:
++            add_check(
++                metric="clarify_agreement_rate",
++                actual=summary.clarify_agreement_rate,
++                threshold=thresholds.min_clarify_agreement_rate,
++                operator=">=",
++                passed=summary.clarify_agreement_rate >= thresholds.min_clarify_agreement_rate,
++                failure_reason=f"clarify_agreement_rate 未达到 {cls._format_percent(thresholds.min_clarify_agreement_rate)}",
++                success_message="澄清一致率达到运营验收门槛。",
++            )
++        else:
++            add_check(
++                metric="clarify_agreement_rate",
++                actual=None,
++                threshold=thresholds.min_clarify_agreement_rate,
++                operator=">=",
++                passed=True,
++                failure_reason=None,
++                severity="info",
++                success_message="当前样本暂无正式澄清日志，暂不作为阻断项。",
++            )
++
++        if summary.formal_unsupported_or_no_answer_count:
++            add_check(
++                metric="unsupported_agreement_rate",
++                actual=summary.unsupported_agreement_rate,
++                threshold=thresholds.min_unsupported_agreement_rate,
++                operator=">=",
++                passed=summary.unsupported_agreement_rate >= thresholds.min_unsupported_agreement_rate,
++                failure_reason=(
++                    "unsupported_agreement_rate 未达到 "
++                    f"{cls._format_percent(thresholds.min_unsupported_agreement_rate)}"
++                ),
++                success_message="拒答/无答案一致率达到运营验收门槛。",
++            )
++        else:
++            add_check(
++                metric="unsupported_agreement_rate",
++                actual=None,
++                threshold=thresholds.min_unsupported_agreement_rate,
++                operator=">=",
++                passed=True,
++                failure_reason=None,
++                severity="info",
++                success_message="当前样本暂无正式拒答/无答案日志，暂不作为阻断项。",
++            )
++
++        count_checks: tuple[tuple[str, int, int, Literal["blocker", "warning", "info"]], ...] = (
++            ("corrupt_payload_count", summary.corrupt_payload, thresholds.max_corrupt_payload_count, "blocker"),
++            (
++                "unsafe_execution_policy_count",
++                cls._risk_count(risk_buckets, "unsafe_execution_policy"),
++                thresholds.max_unsafe_execution_policy_count,
++                "blocker",
++            ),
++            (
++                "clarify_disagreement_count",
++                cls._risk_count(risk_buckets, "clarify_disagreement"),
++                thresholds.max_clarify_disagreement_count,
++                "blocker",
++            ),
++            (
++                "unsupported_disagreement_count",
++                cls._risk_count(risk_buckets, "unsupported_disagreement"),
++                thresholds.max_unsupported_disagreement_count,
++                "blocker",
++            ),
++            (
++                "guardrail_blocked_count",
++                cls._risk_count(risk_buckets, "guardrail_blocked"),
++                thresholds.max_guardrail_blocked_count,
++                "warning",
++            ),
+         )
++        for metric, actual_count, max_allowed, severity in count_checks:
++            add_check(
++                metric=metric,
++                actual=actual_count,
++                threshold=max_allowed,
++                operator="<=",
++                passed=actual_count <= max_allowed,
++                failure_reason=f"{metric} 超过允许值 {max_allowed}",
++                severity=severity,
++                success_message=f"{metric} 在允许范围内。",
++            )
++
++        if blocking_reasons:
++            status: Literal["PASS", "WATCH", "BLOCKED"] = "BLOCKED"
++            recommended_actions = [
++                "先修复 BLOCKED 指标对应的问题，保持 Query Planning V2 继续 shadow-only，不进入受控接入。",
++                "优先排查 query_key mismatch、B/C 边界分歧、unsafe execution policy 和损坏 payload。",
++                "修复后重新跑真实日志灰度报表，并保留验收材料供人工复核。",
++            ]
++        elif watch_reasons:
++            status = "WATCH"
++            recommended_actions = [
++                "当前无阻断项，但仍有观察项；继续 shadow 灰度并扩大样本后再评估受控接入。",
++                "人工抽检 guardrail blocked、HYDE/rewrite/decomposition 候选，确认没有事实计算或 SQL 生成。",
++            ]
++        else:
++            status = "PASS"
++            recommended_actions = [
++                "Phase 5.4 运营门槛通过，可准备小范围只读看板验收或继续讨论后续受控接入候选。",
++                "进入下一阶段前仍需人工抽检样例，确认原始问题、slots、guardrail 与安全边界完整。",
++            ]
++
++        return QueryPlanningV2GrayAcceptanceGate(
++            status=status,
++            passed=status == "PASS",
++            eligible_for_controlled_rollout=status == "PASS",
++            thresholds=thresholds,
++            checks=checks,
++            blocking_reasons=blocking_reasons,
++            watch_reasons=watch_reasons,
++            recommended_actions=recommended_actions,
++        )
++
++    @classmethod
++    def _build_visualization(
++        cls,
++        *,
++        summary: QueryPlanningV2GrayLogSummary,
++        risk_buckets: dict[str, list[QueryPlanningV2GrayLogRiskItem]],
++        acceptance_gate: QueryPlanningV2GrayAcceptanceGate,
++    ) -> QueryPlanningV2GrayVisualization:
++        """生成前端或运营看板可直接消费的图表数据。
++
++        参数：
++            summary: 灰度汇总指标。
++            risk_buckets: 风险桶。
++            acceptance_gate: 运营验收结论。
++        返回：
++            chart-ready 的 KPI 卡片和分布图数据，不包含完整原始 payload。
++        """
++
++        blocker_count = len(acceptance_gate.blocking_reasons)
++        query_key_total = summary.query_key_match_count + summary.query_key_mismatch_count
++        query_key_kpi_value: float | str = round(summary.query_key_match_rate, 4) if query_key_total else "N/A"
++        query_key_kpi_status: Literal["success", "warning", "danger", "neutral"] = (
++            "neutral"
++            if query_key_total == 0
++            else "success"
++            if summary.query_key_match_rate >= acceptance_gate.thresholds.min_query_key_match_rate
++            else "danger"
++        )
++        kpi_cards = [
++            QueryPlanningV2GrayVisualizationKpiCard(
++                key="total_logs",
++                label="样本日志数",
++                value=summary.total_logs,
++                unit="条",
++                status="neutral",
++                description="本次灰度报表读取的 sys_query_log 样本数。",
++            ),
++            QueryPlanningV2GrayVisualizationKpiCard(
++                key="shadow_coverage_rate",
++                label="Shadow 覆盖率",
++                value=round(summary.shadow_coverage_rate, 4),
++                unit="ratio",
++                status="success" if summary.shadow_coverage_rate >= acceptance_gate.thresholds.min_shadow_coverage_rate else "danger",
++                description="有 query_plan_v2_shadow 的正式日志占比。",
++            ),
++            QueryPlanningV2GrayVisualizationKpiCard(
++                key="query_key_match_rate",
++                label="Query Key 一致率",
++                value=query_key_kpi_value,
++                unit="ratio" if query_key_total else None,
++                status=query_key_kpi_status,
++                description=(
++                    "formal query_key 与 shadow query_key 在可比样本中的一致比例。"
++                    if query_key_total
++                    else "当前样本暂无可比 query_key，按运营验收 info 项处理。"
++                ),
++            ),
++            QueryPlanningV2GrayVisualizationKpiCard(
++                key="clarify_agreement_rate",
++                label="澄清一致率",
++                value=round(summary.clarify_agreement_rate, 4),
++                unit="ratio",
++                status=(
++                    "success"
++                    if summary.formal_clarify_count == 0
++                    or summary.clarify_agreement_rate >= acceptance_gate.thresholds.min_clarify_agreement_rate
++                    else "danger"
++                ),
++                description="正式澄清日志中 shadow 也判定为 CLARIFY 的比例。",
++            ),
++            QueryPlanningV2GrayVisualizationKpiCard(
++                key="unsupported_agreement_rate",
++                label="拒答/无答案一致率",
++                value=round(summary.unsupported_agreement_rate, 4),
++                unit="ratio",
++                status=(
++                    "success"
++                    if summary.formal_unsupported_or_no_answer_count == 0
++                    or summary.unsupported_agreement_rate >= acceptance_gate.thresholds.min_unsupported_agreement_rate
++                    else "danger"
++                ),
++                description="正式拒答/无答案日志中 shadow 也判定为 NO_ANSWER/UNSUPPORTED 的比例。",
++            ),
++            QueryPlanningV2GrayVisualizationKpiCard(
++                key="risk_blocker_count",
++                label="阻断项数量",
++                value=blocker_count,
++                unit="项",
++                status="success" if blocker_count == 0 else "danger",
++                description="运营验收阻断原因数量，非风险桶原始条数。",
++            ),
++        ]
++
++        risk_counts = {key: len(risk_buckets.get(key, [])) for key in cls._RISK_BUCKET_KEYS}
++        charts = [
++            cls._build_distribution_chart(
++                key="strategy_distribution",
++                title="Strategy 分布",
++                chart_type="pie",
++                distribution=summary.strategy_distribution,
++                denominator=summary.shadow_available,
++            ),
++            cls._build_distribution_chart(
++                key="domain_distribution",
++                title="Domain 分布",
++                chart_type="pie",
++                distribution=summary.domain_distribution,
++                denominator=summary.total_logs,
++            ),
++            cls._build_distribution_chart(
++                key="status_distribution",
++                title="正式状态分布",
++                chart_type="bar",
++                distribution=summary.status_distribution,
++                denominator=summary.total_logs,
++            ),
++            cls._build_distribution_chart(
++                key="risk_bucket_counts",
++                title="风险桶数量",
++                chart_type="bar",
++                distribution=risk_counts,
++                denominator=max(1, sum(risk_counts.values())),
++            ),
++        ]
++        return QueryPlanningV2GrayVisualization(kpi_cards=kpi_cards, charts=charts, raw_payload=None)
++
++    @classmethod
++    def _build_distribution_chart(
++        cls,
++        *,
++        key: str,
++        title: str,
++        chart_type: Literal["bar", "pie", "line", "table"],
++        distribution: dict[str, int],
++        denominator: int,
++    ) -> QueryPlanningV2GrayVisualizationChart:
++        """把字典计数器转换为 chart-ready 图表数据。"""
++
++        points = [
++            QueryPlanningV2GrayVisualizationPoint(
++                name=name,
++                value=value,
++                ratio=(value / denominator if denominator else None),
++            )
++            for name, value in distribution.items()
++        ]
++        return QueryPlanningV2GrayVisualizationChart(key=key, title=title, chart_type=chart_type, points=points)
++
++    @staticmethod
++    def _risk_count(risk_buckets: dict[str, list[QueryPlanningV2GrayLogRiskItem]], bucket: str) -> int:
++        """读取指定风险桶的条数。"""
++
++        return len(risk_buckets.get(bucket, []))
++
++    @staticmethod
++    def _format_percent(value: float) -> str:
++        """把比例格式化为中文验收说明中的百分比。"""
++
++        return f"{value:.2%}"
+
+     @staticmethod
+     def _parse_payload(value: Any) -> dict[str, Any] | None:
+@@ -757,11 +1240,18 @@ class QueryPlanningV2ShadowReportService:
+
+ __all__ = [
+     "DEFAULT_QUERY_PLANNING_V2_SHADOW_CASES",
++    "QueryPlanningV2GrayAcceptanceCheck",
++    "QueryPlanningV2GrayAcceptanceGate",
++    "QueryPlanningV2GrayAcceptanceThresholds",
+     "QueryPlanningV2GrayLogReport",
+     "QueryPlanningV2GrayLogRiskItem",
+     "QueryPlanningV2GrayLogSample",
+     "QueryPlanningV2GrayLogScope",
+     "QueryPlanningV2GrayLogSummary",
++    "QueryPlanningV2GrayVisualization",
++    "QueryPlanningV2GrayVisualizationChart",
++    "QueryPlanningV2GrayVisualizationKpiCard",
++    "QueryPlanningV2GrayVisualizationPoint",
+     "QueryPlanningV2ShadowCase",
+     "QueryPlanningV2ShadowCaseResult",
+     "QueryPlanningV2ShadowReport",
+diff --git a/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md b/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
+index 0aaca42..41aa852 100644
+--- a/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
++++ b/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
+@@ -363,7 +363,24 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
+ - 参数必须有默认 limit 和最大 limit。
+ - 返回 `ApiResponse.success(...)`。
+
+-### Task 5.4：在线 shadow 对比增强
++### Task 5.4：灰度指标门槛与可视化/运营验收
++
++**目标**：在真实日志灰度报表中增加可自动判定的运营门槛、阻断原因、整改建议和 chart-ready 看板数据。
++
++**建议文件**：
++
++- 修改：`backend/app/domains/query_planning/services/shadow_report_service.py`
++- 测试：`tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py`
++
++**要点**：
++
++- 输出 `acceptance_gate`，包含 `PASS` / `WATCH` / `BLOCKED`、阈值、逐项 check、阻断原因和建议动作。
++- 初始自动化门槛：shadow 覆盖率 `>=95%`、query_key 一致率 `>=98%`、澄清一致率 `>=95%`、拒答/无答案一致率 `>=95%`、unsafe execution policy / B/C 边界分歧 / 损坏 payload 必须为 `0`。
++- `guardrail_blocked_count` 初期作为 `WATCH` 观察项：不直接放行受控接入，需要人工抽检候选是否为合理阻断。
++- 输出 `visualization`，包含 KPI 卡片和 `strategy/domain/status/risk_bucket` 分布图数据，供内部运营看板直接消费。
++- 继续只读 `sys_query_log`；不重新执行 QA、不调用 LLM、不暴露完整 `request_payload`。
++
++### Task 5.5：在线 shadow 对比增强
+
+ **目标**：增强 `query_plan_v2_shadow`，记录正式 query_plan 与 shadow 的差异摘要。
+
+@@ -380,7 +397,7 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
+ - 对比字段包括 `formal_query_key`、`shadow_query_key`、`matched`、`risk_tags`。
+ - 构建失败不阻断主链路。
+
+-### Task 5.5：可选响应 meta 暴露
++### Task 5.6：可选响应 meta 暴露
+
+ **目标**：在非生产/授权环境中通过 feature flag 暴露 shadow 摘要。
+
+@@ -396,7 +413,7 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
+ - 不改变 `answer`、`status`、`table`。
+ - 生产环境需正式权限和开关双重控制。
+
+-### Task 5.6：验收材料
++### Task 5.7：验收材料
+
+ **目标**：形成可审计交付。
+
+diff --git a/tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py b/tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py
+new file mode 100644
+index 0000000..a08ca14
+--- /dev/null
++++ b/tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py
+@@ -0,0 +1,307 @@
++from __future__ import annotations
++
++import json
++from datetime import datetime
++from typing import Any
++
++from backend.app.domains.query_planning.services.shadow_report_service import QueryPlanningV2ShadowReportService
++
++
++class _NoExecutionPlanningService:
++    """测试占位 planning service，真实日志运营验收不应重新执行诊断规划。"""
++
++    def plan(self, **_: Any) -> None:
++        raise AssertionError("Phase 5.4 运营验收只能基于真实日志报表，不允许重新执行 Query Planning。")
++
++
++class _FakeGrayLogRepository:
++    """测试用只读日志仓储。"""
++
++    def __init__(self, rows: list[dict[str, Any]]) -> None:
++        self.rows = rows
++
++    def list_query_logs_for_query_planning_gray(
++        self,
++        db: object,
++        *,
++        domain: str = "all",
++        limit: int = 200,
++        days: int = 7,
++    ) -> list[dict[str, Any]]:
++        return self.rows
++
++
++def _row(
++    log_id: int,
++    *,
++    domain: str,
++    status: str,
++    formal_query_key: str | None,
++    shadow_strategy: str | None,
++    shadow_query_key: str | None,
++    execution_policy: dict[str, Any] | None = None,
++    guardrail_decision: dict[str, Any] | None = None,
++    payload_override: str | None = None,
++) -> dict[str, Any]:
++    """构造最小 sys_query_log 行，便于测试运营验收指标。"""
++
++    if payload_override is None:
++        payload: dict[str, Any] = {
++            "question": f"问题{log_id}",
++            "response_meta": {"domain": domain, "metric_type": formal_query_key},
++            "query_result": {"query_plan": {"query_key": formal_query_key}},
++        }
++        if shadow_strategy is not None:
++            payload["query_plan_v2_shadow"] = {
++                "schema_version": "query_plan_v2.0",
++                "domain": domain,
++                "original_question": f"问题{log_id}",
++                "strategy": shadow_strategy,
++                "intent": "aggregate",
++                "query_key": shadow_query_key,
++                "slots": {"filters": {"year": 2025}},
++                "guardrail_decision": guardrail_decision or {"accepted": True, "blocked_reason": None},
++                "execution_policy": execution_policy
++                or {"shadow_only": True, "llm_can_execute": False, "sql_generation_allowed": False},
++            }
++        request_payload = json.dumps(payload, ensure_ascii=False)
++    else:
++        request_payload = payload_override
++
++    return {
++        "id": log_id,
++        "trace_id": f"trace-{log_id}",
++        "query_type": "DATA_QA" if domain == "logistics" else "PLAN_BOM_QA",
++        "question_text": f"问题{log_id}",
++        "request_payload": request_payload,
++        "route_type": "data_qa" if domain == "logistics" else "plan_bom_qa",
++        "metric_type": formal_query_key,
++        "result_count": 1,
++        "status": status,
++        "message": "ok",
++        "created_at": datetime(2026, 5, 13, 10, log_id, 0),
++    }
++
++
++def _service(rows: list[dict[str, Any]]) -> QueryPlanningV2ShadowReportService:
++    return QueryPlanningV2ShadowReportService(
++        planning_service=_NoExecutionPlanningService(),
++        query_log_repository=_FakeGrayLogRepository(rows),
++        db=object(),
++    )
++
++
++def test_gray_log_report_acceptance_gate_passes_when_operational_thresholds_are_met() -> None:
++    """Phase 5.4 应在真实日志报表中给出可运营验收的 PASS 门槛结论。"""
++    report = _service(
++        [
++            _row(
++                1,
++                domain="logistics",
++                status="SUCCESS",
++                formal_query_key="hist_mw_by_carrier",
++                shadow_strategy="DIRECT_RETRIEVAL",
++                shadow_query_key="hist_mw_by_carrier",
++            ),
++            _row(
++                2,
++                domain="plan_bom",
++                status="SUCCESS",
++                formal_query_key="single_order_material_specs",
++                shadow_strategy="DIRECT_RETRIEVAL",
++                shadow_query_key="single_order_material_specs",
++            ),
++            _row(
++                3,
++                domain="logistics",
++                status="CLARIFICATION",
++                formal_query_key=None,
++                shadow_strategy="CLARIFY",
++                shadow_query_key=None,
++            ),
++            _row(
++                4,
++                domain="logistics",
++                status="UNSUPPORTED",
++                formal_query_key=None,
++                shadow_strategy="UNSUPPORTED",
++                shadow_query_key=None,
++            ),
++        ]
++    ).build_log_report(domain="all", limit=20, days=7)
++
++    assert report.acceptance_gate.status == "PASS"
++    assert report.acceptance_gate.passed is True
++    assert report.acceptance_gate.eligible_for_controlled_rollout is True
++    assert report.acceptance_gate.blocking_reasons == []
++    assert report.acceptance_gate.thresholds.min_shadow_coverage_rate == 0.95
++    assert report.acceptance_gate.thresholds.min_query_key_match_rate == 0.98
++    assert any(check.metric == "shadow_coverage_rate" and check.passed for check in report.acceptance_gate.checks)
++    assert any(check.metric == "query_key_match_rate" and check.passed for check in report.acceptance_gate.checks)
++
++
++def test_gray_log_report_acceptance_gate_blocks_when_thresholds_or_bc_boundaries_fail() -> None:
++    """Phase 5.4 应把覆盖率不足、B/C 边界分歧和危险执行策略列为运营验收阻断。"""
++    report = _service(
++        [
++            _row(
++                1,
++                domain="logistics",
++                status="SUCCESS",
++                formal_query_key="hist_mw_by_carrier",
++                shadow_strategy="DIRECT_RETRIEVAL",
++                shadow_query_key="hist_total_fee_by_carrier",
++            ),
++            _row(
++                2,
++                domain="logistics",
++                status="UNSUPPORTED",
++                formal_query_key=None,
++                shadow_strategy="DIRECT_RETRIEVAL",
++                shadow_query_key="hist_mw_summary",
++            ),
++            _row(
++                3,
++                domain="plan_bom",
++                status="SUCCESS",
++                formal_query_key="single_order_material_specs",
++                shadow_strategy=None,
++                shadow_query_key=None,
++            ),
++            _row(
++                4,
++                domain="logistics",
++                status="SUCCESS",
++                formal_query_key="hist_mw_summary",
++                shadow_strategy="DIRECT_RETRIEVAL",
++                shadow_query_key="hist_mw_summary",
++                execution_policy={"shadow_only": False, "llm_can_execute": True, "sql_generation_allowed": True},
++            ),
++        ]
++    ).build_log_report(domain="all", limit=20, days=7)
++
++    assert report.acceptance_gate.status == "BLOCKED"
++    assert report.acceptance_gate.passed is False
++    assert report.acceptance_gate.eligible_for_controlled_rollout is False
++    assert "shadow_coverage_rate 未达到 95.00%" in report.acceptance_gate.blocking_reasons
++    assert "query_key_match_rate 未达到 98.00%" in report.acceptance_gate.blocking_reasons
++    assert "unsupported_disagreement_count 超过允许值 0" in report.acceptance_gate.blocking_reasons
++    assert "unsafe_execution_policy_count 超过允许值 0" in report.acceptance_gate.blocking_reasons
++    assert any("先修复 BLOCKED" in action for action in report.acceptance_gate.recommended_actions)
++
++
++def test_gray_log_report_contains_chart_ready_visualization_without_raw_payload() -> None:
++    """Phase 5.4 报表应直接提供运营看板可用的 KPI/图表数据，且不暴露原始 payload。"""
++    report = _service(
++        [
++            _row(
++                1,
++                domain="logistics",
++                status="SUCCESS",
++                formal_query_key="hist_mw_by_carrier",
++                shadow_strategy="DIRECT_RETRIEVAL",
++                shadow_query_key="hist_mw_by_carrier",
++            ),
++            _row(
++                2,
++                domain="plan_bom",
++                status="CLARIFICATION",
++                formal_query_key=None,
++                shadow_strategy="CLARIFY",
++                shadow_query_key=None,
++            ),
++        ]
++    ).build_log_report(domain="all", limit=20, days=7)
++
++    kpi_keys = {card.key for card in report.visualization.kpi_cards}
++    assert {"shadow_coverage_rate", "query_key_match_rate", "risk_blocker_count"}.issubset(kpi_keys)
++    chart_keys = {chart.key for chart in report.visualization.charts}
++    assert {"strategy_distribution", "domain_distribution", "status_distribution", "risk_bucket_counts"}.issubset(
++        chart_keys
++    )
++    strategy_chart = next(chart for chart in report.visualization.charts if chart.key == "strategy_distribution")
++    assert {point.name: point.value for point in strategy_chart.points} == {"DIRECT_RETRIEVAL": 1, "CLARIFY": 1}
++    risk_chart = next(chart for chart in report.visualization.charts if chart.key == "risk_bucket_counts")
++    assert all(point.value == 0 for point in risk_chart.points)
++    assert all(sample.raw_payload is None for sample in report.samples)
++    assert report.visualization.raw_payload is None
++
++
++def test_gray_log_report_visualization_marks_query_key_kpi_neutral_when_no_comparable_query_keys() -> None:
++    """没有可比 query_key 时，运营看板不应把 query_key 一致率误标为危险。"""
++    report = _service(
++        [
++            _row(
++                1,
++                domain="logistics",
++                status="CLARIFICATION",
++                formal_query_key=None,
++                shadow_strategy="CLARIFY",
++                shadow_query_key=None,
++            ),
++            _row(
++                2,
++                domain="plan_bom",
++                status="UNSUPPORTED",
++                formal_query_key=None,
++                shadow_strategy="UNSUPPORTED",
++                shadow_query_key=None,
++            ),
++        ]
++    ).build_log_report(domain="all", limit=20, days=7)
++
++    query_key_card = next(card for card in report.visualization.kpi_cards if card.key == "query_key_match_rate")
++    assert query_key_card.value == "N/A"
++    assert query_key_card.status == "neutral"
++    assert report.acceptance_gate.status == "PASS"
++
++
++def test_gray_log_report_guardrail_blocked_is_watch_not_blocked() -> None:
++    """guardrail 阻断候选应进入 WATCH 观察，不应自动等同于可执行受控接入。"""
++    report = _service(
++        [
++            _row(
++                1,
++                domain="logistics",
++                status="SUCCESS",
++                formal_query_key="hist_mw_summary",
++                shadow_strategy="DIRECT_RETRIEVAL",
++                shadow_query_key="hist_mw_summary",
++                guardrail_decision={"accepted": False, "blocked_reason": "候选超出白名单"},
++            )
++        ]
++    ).build_log_report(domain="all", limit=20, days=7)
++
++    assert report.acceptance_gate.status == "WATCH"
++    assert report.acceptance_gate.blocking_reasons == []
++    assert "guardrail_blocked_count 超过允许值 0" in report.acceptance_gate.watch_reasons
++    assert [item.log_id for item in report.risk_buckets["guardrail_blocked"]] == [1]
++
++
++def test_gray_log_report_corrupt_payload_and_clarify_disagreement_block_operational_acceptance() -> None:
++    """损坏 payload 与澄清边界分歧必须作为运营验收阻断项。"""
++    report = _service(
++        [
++            _row(
++                1,
++                domain="logistics",
++                status="SUCCESS",
++                formal_query_key="hist_mw_summary",
++                shadow_strategy=None,
++                shadow_query_key=None,
++                payload_override="{bad json",
++            ),
++            _row(
++                2,
++                domain="plan_bom",
++                status="CLARIFICATION",
++                formal_query_key=None,
++                shadow_strategy="DIRECT_RETRIEVAL",
++                shadow_query_key="single_order_material_specs",
++            ),
++        ]
++    ).build_log_report(domain="all", limit=20, days=7)
++
++    assert report.acceptance_gate.status == "BLOCKED"
++    assert "corrupt_payload_count 超过允许值 0" in report.acceptance_gate.blocking_reasons
++    assert "clarify_disagreement_count 超过允许值 0" in report.acceptance_gate.blocking_reasons
+diff --git a/ai/tasks/running/TASK-query-planning-v2-phase54/test.log b/ai/tasks/running/TASK-query-planning-v2-phase54/test.log
+new file mode 100644
+index 0000000..2345a2f
+--- /dev/null
++++ b/ai/tasks/running/TASK-query-planning-v2-phase54/test.log
+@@ -0,0 +1,78 @@
++# Query Planning V2 Phase 5.4 测试日志
++
++## 1. TDD RED
++
++```text
++$ python -m pytest tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py -q
++FFF [100%]
++3 failed
++
++失败原因：QueryPlanningV2GrayLogReport 尚无 acceptance_gate / visualization 字段。
++```
++
++review 后补充的 query_key 无可比样本可视化测试曾 RED：
++
++```text
++AssertionError: assert 0.0 == 'N/A'
++```
++
++随后修复为 `N/A` / `neutral`。
++
++## 2. Focused：Phase 5.4 运营验收门槛与可视化
++
++```text
++$ python -m pytest tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py -q
++...... [100%]
++6 passed in 0.18s
++```
++
++## 3. Focused：Phase 5.4 + Phase 5.1–5.3 灰度日志报表回归
++
++```text
++$ python -m pytest tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py tests/unit/query_planning/test_query_planning_phase5_gray_log_report.py -q
++......... [100%]
++9 passed in 1.04s
++```
++
++## 4. Query Planning V2 单元回归
++
++```text
++$ python -m pytest tests/unit/query_planning -q
++............................ [100%]
++28 passed in 1.29s
++```
++
++## 5. 全量回归
++
++```text
++$ python -m pytest tests -q
++........................................................................ [ 33%]
++........................................................................ [ 66%]
++.......................................................................  [100%]
++215 passed, 2 warnings in 24.00s
++```
++
++说明：2 个 warning 仍为 openpyxl 读取 xlsm 扩展 / 条件格式 warning，非本轮新增失败。
++
++## 6. Compile
++
++```text
++$ python -m compileall -q backend/app/domains/query_planning/services/shadow_report_service.py tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py
++COMPILE=PASS
++```
++
++## 7. 静态安全扫描
++
++扫描 scoped diff 新增行：hardcoded secret/token/password、shell injection、eval/exec、pickle、SQL string-format。
++
++```text
++STATIC_SCAN_FINDINGS= {'hardcoded_secret': [], 'shell_injection': [], 'eval_exec': [], 'pickle': [], 'sql_string_format': []}
++STATIC_SCAN=PASS
++DIFF_CHECK=PASS
++```
++
++## 8. Ruff
++
++```text
++RUFF=SKIPPED: python module ruff is not installed in current environment
++```

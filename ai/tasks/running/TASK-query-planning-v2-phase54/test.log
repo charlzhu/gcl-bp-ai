@@ -1,0 +1,78 @@
+# Query Planning V2 Phase 5.4 测试日志
+
+## 1. TDD RED
+
+```text
+$ python -m pytest tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py -q
+FFF [100%]
+3 failed
+
+失败原因：QueryPlanningV2GrayLogReport 尚无 acceptance_gate / visualization 字段。
+```
+
+review 后补充的 query_key 无可比样本可视化测试曾 RED：
+
+```text
+AssertionError: assert 0.0 == 'N/A'
+```
+
+随后修复为 `N/A` / `neutral`。
+
+## 2. Focused：Phase 5.4 运营验收门槛与可视化
+
+```text
+$ python -m pytest tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py -q
+...... [100%]
+6 passed in 0.18s
+```
+
+## 3. Focused：Phase 5.4 + Phase 5.1–5.3 灰度日志报表回归
+
+```text
+$ python -m pytest tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py tests/unit/query_planning/test_query_planning_phase5_gray_log_report.py -q
+......... [100%]
+9 passed in 1.04s
+```
+
+## 4. Query Planning V2 单元回归
+
+```text
+$ python -m pytest tests/unit/query_planning -q
+............................ [100%]
+28 passed in 1.29s
+```
+
+## 5. 全量回归
+
+```text
+$ python -m pytest tests -q
+........................................................................ [ 33%]
+........................................................................ [ 66%]
+.......................................................................  [100%]
+215 passed, 2 warnings in 24.00s
+```
+
+说明：2 个 warning 仍为 openpyxl 读取 xlsm 扩展 / 条件格式 warning，非本轮新增失败。
+
+## 6. Compile
+
+```text
+$ python -m compileall -q backend/app/domains/query_planning/services/shadow_report_service.py tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py
+COMPILE=PASS
+```
+
+## 7. 静态安全扫描
+
+扫描 scoped diff 新增行：hardcoded secret/token/password、shell injection、eval/exec、pickle、SQL string-format。
+
+```text
+STATIC_SCAN_FINDINGS= {'hardcoded_secret': [], 'shell_injection': [], 'eval_exec': [], 'pickle': [], 'sql_string_format': []}
+STATIC_SCAN=PASS
+DIFF_CHECK=PASS
+```
+
+## 8. Ruff
+
+```text
+RUFF=SKIPPED: python module ruff is not installed in current environment
+```

@@ -363,7 +363,24 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
 - 参数必须有默认 limit 和最大 limit。
 - 返回 `ApiResponse.success(...)`。
 
-### Task 5.4：在线 shadow 对比增强
+### Task 5.4：灰度指标门槛与可视化/运营验收
+
+**目标**：在真实日志灰度报表中增加可自动判定的运营门槛、阻断原因、整改建议和 chart-ready 看板数据。
+
+**建议文件**：
+
+- 修改：`backend/app/domains/query_planning/services/shadow_report_service.py`
+- 测试：`tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py`
+
+**要点**：
+
+- 输出 `acceptance_gate`，包含 `PASS` / `WATCH` / `BLOCKED`、阈值、逐项 check、阻断原因和建议动作。
+- 初始自动化门槛：shadow 覆盖率 `>=95%`、query_key 一致率 `>=98%`、澄清一致率 `>=95%`、拒答/无答案一致率 `>=95%`、unsafe execution policy / B/C 边界分歧 / 损坏 payload 必须为 `0`。
+- `guardrail_blocked_count` 初期作为 `WATCH` 观察项：不直接放行受控接入，需要人工抽检候选是否为合理阻断。
+- 输出 `visualization`，包含 KPI 卡片和 `strategy/domain/status/risk_bucket` 分布图数据，供内部运营看板直接消费。
+- 继续只读 `sys_query_log`；不重新执行 QA、不调用 LLM、不暴露完整 `request_payload`。
+
+### Task 5.5：在线 shadow 对比增强
 
 **目标**：增强 `query_plan_v2_shadow`，记录正式 query_plan 与 shadow 的差异摘要。
 
@@ -380,7 +397,7 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
 - 对比字段包括 `formal_query_key`、`shadow_query_key`、`matched`、`risk_tags`。
 - 构建失败不阻断主链路。
 
-### Task 5.5：可选响应 meta 暴露
+### Task 5.6：可选响应 meta 暴露
 
 **目标**：在非生产/授权环境中通过 feature flag 暴露 shadow 摘要。
 
@@ -396,7 +413,7 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
 - 不改变 `answer`、`status`、`table`。
 - 生产环境需正式权限和开关双重控制。
 
-### Task 5.6：验收材料
+### Task 5.7：验收材料
 
 **目标**：形成可审计交付。
 
