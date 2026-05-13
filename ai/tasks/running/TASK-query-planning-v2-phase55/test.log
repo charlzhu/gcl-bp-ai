@@ -1,0 +1,77 @@
+# Query Planning V2 Phase 5.5 测试日志
+
+## 1. TDD RED
+
+```text
+$ python -m pytest tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py -q
+FFFF [100%]
+4 failed
+
+失败原因：`query_plan_v2_shadow` 尚未写入 `comparison`，`response_meta` 尚未暴露轻量对比摘要。
+```
+
+## 2. TDD GREEN / Focused
+
+```text
+$ python -m pytest tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py -q
+...... [100%]
+6 passed in 0.94s
+```
+
+覆盖：
+
+1. 物流 `query_plan_v2_shadow.comparison` 写入 formal/shadow 对比摘要；
+2. 物流 `response_meta` 暴露轻量 comparison 字段；
+3. BOM B 类澄清边界写入 comparison 与 risk_tags；
+4. BOM `response_meta` 暴露轻量 comparison 字段；
+5. BOM C/UNSUPPORTED、EMPTY_RESULT/NO_ANSWER、EXECUTION_ERROR 边界；
+6. shadow comparison 构建失败时 fail-soft，不向上抛异常。
+
+## 3. Query Planning V2 单测回归
+
+```text
+$ python -m pytest tests/unit/query_planning -q
+.................................. [100%]
+34 passed in 1.42s
+```
+
+## 4. 全量回归
+
+```text
+$ python -m pytest tests -q
+223 passed, 2 warnings in 27.64s
+```
+
+说明：
+
+- 中途发现 `backend/.venv/bin/python` 存在但无法导入 sqlalchemy/pydantic，导致 `test_power_model_schema_import_has_no_pydantic_protected_namespace_warning` 失败。
+- 已将本地 `backend/.venv/pyvenv.cfg` 的 `include-system-site-packages` 改为 `true`，使该 venv 能读取 `/opt/anaconda3` 已安装依赖；随后该单测和全量回归通过。
+- 该 venv 配置文件位于未跟踪虚拟环境目录，不纳入本轮 git 提交。
+- warning 来源：既有 `openpyxl` 读取 xlsm 扩展/条件格式 warning，非本轮新增失败。
+
+## 5. 编译 / 语法检查
+
+```text
+$ python -m compileall -q backend/app/domains/query_planning/services/shadow_snapshot_builder.py backend/app/domains/logistics/services/data_qa_service.py backend/app/domains/plan_bom/services/qa_service.py tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py
+COMPILE=PASS
+```
+
+## 6. 静态安全扫描 / Pyflakes
+
+```text
+STATIC_SCAN_FINDINGS= {'hardcoded_secret': [], 'shell_injection': [], 'eval_exec': [], 'pickle': [], 'sql_string_format': []}
+STATIC_SCAN=PASS
+PYFLAKES=PASS
+```
+
+## 7. Ruff
+
+```text
+RUFF=SKIPPED: python module ruff is not installed in current environment
+```
+
+## 8. Diff check
+
+```text
+DIFF_CHECK=PASS
+```

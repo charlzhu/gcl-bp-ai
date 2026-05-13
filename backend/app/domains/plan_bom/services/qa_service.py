@@ -1213,6 +1213,9 @@ class PlanBomQaService:
                 response=response,
                 trace_id=trace_id,
             )
+            query_plan_v2_comparison = (
+                query_plan_v2_shadow.get("comparison") if isinstance(query_plan_v2_shadow.get("comparison"), dict) else {}
+            )
             payload_snapshot = {
                 "question": question,
                 "request_payload": {"question": question, "domain": "plan_bom"},
@@ -1229,6 +1232,10 @@ class PlanBomQaService:
                     "query_plan_v2_strategy": query_plan_v2_shadow.get("strategy"),
                     "query_plan_v2_query_key": query_plan_v2_shadow.get("query_key"),
                     "query_plan_v2_shadow_ready": True,
+                    "query_plan_v2_compare_matched": query_plan_v2_comparison.get("matched"),
+                    "query_plan_v2_formal_query_key": query_plan_v2_comparison.get("formal_query_key"),
+                    "query_plan_v2_shadow_query_key": query_plan_v2_comparison.get("shadow_query_key"),
+                    "query_plan_v2_risk_tags": list(query_plan_v2_comparison.get("risk_tags") or []),
                 },
                 "query_plan_v2_shadow": query_plan_v2_shadow,
                 "query_result": query_result_snapshot,

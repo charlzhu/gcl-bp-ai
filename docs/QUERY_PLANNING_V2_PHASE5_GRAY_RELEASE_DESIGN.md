@@ -394,8 +394,12 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
 **要点**：
 
 - 只新增审计字段，不改变正式结果。
-- 对比字段包括 `formal_query_key`、`shadow_query_key`、`matched`、`risk_tags`。
-- 构建失败不阻断主链路。
+- 对比字段包括 `formal_status`、`formal_intent`、`formal_query_key`、`formal_result_count`、`shadow_strategy`、`shadow_query_key`、`query_key_matched`、`matched`、`risk_tags`、`guardrail_status` 和安全开关摘要。
+- `risk_tags` 至少覆盖 `query_key_mismatch`、`clarify_boundary_mismatch`、`unsupported_boundary_mismatch`、`no_answer_boundary_mismatch`、`guardrail_blocked`、`unsafe_execution_policy`。
+- `guardrail_blocked` 只表示存在明确 `blocked_reason` 的安全拦截；业务拒答/空结果等 `accepted=false` 不应被误记为安全拦截。
+- `response_meta` 只暴露轻量摘要字段：`query_plan_v2_compare_matched`、`query_plan_v2_formal_query_key`、`query_plan_v2_shadow_query_key`、`query_plan_v2_risk_tags`。
+- 构建失败不阻断主链路，最多导致历史 shadow 日志写入失败或返回 `log_id=0`。
+- 不重新执行物流 Data QA / Plan BOM QA，不调用 LLM，不生成 SQL。
 
 ### Task 5.6：可选响应 meta 暴露
 

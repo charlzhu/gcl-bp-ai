@@ -78,7 +78,18 @@ class QueryPlanningV2ShadowSnapshotBuilder:
         )
         routed = self.router.route(plan)
         routed.audit.trace_id = trace_id
-        return routed.model_dump(mode="json")
+        snapshot = routed.model_dump(mode="json")
+        comparison = self._build_comparison(
+            domain="logistics",
+            formal_status=self._logistics_formal_status(result),
+            formal_query_key=rule_plan.query_key,
+            formal_intent=rule_plan.intent,
+            formal_result_count=len(result.result_table.rows),
+            shadow_snapshot=snapshot,
+        )
+        snapshot["comparison"] = comparison
+        snapshot["risk_tags"] = list(comparison["risk_tags"])
+        return snapshot
 
     def build_plan_bom_snapshot(
         self,
@@ -133,7 +144,165 @@ class QueryPlanningV2ShadowSnapshotBuilder:
         )
         routed = self.router.route(plan)
         routed.audit.trace_id = trace_id
-        return routed.model_dump(mode="json")
+        snapshot = routed.model_dump(mode="json")
+        comparison = self._build_comparison(
+            domain="plan_bom",
+            formal_status=self._plan_bom_formal_status(response),
+            formal_query_key=candidate.intent,
+            formal_intent=candidate.intent,
+            formal_result_count=len(response.result_table.rows),
+            shadow_snapshot=snapshot,
+        )
+        snapshot["comparison"] = comparison
+        snapshot["risk_tags"] = list(comparison["risk_tags"])
+        return snapshot
+
+    @classmethod
+    def _build_comparison(
+        cls,
+        *,
+        domain: str,
+        formal_status: str,
+        formal_query_key: str | None,
+        formal_intent: str | None,
+        formal_result_count: int,
+        shadow_snapshot: dict[str, Any],
+    ) -> dict[str, Any]:
+        """生成正式链路与 Query Planning V2 shadow 的在线对比摘要。
+
+        参数：
+            domain: 业务域。
+            formal_status: 正式链路业务状态，如 SUCCESS / CLARIFICATION。
+            formal_query_key: 正式 planner / NLU 的 query_key 或 intent。
+            formal_intent: 正式 planner / NLU 意图。
+            formal_result_count: 正式结果行数。
+            shadow_snapshot: 已路由的 query_plan_v2 shadow 快照。
+        返回：
+            可写入 `query_plan_v2_shadow.comparison` 的审计摘要。
+        业务逻辑：只做元数据对比，不重新执行 QA、不调用 LLM、不查库。
+        """
+
+        shadow_strategy = cls._as_str_or_none(shadow_snapshot.get("strategy"))
+        shadow_query_key = cls._as_str_or_none(shadow_snapshot.get("query_key"))
+        policy = shadow_snapshot.get("execution_policy") if isinstance(shadow_snapshot.get("execution_policy"), dict) else {}
+        guardrail = shadow_snapshot.get("guardrail_decision") if isinstance(shadow_snapshot.get("guardrail_decision"), dict) else {}
+        risk_tags: list[str] = []
+
+        query_key_matched: bool | None = None
+        if formal_query_key or shadow_query_key:
+            query_key_matched = formal_query_key == shadow_query_key
+            if not query_key_matched:
+                risk_tags.append("query_key_mismatch")
+
+        if formal_status == "CLARIFICATION" and shadow_strategy != "CLARIFY":
+            risk_tags.append("clarify_boundary_mismatch")
+        if formal_status != "CLARIFICATION" and shadow_strategy == "CLARIFY":
+            risk_tags.append("clarify_boundary_mismatch")
+        if formal_status == "UNSUPPORTED" and shadow_strategy != "UNSUPPORTED":
+            risk_tags.append("unsupported_boundary_mismatch")
+        if formal_status != "UNSUPPORTED" and shadow_strategy == "UNSUPPORTED":
+            risk_tags.append("unsupported_boundary_mismatch")
+        if formal_status == "EMPTY_RESULT" and shadow_strategy != "NO_ANSWER":
+            risk_tags.append("no_answer_boundary_mismatch")
+        if formal_status != "EMPTY_RESULT" and shadow_strategy == "NO_ANSWER":
+            risk_tags.append("no_answer_boundary_mismatch")
+        if bool(guardrail.get("blocked_reason")):
+            risk_tags.append("guardrail_blocked")
+        if cls._is_unsafe_execution_policy(policy):
+            risk_tags.append("unsafe_execution_policy")
+
+        normalized_risk_tags = cls._dedupe(risk_tags)
+        return {
+            "schema_version": "query_plan_v2.comparison.v1",
+            "domain": domain,
+            "formal_status": formal_status,
+            "formal_intent": formal_intent,
+            "formal_query_key": formal_query_key,
+            "formal_result_count": formal_result_count,
+            "shadow_strategy": shadow_strategy,
+            "shadow_query_key": shadow_query_key,
+            "query_key_matched": query_key_matched,
+            "matched": not normalized_risk_tags,
+            "risk_tags": normalized_risk_tags,
+            "guardrail_status": cls._guardrail_status(guardrail),
+            "shadow_only": policy.get("shadow_only"),
+            "llm_can_execute": policy.get("llm_can_execute"),
+            "sql_generation_allowed": policy.get("sql_generation_allowed"),
+        }
+
+    @staticmethod
+    def _logistics_formal_status(result: LogisticsDataQaResult) -> str:
+        """把物流正式结果转换成 comparison 使用的业务状态。"""
+
+        status_code = result.status.code if result.status else ""
+        if status_code == "EXECUTION_ERROR":
+            return "ERROR"
+        if result.needs_clarification:
+            return "CLARIFICATION"
+        if not result.supported:
+            return "UNSUPPORTED"
+        if status_code == "EMPTY_RESULT" or not result.result_table.rows:
+            return "EMPTY_RESULT"
+        return "SUCCESS"
+
+    @staticmethod
+    def _plan_bom_formal_status(response: PlanBomQaResponse) -> str:
+        """把 BOM 正式响应转换成 comparison 使用的业务状态。"""
+
+        if response.classification == "B" or response.status.code == "CLARIFICATION_REQUIRED" or response.nlu.missing_slots:
+            return "CLARIFICATION"
+        if response.classification == "C" or response.status.code == "UNSUPPORTED_QUESTION" or response.nlu.intent == "unsupported":
+            return "UNSUPPORTED"
+        if response.status.code == "EMPTY_RESULT":
+            return "EMPTY_RESULT"
+        if response.status.code == "EXECUTION_ERROR":
+            return "ERROR"
+        return "SUCCESS"
+
+    @staticmethod
+    def _guardrail_status(guardrail: dict[str, Any]) -> str:
+        """把 Guardrail 决策转换成简短状态。"""
+
+        if not guardrail:
+            return "missing"
+        if bool(guardrail.get("blocked_reason")):
+            return "blocked"
+        if guardrail.get("accepted") is False:
+            return "rejected"
+        if guardrail.get("final_source") == "shadow":
+            return "shadow"
+        return "accepted"
+
+    @staticmethod
+    def _is_unsafe_execution_policy(policy: dict[str, Any]) -> bool:
+        """判断 shadow 执行策略是否越过安全边界。"""
+
+        return (
+            policy.get("shadow_only") is not True
+            or bool(policy.get("llm_can_execute"))
+            or bool(policy.get("sql_generation_allowed"))
+        )
+
+    @staticmethod
+    def _dedupe(values: list[str]) -> list[str]:
+        """保持顺序去重风险标签。"""
+
+        seen: set[str] = set()
+        result: list[str] = []
+        for value in values:
+            if value not in seen:
+                seen.add(value)
+                result.append(value)
+        return result
+
+    @staticmethod
+    def _as_str_or_none(value: Any) -> str | None:
+        """把非空值转换为字符串。"""
+
+        if value is None:
+            return None
+        text = str(value)
+        return text if text else None
 
     @staticmethod
     def _logistics_strategy(*, rule_plan: LogisticsDataQaPlan, result: LogisticsDataQaResult) -> str:
@@ -230,6 +399,8 @@ class QueryPlanningV2ShadowSnapshotBuilder:
     def _plan_bom_strategy(response: PlanBomQaResponse) -> str:
         """根据 BOM QA 响应推导 shadow 策略。"""
 
+        if response.status.code == "EXECUTION_ERROR":
+            return "UNSUPPORTED"
         if response.classification == "C" or response.status.code == "UNSUPPORTED_QUESTION" or response.nlu.intent == "unsupported":
             return "UNSUPPORTED"
         if response.status.code == "EMPTY_RESULT":

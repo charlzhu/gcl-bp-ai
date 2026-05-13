@@ -1,0 +1,879 @@
+diff --git a/ai/tasks/running/TASK-query-planning-v2-phase55/final-acceptance.md b/ai/tasks/running/TASK-query-planning-v2-phase55/final-acceptance.md
+new file mode 100644
+index 0000000..bbc1291
+--- /dev/null
++++ b/ai/tasks/running/TASK-query-planning-v2-phase55/final-acceptance.md
+@@ -0,0 +1,141 @@
++# Query Planning V2 Phase 5.5 Final Acceptance
++
++## 1. 任务范围
++
++本轮进入 Phase 5.5：在线 shadow 对比增强。
++
++目标是在 Phase 5.1–5.4 已有真实日志灰度报表和运营验收门槛基础上，把 formal/shadow 的关键差异摘要直接写入每条 `query_plan_v2_shadow` 快照，便于后续报表、运营看板和人工抽检减少重复解析成本。
++
++## 2. 修改文件
++
++```text
++backend/app/domains/query_planning/services/shadow_snapshot_builder.py
++backend/app/domains/logistics/services/data_qa_service.py
++backend/app/domains/plan_bom/services/qa_service.py
++docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
++tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py
++```
++
++验收材料：
++
++```text
++ai/tasks/running/TASK-query-planning-v2-phase55/diff.patch
++ai/tasks/running/TASK-query-planning-v2-phase55/test.log
++ai/tasks/running/TASK-query-planning-v2-phase55/review-result.json
++ai/tasks/running/TASK-query-planning-v2-phase55/final-acceptance.md
++```
++
++## 3. 核心实现
++
++### 3.1 `query_plan_v2_shadow.comparison`
++
++新增在线对比摘要：
++
++```json
++{
++  "schema_version": "query_plan_v2.comparison.v1",
++  "domain": "logistics | plan_bom",
++  "formal_status": "SUCCESS | CLARIFICATION | UNSUPPORTED | EMPTY_RESULT | ERROR",
++  "formal_intent": "...",
++  "formal_query_key": "...",
++  "formal_result_count": 0,
++  "shadow_strategy": "DIRECT_RETRIEVAL | CLARIFY | UNSUPPORTED | NO_ANSWER | QUERY_DECOMPOSITION",
++  "shadow_query_key": "...",
++  "query_key_matched": true,
++  "matched": true,
++  "risk_tags": [],
++  "guardrail_status": "accepted | rejected | blocked | shadow | missing",
++  "shadow_only": true,
++  "llm_can_execute": false,
++  "sql_generation_allowed": false
++}
++```
++
++### 3.2 风险标签
++
++当前覆盖：
++
++```text
++query_key_mismatch
++clarify_boundary_mismatch
++unsupported_boundary_mismatch
++no_answer_boundary_mismatch
++guardrail_blocked
++unsafe_execution_policy
++```
++
++说明：
++
++- `guardrail_blocked` 只表示存在明确 `blocked_reason` 的安全拦截。
++- 业务拒答 / 空结果造成的 `accepted=false` 只显示为 `guardrail_status=rejected`，不误记为安全拦截。
++- Plan BOM `EXECUTION_ERROR` 不再被 shadow 误判为 `DIRECT_RETRIEVAL`，而是落到非可执行 `UNSUPPORTED` 策略并通过风险标签暴露差异。
++
++### 3.3 response_meta 轻量摘要
++
++物流 / BOM 历史日志 `response_meta` 新增：
++
++```text
++query_plan_v2_compare_matched
++query_plan_v2_formal_query_key
++query_plan_v2_shadow_query_key
++query_plan_v2_risk_tags
++```
++
++只暴露轻量对比摘要，不暴露完整 raw payload。
++
++## 4. 安全边界
++
++确认：
++
++1. 不改变物流 Data QA 正式查询结果；
++2. 不改变 Plan BOM QA 正式查询结果；
++3. 不调用 LLM；
++4. 不生成 SQL；
++5. 不查业务数据；
++6. 不让 shadow 参与正式查询决策；
++7. 不恢复临时 token/header；
++8. shadow comparison 构建失败时 fail-soft，不向上抛出异常。
++
++## 5. 测试结果
++
++```text
++Focused Phase 5.5: 6 passed
++Query Planning V2 unit: 34 passed
++Full regression: 223 passed, 2 warnings
++Compile: PASS
++Static scan: PASS
++Pyflakes: PASS
++Diff check: PASS
++Ruff: SKIPPED，当前环境未安装 ruff
++```
++
++## 6. 环境说明
++
++全量回归中发现本地 `backend/.venv/bin/python` 存在但无法导入 sqlalchemy/pydantic，导致一个功率模型 schema import 测试失败。
++已将未跟踪虚拟环境文件 `backend/.venv/pyvenv.cfg` 的 `include-system-site-packages` 改为 `true`，使其读取 `/opt/anaconda3` 已安装依赖；随后该单测与全量回归通过。
++该 venv 配置不纳入本轮 git 提交。
++
++## 7. 影响范围
++
++本轮为 additive metadata 增强：
++
++- `query_plan_v2_shadow.comparison`
++- `query_plan_v2_shadow.risk_tags`
++- `response_meta` 轻量摘要字段
++
++不会改变正式 `query_result`、`status`、`answer_summary`、`result_table`。
++
++## 8. Review 结论
++
++已完成两轮独立 review：
++
++1. 第一轮无阻塞，提出 C/no_answer/error/guardrail 语义建议，已返工；
++2. 第二轮发现 `Any` 未导入导致 pyflakes 阻塞，已补齐并重跑验证通过。
++
++最终无阻塞问题。
++
++## 9. 仍未解决 / 后续建议
++
++建议下一步进入 Phase 5.6：可选响应 meta 暴露。
++
++注意：Phase 5.6 必须默认关闭，并继续沿用生产 fail-closed / 正式权限模块控制，不允许新增临时 token 或 header。
+diff --git a/ai/tasks/running/TASK-query-planning-v2-phase55/review-result.json b/ai/tasks/running/TASK-query-planning-v2-phase55/review-result.json
+new file mode 100644
+index 0000000..9c0f09e
+--- /dev/null
++++ b/ai/tasks/running/TASK-query-planning-v2-phase55/review-result.json
+@@ -0,0 +1,43 @@
++{
++  "passed": true,
++  "blocker_issues": [],
++  "security_concerns": [],
++  "logic_errors": [],
++  "test_gaps": [],
++  "review_rounds": [
++    {
++      "round": 1,
++      "passed": true,
++      "blocking": false,
++      "summary": "独立 review 未发现阻塞提交问题，但指出 Plan BOM EXECUTION_ERROR 可能误判为 DIRECT_RETRIEVAL、业务拒答/空结果 accepted=false 可能误记为 guardrail_blocked，并建议补充 C/no_answer/error 边界测试。",
++      "actions_taken": [
++        "Plan BOM EXECUTION_ERROR 在 shadow strategy 中改为 UNSUPPORTED，避免误判 DIRECT_RETRIEVAL。",
++        "guardrail_blocked 仅在存在明确 blocked_reason 时标记，业务拒答/空结果 accepted=false 改为 guardrail_status=rejected，不计安全拦截风险。",
++        "新增 BOM C/UNSUPPORTED、EMPTY_RESULT/NO_ANSWER、EXECUTION_ERROR 边界测试。",
++        "设计文档补充 guardrail_blocked 口径。"
++      ]
++    },
++    {
++      "round": 2,
++      "passed": false,
++      "blocking": true,
++      "summary": "最终 review 发现测试文件使用 Any 但未导入，pyflakes/ruff 类 CI 会失败；同时提醒验收 artifacts 需按返工后结果刷新。",
++      "actions_taken": [
++        "在 tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py 顶部补充 from typing import Any。",
++        "重跑 focused/query_planning/full/compile/static scan/pyflakes/diff check 均通过。",
++        "刷新 diff.patch、test.log、final-acceptance.md 和 review-result.json。"
++      ]
++    }
++  ],
++  "final_verification": {
++    "focused_phase55": "6 passed",
++    "query_planning_unit": "34 passed",
++    "full_regression": "223 passed, 2 warnings",
++    "compile": "PASS",
++    "static_scan": "PASS",
++    "pyflakes": "PASS",
++    "diff_check": "PASS",
++    "ruff": "SKIPPED: python module ruff is not installed in current environment"
++  },
++  "summary": "Phase 5.5 在线 shadow 对比增强已完成两轮独立 review 和返工。最终 scoped diff 只新增审计元数据与测试/文档/验收材料，不调用 LLM、不生成 SQL、不查业务数据、不改变物流或 BOM 正式结果。"
++}
+diff --git a/ai/tasks/running/TASK-query-planning-v2-phase55/test.log b/ai/tasks/running/TASK-query-planning-v2-phase55/test.log
+new file mode 100644
+index 0000000..5ba0c2d
+--- /dev/null
++++ b/ai/tasks/running/TASK-query-planning-v2-phase55/test.log
+@@ -0,0 +1,77 @@
++# Query Planning V2 Phase 5.5 测试日志
++
++## 1. TDD RED
++
++```text
++$ python -m pytest tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py -q
++FFFF [100%]
++4 failed
++
++失败原因：`query_plan_v2_shadow` 尚未写入 `comparison`，`response_meta` 尚未暴露轻量对比摘要。
++```
++
++## 2. TDD GREEN / Focused
++
++```text
++$ python -m pytest tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py -q
++...... [100%]
++6 passed in 0.94s
++```
++
++覆盖：
++
++1. 物流 `query_plan_v2_shadow.comparison` 写入 formal/shadow 对比摘要；
++2. 物流 `response_meta` 暴露轻量 comparison 字段；
++3. BOM B 类澄清边界写入 comparison 与 risk_tags；
++4. BOM `response_meta` 暴露轻量 comparison 字段；
++5. BOM C/UNSUPPORTED、EMPTY_RESULT/NO_ANSWER、EXECUTION_ERROR 边界；
++6. shadow comparison 构建失败时 fail-soft，不向上抛异常。
++
++## 3. Query Planning V2 单测回归
++
++```text
++$ python -m pytest tests/unit/query_planning -q
++.................................. [100%]
++34 passed in 1.42s
++```
++
++## 4. 全量回归
++
++```text
++$ python -m pytest tests -q
++223 passed, 2 warnings in 27.64s
++```
++
++说明：
++
++- 中途发现 `backend/.venv/bin/python` 存在但无法导入 sqlalchemy/pydantic，导致 `test_power_model_schema_import_has_no_pydantic_protected_namespace_warning` 失败。
++- 已将本地 `backend/.venv/pyvenv.cfg` 的 `include-system-site-packages` 改为 `true`，使该 venv 能读取 `/opt/anaconda3` 已安装依赖；随后该单测和全量回归通过。
++- 该 venv 配置文件位于未跟踪虚拟环境目录，不纳入本轮 git 提交。
++- warning 来源：既有 `openpyxl` 读取 xlsm 扩展/条件格式 warning，非本轮新增失败。
++
++## 5. 编译 / 语法检查
++
++```text
++$ python -m compileall -q backend/app/domains/query_planning/services/shadow_snapshot_builder.py backend/app/domains/logistics/services/data_qa_service.py backend/app/domains/plan_bom/services/qa_service.py tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py
++COMPILE=PASS
++```
++
++## 6. 静态安全扫描 / Pyflakes
++
++```text
++STATIC_SCAN_FINDINGS= {'hardcoded_secret': [], 'shell_injection': [], 'eval_exec': [], 'pickle': [], 'sql_string_format': []}
++STATIC_SCAN=PASS
++PYFLAKES=PASS
++```
++
++## 7. Ruff
++
++```text
++RUFF=SKIPPED: python module ruff is not installed in current environment
++```
++
++## 8. Diff check
++
++```text
++DIFF_CHECK=PASS
++```
+diff --git a/backend/app/domains/logistics/services/data_qa_service.py b/backend/app/domains/logistics/services/data_qa_service.py
+index f075143..68fa73a 100644
+--- a/backend/app/domains/logistics/services/data_qa_service.py
++++ b/backend/app/domains/logistics/services/data_qa_service.py
+@@ -514,6 +514,9 @@ class LogisticsDataQaService:
+                 trace_id=trace_id,
+                 guardrail_decision=guardrail_decision,
+             )
++            query_plan_v2_comparison = (
++                query_plan_v2_shadow.get("comparison") if isinstance(query_plan_v2_shadow.get("comparison"), dict) else {}
++            )
+             payload_snapshot = {
+                 "question": question,
+                 "request_payload": {"question": question},
+@@ -530,6 +533,10 @@ class LogisticsDataQaService:
+                     "query_plan_v2_strategy": query_plan_v2_shadow.get("strategy"),
+                     "query_plan_v2_query_key": query_plan_v2_shadow.get("query_key"),
+                     "query_plan_v2_shadow_ready": True,
++                    "query_plan_v2_compare_matched": query_plan_v2_comparison.get("matched"),
++                    "query_plan_v2_formal_query_key": query_plan_v2_comparison.get("formal_query_key"),
++                    "query_plan_v2_shadow_query_key": query_plan_v2_comparison.get("shadow_query_key"),
++                    "query_plan_v2_risk_tags": list(query_plan_v2_comparison.get("risk_tags") or []),
+                 },
+                 "query_plan_v2_shadow": query_plan_v2_shadow,
+                 "query_result": query_result_snapshot,
+diff --git a/backend/app/domains/plan_bom/services/qa_service.py b/backend/app/domains/plan_bom/services/qa_service.py
+index 8281b49..cfe95d7 100644
+--- a/backend/app/domains/plan_bom/services/qa_service.py
++++ b/backend/app/domains/plan_bom/services/qa_service.py
+@@ -1213,6 +1213,9 @@ class PlanBomQaService:
+                 response=response,
+                 trace_id=trace_id,
+             )
++            query_plan_v2_comparison = (
++                query_plan_v2_shadow.get("comparison") if isinstance(query_plan_v2_shadow.get("comparison"), dict) else {}
++            )
+             payload_snapshot = {
+                 "question": question,
+                 "request_payload": {"question": question, "domain": "plan_bom"},
+@@ -1229,6 +1232,10 @@ class PlanBomQaService:
+                     "query_plan_v2_strategy": query_plan_v2_shadow.get("strategy"),
+                     "query_plan_v2_query_key": query_plan_v2_shadow.get("query_key"),
+                     "query_plan_v2_shadow_ready": True,
++                    "query_plan_v2_compare_matched": query_plan_v2_comparison.get("matched"),
++                    "query_plan_v2_formal_query_key": query_plan_v2_comparison.get("formal_query_key"),
++                    "query_plan_v2_shadow_query_key": query_plan_v2_comparison.get("shadow_query_key"),
++                    "query_plan_v2_risk_tags": list(query_plan_v2_comparison.get("risk_tags") or []),
+                 },
+                 "query_plan_v2_shadow": query_plan_v2_shadow,
+                 "query_result": query_result_snapshot,
+diff --git a/backend/app/domains/query_planning/services/shadow_snapshot_builder.py b/backend/app/domains/query_planning/services/shadow_snapshot_builder.py
+index fbe26d3..ef41098 100644
+--- a/backend/app/domains/query_planning/services/shadow_snapshot_builder.py
++++ b/backend/app/domains/query_planning/services/shadow_snapshot_builder.py
+@@ -78,7 +78,18 @@ class QueryPlanningV2ShadowSnapshotBuilder:
+         )
+         routed = self.router.route(plan)
+         routed.audit.trace_id = trace_id
+-        return routed.model_dump(mode="json")
++        snapshot = routed.model_dump(mode="json")
++        comparison = self._build_comparison(
++            domain="logistics",
++            formal_status=self._logistics_formal_status(result),
++            formal_query_key=rule_plan.query_key,
++            formal_intent=rule_plan.intent,
++            formal_result_count=len(result.result_table.rows),
++            shadow_snapshot=snapshot,
++        )
++        snapshot["comparison"] = comparison
++        snapshot["risk_tags"] = list(comparison["risk_tags"])
++        return snapshot
+
+     def build_plan_bom_snapshot(
+         self,
+@@ -133,7 +144,165 @@ class QueryPlanningV2ShadowSnapshotBuilder:
+         )
+         routed = self.router.route(plan)
+         routed.audit.trace_id = trace_id
+-        return routed.model_dump(mode="json")
++        snapshot = routed.model_dump(mode="json")
++        comparison = self._build_comparison(
++            domain="plan_bom",
++            formal_status=self._plan_bom_formal_status(response),
++            formal_query_key=candidate.intent,
++            formal_intent=candidate.intent,
++            formal_result_count=len(response.result_table.rows),
++            shadow_snapshot=snapshot,
++        )
++        snapshot["comparison"] = comparison
++        snapshot["risk_tags"] = list(comparison["risk_tags"])
++        return snapshot
++
++    @classmethod
++    def _build_comparison(
++        cls,
++        *,
++        domain: str,
++        formal_status: str,
++        formal_query_key: str | None,
++        formal_intent: str | None,
++        formal_result_count: int,
++        shadow_snapshot: dict[str, Any],
++    ) -> dict[str, Any]:
++        """生成正式链路与 Query Planning V2 shadow 的在线对比摘要。
++
++        参数：
++            domain: 业务域。
++            formal_status: 正式链路业务状态，如 SUCCESS / CLARIFICATION。
++            formal_query_key: 正式 planner / NLU 的 query_key 或 intent。
++            formal_intent: 正式 planner / NLU 意图。
++            formal_result_count: 正式结果行数。
++            shadow_snapshot: 已路由的 query_plan_v2 shadow 快照。
++        返回：
++            可写入 `query_plan_v2_shadow.comparison` 的审计摘要。
++        业务逻辑：只做元数据对比，不重新执行 QA、不调用 LLM、不查库。
++        """
++
++        shadow_strategy = cls._as_str_or_none(shadow_snapshot.get("strategy"))
++        shadow_query_key = cls._as_str_or_none(shadow_snapshot.get("query_key"))
++        policy = shadow_snapshot.get("execution_policy") if isinstance(shadow_snapshot.get("execution_policy"), dict) else {}
++        guardrail = shadow_snapshot.get("guardrail_decision") if isinstance(shadow_snapshot.get("guardrail_decision"), dict) else {}
++        risk_tags: list[str] = []
++
++        query_key_matched: bool | None = None
++        if formal_query_key or shadow_query_key:
++            query_key_matched = formal_query_key == shadow_query_key
++            if not query_key_matched:
++                risk_tags.append("query_key_mismatch")
++
++        if formal_status == "CLARIFICATION" and shadow_strategy != "CLARIFY":
++            risk_tags.append("clarify_boundary_mismatch")
++        if formal_status != "CLARIFICATION" and shadow_strategy == "CLARIFY":
++            risk_tags.append("clarify_boundary_mismatch")
++        if formal_status == "UNSUPPORTED" and shadow_strategy != "UNSUPPORTED":
++            risk_tags.append("unsupported_boundary_mismatch")
++        if formal_status != "UNSUPPORTED" and shadow_strategy == "UNSUPPORTED":
++            risk_tags.append("unsupported_boundary_mismatch")
++        if formal_status == "EMPTY_RESULT" and shadow_strategy != "NO_ANSWER":
++            risk_tags.append("no_answer_boundary_mismatch")
++        if formal_status != "EMPTY_RESULT" and shadow_strategy == "NO_ANSWER":
++            risk_tags.append("no_answer_boundary_mismatch")
++        if bool(guardrail.get("blocked_reason")):
++            risk_tags.append("guardrail_blocked")
++        if cls._is_unsafe_execution_policy(policy):
++            risk_tags.append("unsafe_execution_policy")
++
++        normalized_risk_tags = cls._dedupe(risk_tags)
++        return {
++            "schema_version": "query_plan_v2.comparison.v1",
++            "domain": domain,
++            "formal_status": formal_status,
++            "formal_intent": formal_intent,
++            "formal_query_key": formal_query_key,
++            "formal_result_count": formal_result_count,
++            "shadow_strategy": shadow_strategy,
++            "shadow_query_key": shadow_query_key,
++            "query_key_matched": query_key_matched,
++            "matched": not normalized_risk_tags,
++            "risk_tags": normalized_risk_tags,
++            "guardrail_status": cls._guardrail_status(guardrail),
++            "shadow_only": policy.get("shadow_only"),
++            "llm_can_execute": policy.get("llm_can_execute"),
++            "sql_generation_allowed": policy.get("sql_generation_allowed"),
++        }
++
++    @staticmethod
++    def _logistics_formal_status(result: LogisticsDataQaResult) -> str:
++        """把物流正式结果转换成 comparison 使用的业务状态。"""
++
++        status_code = result.status.code if result.status else ""
++        if status_code == "EXECUTION_ERROR":
++            return "ERROR"
++        if result.needs_clarification:
++            return "CLARIFICATION"
++        if not result.supported:
++            return "UNSUPPORTED"
++        if status_code == "EMPTY_RESULT" or not result.result_table.rows:
++            return "EMPTY_RESULT"
++        return "SUCCESS"
++
++    @staticmethod
++    def _plan_bom_formal_status(response: PlanBomQaResponse) -> str:
++        """把 BOM 正式响应转换成 comparison 使用的业务状态。"""
++
++        if response.classification == "B" or response.status.code == "CLARIFICATION_REQUIRED" or response.nlu.missing_slots:
++            return "CLARIFICATION"
++        if response.classification == "C" or response.status.code == "UNSUPPORTED_QUESTION" or response.nlu.intent == "unsupported":
++            return "UNSUPPORTED"
++        if response.status.code == "EMPTY_RESULT":
++            return "EMPTY_RESULT"
++        if response.status.code == "EXECUTION_ERROR":
++            return "ERROR"
++        return "SUCCESS"
++
++    @staticmethod
++    def _guardrail_status(guardrail: dict[str, Any]) -> str:
++        """把 Guardrail 决策转换成简短状态。"""
++
++        if not guardrail:
++            return "missing"
++        if bool(guardrail.get("blocked_reason")):
++            return "blocked"
++        if guardrail.get("accepted") is False:
++            return "rejected"
++        if guardrail.get("final_source") == "shadow":
++            return "shadow"
++        return "accepted"
++
++    @staticmethod
++    def _is_unsafe_execution_policy(policy: dict[str, Any]) -> bool:
++        """判断 shadow 执行策略是否越过安全边界。"""
++
++        return (
++            policy.get("shadow_only") is not True
++            or bool(policy.get("llm_can_execute"))
++            or bool(policy.get("sql_generation_allowed"))
++        )
++
++    @staticmethod
++    def _dedupe(values: list[str]) -> list[str]:
++        """保持顺序去重风险标签。"""
++
++        seen: set[str] = set()
++        result: list[str] = []
++        for value in values:
++            if value not in seen:
++                seen.add(value)
++                result.append(value)
++        return result
++
++    @staticmethod
++    def _as_str_or_none(value: Any) -> str | None:
++        """把非空值转换为字符串。"""
++
++        if value is None:
++            return None
++        text = str(value)
++        return text if text else None
+
+     @staticmethod
+     def _logistics_strategy(*, rule_plan: LogisticsDataQaPlan, result: LogisticsDataQaResult) -> str:
+@@ -230,6 +399,8 @@ class QueryPlanningV2ShadowSnapshotBuilder:
+     def _plan_bom_strategy(response: PlanBomQaResponse) -> str:
+         """根据 BOM QA 响应推导 shadow 策略。"""
+
++        if response.status.code == "EXECUTION_ERROR":
++            return "UNSUPPORTED"
+         if response.classification == "C" or response.status.code == "UNSUPPORTED_QUESTION" or response.nlu.intent == "unsupported":
+             return "UNSUPPORTED"
+         if response.status.code == "EMPTY_RESULT":
+diff --git a/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md b/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
+index 41aa852..7fd5e41 100644
+--- a/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
++++ b/docs/QUERY_PLANNING_V2_PHASE5_GRAY_RELEASE_DESIGN.md
+@@ -394,8 +394,12 @@ QUERY_PLANNING_V2_GRAY_ALLOW_LLM=false
+ **要点**：
+
+ - 只新增审计字段，不改变正式结果。
+-- 对比字段包括 `formal_query_key`、`shadow_query_key`、`matched`、`risk_tags`。
+-- 构建失败不阻断主链路。
++- 对比字段包括 `formal_status`、`formal_intent`、`formal_query_key`、`formal_result_count`、`shadow_strategy`、`shadow_query_key`、`query_key_matched`、`matched`、`risk_tags`、`guardrail_status` 和安全开关摘要。
++- `risk_tags` 至少覆盖 `query_key_mismatch`、`clarify_boundary_mismatch`、`unsupported_boundary_mismatch`、`no_answer_boundary_mismatch`、`guardrail_blocked`、`unsafe_execution_policy`。
++- `guardrail_blocked` 只表示存在明确 `blocked_reason` 的安全拦截；业务拒答/空结果等 `accepted=false` 不应被误记为安全拦截。
++- `response_meta` 只暴露轻量摘要字段：`query_plan_v2_compare_matched`、`query_plan_v2_formal_query_key`、`query_plan_v2_shadow_query_key`、`query_plan_v2_risk_tags`。
++- 构建失败不阻断主链路，最多导致历史 shadow 日志写入失败或返回 `log_id=0`。
++- 不重新执行物流 Data QA / Plan BOM QA，不调用 LLM，不生成 SQL。
+
+ ### Task 5.6：可选响应 meta 暴露
+
+diff --git a/tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py b/tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py
+new file mode 100644
+index 0000000..53d2b58
+--- /dev/null
++++ b/tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py
+@@ -0,0 +1,325 @@
++from __future__ import annotations
++
++import json
++from types import SimpleNamespace
++from typing import Any
++
++from backend.app.domains.logistics.schemas.data_qa import (
++    LogisticsDataQaPlan,
++    LogisticsDataQaResult,
++    LogisticsDataQaStatus,
++    LogisticsDataQaTable,
++)
++from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
++from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate, PlanBomQaResponse, PlanBomQaStatus
++from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
++from backend.app.domains.query_planning.services.shadow_snapshot_builder import QueryPlanningV2ShadowSnapshotBuilder
++
++
++class _FakeDb:
++    """测试用 DB，会话只记录提交/回滚次数。"""
++
++    def __init__(self) -> None:
++        self.commit_count = 0
++        self.rollback_count = 0
++
++    def commit(self) -> None:
++        self.commit_count += 1
++
++    def rollback(self) -> None:
++        self.rollback_count += 1
++
++
++class _CapturingQueryLogRepository:
++    """捕获 sys_query_log 写入 payload。"""
++
++    def __init__(self, log_id: int = 501) -> None:
++        self.log_id = log_id
++        self.payloads: list[dict] = []
++
++    def write_query_log(self, db, payload: dict) -> int:  # noqa: ANN001
++        self.payloads.append(payload)
++        return self.log_id
++
++
++class _BrokenShadowSnapshotBuilder:
++    """模拟 shadow 构建失败，验证不阻断主问答链路。"""
++
++    def build_logistics_snapshot(self, **_: Any) -> dict[str, Any]:
++        raise RuntimeError("shadow compare failed")
++
++    def build_plan_bom_snapshot(self, **_: Any) -> dict[str, Any]:
++        raise RuntimeError("shadow compare failed")
++
++
++def _logistics_success_result(query_key: str = "hist_mw_by_carrier") -> LogisticsDataQaResult:
++    """构造物流 A 类成功结果。"""
++
++    return LogisticsDataQaResult(
++        answer_summary="已统计 2025 年各承运商发运量。",
++        result_table=LogisticsDataQaTable(columns=["承运商", "发运量"], rows=[{"承运商": "A", "发运量": 1}]),
++        query_plan=LogisticsDataQaPlan(
++            intent="aggregate",
++            query_key=query_key,
++            metrics=["shipment_mw"],
++            dimensions=["carrier"],
++            filters={"year": 2025},
++        ),
++        status=LogisticsDataQaStatus(code="OK", message="查询成功", success=True),
++    )
++
++
++def test_logistics_shadow_snapshot_records_online_comparison_summary() -> None:
++    """物流 shadow 快照应在线记录 formal/shadow 对比摘要，便于后续灰度报表直接读取。"""
++    snapshot = QueryPlanningV2ShadowSnapshotBuilder().build_logistics_snapshot(
++        question="2025年各承运商发运量是多少？",
++        result=_logistics_success_result(),
++        trace_id="trace-p55-logistics",
++    )
++
++    comparison = snapshot["comparison"]
++    assert comparison["domain"] == "logistics"
++    assert comparison["formal_status"] == "SUCCESS"
++    assert comparison["formal_query_key"] == "hist_mw_by_carrier"
++    assert comparison["shadow_strategy"] == "DIRECT_RETRIEVAL"
++    assert comparison["shadow_query_key"] == "hist_mw_by_carrier"
++    assert comparison["query_key_matched"] is True
++    assert comparison["matched"] is True
++    assert comparison["risk_tags"] == []
++    assert comparison["shadow_only"] is True
++    assert comparison["llm_can_execute"] is False
++    assert comparison["sql_generation_allowed"] is False
++    assert snapshot["risk_tags"] == []
++
++
++def test_logistics_history_payload_exposes_shadow_comparison_without_changing_formal_result() -> None:
++    """物流历史日志应只新增审计字段，正式 query_result 不被 shadow 对比覆盖。"""
++    db = _FakeDb()
++    query_log_repository = _CapturingQueryLogRepository(log_id=502)
++    service = LogisticsDataQaService(
++        db=db,
++        repository=object(),
++        query_log_repository=query_log_repository,
++    )
++    result = _logistics_success_result()
++
++    log_id = service._write_history_snapshot(question="2025年各承运商发运量是多少？", trace_id="trace-p55", result=result)
++
++    assert log_id == 502
++    assert db.commit_count == 1
++    payload = json.loads(query_log_repository.payloads[0]["request_payload"])
++    comparison = payload["query_plan_v2_shadow"]["comparison"]
++    assert comparison["matched"] is True
++    assert payload["response_meta"]["query_plan_v2_compare_matched"] is True
++    assert payload["response_meta"]["query_plan_v2_risk_tags"] == []
++    assert payload["query_result"]["answer_summary"] == result.answer_summary
++    assert payload["query_result"]["query_plan"]["query_key"] == "hist_mw_by_carrier"
++
++
++def test_plan_bom_shadow_snapshot_records_clarify_boundary_comparison() -> None:
++    """BOM B 类追问应记录 CLARIFY 边界一致的 comparison，不把 shadow 当成正式答案。"""
++    response = PlanBomQaResponse(
++        question="这个订单玻璃是什么？",
++        classification="B",
++        status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="请补充订单。", success=False, severity="warning"),
++        nlu=PlanBomNluCandidate(
++            question="这个订单玻璃是什么？",
++            intent="single_order_material_specs",
++            slots={"material_category": ["玻璃"]},
++            missing_slots=["order_id"],
++            confidence=0.6,
++            provider_mode="rule",
++        ),
++        answer_summary="请补充订单号、BOM 文件名或客户实例。",
++    )
++
++    snapshot = QueryPlanningV2ShadowSnapshotBuilder().build_plan_bom_snapshot(
++        question=response.question,
++        response=response,
++        trace_id="trace-p55-bom",
++    )
++
++    comparison = snapshot["comparison"]
++    assert comparison["domain"] == "plan_bom"
++    assert comparison["formal_status"] == "CLARIFICATION"
++    assert comparison["formal_query_key"] == "single_order_material_specs"
++    assert comparison["shadow_strategy"] == "CLARIFY"
++    assert comparison["shadow_query_key"] is None
++    assert comparison["query_key_matched"] is False
++    assert comparison["matched"] is False
++    assert comparison["risk_tags"] == ["query_key_mismatch"]
++    assert "query_key_mismatch" in snapshot["risk_tags"]
++
++
++def test_plan_bom_shadow_comparison_handles_c_no_answer_and_error_boundaries() -> None:
++    """BOM C、空结果和异常边界应有明确 comparison，不能被误记为 guardrail 安全拦截。"""
++    unsupported_response = PlanBomQaResponse(
++        question="预测一下明年市场价格？",
++        classification="C",
++        status=PlanBomQaStatus(code="UNSUPPORTED_QUESTION", message="暂不支持。", success=False, severity="info"),
++        nlu=PlanBomNluCandidate(
++            question="预测一下明年市场价格？",
++            intent="unsupported",
++            slots={},
++            confidence=0.5,
++            provider_mode="rule",
++        ),
++        answer_summary="当前问题超出计划 BOM 结构化查询边界。",
++    )
++    unsupported_snapshot = QueryPlanningV2ShadowSnapshotBuilder().build_plan_bom_snapshot(
++        question=unsupported_response.question,
++        response=unsupported_response,
++        trace_id="trace-p55-bom-c",
++    )
++    assert unsupported_snapshot["comparison"]["formal_status"] == "UNSUPPORTED"
++    assert unsupported_snapshot["comparison"]["shadow_strategy"] == "UNSUPPORTED"
++    assert unsupported_snapshot["comparison"]["guardrail_status"] == "rejected"
++    assert "guardrail_blocked" not in unsupported_snapshot["risk_tags"]
++
++    empty_response = PlanBomQaResponse(
++        question="订单 X 的玻璃是什么？",
++        classification="A",
++        status=PlanBomQaStatus(code="EMPTY_RESULT", message="未查到结果。", success=True, severity="warning"),
++        nlu=PlanBomNluCandidate(
++            question="订单 X 的玻璃是什么？",
++            intent="single_order_material_specs",
++            slots={"order_id": "X", "material_category": ["玻璃"]},
++            confidence=0.9,
++            provider_mode="rule",
++        ),
++        answer_summary="未查到匹配 BOM。",
++    )
++    empty_snapshot = QueryPlanningV2ShadowSnapshotBuilder().build_plan_bom_snapshot(
++        question=empty_response.question,
++        response=empty_response,
++        trace_id="trace-p55-bom-empty",
++    )
++    assert empty_snapshot["comparison"]["formal_status"] == "EMPTY_RESULT"
++    assert empty_snapshot["comparison"]["shadow_strategy"] == "NO_ANSWER"
++    assert empty_snapshot["comparison"]["guardrail_status"] == "rejected"
++    assert "guardrail_blocked" not in empty_snapshot["risk_tags"]
++
++    error_response = PlanBomQaResponse(
++        question="订单 X 的玻璃是什么？",
++        classification="D",
++        status=PlanBomQaStatus(code="EXECUTION_ERROR", message="执行异常。", success=False, severity="error"),
++        nlu=PlanBomNluCandidate(
++            question="订单 X 的玻璃是什么？",
++            intent="single_order_material_specs",
++            slots={"order_id": "X", "material_category": ["玻璃"]},
++            confidence=0.9,
++            provider_mode="rule",
++        ),
++        answer_summary="查询执行失败。",
++    )
++    error_snapshot = QueryPlanningV2ShadowSnapshotBuilder().build_plan_bom_snapshot(
++        question=error_response.question,
++        response=error_response,
++        trace_id="trace-p55-bom-error",
++    )
++    assert error_snapshot["comparison"]["formal_status"] == "ERROR"
++    assert error_snapshot["comparison"]["shadow_strategy"] == "UNSUPPORTED"
++    assert error_snapshot["comparison"]["matched"] is False
++    assert error_snapshot["risk_tags"]
++
++
++def test_plan_bom_history_payload_exposes_shadow_comparison_meta() -> None:
++    """BOM 历史日志 response_meta 应携带 comparison 摘要，供运营看板轻量读取。"""
++    db = _FakeDb()
++    query_log_repository = _CapturingQueryLogRepository(log_id=503)
++    service = PlanBomQaService(
++        repository=SimpleNamespace(db=db),
++        query_service=object(),
++        nlu_service=object(),
++        presentation_service=object(),
++        power_config_resolver=object(),
++        power_prediction_engine=object(),
++        power_recommendation_service=object(),
++        query_log_repository=query_log_repository,
++    )
++    response = PlanBomQaResponse(
++        question="这个订单玻璃是什么？",
++        classification="B",
++        status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="请补充订单。", success=False, severity="warning"),
++        nlu=PlanBomNluCandidate(
++            question="这个订单玻璃是什么？",
++            intent="single_order_material_specs",
++            slots={"material_category": ["玻璃"]},
++            missing_slots=["order_id"],
++            confidence=0.6,
++            provider_mode="rule",
++        ),
++        answer_summary="请补充订单号、BOM 文件名或客户实例。",
++    )
++
++    log_id = service._write_history_snapshot(question=response.question, trace_id="trace-bom", response=response)
++
++    assert log_id == 503
++    assert db.commit_count == 1
++    payload = json.loads(query_log_repository.payloads[0]["request_payload"])
++    comparison = payload["query_plan_v2_shadow"]["comparison"]
++    assert comparison["formal_status"] == "CLARIFICATION"
++    assert payload["response_meta"]["query_plan_v2_compare_matched"] is False
++    assert payload["response_meta"]["query_plan_v2_formal_query_key"] == "single_order_material_specs"
++    assert payload["response_meta"]["query_plan_v2_shadow_query_key"] is None
++    assert payload["response_meta"]["query_plan_v2_risk_tags"] == ["query_key_mismatch"]
++
++
++def test_history_snapshot_fail_soft_when_shadow_compare_builder_fails() -> None:
++    """shadow comparison 构建失败时只影响历史日志，不向上抛出异常。"""
++    logistics_db = _FakeDb()
++    logistics_repository = _CapturingQueryLogRepository(log_id=504)
++    logistics_service = LogisticsDataQaService(
++        db=logistics_db,
++        repository=object(),
++        query_log_repository=logistics_repository,
++    )
++    logistics_service.query_plan_shadow_builder = _BrokenShadowSnapshotBuilder()
++
++    logistics_log_id = logistics_service._write_history_snapshot(
++        question="2025年各承运商发运量是多少？",
++        trace_id="trace-fail-soft-logistics",
++        result=_logistics_success_result(),
++    )
++
++    assert logistics_log_id == 0
++    assert logistics_db.rollback_count == 1
++    assert logistics_repository.payloads == []
++
++    bom_db = _FakeDb()
++    bom_repository = _CapturingQueryLogRepository(log_id=505)
++    bom_service = PlanBomQaService(
++        repository=SimpleNamespace(db=bom_db),
++        query_service=object(),
++        nlu_service=object(),
++        presentation_service=object(),
++        power_config_resolver=object(),
++        power_prediction_engine=object(),
++        power_recommendation_service=object(),
++        query_log_repository=bom_repository,
++    )
++    bom_service.query_plan_shadow_builder = _BrokenShadowSnapshotBuilder()
++    response = PlanBomQaResponse(
++        question="这个订单玻璃是什么？",
++        classification="B",
++        status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="请补充订单。", success=False, severity="warning"),
++        nlu=PlanBomNluCandidate(
++            question="这个订单玻璃是什么？",
++            intent="single_order_material_specs",
++            slots={"material_category": ["玻璃"]},
++            missing_slots=["order_id"],
++            confidence=0.6,
++            provider_mode="rule",
++        ),
++        answer_summary="请补充订单号、BOM 文件名或客户实例。",
++    )
++
++    bom_log_id = bom_service._write_history_snapshot(
++        question=response.question,
++        trace_id="trace-fail-soft-bom",
++        response=response,
++    )
++
++    assert bom_log_id == 0
++    assert bom_db.rollback_count == 1
++    assert bom_repository.payloads == []
