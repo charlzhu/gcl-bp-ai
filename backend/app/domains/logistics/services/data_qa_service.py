@@ -54,7 +54,12 @@ class LogisticsDataQaService:
     ) -> None:
         self.db = db
         self.repository = repository or LogisticsDataQaRepository(db)
-        self.planner = planner or LogisticsDataQaPlanner()
+        historical_carrier_candidate_provider = getattr(self.repository, "list_historical_carrier_names", None)
+        self.planner = planner or LogisticsDataQaPlanner(
+            historical_carrier_candidate_provider=historical_carrier_candidate_provider
+            if callable(historical_carrier_candidate_provider)
+            else None
+        )
         self.query_log_repository = query_log_repository or LogisticsQueryRepository()
         self.guardrail_service = guardrail_service or LogisticsLlmUnderstandingGuardrailService()
         self.clarification_assist_service = clarification_assist_service or LogisticsLlmClarificationAssistService()
@@ -1045,12 +1050,17 @@ class LogisticsDataQaService:
             }
             if filters.get("city"):
                 carrier_kpi_kwargs["city"] = filters["city"]
+            if filters.get("carrier_local_city"):
+                # 本地/当地物流公司使用独立槽位下推，不能混用目的城市 city。
+                carrier_kpi_kwargs["carrier_local_city"] = filters["carrier_local_city"]
             data = self.repository.hist_carrier_kpi_by_year(**carrier_kpi_kwargs)
             view_mode = filters.get("view_mode", "full_kpi")
             scope_parts = []
             if filters.get("region_name"):
                 scope_parts.append(f"{filters['region_name']}区域")
-            if filters.get("city"):
+            if filters.get("carrier_local_city"):
+                scope_parts.append(f"{filters['carrier_local_city']}本地物流公司")
+            elif filters.get("city"):
                 scope_parts.append(f"{filters['city']}城市")
             scope_text = "".join(scope_parts)
             if view_mode == "fee_only":
@@ -1059,16 +1069,21 @@ class LogisticsDataQaService:
                 summary = (
                     f"{filters['year']}年{scope_text}各物流承运商的发运量、占比和运费总额已汇总返回。"
                 )
+            calculation_logic = [
+                "承运量默认按历史 actual_watt 汇总后折算为 MW。",
+                "承运量占比 = 当前承运商 shipment_mw / 当前查询范围内全部承运商 shipment_mw。",
+                "运费总额按历史 total_fee 汇总。",
+            ]
+            if filters.get("carrier_local_city"):
+                calculation_logic.append(
+                    f"当地物流公司按承运商名称包含“{filters['carrier_local_city']}”识别；当前源数据暂无承运商注册地字段。"
+                )
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
                 table_columns=["carrier_name", "shipment_mw", "shipment_share_pct", "total_fee"],
                 table_rows=data["items"],
-                calculation_logic=[
-                    "承运量默认按历史 actual_watt 汇总后折算为 MW。",
-                    "承运量占比 = 当前承运商 shipment_mw / 当前查询范围内全部承运商 shipment_mw。",
-                    "运费总额按历史 total_fee 汇总。",
-                ],
+                calculation_logic=calculation_logic,
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
                 warnings=warnings,
             )

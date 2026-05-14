@@ -5,6 +5,10 @@ from typing import Any
 
 from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
 from backend.app.domains.logistics.schemas.llm_understanding import LogisticsLlmUnderstandingResult
+from backend.app.domains.logistics.services.business_entity_resolver import (
+    CarrierCandidateProvider,
+    LogisticsBusinessEntityResolver,
+)
 from backend.app.domains.logistics.services.question_bank_response_policy import LogisticsQuestionBankResponsePolicy
 from backend.app.domains.logistics.services.slot_extractor import LogisticsSlotExtractor
 
@@ -128,17 +132,28 @@ class LogisticsDataQaPlanner:
         "composite_decomposed",
     }
 
-    def __init__(self, *, slot_extractor: LogisticsSlotExtractor | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        slot_extractor: LogisticsSlotExtractor | None = None,
+        business_entity_resolver: LogisticsBusinessEntityResolver | None = None,
+        historical_carrier_candidate_provider: CarrierCandidateProvider | None = None,
+    ) -> None:
         """初始化 planner。
 
         参数：
             slot_extractor: 公共槽位抽取器，用于复用年份、月份、区域、省份、车型等基础槽位。
+            business_entity_resolver: 业务实体解析器，用于承运商等可随数据变化的实体解析。
+            historical_carrier_candidate_provider: 历史承运商候选源；未显式传入 resolver 时用于构造默认 resolver。
 
         返回：
             无返回值。
         """
 
         self.slot_extractor = slot_extractor or LogisticsSlotExtractor()
+        self.business_entity_resolver = business_entity_resolver or LogisticsBusinessEntityResolver(
+            historical_carrier_candidate_provider=historical_carrier_candidate_provider
+        )
 
     def build_plan(self, question: str) -> LogisticsDataQaPlan:
         """把自然语言问题转换成最小可执行查询计划。"""
@@ -388,12 +403,14 @@ class LogisticsDataQaPlanner:
         months = self._extract_months(compact)
         region = self._extract_region(compact)
         province = self._extract_province(compact)
-        city = self._extract_carrier_scope_city(compact)
+        carrier_local_city = self._extract_local_carrier_city(compact)
+        city = None if carrier_local_city else self._extract_carrier_scope_city(compact)
         origin_place = self._extract_origin_place(compact)
         system_base_name = self._extract_system_base_name(compact)
         system_base_code = self._extract_system_base_code(compact)
         customer_name = self._extract_customer_name(compact)
         company_name = self._extract_company_name(compact)
+        carrier_name = self._extract_historical_carrier_name(compact)
         transport_mode = self._extract_transport_mode(compact)
         procurement_type = self._extract_procurement_type(compact)
         controlled_field_filters = self._extract_sys_total_fee_controlled_field_filters(compact)
@@ -423,6 +440,8 @@ class LogisticsDataQaPlanner:
                 filters["transport_mode"] = transport_mode
             if company_name:
                 filters["carrier_name"] = company_name
+            if carrier_name:
+                filters["carrier_name"] = carrier_name
             if customer_name:
                 filters["customer_name"] = customer_name
             return LogisticsDataQaPlan(
@@ -439,6 +458,8 @@ class LogisticsDataQaPlanner:
                 filters["region_name"] = region
             if transport_mode:
                 filters["transport_mode"] = transport_mode
+            if carrier_name:
+                filters["carrier_name"] = carrier_name
             if region_breakdown:
                 # “各区域/分区域/每个区域/区域分别”表达的是按区域拆分，不能退化为全局总和。
                 return LogisticsDataQaPlan(
@@ -534,13 +555,13 @@ class LogisticsDataQaPlanner:
                 limit=1,
             )
 
-        if self._is_total_fee_question(compact) and origin_place and "晶茂" in compact:
+        if self._is_total_fee_question(compact) and origin_place and carrier_name:
             return LogisticsDataQaPlan(
                 intent="aggregate",
                 query_key="hist_total_fee_by_origin_and_carrier",
                 metrics=["total_fee"],
                 dimensions=[],
-                filters={"year": year, "origin_place": origin_place, "carrier_name": "晶茂"},
+                filters={"year": year, "origin_place": origin_place, "carrier_name": carrier_name},
             )
 
         if year == 2026 and self._is_mw_question(compact) and (
@@ -635,13 +656,13 @@ class LogisticsDataQaPlanner:
                 filters={"year": year, "months": months or None, "customer_name": customer_name},
             )
 
-        if year in {2023, 2024, 2025} and origin_place and "晶茂" in compact and self._is_mw_question(compact):
+        if year in {2023, 2024, 2025} and origin_place and carrier_name and self._is_mw_question(compact):
             return LogisticsDataQaPlan(
                 intent="aggregate",
                 query_key="hist_mw_by_origin_and_carrier",
                 metrics=["shipment_mw"],
                 dimensions=[],
-                filters={"year": year, "origin_place": origin_place, "carrier_name": "晶茂"},
+                filters={"year": year, "origin_place": origin_place, "carrier_name": carrier_name},
             )
 
         if "17.5车发运多少车" in compact:
@@ -672,17 +693,22 @@ class LogisticsDataQaPlanner:
             and not self._extract_top_n(compact)
             and not self._has_extra_breakdown_intent(compact, allowed_dimension="carrier_name")
         ):
+            filters: dict[str, Any] = {
+                "year": year,
+                "region_name": region,
+                "city": city,
+                "view_mode": self._resolve_carrier_kpi_view_mode(compact),
+            }
+            if carrier_local_city:
+                # “苏州的物流公司/苏州本地物流公司”是承运商归属城市口径，
+                # 不能复用目的城市 city，否则会把发往苏州的外地承运商统计进去。
+                filters["carrier_local_city"] = carrier_local_city
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="hist_carrier_kpi_by_year",
                 metrics=["shipment_mw", "shipment_share_pct", "total_fee"],
                 dimensions=["carrier_name"],
-                filters={
-                    "year": year,
-                    "region_name": region,
-                    "city": city,
-                    "view_mode": self._resolve_carrier_kpi_view_mode(compact),
-                },
+                filters=filters,
                 group_by=["carrier_name"],
                 sort=[{"field": "shipment_mw", "direction": "desc"}],
             )
@@ -1710,7 +1736,8 @@ class LogisticsDataQaPlanner:
         origin_place = self._extract_origin_place(compact)
         vehicle_type = self._extract_vehicle_type(compact)
         city = self._extract_destination_city(compact)
-        carrier_scope_city = self._extract_carrier_scope_city(compact)
+        carrier_local_city = self._extract_local_carrier_city(compact)
+        carrier_scope_city = None if carrier_local_city else self._extract_carrier_scope_city(compact)
         if province:
             # 当“江苏省/上海市”已经被稳定识别成省级目的地时，不再把
             # “江苏的平均”这类后缀误抽成城市，避免线路 query_key 过滤到空结果。
@@ -1753,7 +1780,7 @@ class LogisticsDataQaPlanner:
 
         if year in {2023, 2024, 2025} and region_breakdown and self._is_mw_question(compact):
             # “分区域/各区域”或显式点名多个大区，业务语义都是按区域拆分；
-            # 若同时给出晶茂等已校验承运商简称，必须保留下推过滤，不能退化成全承运商总量。
+            # 若同时给出由候选源/显式短语解析出的承运商，必须保留下推过滤，不能退化成全承运商总量。
             filters: dict[str, Any] = {"year": year}
             if carrier_name:
                 filters["carrier_name"] = carrier_name
@@ -1800,6 +1827,9 @@ class LogisticsDataQaPlanner:
                 "city": carrier_scope_city,
                 "view_mode": self._resolve_carrier_kpi_view_mode(compact),
             }
+            if carrier_local_city:
+                # 本地/当地物流公司按承运商归属城市过滤，和目的城市 city 分开建模。
+                filters["carrier_local_city"] = carrier_local_city
             return LogisticsDataQaPlan(
                 intent="ranking",
                 query_key="hist_carrier_kpi_by_year",
@@ -2986,12 +3016,75 @@ class LogisticsDataQaPlanner:
         """
         return self.slot_extractor.extract_destination_city(question)
 
+    def _normalize_carrier_city_candidate(self, candidate: str) -> str | None:
+        """归一承运商城市候选词，剔除年份、范围词和本地/当地后缀。
+
+        参数：
+            candidate: 正则抽取到的城市候选片段。
+        返回：
+            归一后的城市名；若候选实际为省份、大区或无效范围词，则返回 None。
+        """
+
+        normalized = candidate.replace("市", "").replace("省", "").strip()
+        normalized = re.sub(
+            r"^(?:\d{2,4}年|年|今年|去年|上半年|下半年|全年|各|不同|发往|发至|发到|送往|到|至)",
+            "",
+            normalized,
+        ).strip()
+        normalized = re.sub(r"(?:当地|本地|本市|各|不同|各家|每家|每|全部|所有)$", "", normalized).strip()
+        normalized = normalized.rstrip("的")
+        if not normalized:
+            return None
+        if normalized in self.PROVINCE_ALIAS.values() or normalized in self.REGION_NAMES:
+            return None
+        if normalized.endswith(("区域", "大区", "基地")) or any(region in normalized for region in self.REGION_NAMES):
+            return None
+        return normalized
+
+    def _extract_local_carrier_city(self, question: str) -> str | None:
+        """提取“本地/当地物流公司”所指的承运商归属城市。
+
+        参数：
+            question: 已压缩空白的用户问题。
+        返回：
+            承运商归属城市，例如“苏州”；没有本地承运商语义时返回 None。
+        说明：
+            1. “苏州的物流公司/苏州本地物流公司”表达物流公司自身属于苏州；
+            2. 该槽位不能复用目的城市 city，否则会统计所有发往苏州的外地承运商；
+            3. “发往苏州的各物流公司”这类显式目的地问法仍交给 _extract_carrier_scope_city。
+        """
+
+        if re.search(
+            r"^(?:\d{2,4}年|今年|去年|上半年|下半年|全年)?(?:各|不同|各家|每家|全部|所有)(?:物流公司|物流供应商|物流承运商|承运商|物流)",
+            question,
+        ):
+            # “各物流公司/不同物流公司”是全局承运商分组，不代表某个城市的本地承运商。
+            return None
+        if not any(keyword in question for keyword in ("当地", "本地", "本市")) and re.search(
+            r"(?:发往|发至|发到|送往|到|至)(?!各|不同|各家|每|每家|全部|所有)[\u4e00-\u9fa5]{2,10}?市?的?(?:各|不同|各家|每家|全部|所有)?(?:物流公司|物流供应商|物流承运商|承运商)",
+            question,
+        ):
+            # 明确“发往/到达某城市的物流公司”是目的城市范围，不是本地承运商范围。
+            return None
+        local_patterns = (
+            r"(?<!发往)(?<!发至)(?<!发到)(?<!送往)(?<!到)(?<!至)(?:\d{2,4}年)?(?P<city>(?!年|各|不同|各家|每|每家|全部|所有)[\u4e00-\u9fa5]{2,10}?)(?:市)?(?:当地|本地|本市)的?(?:物流公司|物流供应商|物流承运商|承运商)",
+            r"(?<!发往)(?<!发至)(?<!发到)(?<!送往)(?<!到)(?<!至)(?:\d{2,4}年)?(?P<city>(?!年|各|不同|各家|每|每家|全部|所有|发往|发至|发到)[\u4e00-\u9fa5]{2,10}?)(?:市)?的(?:物流公司|物流供应商|物流承运商|承运商)",
+        )
+        for pattern in local_patterns:
+            match = re.search(pattern, question)
+            if not match:
+                continue
+            normalized = self._normalize_carrier_city_candidate(match.group("city"))
+            if normalized:
+                return normalized
+        return None
+
     def _extract_carrier_scope_city(self, question: str) -> str | None:
-        """提取承运商 KPI 问法中的城市过滤条件。
+        """提取承运商 KPI 问法中的目的城市过滤条件。
 
         说明：
-            1. 该槽位只给“城市 + 承运商/物流公司 + 运量/费用”题族使用；
-            2. 优先复用既有线路城市抽取，再兼容“城市名的物流公司”这类口语写法；
+            1. 该槽位只表达“发往/到达某城市”的目的城市范围；
+            2. “苏州的物流公司/苏州本地物流公司”已由 carrier_local_city 表达承运商归属城市；
             3. 若文本命中省份或大区，不强行当作城市，避免把区域题误下推到 city。
         """
 
@@ -3004,25 +3097,17 @@ class LogisticsDataQaPlanner:
             return None
         city = self._extract_destination_city(question)
         if city:
-            return city
-        patterns = (
-            r"(?:\d{2,4}年)?(?P<city>(?!年|各|不同|各家|每|每家|全部|所有)[\u4e00-\u9fa5]{2,10}?)(?:市|城市)?的?(?:物流公司|物流供应商|物流承运商|承运商)",
+            return self._normalize_carrier_city_candidate(city)
+        destination_patterns = (
+            r"(?:发往|发至|发到|送往|到|至)(?P<city>(?!各|不同|各家|每|每家|全部|所有)[\u4e00-\u9fa5]{2,10}?)(?:市)?的?(?:各|不同|各家|每家|全部|所有)?(?:物流公司|物流供应商|物流承运商|承运商)",
         )
-        for pattern in patterns:
+        for pattern in destination_patterns:
             match = re.search(pattern, question)
             if not match:
                 continue
-            candidate = match.group("city").replace("市", "").replace("省", "").strip()
-            candidate = re.sub(r"^(?:年|今年|去年|上半年|下半年|全年|各|不同)", "", candidate).strip()
-            candidate = re.sub(r"(?:各|不同|各家|每家|每|全部|所有)$", "", candidate).strip()
-            candidate = candidate.rstrip("的")
-            if not candidate:
-                continue
-            if candidate in self.PROVINCE_ALIAS.values() or candidate in self.REGION_NAMES:
-                continue
-            if candidate.endswith(("区域", "大区", "基地")) or any(region in candidate for region in self.REGION_NAMES):
-                continue
-            return candidate
+            normalized = self._normalize_carrier_city_candidate(match.group("city"))
+            if normalized:
+                return normalized
         return None
 
     def _extract_transport_mode(self, question: str) -> str | None:
@@ -3134,30 +3219,20 @@ class LogisticsDataQaPlanner:
         return self.slot_extractor.extract_company_name(question)
 
     def _extract_historical_carrier_name(self, question: str) -> str | None:
-        """提取历史台账中已校验的承运商别名。
+        """提取历史台账承运商名称。
 
         参数：
             question: 已压缩空白的用户问题。
 
         返回：
-            可交给历史明细表 logistics_company_name 做模糊匹配的承运商简称。
+            可交给历史明细表 logistics_company_name 做模糊匹配的承运商关键词。
 
         说明：
-            该方法只承接样例题、现有台账中可验证的承运商简称，以及业务反馈中明确点名的高置信承运商别名，
-            不把所有带“物流”的短语都强行解释成承运商，避免把“历史物流/区域物流”等泛词误当承运商。
+            承运商属于会随台账变化的业务实体，不能在 planner 中维护“晶茂/英赋嘉”等姓名白名单；
+            这里委托业务实体解析器基于仓储候选源和受控显式短语语法解析，泛词会被拦截。
         """
 
-        # 仅维护窄口径白名单：返回简称交给仓储层 LIKE 匹配，兼容“京东物流/京东快运”等存储差异。
-        carrier_aliases = {
-            "晶茂": "晶茂",
-            "英赋嘉": "英赋嘉",
-            "京东物流": "京东",
-            "京东": "京东",
-        }
-        for alias, normalized_name in carrier_aliases.items():
-            if alias in question:
-                return normalized_name
-        return None
+        return self.business_entity_resolver.resolve_historical_carrier_name(question)
 
     def _extract_province_list(self, question: str) -> list[str]:
         """提取问句里显式给出的省份列表。"""
@@ -3265,9 +3340,7 @@ class LogisticsDataQaPlanner:
         company_name = llm_result.filters.get("company_name") or llm_result.filters.get("carrier_name")
         if isinstance(company_name, str) and company_name.strip():
             return company_name.strip()
-        if "晶茂" in question:
-            return "晶茂"
-        return None
+        return self._extract_historical_carrier_name(question)
 
     def _resolve_assist_vehicle_type(self, question: str, llm_result: LogisticsLlmUnderstandingResult) -> str | None:
         """解析 assist 模式下的车型口径。"""

@@ -687,7 +687,7 @@ class LogisticsQuestionBankResponsePolicy:
         # 2026 基地过滤当前缺少稳定映射，不应继续给通用澄清。
         if (
             "基地" in compact
-            and ("客户" in compact or "晶茂" in compact or "承运商" in compact)
+            and ("客户" in compact or "承运商" in compact or any(keyword in compact for keyword in ("物流", "供应链", "运输公司")))
             and any(keyword in compact for keyword in ("总运费", "总费用", "总计运费", "运费多少", "多少钱"))
             and ("26年" in compact or "2026年" in compact)
         ):

@@ -112,6 +112,34 @@ class LogisticsDataQaRepository:
             return
         self.db.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}"))
 
+    def list_historical_carrier_names(self, *, limit: int = 2000) -> list[str]:
+        """读取历史台账中的承运商候选名称。
+
+        参数：
+            limit: 最多返回的 distinct 承运商数量，防止异常数据导致候选集过大。
+
+        返回：
+            按名称去重后的承运商列表，供 planner 的业务实体解析器使用。
+
+        业务逻辑：
+            承运商是会随台账变化的业务实体，不能在 planner 中写死少量名称；
+            这里从受控历史明细表读取 logistics_company_name 作为候选源，后续可替换为字典表。
+        """
+        rows = self.db.execute(
+            text(
+                """
+                SELECT DISTINCT TRIM(logistics_company_name) AS carrier_name
+                FROM dwd_logistics_hist_shipment_detail
+                WHERE logistics_company_name IS NOT NULL
+                  AND TRIM(logistics_company_name) <> ''
+                ORDER BY carrier_name ASC
+                LIMIT :limit
+                """
+            ),
+            {"limit": int(limit)},
+        ).mappings().all()
+        return [str(row["carrier_name"]) for row in rows if row.get("carrier_name")]
+
     def verify_assets(self) -> dict[str, Any]:
         """核验当前真实数据资产。
 
@@ -567,6 +595,7 @@ class LogisticsDataQaRepository:
         year: int,
         region_name: str | None = None,
         city: str | None = None,
+        carrier_local_city: str | None = None,
     ) -> dict[str, Any]:
         """历史年度承运商 KPI 统计。
 
@@ -574,6 +603,7 @@ class LogisticsDataQaRepository:
             year: 业务年份；
             region_name: 可选区域过滤，例如“西北”。为空时统计全年全区域。
             city: 可选目的城市过滤。为空时不限制城市。
+            carrier_local_city: 可选承运商归属城市过滤，例如“苏州”。为空时不限制承运商归属。
 
         返回：
             1. 各承运商的发运量 MW；
@@ -584,7 +614,8 @@ class LogisticsDataQaRepository:
             1. 发运量默认按瓦数口径，折算为 MW；
             2. 占比基于当前查询范围内全部承运商的总发运量；
             3. 统一兼容“承运商 / 物流公司 / 物流供应商”问法；
-            4. 区域/城市过滤必须下推到总量分母和明细分子，避免范围题退回全国口径。
+            4. 区域/城市过滤必须下推到总量分母和明细分子，避免范围题退回全国口径；
+            5. 当地/本地物流公司当前按承运商名称包含城市关键词识别，后续有注册地字段时可扩展。
         """
 
         params: dict[str, Any] = {"year": year}
@@ -600,6 +631,13 @@ class LogisticsDataQaRepository:
             # 城市来自 planner 受控槽位，只通过参数绑定进入 SQL，不能拼接用户输入。
             filters.append("city = :city")
             params["city"] = city
+        if carrier_local_city:
+            # 当前历史源数据没有承运商注册地字段，先以承运商名称包含城市关键词作为本地公司判定。
+            # 城市关键词来自 planner 受控槽位，并通过参数绑定进入 LIKE，避免 SQL 注入风险。
+            normalized_local_city = carrier_local_city.replace("市", "").replace("省", "").strip()
+            if normalized_local_city:
+                filters.append("logistics_company_name LIKE :carrier_local_city_pattern")
+                params["carrier_local_city_pattern"] = f"%{normalized_local_city}%"
         where_clause = " AND ".join(filters)
 
         total_shipment_mw = self.db.execute(

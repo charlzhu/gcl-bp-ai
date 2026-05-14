@@ -530,12 +530,12 @@ def test_clarification_audit_quantity_word_defaults_to_mw_for_hist_carrier() -> 
     """验证带承运商简称的“发运多少量”默认按 MW 统计。
 
     参数：无。
-    返回值：无；通过断言验证“英赋嘉”进入历史承运商过滤。
-    业务逻辑：英赋嘉是当前台账中已校验的历史承运商别名，问题已明确年份和发运量含义，不应要求用户补充主体或单位。
+    返回值：无；通过断言验证“英赋嘉”经候选源进入历史承运商过滤。
+    业务逻辑：英赋嘉来自历史台账候选源，问题已明确年份和发运量含义，不应要求用户补充主体或单位。
     """
 
     question = "2023年英赋嘉发运多少量?"
-    plan = LogisticsDataQaPlanner().build_plan(question)
+    plan = LogisticsDataQaPlanner(historical_carrier_candidate_provider=lambda: ["英赋嘉"]).build_plan(question)
 
     assert plan.query_key == "hist_mw_summary"
     assert not plan.needs_clarification
