@@ -1,0 +1,20 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "missing_tests": [],
+  "suggestions": [
+    "非阻断建议：后续可考虑给 LogisticsNl2SqlEvaluationLogRecord 增加 validate_assignment 或 frozen，降低对象创建后被手工改写字段再被直接序列化的误用风险；当前 sink 写入前 revalidate 已覆盖持久化路径。",
+    "非阻断建议：如 JSONL sink 未来用于多租户或不可信目录，可进一步加固 symlink/TOCTOU 路径逃逸防护；当前受控 root_dir 对内部 shadow/evaluation 场景可接受。",
+    "非阻断建议：后续可扩展 redaction 覆盖 client_secret、secret_key 等复合密钥名，并给 sql_param_keys 增加参数名形态约束。"
+  ],
+  "summary": {
+    "verdict": "第二轮独立只读复审通过。上一轮关于直接构造绕过、JSONL sink 持久化绕过、DSN 只脱敏密码段的 blocker 已关闭。",
+    "evidence": [
+      "LogisticsNl2SqlEvaluationLogRecord 直接构造路径已有字段 validator，文本/列表字段会脱敏，sql_hash 只接受 64 位 hex，计数字段收敛为非负值。",
+      "JSONL sink 和 in-memory sink 写入前均通过 model_validate(record.model_dump(mode='json')) 二次校验后再持久化/保存快照。",
+      "DSN 采用整体 [DSN_REDACTED] 替换；SQL-like 文本包含 SELECT/WITH/EXPLAIN/DML/DDL 等会统一 [SQL_REDACTED]。",
+      "shadow-only 边界满足：新增能力仅在 nl2sql 包内导出和测试/文档中使用；默认 fake executor，不读取 .env；不接正式 Data QA 用户回答链路。"
+    ]
+  }
+}

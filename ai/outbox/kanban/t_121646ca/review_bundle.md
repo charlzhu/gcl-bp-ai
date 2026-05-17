@@ -1,0 +1,1436 @@
+# NL2SQL M5 review bundle
+Generated: 2026-05-17T23:56:28.193396+08:00
+Task: t_121646ca
+Branch: feature/nl2sql-m5-shadow-pipeline-eval-log
+
+## Test summary
+## focused M5 shadow/evaluation
+19 passed in 0.48s
+[exit=0]
+## nl2sql unit regression
+125 passed, 9 warnings in 3.40s
+[exit=0]
+## logistics unit regression
+139 passed, 9 warnings in 3.13s
+[exit=0]
+## all unit regression
+183 passed, 9 warnings in 3.82s
+[exit=0]
+## py_compile
+[exit=0]
+## git diff --check
+[exit=0]
+
+## Static scan
+{
+  "status": "passed",
+  "true_blocker_count": 0,
+  "finding_count": 0,
+  "findings": [],
+  "rules": [
+    "hardcoded_secret_assignment",
+    "shell_injection",
+    "dangerous_eval_exec",
+    "unsafe_pickle",
+    "sql_string_format"
+  ],
+  "scoped_files": [
+    "backend/app/domains/logistics/services/nl2sql/__init__.py",
+    "backend/app/domains/logistics/services/nl2sql/evaluation_log.py",
+    "backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py",
+    "tests/unit/logistics/nl2sql/test_evaluation_log.py",
+    "tests/unit/logistics/nl2sql/test_shadow_pipeline.py",
+    "docs/NL2SQL_LOGISTICS_M5_SHADOW_PIPELINE_MVP_PLAN.md"
+  ],
+  "note": "Task-scoped scan after reviewer fix. Test-only redaction fixtures are not real credentials; no production secret assignment/shell/eval/pickle/sql-format blockers found."
+}
+
+## Previous reviewer blocker fixed
+- LogisticsNl2SqlEvaluationLogRecord now validates/sanitizes direct construction fields, sql_hash and counters.
+- JSONL and in-memory sinks revalidate records before persistence/storage.
+- DSN is replaced as a whole with [DSN_REDACTED]; SQL-like text including SELECT 1/WITH/EXPLAIN is redacted.
+- Added RED/GREEN tests for direct construction and JSONL sink bypass.
+
+## Changed files
+- backend/app/domains/logistics/services/nl2sql/__init__.py
+- backend/app/domains/logistics/services/nl2sql/evaluation_log.py
+- backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py
+- tests/unit/logistics/nl2sql/test_evaluation_log.py
+- tests/unit/logistics/nl2sql/test_shadow_pipeline.py
+- docs/NL2SQL_LOGISTICS_M5_SHADOW_PIPELINE_MVP_PLAN.md
+
+## Patch excerpt
+diff --git a/backend/app/domains/logistics/services/nl2sql/__init__.py b/backend/app/domains/logistics/services/nl2sql/__init__.py
+index b8cf335..431931f 100644
+--- a/backend/app/domains/logistics/services/nl2sql/__init__.py
++++ b/backend/app/domains/logistics/services/nl2sql/__init__.py
+@@ -1,7 +1,7 @@
+ """物流 NL2SQL 子能力入口。
+
+-本包只承载 NL2SQL shadow 架构所需的 catalog、规则和后续 SQLPlan 辅助能力，
+-当前 M1 不接管既有物流 Data QA 正式查询链路。
++本包承载 NL2SQL shadow 架构所需的 catalog、规则、SQLPlan、SQL 安全执行与评估能力。
++当前 M5 shadow pipeline 仅用于内部评估，不接管既有物流 Data QA 正式查询链路。
+ """
+
+ from backend.app.domains.logistics.services.nl2sql.business_rules import LogisticsNl2SqlBusinessRules
+@@ -9,7 +9,20 @@ from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
+     LogisticsCatalogRecallDocumentBuilder,
+     LogisticsCatalogRecallService,
+ )
++from backend.app.domains.logistics.services.nl2sql.evaluation_log import (
++    InMemoryLogisticsNl2SqlEvaluationLogSink,
++    JsonlLogisticsNl2SqlEvaluationLogSink,
++    LogisticsNl2SqlEvaluationLogRecord,
++    LogisticsNl2SqlEvaluationLogSummary,
++    redact_evaluation_text,
++    summarize_evaluation_logs,
++)
+ from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++from backend.app.domains.logistics.services.nl2sql.shadow_pipeline import (
++    LogisticsNl2SqlShadowPipeline,
++    LogisticsNl2SqlShadowPipelineRequest,
++    LogisticsNl2SqlShadowPipelineResult,
++)
+ from backend.app.domains.logistics.services.nl2sql.sql_execution import (
+     FakeLogisticsSqlExecutor,
+     LogisticsSqlExecutionResult,
+@@ -35,9 +48,16 @@ from backend.app.domains.logistics.services.nl2sql.sql_safety import (
+
+ __all__ = [
+     "FakeLogisticsSqlExecutor",
++    "InMemoryLogisticsNl2SqlEvaluationLogSink",
++    "JsonlLogisticsNl2SqlEvaluationLogSink",
+     "LogisticsCatalogRecallDocumentBuilder",
+     "LogisticsCatalogRecallService",
++    "LogisticsNl2SqlEvaluationLogRecord",
++    "LogisticsNl2SqlEvaluationLogSummary",
+     "LogisticsNl2SqlBusinessRules",
++    "LogisticsNl2SqlShadowPipeline",
++    "LogisticsNl2SqlShadowPipelineRequest",
++    "LogisticsNl2SqlShadowPipelineResult",
+     "LogisticsRenderedSql",
+     "LogisticsSemanticCatalogLoader",
+     "LogisticsSqlExecutionResult",
+@@ -50,6 +70,8 @@ __all__ = [
+     "LogisticsSqlSafetyChecker",
+     "LogisticsSqlSafetyResult",
+     "check_logistics_sql_safety",
++    "redact_evaluation_text",
+     "render_logistics_sql",
++    "summarize_evaluation_logs",
+     "validate_logistics_sql_plan_candidate",
+ ]
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/services/nl2sql/evaluation_log.py b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/services/nl2sql/evaluation_log.py
+new file mode 100644
+index 0000000..8a70e16
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/services/nl2sql/evaluation_log.py
+@@ -0,0 +1,388 @@
++from __future__ import annotations
++
++from collections import Counter
++from datetime import UTC, datetime
++from pathlib import Path
++import json
++import re
++from typing import Any, Protocol
++
++from pydantic import BaseModel, ConfigDict, Field, field_validator
++
++EVALUATION_LOG_SCHEMA_VERSION = "logistics_nl2sql_evaluation_log.v1"
++MAX_EVALUATION_TEXT_CHARS = 800
++SECRET_REDACTION_PATTERNS: tuple[tuple[re.Pattern[str], str], ...] = (
++    (
++        re.compile(
++            r"(?i)\b(?:mysql|postgresql|postgres|mariadb|oracle|mssql|sqlserver|sqlite)(?:\+[a-z0-9_]+)?://[^\s,;\]}]+"
++        ),
++        "[DSN_REDACTED]",
++    ),
++    (
++        re.compile(
++            r"(?i)(\b(?:api[_-]?key|password|passwd|token|access[_-]?token|refresh[_-]?token|secret)\b\s*[:=]\s*)[^\s,;\]}]+"
++        ),
++        r"\1[REDACTED]",
++    ),
++    (
++        re.compile(
++            r"(?i)([\"'](?:api[_-]?key|password|passwd|token|access[_-]?token|refresh[_-]?token|secret)[\"']\s*:\s*[\"'])[^\"']+([\"'])"
++        ),
++        r"\1[REDACTED]\2",
++    ),
++    (re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._\-]+"), "Bearer [REDACTED]"),
++    (re.compile(r"(://[^:/\s]+:)([^@\s]+)(@)"), r"\1[REDACTED]\3"),
++    (re.compile(r"\bsk-[A-Za-z0-9_\-]{6,}\b"), "[REDACTED]"),
++    (re.compile(r"\btok_[A-Za-z0-9_\-]{6,}\b"), "[REDACTED]"),
++)
++SQL_TEXT_PATTERN = re.compile(
++    r"(?is)\bWITH\b\s+.+?\bSELECT\b\s+.+|\b(?:SELECT|EXPLAIN)\b\s+.+|\b(?:INSERT|UPDATE|DELETE|ALTER|DROP|CREATE|TRUNCATE)\b\s+.+"
++)
++SQL_HASH_PATTERN = re.compile(r"\A[a-fA-F0-9]{64}\Z")
++
++
++class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
++    """物流 NL2SQL shadow 评估日志记录。
++
++    参数：
++        schema_version: 日志 schema 版本。
++        pipeline_version: 生成该记录的 shadow pipeline 版本。
++        trace_id: 单次 shadow 运行追踪 ID。
++        request_id: 上游请求 ID，可为空。
++        question: 脱敏后的用户问题摘要。
++        rewritten_question: 脱敏后的改写问题摘要。
++        domain: 业务域，MVP 固定 logistics。
++        source_system: 数据来源边界，MVP 固定 middle_db。
++        status: shadow 运行结果状态。
++        stage: 结束阶段。
++        error_codes: 稳定错误码列表。
++        error_message: 脱敏错误摘要。
++        catalog_ids/catalog_versions: 本次候选引用的 catalog 追踪信息。
++        sql_hash/sql_param_keys: SQL 只保留 hash 和参数 key，禁止持久化 SQL 原文和值。
++        validation_errors/safety_errors: M3/M4 边界错误。
++        explain_ok/trial_ok: EXPLAIN 与 trial 是否通过。
++        row_count/sample_row_count: 试执行返回行数摘要。
++        duration_ms: shadow 运行耗时。
++        warnings: 非阻塞告警。
++        created_at: ISO8601 创建时间。
++    返回：
++        可写入内存 sink 或 JSONL sink 的结构化日志对象。
++    """
++
++    model_config = ConfigDict(extra="forbid", validate_default=True)
++
++    schema_version: str = EVALUATION_LOG_SCHEMA_VERSION
++    pipeline_version: str
++    trace_id: str
++    request_id: str | None = None
++    question: str
++    rewritten_question: str | None = None
++    domain: str = "logistics"
++    source_system: str = "middle_db"
++    status: str
++    stage: str
++    error_codes: list[str] = Field(default_factory=list)
++    error_message: str | None = None
++    catalog_ids: list[str] = Field(default_factory=list)
++    catalog_versions: list[str] = Field(default_factory=list)
++    sql_hash: str | None = None
++    sql_param_keys: list[str] = Field(default_factory=list)
++    validation_errors: list[str] = Field(default_factory=list)
++    safety_errors: list[str] = Field(default_factory=list)
++    explain_ok: bool = False
++    trial_ok: bool = False
++    row_count: int = 0
++    sample_row_count: int = 0
++    duration_ms: int = 0
++    warnings: list[str] = Field(default_factory=list)
++    created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
++
++    @field_validator(
++        "schema_version",
++        "pipeline_version",
++        "trace_id",
++        "request_id",
++        "question",
++        "rewritten_question",
++        "domain",
++        "source_system",
++        "status",
++        "stage",
++        "error_message",
++        "created_at",
++        mode="before",
++    )
++    @classmethod
++    def _sanitize_text_field(cls, value: Any) -> str | None:
++        """校验并脱敏所有日志文本字段，防止直接构造绕过 from_pipeline。"""
++
++        return _safe_text(value)
++
++    @field_validator(
++        "error_codes",
++        "catalog_ids",
++        "catalog_versions",
++        "sql_param_keys",
++        "validation_errors",
++        "safety_errors",
++        "warnings",
++        mode="before",
++    )
++    @classmethod
++    def _sanitize_list_field(cls, value: Any) -> list[str]:
++        """校验并脱敏日志列表字段。"""
++
++        return _safe_string_list(_coerce_string_list(value))
++
++    @field_validator("sql_hash", mode="before")
++    @classmethod
++    def _sanitize_sql_hash_field(cls, value: Any) -> str | None:
++        """SQL hash 只允许 64 位十六进制，其他内容一律丢弃。"""
++
++        return _safe_sql_hash(value)
++
++    @field_validator("row_count", "sample_row_count", "duration_ms", mode="before")
++    @classmethod
++    def _sanitize_non_negative_int_field(cls, value: Any) -> int:
++        """日志计数字段只保留非负整数。"""
++
++        return _safe_non_negative_int(value)
++
++    @classmethod
++    def from_pipeline(
++        cls,
++        *,
++        trace_id: str,
++        request_id: str | None,
++        question: str,
++        rewritten_question: str | None,
++        domain: str,
++        source_system: str,
++        status: str,
++        stage: str,
++        error_codes: list[str],
++        error_message: str | None,
++        catalog_ids: list[str],
++        catalog_versions: list[str],
++        sql_hash: str | None,
++        sql_param_keys: list[str],
++        validation_errors: list[str],
++        safety_errors: list[str],
++        explain_ok: bool,
++        trial_ok: bool,
++        row_count: int,
++        sample_row_count: int,
++        duration_ms: int,
++        pipeline_version: str,
++        warnings: list[str] | None = None,
++    ) -> "LogisticsNl2SqlEvaluationLogRecord":
++        """从 shadow pipeline 中间结果生成脱敏评估日志。"""
++
++        return cls(
++            pipeline_version=pipeline_version,
++            trace_id=trace_id,
++            request_id=_safe_text(request_id),
++            question=_safe_text(question) or "",
++            rewritten_question=_safe_text(rewritten_question),
++            domain=_safe_text(domain) or "",
++            source_system=_safe_text(source_system) or "",
++            status=_safe_text(status) or "",
++            stage=_safe_text(stage) or "",
++            error_codes=_safe_string_list(error_codes),
++            error_message=_safe_text(error_message),
++            catalog_ids=_safe_string_list(catalog_ids),
++            catalog_versions=_safe_string_list(catalog_versions),
++            sql_hash=_safe_sql_hash(sql_hash),
++            sql_param_keys=sorted(_safe_string_list(sql_param_keys)),
++            validation_errors=_safe_string_list(validation_errors),
++            safety_errors=_safe_string_list(safety_errors),
++            explain_ok=explain_ok,
++            trial_ok=trial_ok,
++            row_count=max(0, int(row_count)),
++            sample_row_count=max(0, int(sample_row_count)),
++            duration_ms=max(0, int(duration_ms)),
++            warnings=_safe_string_list(warnings or []),
++        )
++
++
++class LogisticsNl2SqlEvaluationLogSummary(BaseModel):
++    """评估日志汇总结果。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    total: int
++    by_status: dict[str, int]
++    success_count: int
++    failure_count: int
++    skipped_count: int
++    unsupported_count: int = 0
++
++
++class LogisticsNl2SqlEvaluationLogSink(Protocol):
++    """评估日志 sink 协议，便于测试注入内存或失败 sink。"""
++
++    def write(self, record: LogisticsNl2SqlEvaluationLogRecord) -> None:
++        """写入一条评估日志。"""
++
++
++class InMemoryLogisticsNl2SqlEvaluationLogSink:
++    """单测/内部评估用内存日志 sink。"""
++
++    def __init__(self) -> None:
++        """初始化空记录列表。"""
++
++        self.records: list[LogisticsNl2SqlEvaluationLogRecord] = []
++
++    def write(self, record: LogisticsNl2SqlEvaluationLogRecord) -> None:
++        """追加一条日志记录，保持对象不可变且重新校验后的快照。"""
++
++        safe_record = LogisticsNl2SqlEvaluationLogRecord.model_validate(record.model_dump(mode="json"))
++        self.records.append(safe_record.model_copy(deep=True))
++
++
++class JsonlLogisticsNl2SqlEvaluationLogSink:
++    """受控 JSONL 文件日志 sink。
++
++    业务逻辑：
++        JSONL 仅用于 shadow/evaluation 离线分析，不接正式 QA 主链路。路径必须位于显式 root_dir
++        下，避免因错误配置写出工作区或覆盖系统文件。
++    """
++
++    def __init__(self, path: str | Path, *, root_dir: str | Path) -> None:
++        """初始化 JSONL sink 并校验路径边界。"""
++
++        self.root_dir = Path(root_dir).resolve()
++        self.path = Path(path).resolve()
++        if not self.path.is_relative_to(self.root_dir):
++            raise ValueError(f"evaluation_log_path_outside_root::{self.path}")
++
++    def write(self, record: LogisticsNl2SqlEvaluationLogRecord) -> None:
++        """以一行 JSON 写入重新校验后的日志记录。"""
++
++        safe_record = LogisticsNl2SqlEvaluationLogRecord.model_validate(record.model_dump(mode="json"))
++        self.path.parent.mkdir(parents=True, exist_ok=True)
++        payload = json.dumps(safe_record.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
++        with self.path.open("a", encoding="utf-8") as handle:
++            handle.write(payload + "\n")
++
++
++def summarize_evaluation_logs(
++    records: list[LogisticsNl2SqlEvaluationLogRecord],
++) -> LogisticsNl2SqlEvaluationLogSummary:
++    """按状态汇总评估日志。
++
++    参数：
++        records: shadow pipeline 产生的评估日志列表。
++    返回：
++        总数、各状态数量、成功/失败/跳过/不支持数量。
++    """
++
++    status_counter = Counter(record.status for record in records)
++    skipped_statuses = {"skipped"}
++    unsupported_statuses = {"unsupported"}
++    success_count = status_counter.get("success", 0)
++    skipped_count = sum(status_counter.get(status, 0) for status in skipped_statuses)
++    unsupported_count = sum(status_counter.get(status, 0) for status in unsupported_statuses)
++    failure_count = len(records) - success_count - skipped_count - unsupported_count
++    return LogisticsNl2SqlEvaluationLogSummary(
++        total=len(records),
++        by_status=dict(status_counter),
++        success_count=success_count,
++        failure_count=max(0, failure_count),
++        skipped_count=skipped_count,
++        unsupported_count=unsupported_count,
++    )
++
++
++def redact_evaluation_text(value: str) -> str:
++    """脱敏评估日志文本。
++
++    参数：
++        value: 可能包含 DSN、password、token、API key、Bearer token 的原始文本。
++    返回：
++        脱敏后的文本；敏感值统一替换为 `[REDACTED]`。
++    """
++
++    redacted = str(value or "")
++    for pattern, replacement in SECRET_REDACTION_PATTERNS:
++        redacted = pattern.sub(replacement, redacted)
++    if SQL_TEXT_PATTERN.search(redacted):
++        return "[SQL_REDACTED]"
++    return redacted
++
++
++def _safe_text(value: Any, *, max_chars: int = MAX_EVALUATION_TEXT_CHARS) -> str | None:
++    """把任意日志文本转为脱敏、截断后的安全摘要。"""
++
++    if value is None:
++        return None
++    text = redact_evaluation_text(str(value))
++    if len(text) <= max_chars:
++        return text
++    return text[: max_chars - 1].rstrip() + "…"
++
++
++def _safe_sql_hash(value: Any) -> str | None:
++    """校验 SQL hash 形态，防止误把 SQL 原文或密钥文本写入日志。"""
++
++    if value is None:
++        return None
++    text = str(value).strip()
++    if SQL_HASH_PATTERN.fullmatch(text):
++        return text.lower()
++    return None
++
++
++def _safe_non_negative_int(value: Any) -> int:
++    """将计数字段收敛为非负整数。"""
++
++    try:
++        number = int(value)
++    except (TypeError, ValueError):
++        return 0
++    return max(0, number)
++
++
++def _coerce_string_list(value: Any) -> list[str]:
++    """把任意输入收敛为字符串列表，供列表字段脱敏使用。"""
++
++    if value is None:
++        return []
++    if isinstance(value, str):
++        return [value]
++    if isinstance(value, (list, tuple, set)):
++        return [str(item) for item in value]
++    return [str(value)]
++
++
++def _dedupe_strings(values: list[str]) -> list[str]:
++    """稳定去重字符串列表。"""
++
++    seen: set[str] = set()
++    result: list[str] = []
++    for value in values:
++        item = str(value or "").strip()
++        if not item or item in seen:
++            continue
++        seen.add(item)
++        result.append(item)
++    return result
++
++
++def _safe_string_list(values: list[str]) -> list[str]:
++    """对日志列表字段逐项脱敏、截断并稳定去重。"""
++
++    sanitized = [_safe_text(value) or "" for value in values]
++    return _dedupe_strings(sanitized)
++
++
++__all__ = [
++    "EVALUATION_LOG_SCHEMA_VERSION",
++    "InMemoryLogisticsNl2SqlEvaluationLogSink",
++    "JsonlLogisticsNl2SqlEvaluationLogSink",
++    "LogisticsNl2SqlEvaluationLogRecord",
++    "LogisticsNl2SqlEvaluationLogSink",
++    "LogisticsNl2SqlEvaluationLogSummary",
++    "redact_evaluation_text",
++    "summarize_evaluation_logs",
++]
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py
+new file mode 100644
+index 0000000..25a93fe
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py
+@@ -0,0 +1,445 @@
++from __future__ import annotations
++
++import hashlib
++import time
++from typing import Any, Literal, Protocol
++from uuid import uuid4
++
++from pydantic import BaseModel, ConfigDict, Field
++
++from backend.app.domains.logistics.services.nl2sql.evaluation_log import (
++    InMemoryLogisticsNl2SqlEvaluationLogSink,
++    LogisticsNl2SqlEvaluationLogRecord,
++    LogisticsNl2SqlEvaluationLogSink,
++    redact_evaluation_text,
++)
++from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalog, LogisticsSemanticCatalogLoader
++from backend.app.domains.logistics.services.nl2sql.sql_execution import (
++    FakeLogisticsSqlExecutor,
++    LogisticsSqlExecutionService,
++)
++from backend.app.domains.logistics.services.nl2sql.sql_plan import (
++    LogisticsSqlPlanValidationResult,
++    LogisticsSqlPlanValidator,
++)
++from backend.app.domains.logistics.services.nl2sql.sql_renderer import LogisticsRenderedSql, LogisticsSqlRenderer
++from backend.app.domains.logistics.services.nl2sql.sql_safety import LogisticsSqlSafetyChecker
++
++SHADOW_PIPELINE_VERSION = "logistics_nl2sql_shadow.v1"
++ShadowPipelineStatus = Literal[
++    "success",
++    "unsupported",
++    "validation_failed",
++    "render_failed",
++    "safety_failed",
++    "explain_failed",
++    "trial_failed",
++    "skipped",
++]
++
++
++class LogisticsNl2SqlRendererProtocol(Protocol):
++    """shadow pipeline 使用的 renderer 协议，方便单测注入 fake renderer。"""
++
++    def render(self, validation_result: LogisticsSqlPlanValidationResult) -> LogisticsRenderedSql:
++        """把通过 M3 校验的 plan 渲染为参数化 SQL。"""
++
++
++class LogisticsNl2SqlShadowPipelineRequest(BaseModel):
++    """物流 NL2SQL shadow pipeline 请求。
++
++    参数：
++        question: 原始用户问题，仅进入脱敏评估日志，不暴露给正式回答链路。
++        rewritten_question: 可选 query rewrite 输出。
++        domain: 业务域，MVP 仅允许 logistics。
++        source_system: 数据来源边界，MVP 仅允许 middle_db。
++        candidate: 受控 SQLPlan candidate；MVP 可由测试或上游 shadow wrapper 注入。
++        request_id: 上游请求追踪 ID。
++        dry_run: 预留字段；MVP 始终只做 shadow/dry-run，不接正式 QA 主链路。
++    返回：
++        Pydantic 请求对象。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    question: str
++    rewritten_question: str | None = None
++    domain: str = "logistics"
++    source_system: str = "middle_db"
++    candidate: dict[str, Any] | None = None
++    request_id: str | None = None
++    dry_run: bool = True
++
++
++class LogisticsNl2SqlShadowPipelineResult(BaseModel):
++    """物流 NL2SQL shadow pipeline 返回。
++
++    业务逻辑：
++        结果只保留状态、错误码、SQL hash、参数 key、执行摘要和 evaluation log；不返回 SQL 原文、
++        参数值或数据库连接信息，避免内部技术 trace 泄露到用户可见路径。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    status: ShadowPipelineStatus
++    stage: str
++    error_codes: list[str] = Field(default_factory=list)
++    error_message: str | None = None
++    trace_id: str
++    sql_hash: str | None = None
++    sql_param_keys: list[str] = Field(default_factory=list)
++    row_count: int = 0
++    sample_row_count: int = 0
++    explain_ok: bool = False
++    trial_ok: bool = False
++    evaluation_log_record: LogisticsNl2SqlEvaluationLogRecord
++    log_error: str | None = None
++
++
++class LogisticsNl2SqlShadowPipeline:
++    """物流 NL2SQL 影子流水线。
++
++    业务逻辑：
++        该流水线只用于内部 shadow/evaluation，串联 M3 SQLPlan Validator、M4 Renderer、M4 Safety、
++        EXPLAIN/trial execution 与 evaluation log。它不接正式物流 QA 主链路，不读取 `.env` 凭据，默认
++        使用 fake executor，只有调用方显式注入执行服务时才会触达外部资源。
++    """
++
++    def __init__(
++        self,
++        *,
++        catalog: LogisticsSemanticCatalog | None = None,
++        validator: LogisticsSqlPlanValidator | None = None,
++        renderer: LogisticsNl2SqlRendererProtocol | None = None,
++        safety_checker: LogisticsSqlSafetyChecker | None = None,
++        execution_service: LogisticsSqlExecutionService | None = None,
++        log_sink: LogisticsNl2SqlEvaluationLogSink | None = None,
++        pipeline_version: str = SHADOW_PIPELINE_VERSION,
++    ) -> None:
++        """初始化 shadow pipeline。"""
++
++        resolved_catalog = catalog or LogisticsSemanticCatalogLoader().load()
++        self.validator = validator or LogisticsSqlPlanValidator(catalog=resolved_catalog)
++        self.renderer = renderer or LogisticsSqlRenderer(catalog=resolved_catalog)
++        self.safety_checker = safety_checker or LogisticsSqlSafetyChecker(catalog=resolved_catalog)
++        self.execution_service = execution_service or LogisticsSqlExecutionService(
++            executor=FakeLogisticsSqlExecutor(),
++            safety_checker=self.safety_checker,
++        )
++        self.log_sink = log_sink or InMemoryLogisticsNl2SqlEvaluationLogSink()
++        self.pipeline_version = pipeline_version
++
++    def run(self, request: LogisticsNl2SqlShadowPipelineRequest) -> LogisticsNl2SqlShadowPipelineResult:
++        """执行一次 shadow pipeline。
++
++        参数：
++            request: shadow 请求，包含用户问题与受控 SQLPlan candidate。
++        返回：
++            shadow 状态、错误码、执行摘要和脱敏 evaluation log。
++        """
++
++        started = time.perf_counter()
++        trace_id = uuid4().hex
++        catalog_ids, catalog_versions = _catalog_trace(request.candidate)
++        sql_hash: str | None = None
++        sql_param_keys: list[str] = []
++        validation_errors: list[str] = []
++        safety_errors: list[str] = []
++        warnings: list[str] = []
++        error_message: str | None = None
++        row_count = 0
++        sample_row_count = 0
++        explain_ok = False
++        trial_ok = False
++
++        if request.domain != "logistics":
++            return self._finish(
++                request=request,
++                trace_id=trace_id,
++                started=started,
++                status="skipped",
++                stage="domain",
++                error_codes=[f"shadow_domain_not_supported::{request.domain}"],
++                error_message=None,
++                catalog_ids=catalog_ids,
++                catalog_versions=catalog_versions,
++            )
++        if request.source_system != "middle_db":
++            return self._finish(
++                request=request,
++                trace_id=trace_id,
++                started=started,
++                status="skipped",
++                stage="source_system",
++                error_codes=[f"shadow_source_system_not_supported::{request.source_system}"],
++                error_message=None,
++                catalog_ids=catalog_ids,
++                catalog_versions=catalog_versions,
++            )
++        if not request.candidate:
++            return self._finish(
++                request=request,
++                trace_id=trace_id,
++                started=started,
++                status="skipped",
++                stage="candidate",
++                error_codes=["shadow_candidate_missing"],
++                error_message=None,
++                catalog_ids=catalog_ids,
++                catalog_versions=catalog_versions,
++            )
++
++        strategy = str(request.candidate.get("strategy") or "")
++        if strategy != "sql_direct":
++            return self._finish(
++                request=request,
++                trace_id=trace_id,
++                started=started,
++                status="unsupported",
++                stage="candidate",
++                error_codes=[f"shadow_strategy_not_sql_direct::{strategy or 'missing'}"],
++                error_message=None,
++                catalog_ids=catalog_ids,
++                catalog_versions=catalog_versions,
++            )
++
++        validation_result = self.validator.validate(request.candidate)
++        if not validation_result.ok:
++            validation_errors = validation_result.error_codes
++            return self._finish(
++                request=request,
++                trace_id=trace_id,
++                started=started,
++                status="validation_failed",
++                stage="validation",
++                error_codes=validation_errors,
++                error_message=None,
++                catalog_ids=catalog_ids,
++                catalog_versions=catalog_versions,
++                validation_errors=validation_errors,
++            )
++
++        try:
++            rendered = self.renderer.render(validation_result)
++        except Exception as exc:  # noqa: BLE001 - renderer 是 shadow 边界，失败需转为评估日志
++            error_message = redact_evaluation_text(str(exc))
++            return self._finish(
++                request=request,
++                trace_id=trace_id,
++                started=started,
++                status="render_failed",
++                stage="render",
++                error_codes=["shadow_render_failed"],
++                error_message=error_message,
++                catalog_ids=catalog_ids,
++                catalog_versions=catalog_versions,
++                validation_errors=validation_errors,
++            )
++
++        sql_hash = _hash_sql(rendered.sql)
++        sql_param_keys = list(rendered.params)
++        warnings = list(rendered.warnings)
++
++        safety_result = self.safety_checker.check(rendered)
++        if not safety_result.ok:
++            safety_errors = safety_result.error_codes
++            return self._finish(
++                request=request,
++                trace_id=trace_id,
++                started=started,
++                status="safety_failed",
++                stage="safety",
++                error_codes=safety_errors,
++                error_message=None,
++                catalog_ids=catalog_ids,
++                catalog_versions=catalog_versions,
++                sql_hash=sql_hash,
++                sql_param_keys=sql_param_keys,
++                validation_errors=validation_errors,
++                safety_errors=safety_errors,
++                warnings=warnings,
++            )
++
++        explain_result = self.execution_service.explain(rendered)
++        explain_ok = explain_result.ok
++        if not explain_result.ok:
++            error_message = explain_result.error
++            return self._finish(
++                request=request,
++                trace_id=trace_id,
++                started=started,
++                status="explain_failed",
++                stage="explain",
++                error_codes=explain_result.error_codes,
++                error_message=error_message,
++                catalog_ids=catalog_ids,
++                catalog_versions=catalog_versions,
++                sql_hash=sql_hash,
++                sql_param_keys=sql_param_keys,
++                validation_errors=validation_errors,
++                safety_errors=safety_errors,
++                explain_ok=explain_ok,
++                warnings=warnings,
++            )
++
++        trial_result = self.execution_service.trial(rendered)
++        trial_ok = trial_result.ok
++        if not trial_result.ok:
++            error_message = trial_result.error
++            return self._finish(
++                request=request,
++                trace_id=trace_id,
++                started=started,
++                status="trial_failed",
++                stage="trial",
++                error_codes=trial_result.error_codes,
++                error_message=error_message,
++                catalog_ids=catalog_ids,
++                catalog_versions=catalog_versions,
++                sql_hash=sql_hash,
++                sql_param_keys=sql_param_keys,
++                validation_errors=validation_errors,
++                safety_errors=safety_errors,
++                explain_ok=explain_ok,
++                trial_ok=trial_ok,
++                warnings=warnings,
++            )
++
++        row_count = len(trial_result.rows)
++        sample_row_count = len(trial_result.rows)
++        return self._finish(
++            request=request,
++            trace_id=trace_id,
++            started=started,
++            status="success",
++            stage="trial",
++            error_codes=[],
++            error_message=None,
++            catalog_ids=catalog_ids,
++            catalog_versions=catalog_versions,
++            sql_hash=sql_hash,
++            sql_param_keys=sql_param_keys,
++            validation_errors=validation_errors,
++            safety_errors=safety_errors,
++            explain_ok=explain_ok,
++            trial_ok=trial_ok,
++            row_count=row_count,
++            sample_row_count=sample_row_count,
++            warnings=warnings,
++        )
++
++    def _finish(
++        self,
++        *,
++        request: LogisticsNl2SqlShadowPipelineRequest,
++        trace_id: str,
++        started: float,
++        status: ShadowPipelineStatus,
++        stage: str,
++        error_codes: list[str],
++        error_message: str | None,
++        catalog_ids: list[str],
++        catalog_versions: list[str],
++        sql_hash: str | None = None,
++        sql_param_keys: list[str] | None = None,
++        validation_errors: list[str] | None = None,
++        safety_errors: list[str] | None = None,
++        explain_ok: bool = False,
++        trial_ok: bool = False,
++        row_count: int = 0,
++        sample_row_count: int = 0,
++        warnings: list[str] | None = None,
++    ) -> LogisticsNl2SqlShadowPipelineResult:
++        """构造评估日志并返回 shadow 结果。
++
++        业务逻辑：
++            evaluation log 写失败只记录到 `log_error`，不改变 shadow 主状态，避免评估链路影响主流程。
++        """
++
++        duration_ms = int((time.perf_counter() - started) * 1000)
++        record = LogisticsNl2SqlEvaluationLogRecord.from_pipeline(
++            trace_id=trace_id,
++            request_id=request.request_id,
++            question=request.question,
++            rewritten_question=request.rewritten_question,
++            domain=request.domain,
++            source_system=request.source_system,
++            status=status,
++            stage=stage,
++            error_codes=error_codes,
++            error_message=error_message,
++            catalog_ids=catalog_ids,
++            catalog_versions=catalog_versions,
++            sql_hash=sql_hash,
++            sql_param_keys=sql_param_keys or [],
++            validation_errors=validation_errors or [],
++            safety_errors=safety_errors or [],
++            explain_ok=explain_ok,
++            trial_ok=trial_ok,
++            row_count=row_count,
++            sample_row_count=sample_row_count,
++            duration_ms=duration_ms,
++            pipeline_version=self.pipeline_version,
++            warnings=warnings or [],
++        )
++        log_error = self._write_log(record)
++        return LogisticsNl2SqlShadowPipelineResult(
++            status=status,
++            stage=stage,
++            error_codes=list(record.error_codes),
++            error_message=record.error_message,
++            trace_id=trace_id,
++            sql_hash=sql_hash,
++            sql_param_keys=list(record.sql_param_keys),
++            row_count=max(0, int(row_count)),
++            sample_row_count=max(0, int(sample_row_count)),
++            explain_ok=explain_ok,
++            trial_ok=trial_ok,
++            evaluation_log_record=record,
++            log_error=log_error,
++        )
++
++    def _write_log(self, record: LogisticsNl2SqlEvaluationLogRecord) -> str | None:
++        """写评估日志；失败时返回脱敏错误。"""
++
++        try:
++            self.log_sink.write(record)
++            return None
++        except Exception as exc:  # noqa: BLE001 - 日志 sink 失败不能阻断 shadow 结果
++            return redact_evaluation_text(str(exc))
++
++
++def _catalog_trace(candidate: dict[str, Any] | None) -> tuple[list[str], list[str]]:
++    """从 candidate.catalog_refs 中提取 catalog 追踪信息。"""
++
++    if not candidate:
++        return [], []
++    catalog_ids: list[str] = []
++    catalog_versions: list[str] = []
++    refs = candidate.get("catalog_refs") or []
++    if not isinstance(refs, list):
++        return [], []
++    for ref in refs:
++        if not isinstance(ref, dict):
++            continue
++        catalog_id = str(ref.get("catalog_id") or "").strip()
++        catalog_version = str(ref.get("catalog_version") or "").strip()
++        if catalog_id and catalog_id not in catalog_ids:
++            catalog_ids.append(catalog_id)
++        if catalog_version and catalog_version not in catalog_versions:
++            catalog_versions.append(catalog_version)
++    return catalog_ids, catalog_versions
++
++
++def _hash_sql(sql: str) -> str:
++    """返回 SQL 文本 SHA256，日志与结果只保留 hash，不保留 SQL 原文。"""
++
++    return hashlib.sha256(sql.encode("utf-8")).hexdigest()
++
++
++__all__ = [
++    "SHADOW_PIPELINE_VERSION",
++    "LogisticsNl2SqlShadowPipeline",
++    "LogisticsNl2SqlShadowPipelineRequest",
++    "LogisticsNl2SqlShadowPipelineResult",
++]
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_evaluation_log.py b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_evaluation_log.py
+new file mode 100644
+index 0000000..36dba12
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_evaluation_log.py
+@@ -0,0 +1,333 @@
++from __future__ import annotations
++
++import json
++
++import pytest
++
++from backend.app.domains.logistics.services.nl2sql.evaluation_log import (
++    InMemoryLogisticsNl2SqlEvaluationLogSink,
++    JsonlLogisticsNl2SqlEvaluationLogSink,
++    LogisticsNl2SqlEvaluationLogRecord,
++    redact_evaluation_text,
++    summarize_evaluation_logs,
++)
++
++
++def test_evaluation_log_record_redacts_questions_errors_and_metadata_without_sql_payload() -> None:
++    """评估日志只能保留脱敏摘要、SQL hash 与参数 key，不能持久化 SQL/密钥原文。"""
++
++    password_key = "password"
++    token_key = "token"
++    bearer_value = "bearer-secret-value"
++    api_value = "sk-unitsecret123"
++    record = LogisticsNl2SqlEvaluationLogRecord.from_pipeline(
++        trace_id="trace-001",
++        request_id="req-001",
++        question=f"2025年发运量 {password_key}=unit-password {token_key}=tok_unitsecret Bearer {bearer_value} {api_value}",
++        rewritten_question=f"2025年发运量 {password_key}=unit-password",
++        domain="logistics",
++        source_system="middle_db",
++        status="explain_failed",
++        stage="explain",
++        error_codes=["sql_execution_executor_failed::explain"],
++        error_message=(
++            "mysql://demo:pass123@127.0.0.1/db "
++            f"{password_key}=unit-password {token_key}=tok_unitsecret Bearer {bearer_value} {api_value}"
++        ),
++        catalog_ids=["metric:shipment_mw", "table:dws_logistics_detail_union"],
++        catalog_versions=["logistics_nl2sql_catalog.v1"],
++        sql_hash="a" * 64,
++        sql_param_keys=["p0", "p1"],
++        validation_errors=[],
++        safety_errors=[],
++        explain_ok=False,
++        trial_ok=False,
++        row_count=0,
++        sample_row_count=0,
++        duration_ms=12,
++        pipeline_version="logistics_nl2sql_shadow.v1",
++    )
++
++    payload = record.model_dump_json()
++
++    assert "unit-password" not in payload
++    assert "tok_unitsecret" not in payload
++    assert bearer_value not in payload
++    assert api_value not in payload
++    assert "pass123" not in payload
++    assert "[REDACTED]" in payload
++    assert record.sql_hash == "a" * 64
++    assert record.sql_param_keys == ["p0", "p1"]
++    assert not hasattr(record, "sql")
++
++
++def test_evaluation_log_redacts_list_metadata_and_sql_like_text() -> None:
++    """catalog/error 元数据列表也必须脱敏，不能把候选输入中的密钥或 SQL 原文写入日志。"""
++
++    password_key = "password"
++    token_key = "token"
++    bearer_value = "bearer-secret-value"
++    record = LogisticsNl2SqlEvaluationLogRecord.from_pipeline(
++        trace_id="trace-metadata",
++        request_id=f"req {password_key}=unit-password",
++        question="2025年发运量是多少",
++        rewritten_question=None,
++        domain=f"logistics {password_key}=unit-password",
++        source_system=f"middle_db Bearer {bearer_value}",
++        status="validation_failed",
++        stage="validation",
++        error_codes=[
++            f"shadow_strategy_not_sql_direct::{token_key}=tok_unitsecret",
++            "raw_sql::SELECT * FROM dws_logistics_detail_union WHERE id = 1",
++        ],
++        error_message=None,
++        catalog_ids=[
++            "metric:shipment_mw",
++            f"table:{password_key}=unit-password",
++            "raw::SELECT * FROM dws_logistics_detail_union",
++        ],
++        catalog_versions=["logistics_nl2sql_catalog.v1", f"Bearer {bearer_value}"],
++        sql_hash="c" * 64,
++        sql_param_keys=["p0", f"p1_{token_key}=tok_unitsecret"],
++        validation_errors=[f"sqlplan_bad::{password_key}=unit-password"],
++        safety_errors=["raw::SELECT * FROM dws_logistics_detail_union"],
++        explain_ok=False,
++        trial_ok=False,
++        row_count=0,
++        sample_row_count=0,
++        duration_ms=1,
++        pipeline_version="logistics_nl2sql_shadow.v1",
++        warnings=[f"warn {token_key}=tok_unitsecret"],
++    )
++
++    payload = record.model_dump_json()
++
++    assert "unit-password" not in payload
++    assert "tok_unitsecret" not in payload
++    assert bearer_value not in payload
++    assert "SELECT * FROM" not in payload
++    assert "[REDACTED]" in payload
++    assert "[SQL_REDACTED]" in payload
++
++
++def test_evaluation_log_rejects_non_hash_sql_hash_values() -> None:
++    """sql_hash 字段只允许 64 位哈希，误传 SQL 或密钥文本时必须 fail-closed。"""
++
++    record = LogisticsNl2SqlEvaluationLogRecord.from_pipeline(
++        trace_id="trace-bad-hash",
++        request_id=None,
++        question="2025年发运量是多少",
++        rewritten_question=None,
++        domain="logistics",
++        source_system="middle_db",
++        status="success",
++        stage="trial",
++        error_codes=[],
++        error_message=None,
++        catalog_ids=[],
++        catalog_versions=[],
++        sql_hash="SELECT password=unit-password FROM dws_logistics_detail_union",
++        sql_param_keys=[],
++        validation_errors=[],
++        safety_errors=[],
++        explain_ok=True,
++        trial_ok=True,
++        row_count=1,
++        sample_row_count=1,
++        duration_ms=1,
++        pipeline_version="logistics_nl2sql_shadow.v1",
++    )
++
++    payload = record.model_dump_json()
++
++    assert record.sql_hash is None
++    assert "SELECT" not in payload
++    assert "unit-password" not in payload
++
++
++def test_direct_log_record_construction_sanitizes_hash_sql_dsn_and_secret_text() -> None:
++    """直接构造日志记录也必须执行同样的脱敏与 sql_hash 形态校验。"""
++
++    record = LogisticsNl2SqlEvaluationLogRecord(
++        pipeline_version="logistics_nl2sql_shadow.v1",
++        trace_id="trace-direct",
++        request_id="req password=unit-password",
++        question="SELECT 1 password=unit-password mysql://demo:pass123@127.0.0.1/db",
++        rewritten_question="WITH cte AS (SELECT 1) SELECT * FROM cte",
++        domain="logistics",
++        source_system="middle_db",
++        status="success",
++        stage="trial",
++        error_codes=["raw::EXPLAIN SELECT 1", "token=tok_unitsecret"],
++        error_message="mysql://demo:pass123@127.0.0.1/db Bearer bearer-secret-value",
++        catalog_ids=["table:dws_logistics_detail_union"],
++        catalog_versions=["logistics_nl2sql_catalog.v1"],
++        sql_hash="SELECT password=unit-password FROM dws_logistics_detail_union",
++        sql_param_keys=["p0", "token=tok_unitsecret"],
++        validation_errors=["api_key=unit-secret"],
++        safety_errors=["SELECT 1"],
++        explain_ok=True,
++        trial_ok=True,
++        row_count=-1,
++        sample_row_count=-2,
++        duration_ms=-3,
++        warnings=["sk-unitsecret123"],
++    )
++
++    payload = record.model_dump_json()
++
++    assert record.sql_hash is None
++    assert record.row_count == 0
++    assert record.sample_row_count == 0
++    assert record.duration_ms == 0
++    assert "SELECT" not in payload
++    assert "WITH" not in payload
++    assert "mysql://" not in payload
++    assert "127.0.0.1" not in payload
++    assert "demo" not in payload
++    assert "unit-password" not in payload
++    assert "tok_unitsecret" not in payload
++    assert "bearer-secret-value" not in payload
++    assert "unit-secret" not in payload
++    assert "sk-unitsecret123" not in payload
++    assert "[SQL_REDACTED]" in payload
++    assert "[DSN_REDACTED]" in payload
++
++
++def test_jsonl_log_sink_revalidates_direct_records_before_persisting(tmp_path) -> None:
++    """JSONL sink 写入前应二次校验，防止手工构造记录绕过 from_pipeline 安全入口。"""
++
++    record = LogisticsNl2SqlEvaluationLogRecord(
++        pipeline_version="logistics_nl2sql_shadow.v1",
++        trace_id="trace-jsonl-direct",
++        question="mysql://demo:pass123@db.local/prod password=unit-password",
++        status="success",
++        stage="trial",
++        sql_hash="SELECT password=unit-password FROM dws_logistics_detail_union",
++    )
++    log_path = tmp_path / "shadow" / "eval.jsonl"
++    sink = JsonlLogisticsNl2SqlEvaluationLogSink(log_path, root_dir=tmp_path)
++
++    sink.write(record)
++
++    payload = log_path.read_text(encoding="utf-8")
++    decoded = json.loads(payload)
++    assert decoded["sql_hash"] is None
++    assert "SELECT" not in payload
++    assert "mysql://" not in payload
++    assert "db.local" not in payload
++    assert "prod" not in payload
++    assert "unit-password" not in payload
++    assert "[DSN_REDACTED]" in payload
++
++
++def test_in_memory_log_sink_collects_records_and_summarizes_status_families() -> None:
++    """内存 sink 应支持单测读取与后续按状态汇总成功/失败/跳过数量。"""
++
++    sink = InMemoryLogisticsNl2SqlEvaluationLogSink()
++    records = [
++        _record("success", "trial"),
++        _record("validation_failed", "validation", error_codes=["sqlplan_tables_required"]),
++        _record("safety_failed", "safety", error_codes=["sql_safety_select_star_forbidden"]),
++        _record("skipped", "candidate", error_codes=["shadow_candidate_missing"]),
++    ]
++
++    for record in records:
++        sink.write(record)
++
++    summary = summarize_evaluation_logs(sink.records)
++
++    assert [item.status for item in sink.records] == ["success", "validation_failed", "safety_failed", "skipped"]
++    assert summary.total == 4
++    assert summary.by_status == {"success": 1, "validation_failed": 1, "safety_failed": 1, "skipped": 1}
++    assert summary.success_count == 1
++    assert summary.failure_count == 2
++    assert summary.skipped_count == 1
++
++
++def test_jsonl_log_sink_writes_sanitized_json_lines_under_controlled_path(tmp_path) -> None:
++    """JSONL sink 只写受控路径，并输出可逐行解析的脱敏评估日志。"""
++
++    log_path = tmp_path / "shadow" / "eval.jsonl"
++    sink = JsonlLogisticsNl2SqlEvaluationLogSink(log_path, root_dir=tmp_path)
++    sink.write(_record("success", "trial", question="查发运量 password=unit-password"))
++    sink.write(_record("skipped", "candidate"))
++
++    lines = log_path.read_text(encoding="utf-8").splitlines()
++    decoded = [json.loads(line) for line in lines]
++
++    assert len(decoded) == 2
++    assert decoded[0]["status"] == "success"
++    assert "unit-password" not in lines[0]
++    assert decoded[0]["sql_param_keys"] == ["p0"]
++    assert "sql" not in decoded[0]
++
++
++def test_jsonl_log_sink_rejects_paths_outside_controlled_root(tmp_path) -> None:
++    """JSONL sink 路径必须被限制在显式 root_dir 下，避免评估日志写出工作区。"""
++
++    outside_path = tmp_path.parent / "outside-eval.jsonl"
++
++    with pytest.raises(ValueError, match="evaluation_log_path_outside_root"):
++        JsonlLogisticsNl2SqlEvaluationLogSink(outside_path, root_dir=tmp_path)
++
++
++def test_redact_evaluation_text_handles_dict_json_secret_shapes() -> None:
++    """脱敏函数应覆盖 key=value、Bearer、sk-*、DSN 与 JSON/dict 风格 secret。"""
++
++    password_key = "pass" + "word"
++    key_name = "api" + "_key"
++    dsn_pw = "pass" + "123"
++    openai_like = "sk-" + "unitsecret123"
++    text = (
++        f"{password_key}=unit-password "
++        "Bearer bearer-secret-value "
++        f"{openai_like} mysql://demo:{dsn_pw}@127.0.0.1/db "
++        f"{{\"{key_name}\":\"json-secret\"}} "
++        f"'{key_name}': 'dict-secret'"
++    )
++
++    redacted = redact_evaluation_text(text)
++
++    assert "unit-password" not in redacted
++    assert "bearer-secret-value" not in redacted
++    assert openai_like not in redacted
++    assert dsn_pw not in redacted
++    assert "json-secret" not in redacted
++    assert "dict-secret" not in redacted
++    assert "[REDACTED]" in redacted
++
++
++def _record(
++    status: str,
++    stage: str,
++    *,
++    error_codes: list[str] | None = None,
++    question: str = "2025年发运量是多少",
++) -> LogisticsNl2SqlEvaluationLogRecord:
++    """生成测试用评估日志记录。"""
++
++    return LogisticsNl2SqlEvaluationLogRecord.from_pipeline(
++        trace_id=f"trace-{status}",
++        request_id=None,
++        question=question,
++        rewritten_question=None,
++        domain="logistics",
++        source_system="middle_db",
++        status=status,
++        stage=stage,
++        error_codes=error_codes or [],
++        error_message=None,
++        catalog_ids=["metric:shipment_mw"],
++        catalog_versions=["logistics_nl2sql_catalog.v1"],
++        sql_hash="b" * 64 if status == "success" else None,
++        sql_param_keys=["p0"] if status == "success" else [],
++        validation_errors=error_codes or [],
++        safety_errors=[],
++        explain_ok=status == "success",
++        trial_ok=status == "success",
++        row_count=1 if status == "success" else 0,
++        sample_row_count=1 if status == "success" else 0,
++        duration_ms=3,
++        pipeline_version="logistics_nl2sql_shadow.v1",
++    )
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_shadow_pipeline.py b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_shadow_pipeline.py
+new file mode 100644
+index 0000000..399c75a
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_shadow_pipeline.py
+@@ -0,0 +1,434 @@
++from __future__ import annotations
++
++from copy import deepcopy
++from typing import Any
++
++from backend.app.domains.logistics.services.nl2sql.evaluation_log import InMemoryLogisticsNl2SqlEvaluationLogSink
++from backend.app.domains.logistics.services.nl2sql.shadow_pipeline import (
++    LogisticsNl2SqlShadowPipeline,
++    LogisticsNl2SqlShadowPipelineRequest,
++)
++from backend.app.domains.logistics.services.nl2sql.sql_execution import (
++    FakeLogisticsSqlExecutor,
++    LogisticsSqlExecutionService,
++)
++from backend.app.domains.logistics.services.nl2sql.sql_renderer import LogisticsRenderedSql
++
++
++class _UnsafeRenderer:
++    """测试用 renderer：故意返回 Safety 会拒绝的 SELECT *。"""
++
++    def render(self, validation_result: Any) -> LogisticsRenderedSql:
++        """返回不安全 SQL，用于验证 shadow pipeline 在 safety 阶段 fail-closed。"""
++
++        return LogisticsRenderedSql(
++            sql="SELECT * FROM dws_logistics_detail_union WHERE dws_logistics_detail_union.biz_year = :p0",
++            params={"p0": 2025},
++            referenced_tables=["dws_logistics_detail_union"],
++            referenced_columns=[("dws_logistics_detail_union", "biz_year")],
++        )
++
++
++class _FailingRenderer:
++    """测试用 renderer：模拟 renderer 边界异常。"""
++
++    def render(self, validation_result: Any) -> LogisticsRenderedSql:
++        """抛出带 SQL/密钥片段的异常，验证 render_failed 脱敏且不进入 executor。"""
++
++        password_key = "password"
++        raise RuntimeError(f"SELECT {password_key}=unit-password FROM dws_logistics_detail_union")
++
++
++class _TrialFailingExecutor:
++    """测试用 executor：EXPLAIN 成功但 trial 失败。"""
++
++    def __init__(self) -> None:
++        """初始化调用记录。"""
++
++        self.calls: list[str] = []
++
++    def explain(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++        """记录 EXPLAIN 并返回成功行。"""
++
++        self.calls.append("explain")
++        return [{"select_type": "SIMPLE"}]
++
++    def trial(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++        """记录 trial 并抛出带敏感片段的错误。"""
++
++        self.calls.append("trial")
++        token_key = "token"
++        raise RuntimeError(f"trial failed {token_key}=tok_unitsecret")
++
++
++class _FailingLogSink:
++    """测试用日志 sink：模拟日志落盘失败。"""
++
++    def write(self, record: Any) -> None:
++        """抛出带敏感片段的异常，验证主 shadow 结果不受影响且错误被脱敏。"""
++
++        password_key = "password"
++        raise RuntimeError(f"disk full {password_key}=unit-password")
++
++
++def test_shadow_pipeline_success_runs_validation_render_safety_explain_trial_and_logs_hash_only() -> None:
++    """合法 SQLPlan 应走完 M3/M4/explain/trial，并只在结果与日志中保留 SQL hash。"""
++
++    executor = FakeLogisticsSqlExecutor(
++        explain_rows=[{"select_type": "SIMPLE"}],
++        trial_rows=[{"logistics_company_name": "承运商A", "shipment_mw": 12.3}],
++    )
++    sink = InMemoryLogisticsNl2SqlEvaluationLogSink()
++    pipeline = LogisticsNl2SqlShadowPipeline(
++        execution_service=LogisticsSqlExecutionService(executor=executor),
++        log_sink=sink,
++    )
++
++    result = pipeline.run(
++        LogisticsNl2SqlShadowPipelineRequest(
++            question="2025年哪个物流承运商发运量最多",
++            rewritten_question="2025年按承运商统计发运量并排序",
++            request_id="req-success",
++            candidate=_valid_candidate(),
++        )
++    )
++
++    assert result.status == "success", result.error_codes
++    assert result.stage == "trial"
++    assert result.explain_ok is True
++    assert result.trial_ok is True
++    assert result.row_count == 1
++    assert result.sample_row_count == 1
++    assert result.sql_hash is not None and len(result.sql_hash) == 64
++    assert result.sql_param_keys == ["p0", "p1", "p2", "p3", "p4"]
++    assert [call.mode for call in executor.calls] == ["explain", "trial"]
++    assert len(sink.records) == 1
++    assert sink.records[0].status == "success"
++    assert sink.records[0].sql_hash == result.sql_hash
++    assert "SELECT " not in result.model_dump_json()
++    assert "dws_logistics_detail_union.biz_year" not in sink.records[0].model_dump_json()
++
++
++def test_shadow_pipeline_validation_failure_logs_and_skips_renderer_safety_executor() -> None:
++    """M3 SQLPlan validation 失败时必须停止后续阶段，但仍写 evaluation log。"""
++
++    executor = FakeLogisticsSqlExecutor()
++    sink = InMemoryLogisticsNl2SqlEvaluationLogSink()
++    pipeline = LogisticsNl2SqlShadowPipeline(
++        execution_service=LogisticsSqlExecutionSe
+... [truncated in bundle; full patch at ai/outbox/kanban/t_121646ca/diff.patch]

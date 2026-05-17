@@ -1,0 +1,22 @@
+{
+  "status": "passed",
+  "true_blocker_count": 0,
+  "finding_count": 0,
+  "findings": [],
+  "rules": [
+    "hardcoded_secret_assignment",
+    "shell_injection",
+    "dangerous_eval_exec",
+    "unsafe_pickle",
+    "sql_string_format"
+  ],
+  "scoped_files": [
+    "backend/app/domains/logistics/services/nl2sql/__init__.py",
+    "backend/app/domains/logistics/services/nl2sql/evaluation_log.py",
+    "backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py",
+    "tests/unit/logistics/nl2sql/test_evaluation_log.py",
+    "tests/unit/logistics/nl2sql/test_shadow_pipeline.py",
+    "docs/NL2SQL_LOGISTICS_M5_SHADOW_PIPELINE_MVP_PLAN.md"
+  ],
+  "note": "Task-scoped scan after reviewer fix. Test-only redaction fixtures are not real credentials; no production secret assignment/shell/eval/pickle/sql-format blockers found."
+}
