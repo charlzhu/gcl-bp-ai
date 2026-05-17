@@ -1,145 +1,60 @@
+
 # CURRENT_STATUS.md
 
-## 当前阶段：计划 BOM 功率预测智能问答 M1.5 已完成，等待进入 M2 确认
+## 当前阶段：物管域 SAP MID 接入 M1 方案已完成，建议进入 M2 准备
 
 当前正式任务：
 
 ```text
-计划 BOM 功率预测智能问答 / 功率测试基准能力
+物管域 SAP Oracle MID 数据同步、智能问数与前端适配建设
 ```
 
-该能力属于现有 **计划 BOM 业务域** 的子能力，不新建独立业务域。
+本轮只执行 M1：数据资产审计、同步方案、中间库建模、智能问数链路、计划 BOM SAP 数据源改造、前端适配方案、Oracle 只读 smoke test 报告。
 
 ---
 
-## 一、当前完成状态
+## 一、M1 已完成内容
 
-### 1. M1 已完成
-
-M1 已完成以下工作：
-
-1. 审计旧版 `GCL功率测试基准（V2.1）26.03.26 (1).xlsm——副本.xlsm`。
-2. 梳理计划 BOM 现有导入、查询、QA、智能助手链路。
-3. 输出：
-   - `docs/PLAN_POWER_EXCEL_FORMULA_AUDIT.md`
-   - `docs/PLAN_POWER_IMPLEMENTATION_PLAN.md`
-
-M1 未修改后端业务代码、未新增接口、未新增迁移、未修改前端、未接入 PlanBom QA、未实现正式计算引擎。
-
-### 2. M1.5 已完成
-
-M1.5 已完成：
-
-1. 固化业务口径。
-2. 补充审计新版 Excel：
-   - `ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm`
-3. 判断 M2 开发准入。
-4. 新增 / 更新文档：
-   - `docs/PLAN_POWER_BUSINESS_CONFIRMATION.md`
-   - `docs/PLAN_POWER_EXCEL_FORMULA_AUDIT.md`
-   - `docs/PLAN_POWER_IMPLEMENTATION_PLAN.md`
-   - `docs/CURRENT_STATUS.md`
-   - `docs/NEXT_TASK.md`
-   - `ai/inbox/attachments_manifest.md`
-
-M1.5 仍未创建数据库迁移、未新增正式接口、未实现正式计算引擎、未接入 PlanBom QA、未修改前端、未 hardcode 样例题。
+1. 只读审计 `ai/inbox/requirement.md`。
+2. 只读审计 SAP MID 附件：87 个视图、7718 行字段元数据、16 个重点视图样例、87 条视图 SQL 记录。
+3. 只读审计智能助手中间库附件：物流 ODS/DWD/DWS/DM、计划 BOM 表、sys_task/sys_query 日志表。
+4. 只读审计现有后端：物流同步/问数链路、计划 BOM Excel 导入/查询/QA、配置与 DB session。
+5. 只读审计现有前端：路由、布局、BusinessChatPage、物流/计划 BOM API、ResultTable、流式 API。
+6. 完成 Oracle 只读 smoke test 前置检查：`SAP_ORACLE_*` 配置项存在，但本地缺少 `oracledb/cx_Oracle` 驱动，未连接 Oracle、未执行 SQL、未导出数据。
+7. 输出 M1 文档：
+   - `docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md`
+   - `docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md`
+   - `docs/SAP_MID_SYNC_DESIGN.md`
+   - `docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md`
+   - `docs/PLAN_BOM_SAP_DATA_SOURCE_MIGRATION_PLAN.md`
+   - `docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md`
+   - `docs/SAP_MID_INTEGRATION_ROADMAP.md`
+   - `docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md`
 
 ---
 
-## 二、当前主分析文件
+## 二、本轮未做事项
 
-后续 M2/M3/M4/M5 默认以新版 TOPCon 文件作为目标：
-
-```text
-ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm
-```
-
-旧版 Excel 仅作为历史审计参考。
-
-新版文件补充审计结论：
-
-1. Sheet 数量未变：仍为 12 个 Sheet。
-2. 版型模型页未变：仍为 10 个版型模型页。
-3. 配置区位置未变：`A1:Y27`。
-4. 功率档位区未变：10 档版型为 `K28:T28`，48/54 系列有效 8 档。
-5. 供应商效率分布区未变：`C77:Y96`。
-6. 公式结构未发生阻塞性变化：仍以 `NORMSDIST`、`SUM`、固定行列引用和 VBA 写值为核心。
-7. `标板基准` 页从 `A1:D10` 变为 `A1:E10`，新增 `功率最优` 列。
-8. `更改履历` 更新到 2026.04.13。
-9. `R30:R34` 疑似问题未完全消失，新版仍发现 `NT12R-66GDF!R30/R32` 需要语义修正。
+1. 未新增正式业务接口。
+2. 未修改前端页面。
+3. 未创建数据库迁移。
+4. 未接入用户问答生产链路。
+5. 未让智能助手实时直接查询 SAP Oracle MID。
+6. 未让 LLM 自由生成 SQL 并执行。
+7. 未导出 Oracle 大表。
+8. 未写入或泄露真实 Oracle 账号密码。
 
 ---
 
-## 三、已固化业务口径
+## 三、当前结论
 
-详见：`docs/PLAN_POWER_BUSINESS_CONFIRMATION.md`。
-
-### 1. 公式策略
-
-```text
-formula_policy = semantic_fixed_mode
-```
-
-含义：后端计算引擎不完全按 Excel 原疑似错误公式照搬，而是按公式语义修正 `R30:R34` 的疑似复制错误。
-
-### 2. BOM 映射口径
-
-| BOM / 用户问法 | 功率模型标准项 | 默认归一结果 |
-|---|---|---|
-| 间隙贴膜 | 玻璃选型 | 间隙铝膜 |
-| 接线盒 300/200 | 线缆长度 | +300/-200mm |
-| 北德 / 新北德 / TÜV北德 | 标板基准 | 新北德 |
-| 计量院 | 标板基准 | 中国计量院 |
-| 莱茵 | 标板基准 | 莱茵基准 |
-| NT12/66GDF | 版型 | NT12-66GDF |
-| NT12R/66GDF | 版型 | NT12R-66GDF |
+1. M2 可优先从库存/出入库两视图开始：`V_HF_SAP_INOUT_DAILY`、`V_SAP_HFFN_CRKLSZ`。
+2. 现有物流链路可复用同步日志、ODS/DWD/DWS/DM 分层、SQL 模板、查询服务、StreamingResponse 和前端结果表格模式。
+3. 现有计划 BOM 已具备 `source_type/source_tag/import_batch_id` 等多来源基础，但 `SAP` 与需求中的 `SAP_MID` 命名需要 M2 前人工确认。
+4. Oracle live 验证当前被驱动缺失阻塞，M2 开发前必须补齐驱动并做只读 `SELECT 1`、字段结构、count、小样本验证。
 
 ---
 
-## 四、M2 准入判断
+## 四、现有能力基线仍需保持
 
-建议可以进入 M2：功率模型版本化入库。
-
-准入依据：
-
-1. 新版 Excel 核心结构可解析。
-2. Sheet / 配置区 / 功率档位区 / 供应商效率分布区可稳定定位。
-3. `formula_policy = semantic_fixed_mode` 已固化。
-4. BOM 映射口径已固化。
-5. M2 表结构和解析器设计不需要大改。
-6. 未发现新的宏 / 公式阻塞项。
-
-M2 范围限制：只做模型版本化入库和解析校验；不要实现正式计算引擎，不接入 QA，不修改前端。
-
----
-
-## 五、现有能力基线
-
-上一阶段“全量样例题真实网页 E2E”验收已完成：
-
-- 真实网页 E2E：`3281/3281`
-- 自动比对：`PASS=3281 / FAIL=0`
-- B 类正确追问：`1429/1429`
-- C 类正确拒答解释：`93/93`
-
-当前能力基线：
-
-- 物流：`A=656 / B=178 / C=69 / D=0`
-- BOM：`A=86 / B=40 / C=3 / D=0`
-- BOM QA API E2E：`30/30`
-- BOM 多问法语义回归：`129/129`
-
-M1/M1.5 文档工作不应改变上述能力边界。
-
----
-
-## 六、当前边界
-
-1. 没有 mock 数据。
-2. 没有 hardcode 样例题答案。
-3. 不绕过真实业务主链路。
-4. M1/M1.5 不修改业务主链路。
-5. M1/M1.5 不新增数据库结构。
-6. M1/M1.5 不新增前端页面。
-7. `BOM配置搭配问询：.docx` 只作为题型和问法参考，其中数据为假数据。
-8. 后续正式测试必须基于真实 BOM 数据和 active 功率模型自行生成可验证测试题。
+历史物流/计划 BOM/功率预测能力不属于本轮 M1 改造对象。本轮文档工作不应改变既有能力边界：物流、计划 BOM、功率预测、试运行 E2E 基线均需在 M2 开发时继续回归。

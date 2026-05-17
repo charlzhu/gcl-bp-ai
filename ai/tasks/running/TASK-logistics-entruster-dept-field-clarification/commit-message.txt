@@ -1,0 +1,1 @@
+fix(logistics): map 2026 total-fee field scopes for department and entrusted person

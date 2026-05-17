@@ -1,0 +1,4 @@
+You are an independent code reviewer. Read only ai/tasks/running/TASK-ai-answer-experience-v2/review_bundle_richer_ranking.md and ai/tasks/running/TASK-ai-answer-experience-v2/diff-richer-ranking.patch. Return ONLY valid JSON:
+{"passed": true/false, "security_concerns": [], "logic_errors": [], "suggestions": [], "summary": "..."}
+
+Focus on: deterministic facts remain authoritative; richer ranking narrative only reuses answer_summary and result_table rows; no derived calculations; LLM/stream fallback cannot alter status/table/cards/chart; no user-facing SQL/query_key/planner/guardrail leak.

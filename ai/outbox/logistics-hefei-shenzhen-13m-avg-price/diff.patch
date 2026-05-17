@@ -1,0 +1,384 @@
+diff --git a/backend/app/domains/logistics/repositories/data_qa_repository.py b/backend/app/domains/logistics/repositories/data_qa_repository.py
+index 644f2e6..7746ffe 100644
+--- a/backend/app/domains/logistics/repositories/data_qa_repository.py
++++ b/backend/app/domains/logistics/repositories/data_qa_repository.py
+@@ -1491,12 +1545,17 @@ class LogisticsDataQaRepository:
+ 
+         说明：
+             1. 该方法服务于 Round2 的历史线路运价题族；
+-            2. 统计口径按 price_metric 选择：报价/运价使用 unit_price_per_vehicle（单价/车），运费类默认使用 total_fee；
++            2. 报价 / 单价题按单价/车字段求样本均值，线路均价按总费用 / 总车次计算；
+             3. 如果目的地给的是城市，则优先按 city 模糊过滤；否则按 province 过滤。
+         """
+         filters = ["required_vehicle_type LIKE :vehicle_type"]
+         params: dict[str, Any] = {"vehicle_type": f"%{vehicle_type}%"}
+         metric_column = "unit_price_per_vehicle" if price_metric == "unit_price_per_vehicle" else "total_fee"
++        avg_fee_expr = (
++            "ROUND(AVG(unit_price_per_vehicle), 0)"
++            if price_metric == "unit_price_per_vehicle"
++            else "ROUND(SUM(total_fee) / NULLIF(SUM(shipment_trip_count), 0), 0)"
++        )
+         year_placeholders = ", ".join(f":year_{idx}" for idx, _ in enumerate(years))
+         filters.append(f"biz_year IN ({year_placeholders})")
+         for idx, year in enumerate(years):
+@@ -1518,7 +1577,9 @@ class LogisticsDataQaRepository:
+                     f"""
+                     SELECT
+                         DATE_FORMAT(biz_date, '%Y-%m') AS biz_month,
+-                        ROUND(AVG({metric_column}), 0) AS avg_fee,
++                        {avg_fee_expr} AS avg_fee,
++                        ROUND(SUM(total_fee), 0) AS total_fee,
++                        ROUND(SUM(shipment_trip_count), 0) AS shipment_trip_count,
+                         COUNT(*) AS row_count
+                     FROM dwd_logistics_hist_shipment_detail
+                     WHERE {where_sql}
+@@ -1537,7 +1598,9 @@ class LogisticsDataQaRepository:
+                     f"""
+                     SELECT
+                         biz_year,
+-                        ROUND(AVG({metric_column}), 0) AS avg_fee,
++                        {avg_fee_expr} AS avg_fee,
++                        ROUND(SUM(total_fee), 0) AS total_fee,
++                        ROUND(SUM(shipment_trip_count), 0) AS shipment_trip_count,
+                         COUNT(*) AS row_count
+                     FROM dwd_logistics_hist_shipment_detail
+                     WHERE {where_sql}
+@@ -1556,7 +1619,15 @@ class LogisticsDataQaRepository:
+                 # 输出顺序遵循 query_plan.sort 的 biz_year 升序，便于审计和图表展示稳定。
+                 year_row = rows_by_year.get(int(requested_year))
+                 if year_row is None:
+-                    items.append({"biz_year": int(requested_year), "avg_fee": None, "row_count": 0})
++                    items.append(
++                        {
++                            "biz_year": int(requested_year),
++                            "avg_fee": None,
++                            "total_fee": None,
++                            "shipment_trip_count": 0,
++                            "row_count": 0,
++                        }
++                    )
+                     missing_years.append(int(requested_year))
+                 else:
+                     items.append(year_row)
+@@ -1569,7 +1640,9 @@ class LogisticsDataQaRepository:
+                     SELECT
+                         ROUND(MIN({metric_column}), 0) AS min_fee,
+                         ROUND(MAX({metric_column}), 0) AS max_fee,
+-                        ROUND(AVG({metric_column}), 0) AS avg_fee,
++                        {avg_fee_expr} AS avg_fee,
++                        ROUND(SUM(total_fee), 0) AS total_fee,
++                        ROUND(SUM(shipment_trip_count), 0) AS shipment_trip_count,
+                         COUNT(*) AS row_count
+                     FROM dwd_logistics_hist_shipment_detail
+                     WHERE {where_sql}
+@@ -1583,7 +1656,9 @@ class LogisticsDataQaRepository:
+             text(
+                 f"""
+                 SELECT
+-                    ROUND(AVG({metric_column}), 0) AS avg_fee,
++                    {avg_fee_expr} AS avg_fee,
++                    ROUND(SUM(total_fee), 0) AS total_fee,
++                    ROUND(SUM(shipment_trip_count), 0) AS shipment_trip_count,
+                     COUNT(*) AS row_count
+                 FROM dwd_logistics_hist_shipment_detail
+                 WHERE {where_sql}
+diff --git a/backend/app/domains/logistics/services/data_qa_service.py b/backend/app/domains/logistics/services/data_qa_service.py
+index 9440f4a..b351ff2 100644
+--- a/backend/app/domains/logistics/services/data_qa_service.py
++++ b/backend/app/domains/logistics/services/data_qa_service.py
+@@ -1373,7 +1405,6 @@ class LogisticsDataQaService:
+             )
+             view_mode = filters["view_mode"]
+             price_metric = filters.get("price_metric", "total_fee")
+-            price_metric_label = "单价/车" if price_metric == "unit_price_per_vehicle" else "总费用"
+             price_summary_label = "报价" if price_metric == "unit_price_per_vehicle" else "运费"
+             if filters.get("default_year_scope_label"):
+                 scope_parts = [filters["default_year_scope_label"]]
+@@ -1395,7 +1426,7 @@ class LogisticsDataQaService:
+             scope_text = "".join(scope_parts)
+             if view_mode == "monthly_avg":
+                 summary = f"{scope_text}每月平均{price_summary_label}已按月份返回。"
+-                table_columns = ["biz_month", "avg_fee", "row_count"]
++                table_columns = ["biz_month", "avg_fee", "total_fee", "shipment_trip_count", "row_count"]
+             elif view_mode == "year_compare":
+                 missing_years = [int(year) for year in data.get("missing_years") or []]
+                 summary = f"{scope_text}{price_summary_label}对比已按年份返回。"
+@@ -1405,28 +1436,35 @@ class LogisticsDataQaService:
+                     warnings.append(
+                         f"{scope_text}在{missing_year_text}无匹配记录，已保留空值行，避免显式年份被静默遗漏。"
+                     )
+-                table_columns = ["biz_year", "avg_fee", "row_count"]
++                table_columns = ["biz_year", "avg_fee", "total_fee", "shipment_trip_count", "row_count"]
+             elif view_mode == "fee_extremes":
+                 summary_row = data["summary_row"] or {}
+                 summary = (
+                     f"{scope_text}最高{price_summary_label}为{int(summary_row.get('max_fee') or 0):,}元，"
+                     f"最低{price_summary_label}为{int(summary_row.get('min_fee') or 0):,}元。"
+                 )
+-                table_columns = ["min_fee", "max_fee", "avg_fee", "row_count"]
++                table_columns = ["min_fee", "max_fee", "avg_fee", "total_fee", "shipment_trip_count", "row_count"]
+             else:
+                 summary_row = data["summary_row"] or {}
+                 summary = f"{scope_text}平均{price_summary_label}为{int(summary_row.get('avg_fee') or 0):,}元。"
+-                table_columns = ["avg_fee", "row_count"]
++                table_columns = ["avg_fee", "total_fee", "shipment_trip_count", "row_count"]
++            calculation_logic = (
++                ["历史线路报价 / 单价按单价/车字段求样本均值。"]
++                if price_metric == "unit_price_per_vehicle"
++                else ["历史线路均价按总费用 / 总车次（车次数）计算，先汇总匹配线路总费用，再除以汇总车次数。"]
++            )
++            calculation_logic.extend(
++                [
++                    "当问题指定城市时优先按城市模糊匹配，兼容广州/广州市等同一城市写法；否则按目的省份过滤。",
++                    "车型口径通过车型字段模糊匹配实现。",
++                ]
++            )
+             return self._build_result(
+                 answer_summary=summary,
+                 plan=plan,
+                 table_columns=table_columns,
+                 table_rows=data["items"],
+-                calculation_logic=[
+-                    f"历史线路{price_summary_label}按 dwd_logistics_hist_shipment_detail.{price_metric}（{price_metric_label}）统计。",
+-                    "当问题指定城市时优先按 city 模糊过滤，兼容广州/广州市等同一城市写法；否则按 province 过滤。",
+-                    "车型口径通过 required_vehicle_type 模糊匹配实现。",
+-                ],
++                calculation_logic=calculation_logic,
+                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+                 warnings=warnings,
+             )
+diff --git a/backend/app/domains/logistics/services/slot_extractor.py b/backend/app/domains/logistics/services/slot_extractor.py
+index f3471c0..011f1ac 100644
+--- a/backend/app/domains/logistics/services/slot_extractor.py
++++ b/backend/app/domains/logistics/services/slot_extractor.py
+@@ -181,6 +181,18 @@ class LogisticsSlotExtractor:
+                 for year in range(start_year, end_year + 1):
+                     if year not in years:
+                         years.append(year)
++        for match in re.finditer(
++            r"(?<!\d)(?P<start>2[3-6])年?(?:到|至|-|–|—|~)(?P<end>2[3-6])年",
++            compact,
++        ):
++            # 业务常把“2023年至2025年”简写成“23年-25年”。
++            # 这里在单年命中前先展开两位年份区间，确保“分别/对比”类问题保留中间年份。
++            start_year = self._resolve_year_token(match.group("start"))
++            end_year = self._resolve_year_token(match.group("end"))
++            if start_year and end_year and start_year <= end_year:
++                for year in range(start_year, end_year + 1):
++                    if year not in years:
++                        years.append(year)
+         for match in re.finditer(r"(?P<year>\d{2,4})年", compact):
+             year = self._resolve_year_token(match.group("year"))
+             if year and year not in years:
+@@ -354,10 +366,10 @@ class LogisticsSlotExtractor:
+         compact = self.compact(question)
+         patterns = (
+             r"([\u4e00-\u9fa5]{2,10})城市发运中",
+-            # “合肥至马鞍山17.5米车的平均运费”里的“至/到”是线路连接词，
++            # “合肥至马鞍山17.5米车的平均运费”里的“至/到/-”是线路连接词，
+             # 目的城市右侧以车型或费用指标为边界；左侧只接受句首/时间词/“从、由”等明确始发前缀，避免命中多段路径中间片段。
+-            # 目的城市内部也排除“至/到”，防止把“马鞍山到南京”这类中转路线吞成单一城市。
+-            r"(?:^|[0-9年月日从由：:,，；;])(?:合肥|阜宁)(?:至|到)((?:(?![至到])[\u4e00-\u9fa5]){2,10}?)(?:17\.5米车|17\.5米|17\.5车|17\.5|17米五|17米5|13m|13米车|13米|9\.6米|9米6|9\.6|车|(?:的)?(?:平均|总|累计|全年)|每车|单车|运输费用|运输成本|费用|运费|运价|报价)",
++            # 目的城市内部也排除线路连接词，防止把“马鞍山到南京”这类中转路线吞成单一城市。
++            r"(?:^|[0-9年月日间从由：:,，；;])(?:合肥|阜宁)(?:至|到|-|－|–|—)((?:(?![至到\-－–—])[\u4e00-\u9fa5]){2,10}?)(?:17\.5米车|17\.5米|17\.5车|17\.5|17米五|17米5|13m|13米车|13米|9\.6米|9米6|9\.6|车|(?:的)?(?:平均|均价|总|累计|全年)|每车|单车|运输费用|运输成本|费用|运费|运价|报价)",
+             # “发往苏州的平均运输费用”这类业务问法会把指标写成“运输费用”，
+             # 先用非贪婪城市匹配截住目的城市，避免后续 planner 误入澄清分支。
+             r"发往([\u4e00-\u9fa5]{2,10}?)(?:的)?(?:平均|总|累计|全年)?(?:每车|单车)?(?:运输费用|运输成本|费用|运费|运价|报价)",
+diff --git a/tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py b/tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py
+new file mode 100644
+index 0000000..b0d46cf
+--- /dev/null
++++ b/tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py
+@@ -0,0 +1,192 @@
++"""历史线路运价问法回归测试。
++
++本文件锁定“始发地 + 至/到 + 目的城市 + 车型 + 运费指标”这类明确线路问法，
++避免用户已给足槽位时被误判为需要澄清。
++"""
++
++from __future__ import annotations
++
++from backend.app.db.session import SessionLocal
++from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
++from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
++from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
++
++
++def test_2025_hefei_to_maanshan_17_5_avg_fee_answers_without_clarification() -> None:
++    """验证“合肥至马鞍山 17.5 米车平均运费”可直接回答。
++
++    参数：无。
++    返回值：无；通过断言验证 planner 槽位、service 结果和确定性均价。
++    业务逻辑：用户已给出年份、始发地、目的城市、车型和平均运费指标，应进入历史线路运价分析；
++    “至/到”是线路表达，不应因为目的城市未抽取而进入通用澄清；均价按总费用 / 总车次计算。
++    """
++
++    question = "2025年合肥至马鞍山17.5米车的平均运费"
++    plan = LogisticsDataQaPlanner().build_plan(question)
++
++    assert plan.query_key == "hist_route_pricing_analysis"
++    assert not plan.needs_clarification
++    assert plan.filters == {
++        "years": [2025],
++        "vehicle_type": "17.5",
++        "view_mode": "avg_fee",
++        "price_metric": "total_fee",
++        "origin_place": "合肥",
++        "city": "马鞍山",
++    }
++
++    with SessionLocal() as db:
++        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question, use_llm=False))
++
++    assert not result.needs_clarification
++    assert result.result_table is not None
++    row = result.result_table.rows[0]
++    assert int(row["avg_fee"] or 0) == 1557
++    assert int(row["total_fee"] or 0) == 14009
++    assert int(row["shipment_trip_count"] or 0) == 9
++    assert int(row["row_count"] or 0) == 2
++    assert "合肥" in result.answer_summary
++    assert "马鞍山" in result.answer_summary
++    assert "1,557" in result.answer_summary
++
++
++def test_23_to_25_hefei_shenzhen_13_avg_fee_hyphen_range_answers_without_clarification() -> None:
++    """验证“23年-25年 合肥-深圳 13米均价分别是多少”可直接回答。
++
++    参数：无。
++    返回值：无；通过断言验证两位年份区间、横线线路、车型和均价指标均被稳定识别。
++    业务逻辑：用户已给出时间区间、始发地、目的城市、车型和均价指标，应按 2023-2025 年逐年返回；
++    某一年没有匹配记录也要保留空值行，不能要求用户补充口径。
++    """
++
++    question = "23年-25年，3年间合肥-深圳13米均价分别是多少"
++    plan = LogisticsDataQaPlanner().build_plan(question)
++
++    assert plan.query_key == "hist_route_pricing_analysis"
++    assert not plan.needs_clarification
++    assert plan.filters == {
++        "years": [2023, 2024, 2025],
++        "vehicle_type": "13",
++        "view_mode": "year_compare",
++        "price_metric": "total_fee",
++        "origin_place": "合肥",
++        "city": "深圳",
++    }
++
++    with SessionLocal() as db:
++        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question, use_llm=False))
++
++    assert not result.needs_clarification
++    assert result.result_table is not None
++    rows_by_year = {int(row["biz_year"]): row for row in result.result_table.rows}
++    assert set(rows_by_year) == {2023, 2024, 2025}
++    assert rows_by_year[2023]["avg_fee"] is None
++    assert rows_by_year[2023]["total_fee"] is None
++    assert int(rows_by_year[2023]["shipment_trip_count"] or 0) == 0
++    assert int(rows_by_year[2023]["row_count"] or 0) == 0
++    assert rows_by_year[2024]["avg_fee"] is None
++    assert rows_by_year[2024]["total_fee"] is None
++    assert int(rows_by_year[2024]["shipment_trip_count"] or 0) == 0
++    assert int(rows_by_year[2024]["row_count"] or 0) == 0
++    assert int(rows_by_year[2025]["avg_fee"] or 0) == 9623
++    assert int(rows_by_year[2025]["total_fee"] or 0) == 28870
++    assert int(rows_by_year[2025]["shipment_trip_count"] or 0) == 3
++    assert int(rows_by_year[2025]["row_count"] or 0) == 3
++    assert "合肥" in result.answer_summary
++    assert "深圳" in result.answer_summary
++    assert "2023年" in result.answer_summary
++    assert "2024年" in result.answer_summary
++    assert "2025年" in result.answer_summary
++
++
++def test_route_pricing_avg_fee_uses_total_fee_divided_by_trip_count_not_row_average() -> None:
++    """验证线路“均价”按总费用除以车次数，而不是按明细行直接平均。
++
++    参数：无。
++    返回值：无；通过断言锁定加权单车均价、总费用、车次数和明细行数。
++    业务逻辑：同一线路可能一行代表多车次，均价必须使用 SUM(total_fee) / SUM(shipment_trip_count)；
++    若误用 AVG(total_fee)，本用例会得到约 272,108 元而不是 16,745 元。
++    """
++
++    question = "2025年合肥到乌苏17.5米车均价是多少"
++    plan = LogisticsDataQaPlanner().build_plan(question)
++
++    assert plan.query_key == "hist_route_pricing_analysis"
++    assert not plan.needs_clarification
++    assert plan.filters == {
++        "years": [2025],
++        "vehicle_type": "17.5",
++        "view_mode": "avg_fee",
++        "price_metric": "total_fee",
++        "origin_place": "合肥",
++        "city": "乌苏",
++    }
++
++    with SessionLocal() as db:
++        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question, use_llm=False))
++
++    assert not result.needs_clarification
++    assert result.result_table is not None
++    row = result.result_table.rows[0]
++    assert int(row["total_fee"] or 0) == 7619020
++    assert int(row["shipment_trip_count"] or 0) == 455
++    assert int(row["row_count"] or 0) == 28
++    assert int(row["avg_fee"] or 0) == 16745
++    assert int(row["avg_fee"] or 0) != 272108
++    assert "16,745" in result.answer_summary
++
++
++def test_unknown_origin_to_maanshan_route_pricing_still_requires_clarification() -> None:
++    """验证未知始发地不会因“至/到”表达被误放行为全始发线路。
++
++    参数：无。
++    返回值：无；通过断言确认当前无法稳定识别的始发地仍需澄清。
++    业务逻辑：修复只补充受控始发地“合肥/阜宁”的线路连接词，不能把未知始发地静默降级为仅按目的城市过滤。
++    """
++
++    plan = LogisticsDataQaPlanner().build_plan("2025年广德至马鞍山17.5米车的平均运费")
++
++    assert plan.query_key != "hist_route_pricing_analysis"
++    assert plan.needs_clarification
++
++
++def test_multihop_unknown_origin_to_hefei_maanshan_still_requires_clarification() -> None:
++    """验证多段路径里的中间“合肥至马鞍山”不会被误当成完整始发线路。
++
++    参数：无。
++    返回值：无；通过断言确认包含未知前置始发地的多段路径仍需澄清。
++    业务逻辑：当问句是“广德到合肥至马鞍山”时，合肥只是路径中间片段，不能忽略广德并按合肥始发直答。
++    """
++
++    plan = LogisticsDataQaPlanner().build_plan("2025年广德到合肥至马鞍山17.5米车的平均运费")
++
++    assert plan.query_key != "hist_route_pricing_analysis"
++    assert plan.needs_clarification
++
++
++def test_route_pricing_arrow_connector_is_not_added_without_business_confirmation() -> None:
++    """验证本次最小修复不额外扩展箭头连接词。
++
++    参数：无。
++    返回值：无；通过断言确认非本次需求的箭头连接符仍走澄清。
++    业务逻辑：本次只补齐业务已反馈的自然语言连接词和普通横线，不额外支持箭头等复合路径符号，避免扩大匹配边界。
++    """
++
++    plan = LogisticsDataQaPlanner().build_plan("2025年合肥->马鞍山17.5米车的平均运费")
++
++    assert plan.query_key != "hist_route_pricing_analysis"
++    assert plan.needs_clarification
++
++
++def test_multihop_after_controlled_origin_still_requires_clarification() -> None:
++    """验证受控始发地后的多段路径不会把整段中转路线吞成目的城市。
++
++    参数：无。
++    返回值：无；通过断言确认“合肥至马鞍山到南京”仍需澄清。
++    业务逻辑：历史线路运价当前只支持单一始发地到单一目的城市，多段路径必须澄清，不能把“马鞍山到南京”当成城市。
++    """
++
++    plan = LogisticsDataQaPlanner().build_plan("2025年合肥至马鞍山到南京17.5米车的平均运费")
++
++    assert plan.query_key != "hist_route_pricing_analysis"
++    assert plan.needs_clarification

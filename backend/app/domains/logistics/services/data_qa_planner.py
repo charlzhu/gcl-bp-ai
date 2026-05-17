@@ -1750,6 +1750,27 @@ class LogisticsDataQaPlanner:
         region_breakdown = self._is_all_region_breakdown_request(compact) or (
             len(region_list) >= 2 and any(keyword in compact for keyword in ("分别", "列出", "统计", "按"))
         )
+        history_year_range = [item for item in years if item in {2023, 2024, 2025}]
+
+        if (
+            len(history_year_range) >= 2
+            and carrier_name
+            and self._is_mw_question(compact)
+            and any(keyword in compact for keyword in ("每年", "按年", "按年份", "各年", "年度", "分别"))
+            and not self._is_total_fee_question(compact)
+            and not region_breakdown
+        ):
+            # “23年-25年，某承运商每年发运量”是显式承运商 + 显式年份范围的逐年拆分题；
+            # 不能落入单年“各物流公司 KPI”分组，否则会只取首年且丢失承运商过滤条件。
+            return LogisticsDataQaPlan(
+                intent="detail_list",
+                query_key="hist_mw_by_year",
+                metrics=["shipment_mw"],
+                dimensions=["biz_year"],
+                filters={"years": history_year_range, "carrier_name": carrier_name},
+                group_by=["biz_year"],
+                sort=[{"field": "biz_year", "direction": "asc"}],
+            )
 
         if year in {2023, 2024, 2025} and region_breakdown and self._is_mw_question(compact):
             # “分区域/各区域”或显式点名多个大区，业务语义都是按区域拆分；
@@ -2345,7 +2366,7 @@ class LogisticsDataQaPlanner:
         ):
             price_metric = (
                 "unit_price_per_vehicle"
-                if any(keyword in compact for keyword in ("报价", "运价", "单价", "单价/车"))
+                if any(keyword in compact for keyword in ("报价", "单价", "单价/车"))
                 else "total_fee"
             )
             filters: dict[str, Any] = {

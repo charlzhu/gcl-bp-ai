@@ -1,0 +1,45 @@
+catalog_version: logistics_nl2sql_catalog.v1
+domain: logistics
+rules:
+  - rule_id: default_time_range
+    display_name: 无时间条件默认查询 2023-2026
+    rule_type: time_default
+    aliases: [无时间, 未给年份, 默认时间, 默认年份]
+    action: default_years
+    value: [2023, 2024, 2025, 2026]
+    business_message: 未指定年月日时，默认查询 2023-2026 年全量物流数据。
+  - rule_id: current_year_reference
+    display_name: 今年/当前/最近按系统当前年份
+    rule_type: time_reference
+    aliases: [今年, 当前, 最近, 本年]
+    action: current_year
+    business_message: “今年/当前/最近”按系统当前年份解析。
+  - rule_id: cross_source_years
+    display_name: 允许历史侧与系统侧跨源对比
+    rule_type: source_scope
+    aliases: [跨源, 跨年, 历史和系统, 23到26, 2023到2026]
+    action: allow
+    value:
+      historical_years: [2023, 2024, 2025]
+      system_years: [2026]
+    business_message: 2023-2025 历史侧和 2026 系统侧所有维度均允许跨源对比。
+  - rule_id: empty_result_no_relax
+    display_name: 空结果不自动放宽条件
+    rule_type: empty_result
+    aliases: [空结果, 无数据, 没有数据, 查不到]
+    action: explain_only
+    relax_filters: false
+    business_message: 当前筛选条件下无匹配数据，不自动放宽条件；请核对时间、客户、区域、承运商或目的地后再改问建议。
+  - rule_id: unsupported_tonnage
+    display_name: 吨数口径当前不支持
+    rule_type: unsupported_metric
+    aliases: [吨, 吨数, 运输吨位, 重量, 吨位]
+    action: reject
+    business_message: 当前物流问答暂不支持吨数/运输吨位口径；如需发运量，默认按 MW 统计。
+  - rule_id: quote_metric_separation
+    display_name: 报价/单价/运价与均价严格区分
+    rule_type: metric_mapping
+    aliases: [报价, 单价, 运价, 单价/车]
+    action: map_metric
+    value: unit_price_per_vehicle
+    business_message: 报价/单价/运价使用单价/车字段；均价使用总费用除以车次。

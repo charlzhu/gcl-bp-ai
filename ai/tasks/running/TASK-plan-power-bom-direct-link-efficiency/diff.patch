@@ -1,0 +1,820 @@
+diff --git a/backend/app/domains/plan_bom/services/nlu_center_service.py b/backend/app/domains/plan_bom/services/nlu_center_service.py
+index 8ffab6e..6777acd 100644
+--- a/backend/app/domains/plan_bom/services/nlu_center_service.py
++++ b/backend/app/domains/plan_bom/services/nlu_center_service.py
+@@ -19,7 +19,7 @@ class PlanBomNluCenterService:
+ 
+     说明：
+         1. 先用规则层抽取订单、材料、版本、型号、国家、年份和输出形态；
+-        2. 可选调用 qwen-plus / OpenAI 兼容 LLM 生成候选理解；
++        2. 可选调用 deepseek-v4-flash / OpenAI 兼容 LLM 生成候选理解；
+         3. LLM 候选必须经过订单、材料和版本索引校验，不能越权生成事实；
+         4. 最终输出只作为受控 query/service 的输入，不直接回答业务问题。
+     """
+@@ -37,11 +37,36 @@ class PlanBomNluCenterService:
+         "supplier_reuse_quote_prepare",
+         "plan_power_prediction",
+         "plan_power_supplier_recommendation",
++        "plan_power_factor_effect_compare",
+         "power_cell_requirement",
+         "unsupported",
+         "clarification",
+     }
+-    POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation"}
++    POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation", "plan_power_factor_effect_compare"}
++    POWER_FACTOR_BY_MATERIAL_CATEGORY = {
++        "glass": "glass",
++        "gap_film": "glass",
++        "interconnect_bar": "ribbon",
++        "busbar": "busbar",
++        "junction_box": "cable",
++    }
++    POWER_FACTOR_COMPARE_WORDS = ("相差", "差值", "差多少", "差了多少", "高多少", "低多少", "大多少", "小多少")
++    ALL_ORDER_SCOPE_WORDS = (
++        "所有",
++        "全部",
++        "多个订单",
++        "现有订单",
++        "现有的订单",
++        "当前订单",
++        "当前的订单",
++        "已有订单",
++        "现有BOM",
++        "当前BOM",
++        "清单",
++        "Excel",
++        "excel",
++        "导出",
++    )
+     INTENT_ALIASES = {
+         "单订单关键材料规格查询": "single_order_material_specs",
+         "单订单材料规格查询": "single_order_material_specs",
+@@ -64,6 +89,8 @@ class PlanBomNluCenterService:
+         "功率档位分布预测": "plan_power_prediction",
+         "供应商功率推荐": "plan_power_supplier_recommendation",
+         "目标功率供应商推荐": "plan_power_supplier_recommendation",
++        "功率配置影响值对比": "plan_power_factor_effect_compare",
++        "功率配置差值查询": "plan_power_factor_effect_compare",
+         "功率电池需求": "plan_power_supplier_recommendation",
+         "功率/电池片需求类问题": "plan_power_supplier_recommendation",
+         "无法基于当前BOM数据回答的问题": "unsupported",
+@@ -139,6 +166,9 @@ class PlanBomNluCenterService:
+         normalized = question.strip()
+         slots: dict[str, Any] = {}
+         slots["order_tail_no"] = self._extract_order_tails(normalized)
++        # “未给订单号但要求现有/全部订单清单”是明确的全订单范围；
++        # 该标记来自原始问题和规则层尾号抽取，不允许 LLM 单独伪造。
++        slots["all_order_scope_requested"] = self._is_all_order_scope_requested(normalized, slots["order_tail_no"])
+         slots["compare_orders"] = slots["order_tail_no"][:]
+         slots["order_name_hint"] = self._extract_order_name_hint(normalized)
+         slots["material_category"] = self._extract_material_categories(normalized)
+@@ -152,6 +182,8 @@ class PlanBomNluCenterService:
+         slots["supplier_name"] = self._extract_supplier_name(normalized)
+         slots["benchmark"] = self._extract_benchmark(normalized)
+         slots["explicit_power_configuration"] = self._extract_explicit_power_configuration(normalized)
++        slots["power_factor_options"] = self._extract_power_factor_options(normalized)
++        slots["power_factor_key"] = self._select_power_factor_key(slots)
+         slots["need_table"] = any(word in normalized for word in ("表格", "清单", "列表", "统计出来", "列出来"))
+         slots["need_excel"] = any(word.lower() in normalized.lower() for word in ("excel", "导表", "导出"))
+         slots["output_format"] = "excel" if slots["need_excel"] else ("table" if slots["need_table"] else "narrative")
+@@ -180,6 +212,8 @@ class PlanBomNluCenterService:
+             受控 intent 编码。
+         """
+ 
++        if self._is_power_factor_effect_compare_question(question, slots):
++            return "plan_power_factor_effect_compare"
+         if self._is_power_question(question) or (
+             slots.get("target_power_ratio")
+             and (slots.get("model") or slots.get("supplier_name") or slots.get("explicit_power_configuration") or slots.get("order_tail_no"))
+@@ -215,7 +249,9 @@ class PlanBomNluCenterService:
+             return "cross_order_material_compare" if len(slots.get("order_tail_no") or []) >= 2 else "material_consistency_check"
+         if any(word in question for word in ("哪些订单没有", "没有接线盒", "是否有", "有没有")):
+             return "material_presence_check"
+-        if any(word in question for word in ("所有", "全部", "多个订单", "清单", "Excel", "excel", "导出")):
++        if slots.get("all_order_scope_requested"):
++            # 只有业务员未给出订单号时，“现有/所有/全部订单”才代表当前全部 BOM；
++            # 若问题同时包含尾号，必须继续按该尾号做候选消歧，避免绕过单订单实例确认。
+             return "scope_material_list" if slots.get("model") or slots.get("year") else "multi_order_material_table"
+         if len(slots.get("order_tail_no") or []) >= 2:
+             return "multi_order_material_table"
+@@ -238,13 +274,32 @@ class PlanBomNluCenterService:
+ 
+         missing: list[str] = []
+         has_explicit_power_config = bool(slots.get("model") and slots.get("explicit_power_configuration"))
++        if intent == "plan_power_factor_effect_compare":
++            if not slots.get("model"):
++                missing.append("model")
++            factor_key = slots.get("power_factor_key")
++            factor_options = slots.get("power_factor_options") or {}
++            if not factor_key or len(factor_options.get(factor_key) or []) < 2:
++                missing.append("power_factor_options")
++            return missing
+         if intent in {"plan_power_prediction", "plan_power_supplier_recommendation"} and not slots.get("order_tail_no") and not has_explicit_power_config:
+             missing.append("order_id")
+         if intent == "plan_power_supplier_recommendation" and not slots.get("target_power_ratio"):
+             missing.append("target_power_ratio")
+         if intent in {"single_order_material_specs", "specific_material_query", "bom_version_compare"} and not slots.get("order_tail_no"):
+             missing.append("order_id")
+-        if intent in {"multi_order_material_table", "cross_order_material_compare"} and len(slots.get("order_tail_no") or []) < 2:
++        order_tails = slots.get("order_tail_no") or []
++        bulk_material_intents = {"multi_order_material_table", "scope_material_list", "batch_export_table"}
++        if intent in bulk_material_intents and order_tails and len(order_tails) < 2:
++            # 多订单/范围/批量清单只有在“无订单尾号 + 现有/所有订单范围”时可默认查全部订单；
++            # 若 LLM 把单个显式尾号改写成批量意图，必须保留对比订单缺槽，避免绕过单订单候选消歧。
++            missing.append("compare_orders")
++        if intent in {"multi_order_material_table", "batch_export_table"} and not order_tails and not slots.get(
++            "all_order_scope_requested"
++        ):
++            # 普通“玻璃规格是什么”没有给订单，也没有全订单范围词，不能被 LLM 改写成全量清单。
++            missing.append("order_id")
++        if intent == "cross_order_material_compare" and len(order_tails) < 2:
+             missing.append("compare_orders")
+         if intent in {"single_order_material_specs", "multi_order_material_table", "cross_order_material_compare"} and not slots.get("material_category"):
+             missing.append("material_category")
+@@ -321,12 +376,13 @@ class PlanBomNluCenterService:
+             tails = [self._normalize_order_tail(str(item)) for item in slot_candidate.get("order_tail_no") or []]
+             tails = [item for item in tails if item]
+             rule_tails = rule_candidate.slots.get("order_tail_no") or []
+-            if is_power_intent and tails != rule_tails:
+-                rejected_reasons.append("功率预测类问题的 LLM 订单候选未与规则层原文抽取完全一致，未采纳订单槽位。")
++            if tails and tails != rule_tails:
++                # 订单号是业务数据边界，LLM 只能复述规则层从原文抽取到的尾号，不能新增、替换或扩展订单范围。
++                rejected_reasons.append("LLM 订单候选未与规则层原文抽取完全一致，未采纳订单槽位。")
+             elif tails and self._all_order_tails_exist(tails):
+                 validated_slots["order_tail_no"] = tails
+                 validated_slots["compare_orders"] = tails
+-            else:
++            elif tails:
+                 rejected_reasons.append("LLM 订单候选未通过 BOM 索引校验，未采纳订单槽位。")
+         if "bom_version" in slot_candidate:
+             versions = [str(item).upper().strip() for item in slot_candidate.get("bom_version") or [] if str(item).strip()]
+@@ -379,6 +435,13 @@ class PlanBomNluCenterService:
+             final_intent = rule_candidate.intent
+             final_missing = self._detect_missing_slots(final_intent, validated_slots)
+             rule_candidate.guardrail_notes.append(f"LLM intent 会引入缺失槽位，保持规则层 intent：{rule_candidate.intent}。")
++        if rule_candidate.missing_slots:
++            # 规则层已经判定缺订单/范围等关键信息时，LLM 不能通过改写 intent 清空缺槽；
++            # 否则后续 QA 会带空订单号进入查询模型，甚至把普通材料问题误当成全订单清单。
++            final_intent = rule_candidate.intent
++            final_missing = self._detect_missing_slots(final_intent, validated_slots)
++            if intent != rule_candidate.intent:
++                rule_candidate.guardrail_notes.append(f"规则层存在缺槽，保持规则层 intent：{rule_candidate.intent}。")
+         if intent != rule_candidate.intent:
+             rule_candidate.guardrail_notes.append(f"LLM intent 与规则层存在冲突：{rule_candidate.intent} -> {intent}。")
+         merged = PlanBomNluCandidate(
+@@ -638,7 +701,8 @@ class PlanBomNluCenterService:
+             # “超高透”必须放在“高透”前面，避免正则从中间命中成普通高透。
+             "glass": r"(?P<value>超高透|高透|双镀|单镀|透明|白玻|镀膜|非镀膜)\s*玻璃",
+             "busbar": r"(?P<value>\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*mm?[^，,；;。+]*?)\s*汇流条",
+-            "cable": r"(?P<value>\+?\d{2,4}\s*/\s*-?\d{2,4}\s*(?:mm)?\s*(?:线长|线缆长度|线缆|接线盒))",
++            # 兼容“300、200线长 / 300,200线长”这类业务口语；只抽取长度值，线径仍由 M4 根据显式线径或模型默认确定。
++            "cable": r"(?P<value>\+?\d{2,4}\s*(?:/|、|，|,)\s*-?\d{2,4}\s*(?:mm)?)\s*(?:线长|线缆长度|线缆|接线盒)",
+         }
+         for key, pattern in prefix_extractors.items():
+             match = re.search(pattern, question, flags=re.IGNORECASE)
+@@ -654,10 +718,10 @@ class PlanBomNluCenterService:
+ 
+         # 兼容结构化后置写法；仅在前置写法没有命中该槽位时使用，避免跨材料贪婪误抽。
+         suffix_extractors = {
+-            "ribbon": r"焊带\s*[:：]\s*(?P<value>.+?)(?=\+?玻璃|\+?汇流条|\+?接线盒|\+?线长|[，,；;。]|$)",
++            "ribbon": r"焊带\s*[:：]?\s*(?P<value>φ?\s*\d+(?:\.\d+)?(?:\s*\+\s*φ?\s*\d+(?:\.\d+)?)*)\s*(?:mm)?(?=\+?(?:超高透|高透|双镀|单镀|透明|白玻|玻璃|汇流条|接线盒|线长)|[，,；;。]|$)",
+             "glass": r"玻璃\s*[:：]\s*(?P<value>.+?)(?=\+?汇流条|\+?接线盒|\+?线长|[，,；;。]|$)",
+             "busbar": r"汇流条\s*[:：]\s*(?P<value>.+?)(?=\+?接线盒|\+?线长|[，,；;。]|$)",
+-            "cable": r"(?:接线盒|线长|线缆长度|线缆)\s*[:：]?\s*(?P<value>\+?\d{2,4}\s*/\s*-?\d{2,4}(?:mm)?)(?=\s*[，,；;。]|\s*标板|$)",
++            "cable": r"(?:接线盒|线长|线缆长度|线缆)\s*[:：]?\s*(?P<value>\+?\d{2,4}\s*(?:/|、|，|,)\s*-?\d{2,4}(?:mm)?)(?=\s*[，,；;。]|\s*标板|$)",
+         }
+         for key, pattern in suffix_extractors.items():
+             if key in config:
+@@ -697,6 +761,100 @@ class PlanBomNluCenterService:
+             config["benchmark"] = benchmark
+         return config
+ 
++    def _extract_power_factor_options(self, question: str) -> dict[str, list[str]]:
++        """抽取功率模型配置选项差值问法中的候选选项。
++
++        参数：
++            question: 用户原始问题。
++
++        返回：
++            配置项 key 到用户原文选项列表的映射，例如 `{"busbar": ["6*0.3+4*0.3反光", "4*0.4+4*0.3反光"]}`。
++
++        业务逻辑：
++            版型 + 两个配置值 + “相差多少”属于功率模型配置影响值查询，不需要订单号。
++            本方法只做文本抽取，后续仍由 QA 层到 active 功率模型中校验真实 option 和影响值。
++        """
++
++        result: dict[str, list[str]] = {}
++
++        def add_option(factor_key: str, raw_value: str | None) -> None:
++            """追加去重后的配置选项，保持用户原文中的业务顺序。"""
++            value = self._normalize_power_factor_option_text(raw_value)
++            if not value:
++                return
++            result.setdefault(factor_key, [])
++            if value not in result[factor_key]:
++                result[factor_key].append(value)
++
++        normalized_question = question.lower().replace(" ", "")
++        busbar_aliases = [alias.lower().replace(" ", "") for alias in self.material_aliases.get("busbar", [])]
++        if any(alias in normalized_question for alias in busbar_aliases):
++            busbar_pattern = (
++                r"\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*\+\s*"
++                r"\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*(?:反光)?"
++            )
++            for match in re.finditer(busbar_pattern, question, flags=re.IGNORECASE):
++                add_option("busbar", match.group(0))
++
++        # 焊带影响值查询通常写成“0.24焊带和0.26焊带相差多少”或“焊带0.24和0.26差值”。
++        ribbon_aliases = [alias.lower().replace(" ", "") for alias in self.material_aliases.get("interconnect_bar", [])]
++        if any(alias in normalized_question for alias in ribbon_aliases):
++            for pattern in (
++                r"(?P<value>φ?\s*\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:焊带|互联条|互联带)",
++                r"(?:焊带|互联条|互联带)\s*[:：]?\s*(?P<value>φ?\s*\d+(?:\.\d+)?)(?=\s*(?:和|与|、|,|，|相差|差值|差多少|$))",
++            ):
++                for match in re.finditer(pattern, question, flags=re.IGNORECASE):
++                    add_option("ribbon", match.group("value"))
++
++        return result
++
++    @staticmethod
++    def _normalize_power_factor_option_text(value: str | None) -> str:
++        """归一化用户输入的功率配置选项文本，消除空格和中英文符号差异。"""
++        text = (value or "").strip().strip("，,。；;：:")
++        if not text:
++            return ""
++        text = text.replace("＋", "+").replace("＊", "*").replace("×", "*").replace("X", "*").replace("x", "*")
++        text = re.sub(r"\s+", "", text)
++        text = text.replace("毫米", "mm")
++        return text
++
++    @classmethod
++    def _select_power_factor_key(cls, slots: dict[str, Any]) -> str | None:
++        """从材料类别和配置选项中选择唯一的功率模型配置项。"""
++        factor_options = slots.get("power_factor_options") or {}
++        keys_with_enough_options = [key for key, values in factor_options.items() if len(values or []) >= 2]
++        if len(keys_with_enough_options) == 1:
++            return keys_with_enough_options[0]
++        material_categories = slots.get("material_category") or []
++        inferred = []
++        for category in material_categories:
++            factor_key = cls.POWER_FACTOR_BY_MATERIAL_CATEGORY.get(str(category))
++            if factor_key and factor_key not in inferred:
++                inferred.append(factor_key)
++        return inferred[0] if len(inferred) == 1 else None
++
++    @classmethod
++    def _is_power_factor_effect_compare_question(cls, question: str, slots: dict[str, Any]) -> bool:
++        """判断是否为功率模型配置影响值差异查询。
++
++        参数：
++            question: 用户问题。
++            slots: 规则层已抽取槽位。
++
++        返回：
++            版型、唯一配置项和至少两个配置选项均闭合时返回 True。
++        """
++        if not slots.get("model"):
++            return False
++        if not any(word in question for word in cls.POWER_FACTOR_COMPARE_WORDS):
++            return False
++        factor_key = slots.get("power_factor_key")
++        if not factor_key:
++            return False
++        factor_options = slots.get("power_factor_options") or {}
++        return len(factor_options.get(factor_key) or []) >= 2
++
+     def _extract_supplier_name(self, question: str) -> str | None:
+         """从问题中抽取已存在于 active 功率模型的供应商。
+ 
+@@ -852,6 +1010,22 @@ class PlanBomNluCenterService:
+                 normalized.append(tail)
+         return normalized
+ 
++    @staticmethod
++    def _is_all_order_scope_requested(question: str, order_tails: list[str]) -> bool:
++        """判断用户是否明确要求当前全部订单范围。
++
++        参数：
++            question: 用户问题原文；
++            order_tails: 规则层已抽取出的订单尾号。
++
++        返回：
++            未给具体订单号且命中全订单/清单范围词时返回 True。
++        """
++
++        if order_tails:
++            return False
++        return any(word in question for word in PlanBomNluCenterService.ALL_ORDER_SCOPE_WORDS)
++
+     @staticmethod
+     def _extract_order_name_hint(question: str) -> str | None:
+         """抽取用户显式给出的 BOM 文件名或客户实例片段，用于同评审号候选消歧。
+@@ -1077,7 +1251,7 @@ class PlanBomNluCenterService:
+             "你不能改变 A/B/C 边界；信息不足时只输出 missing_slots 候选，不要强行补全。\n"
+             "订单必须尽量从用户问题原文提取，不要自行补全不存在的订单号。\n"
+             f"intent_candidate 只能取：{sorted(self.INTENTS)}。\n"
+-            "slot_candidate 可包含 order_tail_no、model、customer、country、year、bom_version、material_category、target_power_ratio、supplier_name、benchmark、output_format、need_table、need_excel、missing_slots。\n"
++            "slot_candidate 可包含 order_tail_no、model、customer、country、year、bom_version、material_category、target_power_ratio、supplier_name、benchmark、power_factor_key、power_factor_options、output_format、need_table、need_excel、missing_slots。\n"
+             f"material_category 必须优先取核心五类：{sorted(CORE_MATERIAL_CATEGORIES)}；如用户明确问非核心材料，只输出原始候选，不能自行扩展成核心材料。\n"
+             "严格输出单个 JSON 对象，不要 markdown，不要解释性自然语言。\n"
+             "示例：{\"intent_candidate\":\"single_order_material_specs\",\"slot_candidate\":{\"order_tail_no\":[\"00104\"],\"material_category\":[\"glass\",\"junction_box\"],\"need_table\":true},\"confidence\":0.85}"
+diff --git a/backend/app/domains/plan_bom/services/power_config_resolver_service.py b/backend/app/domains/plan_bom/services/power_config_resolver_service.py
+index c8f9843..42df5ec 100644
+--- a/backend/app/domains/plan_bom/services/power_config_resolver_service.py
++++ b/backend/app/domains/plan_bom/services/power_config_resolver_service.py
+@@ -689,7 +689,13 @@ class PlanBomPowerConfigResolverService:
+         )
+ 
+     def _resolve_cable(self, sheet: PlanPowerModelSheet, grouped: Mapping[str, list[PlanBomMaterialLine]]) -> PowerBomResolvedItem | None:
+-        """解析接线盒线缆长度/线径并映射到 cable option。"""
++        """解析接线盒线缆长度/线径并映射到 cable option。
++
++        业务逻辑：
++            1. BOM 接线盒描述中若同时存在长度和线径，优先按 BOM 原文映射；
++            2. 若只写了线长但未写线径，则不直接追问，而是复用当前功率模型默认接线盒 option 的线径，
++               再拼出同线长的真实 option；只有拼出的 option 存在时才采纳，避免凭空猜测。
++        """
+         lines = grouped.get("junction_box", [])
+         if not lines:
+             return None
+@@ -699,20 +705,36 @@ class PlanBomPowerConfigResolverService:
+         source_line_ids: list[int] = []
+         for line in lines:
+             text = self._line_text(line)
+-            for pattern_cfg in cfg.get("length_patterns") or []:
+-                if re.search(str(pattern_cfg.get("pattern")), text, flags=re.IGNORECASE):
+-                    length_value = str(pattern_cfg.get("normalized"))
+-                    source_line_ids.append(line.id)
+-                    break
++            if length_value is None:
++                for pattern_cfg in cfg.get("length_patterns") or []:
++                    if re.search(str(pattern_cfg.get("pattern")), text, flags=re.IGNORECASE):
++                        length_value = str(pattern_cfg.get("normalized"))
++                        source_line_ids.append(line.id)
++                        break
+             for pattern_cfg in cfg.get("wire_size_patterns") or []:
+                 if re.search(str(pattern_cfg.get("pattern")), text, flags=re.IGNORECASE):
+                     wire_size = str(pattern_cfg.get("normalized"))
++                    if line.id not in source_line_ids:
++                        source_line_ids.append(line.id)
+                     break
+-            if length_value:
++            if length_value and wire_size:
+                 break
+-        if not length_value or not wire_size:
++        if not length_value:
+             return None
+         template = str(cfg.get("option_template") or "{length}（{wire_size}）")
++        source = "bom_material_line.junction_box"
++        confidence = float(cfg.get("confidence") or 0.9)
++        rule_id = "cable.length_and_wire_size"
++        if not wire_size:
++            # 当前真实 BOM 存在“+400/-200mm”这类只写线长的接线盒。
++            # 这里仅借用 active 模型默认 option 中的线径标签，并继续校验“该线长+默认线径”是否为真实 option；
++            # 若模型不存在该组合，仍返回 None，由上层保持追问，避免把未知线长硬塞进模型。
++            wire_size = self._default_cable_wire_size(self._default_option(sheet.id, "cable"))
++            if not wire_size:
++                return None
++            source = "bom_material_line.junction_box+model_default_wire_size"
++            confidence = float(cfg.get("confidence_default_wire_size") or 0.78)
++            rule_id = "cable.length_with_default_wire_size"
+         candidate_value = template.format(length=length_value, wire_size=wire_size)
+         option = self._coerce_to_valid_option(sheet.id, "cable", candidate_value)
+         if option is None:
+@@ -720,11 +742,11 @@ class PlanBomPowerConfigResolverService:
+         return PowerBomResolvedItem(
+             factor_key="cable",
+             value=option.option_label,
+-            source="bom_material_line.junction_box",
+-            confidence=float(cfg.get("confidence") or 0.9),
++            source=source,
++            confidence=confidence,
+             source_line_ids=source_line_ids or [line.id for line in lines],
+             source_description=self._source_description(lines),
+-            rule_id="cable.length_and_wire_size",
++            rule_id=rule_id,
+         )
+ 
+     def _resolve_default_option(
+@@ -880,7 +902,7 @@ class PlanBomPowerConfigResolverService:
+         if factor_key == "cable":
+             # 显式接线盒可能写“300/200线长”，也可能在无 BOM 方案评估中写“+400/-200mm（4mm²）”。
+             # 长度和线径都只用于拼当前模型真实 option；若拼不出有效 option，仍 fail-closed 追问。
+-            length_match = re.search(r"(\d{2,4})\s*/\s*-?(\d{2,4})", normalized)
++            length_match = re.search(r"(\d{2,4})\s*(?:/|、|，|,)\s*-?(\d{2,4})", normalized)
+             default_option = self._default_option(sheet.id, factor_key)
+             if length_match:
+                 explicit_wire_match = re.search(r"(?P<size>\d+(?:\.\d+)?)\s*mm\s*(?:²|2)", value, flags=re.IGNORECASE)
+diff --git a/backend/app/domains/plan_bom/services/qa_service.py b/backend/app/domains/plan_bom/services/qa_service.py
+index 91dd4f9..42ff8f7 100644
+--- a/backend/app/domains/plan_bom/services/qa_service.py
++++ b/backend/app/domains/plan_bom/services/qa_service.py
+@@ -3,11 +3,12 @@ from __future__ import annotations
+ import json
+ import logging
+ import re
++from decimal import Decimal
+ from typing import Any
+ 
+ from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
+ from backend.app.domains.plan_bom.constants import CANDIDATE_SCOPE_ORDER_IDENTITY, CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
+-from backend.app.domains.plan_bom.models import PlanBomHeader, PlanBomMaterialLine
++from backend.app.domains.plan_bom.models import PlanBomHeader, PlanBomMaterialLine, PlanPowerFactorOption, PlanPowerModelSheet, PlanPowerModelVersion
+ from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
+ from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate, PlanBomQaResponse, PlanBomQaStatus, PlanBomTableSpec
+ from backend.app.domains.plan_bom.schemas.query import (
+@@ -159,6 +160,13 @@ class PlanBomQaService:
+                 {"intent": nlu.intent, "slots": nlu.slots},
+             )
+             response = self._power_response(question=question, nlu=nlu)
++        elif nlu.intent == "plan_power_factor_effect_compare":
++            trace_recorder.add(
++                "branch_selected",
++                "问题进入功率模型配置影响值对比分支。",
++                {"intent": nlu.intent, "slots": nlu.slots},
++            )
++            response = self._power_factor_effect_compare_response(question=question, nlu=nlu)
+         elif nlu.intent in {"single_order_material_specs", "specific_material_query"}:
+             trace_recorder.add(
+                 "branch_selected",
+@@ -824,6 +832,165 @@ class PlanBomQaService:
+                 raw={"bom_config_resolution": resolution_payload, "power_error": str(exc)},
+             )
+ 
++    def _power_factor_effect_compare_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:
++        """处理功率模型配置影响值差异查询。
++
++        参数：
++            question: 用户原始问题。
++            nlu: 已抽取版型、配置项和两个配置选项的 NLU 结果。
++
++        返回：
++            A 类配置影响值对比响应；若版型或选项无法在 active 功率模型中命中，则 fail-closed 追问。
++
++        业务逻辑：
++            这类问题问的是 Excel 功率模型中“某配置项两个选项的影响值相差多少”，
++            不依赖具体订单/BOM 明细，因此不能因为缺少订单号而追问；但所有选项必须回到
++            当前生效功率模型的真实 option 校验后才能返回差值，避免按文本硬算。
++        """
++
++        model_code = str(nlu.slots.get("model") or "").strip()
++        factor_key = str(nlu.slots.get("power_factor_key") or "").strip()
++        factor_options = nlu.slots.get("power_factor_options") or {}
++        option_values = list(factor_options.get(factor_key) or [])[:2]
++        if not model_code or not factor_key or len(option_values) < 2:
++            nlu.missing_slots = sorted({str(slot) for slot in [*(nlu.missing_slots or []), "power_factor_options"]})
++            return self._clarification_response(
++                question=question,
++                nlu=nlu,
++                raw={"power_factor_effect_compare": {"model_code": model_code, "factor_key": factor_key, "options": option_values}},
++            )
++
++        version = self.repository.db.query(PlanPowerModelVersion).filter_by(is_active=1).first()
++        if version is None:
++            return self._empty_response(
++                question=question,
++                nlu=nlu,
++                reason="当前没有生效的功率模型版本，无法查询配置影响值。",
++                raw={"power_factor_effect_compare": {"model_code": model_code, "factor_key": factor_key}},
++            )
++        sheet = (
++            self.repository.db.query(PlanPowerModelSheet)
++            .filter_by(version_id=version.id, normalized_model_code=model_code)
++            .first()
++        )
++        if sheet is None:
++            return self._empty_response(
++                question=question,
++                nlu=nlu,
++                reason=f"当前生效功率模型中没有版型 {model_code}。",
++                raw={"power_factor_effect_compare": {"model_code": model_code, "factor_key": factor_key}},
++            )
++
++        options = (
++            self.repository.db.query(PlanPowerFactorOption)
++            .filter_by(sheet_id=sheet.id, factor_key=factor_key, is_valid=1)
++            .order_by(PlanPowerFactorOption.id.asc())
++            .all()
++        )
++        option_by_label = {self._normalize_power_factor_label(option.option_label): option for option in options}
++        selected_options = [option_by_label.get(self._normalize_power_factor_label(value)) for value in option_values]
++        if any(option is None or option.effect_value is None for option in selected_options):
++            nlu.missing_slots = sorted({str(slot) for slot in [*(nlu.missing_slots or []), "power_factor_options"]})
++            return self._with_presentation(
++                PlanBomQaResponse(
++                    question=question,
++                    classification="B",
++                    status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="需要确认功率配置选项", severity="warning"),
++                    nlu=nlu,
++                    answer_summary=(
++                        f"已识别为 {model_code} 的{self._power_factor_label(factor_key)}影响值对比，"
++                        "但至少有一个配置选项未命中当前生效功率模型。请从模型候选配置中确认后再比较。"
++                    ),
++                    raw_result={
++                        "power_factor_effect_compare": {
++                            "model_code": model_code,
++                            "factor_key": factor_key,
++                            "requested_options": option_values,
++                            "candidate_options": [option.option_label for option in options[:20]],
++                        }
++                    },
++                    warnings=["配置影响值对比未完全命中 active 模型 option，已停止计算差值。"],
++                )
++            )
++
++        left_option, right_option = selected_options
++        assert left_option is not None and right_option is not None
++        assert left_option.effect_value is not None and right_option.effect_value is not None
++        left_effect = self._decimal_to_float(left_option.effect_value)
++        right_effect = self._decimal_to_float(right_option.effect_value)
++        absolute_difference = round(abs(left_effect - right_effect), 6)
++        factor_label = self._power_factor_label(factor_key)
++        answer = (
++            f"{model_code} 的{factor_label}功率影响值对比："
++            f"{left_option.option_label} 为 {self._format_plain_number(left_effect)}W，"
++            f"{right_option.option_label} 为 {self._format_plain_number(right_effect)}W，"
++            f"二者相差 {self._format_plain_number(absolute_difference)}W。"
++        )
++        payload = {
++            "model_code": model_code,
++            "factor_key": factor_key,
++            "factor_label": factor_label,
++            "left": self._power_factor_option_payload(left_option),
++            "right": self._power_factor_option_payload(right_option),
++            "absolute_difference": absolute_difference,
++        }
++        rows = [
++            {"配置项": factor_label, "选项": left_option.option_label, "功率影响值": left_effect},
++            {"配置项": factor_label, "选项": right_option.option_label, "功率影响值": right_effect},
++            {"配置项": factor_label, "选项": "差值", "功率影响值": absolute_difference},
++        ]
++        return self._with_presentation(
++            PlanBomQaResponse(
++                question=question,
++                classification="A",
++                status=PlanBomQaStatus(code="OK", message="配置影响值对比成功"),
++                nlu=nlu,
++                answer_summary=answer,
++                result_table=PlanBomTableSpec(columns=["配置项", "选项", "功率影响值"], rows=rows),
++                raw_result={"power_factor_effect_compare": payload},
++            )
++        )
++
++    @staticmethod
++    def _power_factor_label(factor_key: str) -> str:
++        """把功率模型配置项 key 转为业务可读名称。"""
++        labels = {
++            "glass": "玻璃",
++            "ribbon": "焊带",
++            "busbar": "汇流条",
++            "cable": "接线盒线缆",
++            "supplier": "供应商",
++            "cell_size": "电池尺寸",
++            "benchmark": "标板基准",
++        }
++        return labels.get(factor_key, factor_key)
++
++    @staticmethod
++    def _normalize_power_factor_label(value: str | None) -> str:
++        """归一化功率模型 option 标签，用于用户文本与 active 模型 option 的确定性匹配。"""
++        text = str(value or "").strip()
++        text = text.replace("＋", "+").replace("＊", "*").replace("×", "*").replace("X", "*").replace("x", "*")
++        return re.sub(r"\s+", "", text)
++
++    @staticmethod
++    def _decimal_to_float(value: Decimal | int | float) -> float:
++        """把数据库 Decimal 影响值转成前端和测试易消费的 float。"""
++        return float(value)
++
++    @staticmethod
++    def _format_plain_number(value: float) -> str:
++        """格式化普通数值，去掉无意义尾零。"""
++        return f"{value:.6f}".rstrip("0").rstrip(".")
++
++    @staticmethod
++    def _power_factor_option_payload(option: PlanPowerFactorOption) -> dict[str, Any]:
++        """输出配置 option 的审计载荷，所有数值来自 active 功率模型。"""
++        return {
++            "option_label": option.option_label,
++            "effect_value": PlanBomQaService._decimal_to_float(option.effect_value or 0),
++            "source_cell": option.source_cell_ref,
++        }
++
+     def _power_prediction_response(
+         self,
+         *,
+@@ -889,12 +1056,23 @@ class PlanBomQaService:
+         """
+ 
+         rows = self._power_recommendation_rows(recommendation)
+-        top_supplier = recommendation.recommendations[0].supplier_name if recommendation.recommendations else "无"
++        top_item = recommendation.recommendations[0] if recommendation.recommendations else None
++        top_supplier = top_item.supplier_name if top_item else "无"
+         source_label = f"订单 {resolution_payload.get('order_no')} 的 BOM 配置" if resolution_payload.get("order_no") else "显式输入配置"
+-        answer = (
+-            f"已按{source_label}和目标功率比例完成供应商推荐，"
+-            f"当前最高匹配供应商为 {top_supplier}。"
+-        )
++        efficiency_label = self._format_suggested_efficiency_segments(top_item.suggested_efficiency_segments) if top_item else ""
++        if efficiency_label:
++            # 用户问“什么效率段投产”时，正文必须直接给出最低建议效率段；
++            # 多个效率段仍保留在明细表中，避免只返回泛化的“推荐供应商”。
++            first_efficiency = efficiency_label.split("、", 1)[0]
++            answer = (
++                f"已按{source_label}和目标功率比例完成供应商推荐，"
++                f"{top_supplier}建议从 {first_efficiency} 效率段投产；可重点关注效率段：{efficiency_label}。"
++            )
++        else:
++            answer = (
++                f"已按{source_label}和目标功率比例完成供应商推荐，"
++                f"当前最高匹配供应商为 {top_supplier}。"
++            )
+         warnings = list(resolution_payload.get("warnings") or []) + list(recommendation.warnings)
+         return self._with_presentation(
+             PlanBomQaResponse(
+@@ -1383,6 +1561,7 @@ class PlanBomQaService:
+             "bom_version": "BOM 版本",
+             "target_power_ratio": "目标功率档比例",
+             "power_configuration": "功率预测所需配置",
++            "power_factor_options": "需要对比的两个功率模型配置选项",
+             "supported_material_category": "当前要查询的核心材料范围",
+         }
+         return mapping.get(slot, "更明确的查询条件")
+diff --git a/tests/business_acceptance/test_plan_power_docx_question_regression.py b/tests/business_acceptance/test_plan_power_docx_question_regression.py
+index d868c0f..f292989 100644
+--- a/tests/business_acceptance/test_plan_power_docx_question_regression.py
++++ b/tests/business_acceptance/test_plan_power_docx_question_regression.py
+@@ -283,6 +283,80 @@ def test_explicit_config_all_battery_supplier_synonyms_ignore_example_supplier_n
+     assert len({row["供应商"] for row in response.result_table.rows}) >= 3
+ 
+ 
++def test_explicit_nt12_wuhu_single_720_colloquial_config_answers_without_clarification(qa_service) -> None:
++    """截图复现：显式配置、北德基准、芜湖和单一 720W 已闭合时，不能再要求补充配置。"""
++    question = (
++        "NT12-66GDF，焊带0.26+0.24+高透玻璃+间隙贴膜+300、200线长+"
++        "6*0.35+4*0.35反光+北德基准，单一功率720W，需要从芜湖的什么效率段投产"
++    )
++
++    response = qa_service.ask(question, use_llm=False)
++
++    _assert_power_recommendation_response(response, expected_bins={"720"}, expected_supplier="芜湖", explicit_config=True)
++    assert response.nlu.missing_slots == []
++    resolution = response.raw_result["bom_config_resolution"]["resolved_config"]
++    assert resolution["ribbon"]["value"] == "0.26"
++    assert resolution["glass"]["value"] == "超高透+间隙铝膜"
++    assert resolution["cable"]["value"] == "+300/-200mm（4mm²）"
++    assert resolution["busbar"]["value"] == "6*0.35+4*0.35反光"
++    assert resolution["benchmark"]["value"] == "北德基准"
++
++
++def test_explicit_nt12_wuhu_single_720_adjacent_invalid_glass_still_clarifies(qa_service) -> None:
++    """相邻无效玻璃配置仍必须 fail-closed 追问，避免为减少澄清而瞎猜。"""
++    question = (
++        "NT12-66GDF，焊带0.26+0.24+透明玻璃+间隙贴膜+300、200线长+"
++        "6*0.35+4*0.35反光+北德基准，单一功率720W，需要从芜湖的什么效率段投产"
++    )
++
++    response = qa_service.ask(question, use_llm=False)
++
++    assert response.classification == "B", response.model_dump(mode="json")
++    assert response.status.code == "CLARIFICATION_REQUIRED", response.model_dump(mode="json")
++    assert "power_configuration" in response.nlu.missing_slots
++    resolution = response.raw_result["bom_config_resolution"]
++    assert resolution["status"] == "partial"
++    assert any(item["factor_key"] == "glass" for item in resolution["unresolved_items"])
++    assert "power_recommendation" not in response.raw_result
++
++
++def test_nt12_busbar_power_factor_difference_uses_model_options_without_order(qa_service) -> None:
++    """截图回归：版型+两个汇流条配置问差值时，应查功率模型选项影响值，不应追问订单号。"""
++    question = "NT12-66GDF，汇流条6*0.3+4*0.3反光和4 *0.4+4*0.3反光相差多少"
++
++    response = qa_service.ask(question, use_llm=False)
++
++    assert response.classification == "A", response.model_dump(mode="json")
++    assert response.status.code == "OK", response.model_dump(mode="json")
++    assert response.nlu.intent == "plan_power_factor_effect_compare"
++    assert response.nlu.missing_slots == []
++    assert response.raw_result["power_factor_effect_compare"]["model_code"] == "NT12-66GDF"
++    assert response.raw_result["power_factor_effect_compare"]["factor_key"] == "busbar"
++    assert response.raw_result["power_factor_effect_compare"]["left"]["effect_value"] == pytest.approx(0.6)
++    assert response.raw_result["power_factor_effect_compare"]["right"]["effect_value"] == pytest.approx(0.3)
++    assert response.raw_result["power_factor_effect_compare"]["absolute_difference"] == pytest.approx(0.3)
++    assert "6*0.3+4*0.3反光" in response.answer_summary
++    assert "4*0.4+4*0.3反光" in response.answer_summary
++    assert "0.3" in response.answer_summary
++
++
++def test_nt12_busbar_power_factor_unknown_option_still_clarifies(qa_service) -> None:
++    """影响值对比中任一配置不在 active 模型 option 内时，必须追问而不是编造差值。"""
++    question = "NT12-66GDF，汇流条6*9.9+4*9.9反光和4*0.4+4*0.3反光相差多少"
++
++    response = qa_service.ask(question, use_llm=False)
++
++    assert response.classification == "B", response.model_dump(mode="json")
++    assert response.status.code == "CLARIFICATION_REQUIRED", response.model_dump(mode="json")
++    assert response.nlu.intent == "plan_power_factor_effect_compare"
++    assert "power_factor_options" in response.nlu.missing_slots
++    payload = response.raw_result["power_factor_effect_compare"]
++    assert payload["model_code"] == "NT12-66GDF"
++    assert payload["factor_key"] == "busbar"
++    assert "absolute_difference" not in payload
++    assert any(option == "4*0.4+4*0.3反光" for option in payload["candidate_options"])
++
++
+ EXPLICIT_WUHU_CASES = [
+     pytest.param("docx_q9", "0.24+0.26", "6*0.4+4*0.35反光", id="q9-mixed-ribbon-busbar-040-035"),
+     pytest.param("docx_q10", "0.24+0.26", "6*0.3+4*0.3反光", id="q10-mixed-ribbon-busbar-030-030"),
+diff --git a/tests/business_acceptance/test_plan_power_m4_config_resolver.py b/tests/business_acceptance/test_plan_power_m4_config_resolver.py
+index 5ff268c..a26a270 100644
+--- a/tests/business_acceptance/test_plan_power_m4_config_resolver.py
++++ b/tests/business_acceptance/test_plan_power_m4_config_resolver.py
+@@ -165,8 +165,8 @@ def test_model_aliases_normalize_bom_order_name(live_db_session) -> None:
+     assert result.resolved_config["model_code"].source == "bom_header.order_name"
+ 
+ 
+-def test_cable_length_without_wire_size_returns_unresolved(live_db_session) -> None:
+-    """接线盒只给线长但未给线径时不能默认猜 4mm²。"""
++def test_cable_length_without_wire_size_uses_default_wire_size_when_length_matches(live_db_session) -> None:
++    """接线盒只给线长但未给线径时，应按模型默认线径拼真实 option，不能因此中断功率测算。"""
+     session = live_db_session
+     line = (
+         session.query(PlanBomMaterialLine)
+@@ -182,7 +182,7 @@ def test_cable_length_without_wire_size_returns_unresolved(live_db_session) -> N
+         .first()
+     )
+     if line is None:
+-        pytest.skip("当前真实 BOM 中没有只写线长但未写线径的接线盒样本，跳过 fail-closed 用例。")
++        pytest.skip("当前真实 BOM 中没有只写线长但未写线径的接线盒样本，跳过默认线径回归用例。")
+     header = (
+         session.query(PlanBomHeader)
+         .filter_by(
+@@ -202,10 +202,11 @@ def test_cable_length_without_wire_size_returns_unresolved(live_db_session) -> N
+         version_no=header.version_no,
+     )
+ 
+-    cable_items = [item for item in result.unresolved_items if item.factor_key == "cable"]
+-    assert cable_items
+-    assert "cable" not in result.to_prediction_configuration()
+-    assert cable_items[0].candidate_options
++    assert result.status == RESOLVED_STATUS
++    assert "cable" in result.resolved_config
++    assert result.resolved_config["cable"].value == "+400/-200mm（4mm²）"
++    assert result.resolved_config["cable"].source == "bom_material_line.junction_box+model_default_wire_size"
++    assert "cable" in result.to_prediction_configuration()
+ 
+ 
+ def test_invalid_explicit_benchmark_returns_unresolved(live_db_session) -> None:
+diff --git a/tests/business_acceptance/test_plan_power_m5_qa_integration.py b/tests/business_acceptance/test_plan_power_m5_qa_integration.py
+index 3a2006a..906250c 100644
+--- a/tests/business_acceptance/test_plan_power_m5_qa_integration.py
++++ b/tests/business_acceptance/test_plan_power_m5_qa_integration.py
+@@ -133,6 +133,48 @@ def test_plan_bom_qa_recommends_suppliers_by_target_ratio(live_db_session, qa_se
+     assert "差异" not in response.result_table.columns
+ 
+ 
++def test_qa_links_customer_instance_bom_to_single_power_efficiency_segment(live_db_session, qa_service) -> None:
++    """版型+客户实例+年份+单号+标板+单一功率+供应商问法，应直接关联 BOM 并返回效率段，不应追问配置。"""
++    header = (
++        live_db_session.query(PlanBomHeader)
++        .filter(
++            PlanBomHeader.is_active == 1,
++            PlanBomHeader.order_name.contains("NT12R/66GDF"),
++            PlanBomHeader.order_name.contains("2025-01048"),
++        )
++        .order_by(PlanBomHeader.id.asc())
++        .first()
++    )
++    if header is None:
++        pytest.skip("当前真实 BOM 数据没有业务反馈中的客户实例样本，跳过该回归。")
++    customer_instance = str(header.order_name or "").replace("Bill of materials", "").strip()
++
++    response = qa_service.ask(
++        f"{customer_instance} 的BOM搭配，莱茵基准，单一功率620需求，需要芜湖什么效率段投产",
++        use_llm=False,
++    )
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.nlu.slots["target_power_ratio"] == {"620": 1.0}
++    assert response.nlu.slots["supplier_name"] == "芜湖"
++    assert response.nlu.slots["benchmark"] == "莱茵基准"
++    resolution = response.raw_result["bom_config_resolution"]
++    assert resolution["status"] == RESOLVED_STATUS
++    assert resolution["order_no"] == header.order_no
++    assert not resolution["unresolved_items"]
++    assert resolution["resolved_config"]["benchmark"]["value"] == "莱茵基准"
++    assert resolution["resolved_config"]["cable"]["value"] == "+400/-200mm（4mm²）"
++    assert response.result_table.rows
++    first_row = response.result_table.rows[0]
++    assert first_row["供应商"] == "芜湖"
++    assert first_row["目标功率档"] == "620W"
++    assert "25.6" in first_row["建议效率段"]
++    assert "25.6" in response.answer_summary
++    assert not any(keyword in response.answer_summary for keyword in ["M3", "M4", "LLM", "raw", "debug", "槽位"])
++
++
+ def test_plan_bom_qa_accepts_explicit_supplier_for_power_prediction(live_db_session, qa_service) -> None:
+     """显式供应商只作为确定性预测输入，不由 LLM 或前端补算。"""
+     tail, _, resolved = _resolved_order_tail(live_db_session)

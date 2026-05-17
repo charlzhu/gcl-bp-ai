@@ -1,0 +1,1237 @@
+diff --git a/backend/app/domains/logistics/repositories/data_qa_repository.py b/backend/app/domains/logistics/repositories/data_qa_repository.py
+index a8f6cb4..9137c1e 100644
+--- a/backend/app/domains/logistics/repositories/data_qa_repository.py
++++ b/backend/app/domains/logistics/repositories/data_qa_repository.py
+@@ -561,9 +561,13 @@ class LogisticsDataQaRepository:
+         payload["total_fee_share_pct"] = round(total_fee / denominator * 100, 2) if denominator else None
+         return payload
+ 
+-    def hist_carrier_kpi_by_year(self, *, year: int) -> dict[str, Any]:
++    def hist_carrier_kpi_by_year(self, *, year: int, region_name: str | None = None) -> dict[str, Any]:
+         """历史年度承运商 KPI 统计。
+ 
++        参数：
++            year: 业务年份；
++            region_name: 可选区域过滤，例如“西北”。为空时统计全年全区域。
++
+         返回：
+             1. 各承运商的发运量 MW；
+             2. 发运量占比；
+@@ -571,24 +575,35 @@ class LogisticsDataQaRepository:
+ 
+         说明：
+             1. 发运量默认按瓦数口径，折算为 MW；
+-            2. 占比基于当年全部承运商的总发运量；
+-            3. 统一兼容“承运商 / 物流公司 / 物流供应商”问法。
++            2. 占比基于当前查询范围内全部承运商的总发运量；
++            3. 统一兼容“承运商 / 物流公司 / 物流供应商”问法；
++            4. 区域过滤必须下推到总量分母和明细分子，避免区域题退回全国口径。
+         """
++
++        params: dict[str, Any] = {"year": year}
++        filters = [
++            "biz_year = :year",
++            "logistics_company_name IS NOT NULL",
++            "TRIM(logistics_company_name) <> ''",
++        ]
++        if region_name:
++            filters.append("region_name = :region_name")
++            params["region_name"] = region_name
++        where_clause = " AND ".join(filters)
++
+         total_shipment_mw = self.db.execute(
+             text(
+-                """
++                f"""
+                 SELECT ROUND(SUM(actual_watt) / 1000000, 3)
+                 FROM dwd_logistics_hist_shipment_detail
+-                WHERE biz_year = :year
+-                  AND logistics_company_name IS NOT NULL
+-                  AND TRIM(logistics_company_name) <> ''
++                WHERE {where_clause}
+                 """
+             ),
+-            {"year": year},
++            params,
+         ).scalar()
+         rows = self.db.execute(
+             text(
+-                """
++                f"""
+                 SELECT
+                     logistics_company_name AS carrier_name,
+                     ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw,
+@@ -596,22 +611,18 @@ class LogisticsDataQaRepository:
+                         100 * SUM(actual_watt) / NULLIF((
+                             SELECT SUM(actual_watt)
+                             FROM dwd_logistics_hist_shipment_detail
+-                            WHERE biz_year = :year
+-                              AND logistics_company_name IS NOT NULL
+-                              AND TRIM(logistics_company_name) <> ''
++                            WHERE {where_clause}
+                         ), 0),
+                         2
+                     ) AS shipment_share_pct,
+                     ROUND(SUM(total_fee), 0) AS total_fee
+                 FROM dwd_logistics_hist_shipment_detail
+-                WHERE biz_year = :year
+-                  AND logistics_company_name IS NOT NULL
+-                  AND TRIM(logistics_company_name) <> ''
++                WHERE {where_clause}
+                 GROUP BY logistics_company_name
+                 ORDER BY shipment_mw DESC, total_fee DESC, logistics_company_name ASC
+                 """
+             ),
+-            {"year": year},
++            params,
+         ).mappings().all()
+         return {
+             "total_shipment_mw": total_shipment_mw,
+@@ -1310,7 +1321,8 @@ class LogisticsDataQaRepository:
+         include_extra_fee: bool = False,
+         transport_mode: str | None = None,
+         carrier_name: str | None = None,
+-    ) -> dict[str, Any]:
++        monthly_breakdown: bool = False,
++    ) -> dict[str, Any] | list[dict[str, Any]]:
+         """历史单瓦运输成本。
+ 
+         参数：
+@@ -1320,11 +1332,13 @@ class LogisticsDataQaRepository:
+             include_extra_fee: 是否把 extra_fee 一并纳入分子。
+             transport_mode: 可选运输方式过滤，公路/铁路会合并同义写法。
+             carrier_name: 可选承运商简称，按物流公司名称模糊匹配。
++            monthly_breakdown: 是否按业务月份分组返回月度明细。
+ 
+         说明：
+             1. `单瓦价` 默认按 total_fee / actual_watt；
+-            2. 当业务明确要求“(运费+额外费用)/总W数”时，再纳入 extra_fee。
+-            3. 承运商过滤只用于已通过 planner 校验的历史承运商别名题族。
++            2. 当业务明确要求“(运费+额外费用)/总W数”时，再纳入 extra_fee；
++            3. 承运商过滤只用于已通过 planner 校验的历史承运商别名题族；
++            4. 用户要求 1-12 月/按月时，仓储层直接按月份分组，避免服务层拿年度总计伪造成月表。
+         """
+         filters = ["biz_year = :year", "actual_watt IS NOT NULL", "actual_watt <> 0"]
+         params: dict[str, Any] = {"year": year}
+@@ -1343,6 +1357,26 @@ class LogisticsDataQaRepository:
+             params["carrier_name"] = f"%{carrier_name}%"
+         numerator_sql = "SUM(total_fee)" if not include_extra_fee else "SUM(total_fee) + SUM(COALESCE(extra_fee, 0))"
+         where_sql = " AND ".join(filters)
++        if monthly_breakdown:
++            rows = self.db.execute(
++                text(
++                    f"""
++                    SELECT
++                        DATE_FORMAT(biz_date, '%Y-%m') AS biz_month,
++                        ROUND({numerator_sql}, 0) AS total_fee_amount,
++                        ROUND(SUM(COALESCE(extra_fee, 0)), 0) AS extra_fee_amount,
++                        ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw,
++                        ROUND(({numerator_sql}) / NULLIF(SUM(actual_watt), 0), 8) AS unit_fee_per_watt
++                    FROM dwd_logistics_hist_shipment_detail
++                    WHERE {where_sql}
++                      AND biz_date IS NOT NULL
++                    GROUP BY DATE_FORMAT(biz_date, '%Y-%m')
++                    ORDER BY biz_month ASC
++                    """
++                ),
++                params,
++            ).mappings().all()
++            return [dict(row) for row in rows]
+         row = self.db.execute(
+             text(
+                 f"""
+@@ -1359,6 +1393,67 @@ class LogisticsDataQaRepository:
+         ).mappings().first()
+         return dict(row or {})
+ 
++    def hist_city_mw_rank(
++        self,
++        *,
++        year: int,
++        top_n: int,
++        region_name: str | None = None,
++        province: str | None = None,
++    ) -> dict[str, Any]:
++        """历史城市发运量 TopN 排名。
++
++        参数：
++            year: 统计年份。
++            top_n: 返回城市数量上限。
++            region_name: 可选大区过滤，例如“华东”。
++            province: 可选省份过滤，例如“安徽”。
++
++        返回：
++            包含统计范围、筛选后城市发运量总和和城市排名明细。
++
++        说明：
++            1. 城市发运量按 actual_watt 汇总后折算为 MW；
++            2. 区域/省份过滤先下推，再按城市分组排序，防止 TopN 使用全国口径；
++            3. 仅统计城市字段非空的历史台账记录。
++        """
++        filters = [
++            "biz_year = :year",
++            "city IS NOT NULL",
++            "TRIM(city) <> ''",
++        ]
++        params: dict[str, Any] = {"year": year, "limit_value": int(top_n)}
++        scope_parts = [f"{year}年"]
++        if region_name:
++            filters.append("region_name = :region_name")
++            params["region_name"] = region_name
++            scope_parts.append(f"{region_name}区域")
++        if province:
++            filters.append("province = :province")
++            params["province"] = province
++            scope_parts.append(f"{province}省")
++        where_sql = " AND ".join(filters)
++        rows = self.db.execute(
++            text(
++                f"""
++                SELECT
++                    city,
++                    ROUND(SUM(actual_watt) / 1000000, 3) AS shipment_mw
++                FROM dwd_logistics_hist_shipment_detail
++                WHERE {where_sql}
++                GROUP BY city
++                ORDER BY shipment_mw DESC, city ASC
++                LIMIT :limit_value
++                """
++            ),
++            params,
++        ).mappings().all()
++        return {
++            "total_shipment_mw": round(sum(float(row["shipment_mw"] or 0) for row in rows), 3),
++            "items": [dict(row) for row in rows],
++            "scope_label": "".join(scope_parts),
++        }
++
+     def hist_route_pricing_analysis(
+         self,
+         *,
+@@ -1784,14 +1879,26 @@ class LogisticsDataQaRepository:
+         ).scalar()
+         return {"shipment_count": total}
+ 
+-    def hist_customer_mw(self, *, customer_name: str, year: int | None = None) -> dict[str, Any]:
++    def hist_customer_mw(
++        self,
++        *,
++        customer_name: str,
++        year: int | None = None,
++        months: list[int] | None = None,
++    ) -> dict[str, Any]:
+         """历史客户发运量 MW。
+ 
++        参数：
++            customer_name: 从业务问题中抽取的客户简称或全称。
++            year: 可选统计年份；为空时默认 2023-2025 历史累计。
++            months: 可选月份过滤，支持“1月/1-12月”等问法。
++
+         口径说明：
+             1. 当前客户名存在“项目后缀/客诉组件”等变体；
+-            2. 为尽量贴近业务问法，这里先按前缀 LIKE 做归并；
+-            3. 同时返回命中的客户名列表，便于外层输出 warning。
+-            4. 当 year 为空时，默认按 2023–2025 历史累计统计。
++            2. 为尽量贴近业务问法，这里按包含匹配做归并；
++            3. 同时返回命中的客户名列表，便于外层输出 warning；
++            4. 当 year 为空时，默认按 2023–2025 历史累计统计；
++            5. 月份过滤只在用户明确给出月份时下推，不影响年度全量问题。
+         """
+         filters = ["customer_name LIKE :customer_name"]
+         params: dict[str, Any] = {"customer_name": f"%{customer_name}%"}
+@@ -1801,7 +1908,14 @@ class LogisticsDataQaRepository:
+         else:
+             filters.insert(0, "biz_year = :year")
+             params["year"] = year
+-            scope_label = f"{year}年"
++            if months:
++                month_text = "、".join(f"{int(month)}月" for month in months)
++                scope_label = f"{year}年{month_text}"
++            else:
++                scope_label = f"{year}年"
++        if months:
++            month_placeholders = ", ".join(str(int(month)) for month in months)
++            filters.append(f"MONTH(biz_date) IN ({month_placeholders})")
+         where_sql = " AND ".join(filters)
+         rows = self.db.execute(
+             text(
+diff --git a/backend/app/domains/logistics/services/data_qa_planner.py b/backend/app/domains/logistics/services/data_qa_planner.py
+index cb1f4bd..22991d2 100644
+--- a/backend/app/domains/logistics/services/data_qa_planner.py
++++ b/backend/app/domains/logistics/services/data_qa_planner.py
+@@ -138,6 +138,19 @@ class LogisticsDataQaPlanner:
+         compact = re.sub(r"\s+", "", normalized_question)
+         ranking_top_n = self._extract_top_n(compact)
+         policy = LogisticsQuestionBankResponsePolicy().match(normalized_question)
++        pre_year = self._extract_year(compact)
++        pre_months = self._extract_months(compact)
++
++        if pre_year == 2026 and pre_months and "额外费用" in compact and any(keyword in compact for keyword in ("项目", "原因", "明细")):
++            # 月份明确时，额外费用总额已有系统侧确定性口径；项目/原因明细尚未固化，
++            # 因此先返回可审计总额，并把明细边界交给服务层作为 warning 展示。
++            return LogisticsDataQaPlan(
++                intent="aggregate",
++                query_key="sys_extra_fee_summary",
++                metrics=["extra_fee"],
++                dimensions=[],
++                filters={"year": pre_year, "months": pre_months, "detail_warning": "extra_fee_project_reason_unfixed"},
++            )
+ 
+         # 不支持边界必须先于高置信 A 类候选生效。
+         # 例如“预测未来 3 个月各区域发运量”虽然包含“年份+各区域+发运量”，
+@@ -164,7 +177,6 @@ class LogisticsDataQaPlanner:
+                 clarification_reason="用户要求吨口径，但当前稳定数据链路只支持瓦数 / MW 发运量。",
+             )
+ 
+-        pre_year = self._extract_year(compact)
+         pre_origin_place = self._extract_origin_place(compact)
+         pre_remark_amount_keywords = self._extract_valid_remark_keywords(compact, self.REMARK_SUPPORTED_KEYWORDS)
+         if self._is_supported_remark_keyword_amount_summary(compact, pre_year, pre_remark_amount_keywords):
+@@ -431,6 +443,31 @@ class LogisticsDataQaPlanner:
+             )
+ 
+         city_total_fee_rank_limit = self._extract_city_total_fee_rank_limit(compact)
++        if (
++            year in {2023, 2024, 2025}
++            and ranking_top_n
++            and (region or province)
++            and "城市" in compact
++            and self._is_mw_question(compact)
++            and not self._is_total_fee_question(compact)
++        ):
++            # 历史区域/省份下的城市发运量 TopN 是城市维度排名题，
++            # 不能退化为区域或省份总发运量单行汇总。
++            filters: dict[str, Any] = {"year": year, "top_n": ranking_top_n}
++            if region:
++                filters["region_name"] = region
++            if province:
++                filters["province"] = province
++            return LogisticsDataQaPlan(
++                intent="ranking",
++                query_key="hist_city_mw_rank",
++                metrics=["shipment_mw"],
++                dimensions=["city"],
++                filters=filters,
++                group_by=["city"],
++                sort=[{"field": "shipment_mw", "direction": "desc"}],
++                limit=ranking_top_n,
++            )
+         if year and province and city_total_fee_rank_limit:
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+@@ -579,7 +616,7 @@ class LogisticsDataQaPlanner:
+                 query_key="hist_customer_mw",
+                 metrics=["shipment_mw"],
+                 dimensions=[],
+-                filters={"year": year, "customer_name": customer_name},
++                filters={"year": year, "months": months or None, "customer_name": customer_name},
+             )
+ 
+         if year in {2023, 2024, 2025} and origin_place and "晶茂" in compact and self._is_mw_question(compact):
+@@ -626,6 +663,7 @@ class LogisticsDataQaPlanner:
+                 dimensions=["carrier_name"],
+                 filters={
+                     "year": year,
++                    "region_name": region,
+                     "view_mode": self._resolve_carrier_kpi_view_mode(compact),
+                 },
+                 group_by=["carrier_name"],
+@@ -857,17 +895,23 @@ class LogisticsDataQaPlanner:
+             )
+ 
+         if year in {2023, 2024, 2025} and province and self._is_unit_fee_question(compact):
++            monthly_breakdown = self._is_monthly_breakdown_request(compact)
++            filters = {
++                "year": year,
++                "province": province,
++                "months": months,
++                "include_extra_fee": "额外费用" in compact,
++            }
++            if monthly_breakdown:
++                filters["monthly_breakdown"] = True
+             return LogisticsDataQaPlan(
+                 intent="aggregate",
+                 query_key="hist_unit_fee_per_watt",
+                 metrics=["unit_fee_per_watt"],
+-                dimensions=[],
+-                filters={
+-                    "year": year,
+-                    "province": province,
+-                    "months": months,
+-                    "include_extra_fee": "额外费用" in compact,
+-                },
++                dimensions=["biz_month"] if monthly_breakdown else [],
++                filters=filters,
++                group_by=["biz_month"] if monthly_breakdown else [],
++                sort=[{"field": "biz_month", "direction": "asc"}] if monthly_breakdown else [],
+             )
+ 
+         if year in {2023, 2024, 2025} and region_breakdown and self._is_mw_question(compact):
+@@ -1184,6 +1228,30 @@ class LogisticsDataQaPlanner:
+                 filters={"year": year, "months": months, "origin_place": origin_place},
+             )
+ 
++        if (
++            year in {2023, 2024, 2025}
++            and self._is_carrier_kpi_question(compact)
++            and not self._is_monthly_fee_compare_question(compact)
++            and not ranking_top_n
++            and not self._has_extra_breakdown_intent(compact, allowed_dimension="carrier_name")
++        ):
++            # “物流公司/承运商 + 分别/各”表达的是承运商分组，
++            # 需早于年度总运量兜底分支，避免“物流公司发货量分别”被误算成全年总量。
++            filters: dict[str, Any] = {
++                "year": year,
++                "region_name": region,
++                "view_mode": self._resolve_carrier_kpi_view_mode(compact),
++            }
++            return LogisticsDataQaPlan(
++                intent="ranking",
++                query_key="hist_carrier_kpi_by_year",
++                metrics=["shipment_mw", "shipment_share_pct", "total_fee"],
++                dimensions=["carrier_name"],
++                filters=filters,
++                group_by=["carrier_name"],
++                sort=[{"field": "shipment_mw", "direction": "desc"}],
++            )
++
+         if year == 2026 and "手机号" in compact and "司机姓名" in compact and any(keyword in compact for keyword in ("多个", "多名", "对应多个", "关联多个", "一号多人")):
+             # 2026 派车表已有手机号和司机姓名字段，可按手机号分组做确定性一致性检查，
+             # 不需要继续泛化追问“对账对象/输出形态”。
+@@ -1319,7 +1387,7 @@ class LogisticsDataQaPlanner:
+             and not carrier_name
+             and not origin_place
+             and not transport_mode
+-            and not any(keyword in compact for keyword in ("各", "排名", "前十", "前10", "占比", "表"))
++            and not any(keyword in compact for keyword in ("各", "分别", "排名", "前十", "前10", "占比", "表"))
+         ):
+             # “2023年物流发运合计多少量”这类问法里的“量”按当前稳定 MW 发运量口径处理；
+             # 用户已明确年份和全量主体时，不再因没有显式写 MW 而进入澄清。
+@@ -2387,7 +2455,12 @@ class LogisticsDataQaPlanner:
+             2. 只做轻量文本清洗，不做开放实体识别；
+             3. 返回值仍交给仓储层按前缀或 project_name 做模糊命中。
+         """
+-        return self.slot_extractor.extract_customer_name(question)
++        customer_name = self.slot_extractor.extract_customer_name(question)
++        if not customer_name:
++            return None
++        # “客户华阳的总发运量”里的“的”是助词，不属于客户实体；
++        # 这里只裁剪常见尾部助词，不改变中间包含“的”的真实名称。
++        return customer_name.strip().rstrip("的")
+ 
+     def _extract_company_name(self, question: str) -> str | None:
+         """提取 2026 系统口径下的承运商公司名。
+@@ -2610,6 +2683,11 @@ class LogisticsDataQaPlanner:
+             r"(?:名|位|条|个(?!月|工作日|自然日|日|年)|(?=$|[?？。.!！,，；;、]|和|与|及|客户|承运商|物流公司|城市|项目|省|状态|司机|结果|集中|在哪|哪里))",
+             normalized,
+         )
++        if not front_match:
++            front_match = re.search(
++                r"前(?P<limit>\d+|[一二两三四五六七八九十]+)的(?=客户|承运商|物流公司|城市|项目|省|状态|司机|结果)",
++                normalized,
++            )
+         if not front_match:
+             return None
+         return self._parse_positive_integer(front_match.group("limit"))
+@@ -3161,6 +3239,9 @@ class LogisticsDataQaPlanner:
+                 "按月",
+                 "月度",
+                 "各月",
++                "1-12月",
++                "1到12月",
++                "1至12月",
+                 "每月",
+                 "每个月",
+                 "这几个月",
+diff --git a/backend/app/domains/logistics/services/data_qa_service.py b/backend/app/domains/logistics/services/data_qa_service.py
+index 2729c5f..79f424f 100644
+--- a/backend/app/domains/logistics/services/data_qa_service.py
++++ b/backend/app/domains/logistics/services/data_qa_service.py
+@@ -1015,13 +1015,17 @@ class LogisticsDataQaService:
+             )
+ 
+         if plan.query_key == "hist_carrier_kpi_by_year":
+-            data = self.repository.hist_carrier_kpi_by_year(year=filters["year"])
++            data = self.repository.hist_carrier_kpi_by_year(
++                year=filters["year"],
++                region_name=filters.get("region_name"),
++            )
+             view_mode = filters.get("view_mode", "full_kpi")
++            region_text = f"{filters['region_name']}区域" if filters.get("region_name") else ""
+             if view_mode == "fee_only":
+-                summary = f"{filters['year']}年各物流承运商年度运输费用已汇总返回。"
++                summary = f"{filters['year']}年{region_text}各物流承运商年度运输费用已汇总返回。"
+             else:
+                 summary = (
+-                    f"{filters['year']}年各物流承运商的发运量、占比和运费总额已汇总返回。"
++                    f"{filters['year']}年{region_text}各物流承运商的发运量、占比和运费总额已汇总返回。"
+                 )
+             return self._build_result(
+                 answer_summary=summary,
+@@ -1030,7 +1034,7 @@ class LogisticsDataQaService:
+                 table_rows=data["items"],
+                 calculation_logic=[
+                     "承运量默认按历史 actual_watt 汇总后折算为 MW。",
+-                    "承运量占比 = 当前承运商 shipment_mw / 全部承运商 shipment_mw。",
++                    "承运量占比 = 当前承运商 shipment_mw / 当前查询范围内全部承运商 shipment_mw。",
+                     "运费总额按历史 total_fee 汇总。",
+                 ],
+                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+@@ -1252,8 +1256,26 @@ class LogisticsDataQaService:
+                 include_extra_fee=filters.get("include_extra_fee", False),
+                 transport_mode=filters.get("transport_mode"),
+                 carrier_name=filters.get("carrier_name"),
++                monthly_breakdown=bool(filters.get("monthly_breakdown")),
+             )
+             scope_label = filters.get("province") or filters.get("transport_mode") or filters.get("carrier_name") or ""
++            if filters.get("monthly_breakdown"):
++                # 用户明确要求 1-12 月或按月展示时，保留月份粒度，避免服务层把已下推的 monthly_breakdown 压平成总计行。
++                monthly_rows = data if isinstance(data, list) else data.get("monthly_rows", [])
++                summary = f"{filters['year']}年{scope_label}按月单瓦运输成本已返回。"
++                return self._build_result(
++                    answer_summary=summary,
++                    plan=plan,
++                    table_columns=["biz_month", "total_fee_amount", "extra_fee_amount", "shipment_mw", "unit_fee_per_watt"],
++                    table_rows=monthly_rows,
++                    calculation_logic=[
++                        "月度单瓦价默认按当月 total_fee / actual_watt。",
++                        "当问题明确要求“运费+额外费用”时，再把当月 extra_fee 一并纳入分子。",
++                        "月份粒度按历史台账 biz_date 对应 YYYY-MM 返回。",
++                    ],
++                    data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
++                    warnings=warnings,
++                )
+             summary = (
+                 f"{filters['year']}年{scope_label}单瓦运输成本为"
+                 f"{data.get('unit_fee_per_watt') or 0}元/瓦。"
+@@ -1271,6 +1293,28 @@ class LogisticsDataQaService:
+                 warnings=warnings,
+             )
+ 
++        if plan.query_key == "hist_city_mw_rank":
++            data = self.repository.hist_city_mw_rank(
++                year=filters["year"],
++                top_n=int(filters.get("top_n") or plan.limit or 10),
++                region_name=filters.get("region_name"),
++                province=filters.get("province"),
++            )
++            scope_label = data.get("scope_label") or f"{filters['year']}年"
++            summary = f"{scope_label}城市发运量前{int(filters.get('top_n') or plan.limit or 10)}名已按 MW 返回。"
++            return self._build_result(
++                answer_summary=summary,
++                plan=plan,
++                table_columns=["city", "shipment_mw"],
++                table_rows=data.get("items") or [],
++                calculation_logic=[
++                    "历史城市发运量按 actual_watt 汇总后除以 1,000,000 折算为 MW。",
++                    "当问题给出区域或省份时，先下推对应过滤条件，再按城市分组排序。",
++                ],
++                data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
++                warnings=warnings,
++            )
++
+         if plan.query_key == "hist_route_pricing_analysis":
+             data = self.repository.hist_route_pricing_analysis(
+                 years=filters["years"],
+@@ -1517,6 +1561,7 @@ class LogisticsDataQaService:
+             data = self.repository.hist_customer_mw(
+                 year=filters.get("year"),
+                 customer_name=filters["customer_name"],
++                months=filters.get("months"),
+             )
+             matched_names = data.get("matched_customer_names", [])
+             if len(matched_names) > 1:
+@@ -2031,6 +2076,8 @@ class LogisticsDataQaService:
+             )
+ 
+         if plan.query_key == "sys_extra_fee_summary":
++            if filters.get("detail_warning") == "extra_fee_project_reason_unfixed":
++                warnings.append("额外费用项目/原因明细口径尚未固化，本次先返回可审计的额外费用总额。")
+             data = self.repository.sys_extra_fee_summary(
+                 year=filters["year"],
+                 months=filters.get("months"),
+diff --git a/backend/app/domains/plan_bom/services/qa_service.py b/backend/app/domains/plan_bom/services/qa_service.py
+index 0d46df9..4e87384 100644
+--- a/backend/app/domains/plan_bom/services/qa_service.py
++++ b/backend/app/domains/plan_bom/services/qa_service.py
+@@ -361,6 +361,30 @@ class PlanBomQaService:
+             )
+         )
+ 
++    @staticmethod
++    def _infer_single_model_code_from_power_candidates(candidates: list[Any]) -> str | None:
++        """从未确认订单候选中提取唯一版型编码。
++
++        参数：
++            candidates: M4 返回的候选订单列表，元素可以是 dataclass、Pydantic 或字典。
++        返回：
++            当所有可识别候选只指向同一个 `NTxx-xxGDF` 版型时返回该版型；否则返回 None。
++        业务逻辑：显式配置 no-BOM 评估只可借用“唯一一致的版型线索”，不能在多版型候选中替业务员硬选订单。
++        """
++
++        model_codes: set[str] = set()
++        for candidate in candidates or []:
++            if isinstance(candidate, dict):
++                raw_values = [candidate.get("order_name"), candidate.get("raw_file_name")]
++            else:
++                raw_values = [getattr(candidate, "order_name", None), getattr(candidate, "raw_file_name", None)]
++            for raw_value in raw_values:
++                text = str(raw_value or "")
++                match = re.search(r"NT[0-9A-Z]+[-/][0-9A-Z]+GDF", text, flags=re.IGNORECASE)
++                if match:
++                    model_codes.add(match.group(0).upper().replace("/", "-"))
++        return next(iter(model_codes)) if len(model_codes) == 1 else None
++
+     def _power_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:
+         """处理计划 BOM 功率预测 / 供应商推荐问答。
+ 
+@@ -389,6 +413,20 @@ class PlanBomQaService:
+                 benchmark=benchmark,
+                 explicit_configuration=explicit_configuration,
+             )
++            fallback_model_code = nlu.slots.get("model") or self._infer_single_model_code_from_power_candidates(
++                getattr(resolution, "candidates", [])
++            )
++            if resolution.status == CANDIDATE_REQUIRED_STATUS and explicit_configuration and fallback_model_code:
++                # 业务员有时会把不可靠短尾号和完整计划搭配一起写入问题。
++                # 若订单候选未确认，但显式配置 + 版型已经足够让 M4/M3 做 no-BOM 评估，
++                # 则转为“显式输入配置”路径，避免把可安全计算的问题降级为候选追问。
++                explicit_resolution = self.power_config_resolver.resolve_explicit_configuration(
++                    model_code=fallback_model_code,
++                    configuration=explicit_configuration,
++                )
++                if explicit_resolution.status != CANDIDATE_REQUIRED_STATUS:
++                    explicit_resolution.warnings.append("已忽略未确认订单候选，按显式输入配置执行 no-BOM 功率推荐。")
++                    resolution = explicit_resolution
+         else:
+             resolution = self.power_config_resolver.resolve_explicit_configuration(
+                 model_code=nlu.slots.get("model"),
+@@ -1271,7 +1309,7 @@ class PlanBomQaService:
+             列名列表。
+         """
+ 
+-        return ["order_no", "order_name", "version_no", "material_category", "material_name", "description", "sap_code", "standard_usage", "unit", "source_file"]
++        return ["material_category", "material_name", "description", "standard_usage", "unit"]
+ 
+     @staticmethod
+     def _compare_columns() -> list[str]:
+diff --git a/tests/business_acceptance/test_business_feedback_excel_qa_regression.py b/tests/business_acceptance/test_business_feedback_excel_qa_regression.py
+new file mode 100644
+index 0000000..098a70d
+--- /dev/null
++++ b/tests/business_acceptance/test_business_feedback_excel_qa_regression.py
+@@ -0,0 +1,614 @@
++"""业务反馈 Excel 问答修复回归测试。
++
++本文件只覆盖 `TASK-business-feedback-excel-qa-fix` 中高置信、可通用修复的问法。
++测试入口优先使用真实 QA 服务，避免绕过 NLU、planner、repository 和展示层的真实链路。
++"""
++
++from __future__ import annotations
++
++from types import SimpleNamespace
++from typing import Any
++
++import pytest
++
++from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
++from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
++from backend.app.domains.logistics.services.llm_answer_presentation_service import LogisticsLlmAnswerPresentationService
++from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate
++from backend.app.domains.plan_bom.schemas.qa import PlanBomPresentation
++from backend.app.domains.plan_bom.schemas.query import PlanBomCompareResponse
++from backend.app.domains.plan_bom.schemas.query import PlanBomDetailQueryResponse
++from backend.app.domains.plan_bom.schemas.query import PlanBomMaterialItem
++from backend.app.domains.plan_bom.schemas.query import PlanBomSelectedVersion
++from backend.app.domains.plan_bom.schemas.query import PlanBomStatus
++from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
++from backend.app.domains.plan_bom.services.power_config_resolver_service import CANDIDATE_REQUIRED_STATUS
++from backend.app.domains.plan_bom.services.power_config_resolver_service import RESOLVED_STATUS
++from backend.app.domains.plan_bom.services.power_config_resolver_service import PowerBomCandidate
++from backend.app.domains.plan_bom.services.power_config_resolver_service import PowerBomConfigResolution
++from backend.app.domains.plan_bom.services.power_config_resolver_service import PowerBomResolvedItem
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerEfficiencyRow
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionResult
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationItem
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationResult
++from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
++
++
++class _FakeDb:
++    """服务层写历史日志时使用的最小数据库替身。"""
++
++    def commit(self) -> None:
++        """模拟事务提交。"""
++
++    def rollback(self) -> None:
++        """模拟事务回滚。"""
++
++
++class _FakeQueryLogRepository:
++    """服务层写查询历史时使用的最小仓储替身。"""
++
++    def write_query_log(self, db: Any, payload: dict[str, Any]) -> int:
++        """返回固定日志 ID，避免测试依赖真实 sys_query_log。"""
++
++        return 1
++
++
++class _FakeLogisticsRepository:
++    """物流问答服务级测试使用的结构化数据替身。
++
++    业务口径：这里不冒充真实数据库验收，只用于验证 planner 和 service 是否把年份、月份、
++    区域、省份、城市、承运商等槽位正确下推到确定性查询入口。
++    """
++
++    def hist_customer_mw(
++        self,
++        *,
++        customer_name: str,
++        year: int | None = None,
++        months: list[int] | None = None,
++    ) -> dict[str, Any]:
++        """模拟历史客户发运量，只有正确客户与月份过滤才返回业务反馈基线。"""
++
++        month_text = "、".join(f"{month}月" for month in (months or []))
++        scope = f"{year}年{month_text}" if year else "历史累计"
++        if customer_name == "华阳" and year == 2024 and months == [1]:
++            return {
++                "shipment_mw": 200.187,
++                "matched_customer_names": ["华阳新能源有限公司"],
++                "scope_label": scope,
++            }
++        return {"shipment_mw": 0.0, "matched_customer_names": [], "scope_label": scope}
++
++    def hist_carrier_kpi_by_year(self, *, year: int, region_name: str | None = None) -> dict[str, Any]:
++        """模拟年度承运商 KPI，并让区域过滤产生不同结果。"""
++
++        if region_name == "西北":
++            rows = [
++                {"carrier_name": "苏州晶茂物流有限公司", "shipment_mw": 909.25, "shipment_share_pct": 65.0, "total_fee": 1000.0},
++                {"carrier_name": "浙江英赋嘉供应链科技股份有限公司", "shipment_mw": 320.0, "shipment_share_pct": 22.9, "total_fee": 800.0},
++            ]
++            return {"total_shipment_mw": 1398.846, "items": rows}
++        rows = [
++            {"carrier_name": "苏州晶茂物流有限公司", "shipment_mw": 3730.136, "shipment_share_pct": 21.47, "total_fee": 58250425.0},
++            {"carrier_name": "浙江英赋嘉供应链科技股份有限公司", "shipment_mw": 3372.578, "shipment_share_pct": 19.41, "total_fee": 81156591.0},
++        ]
++        return {"total_shipment_mw": 17374.913, "items": rows}
++
++    def hist_city_mw_rank(
++        self,
++        *,
++        year: int,
++        top_n: int,
++        region_name: str | None = None,
++        province: str | None = None,
++    ) -> dict[str, Any]:
++        """模拟历史城市发运量 TopN。"""
++
++        rows = [
++            {"city": "合肥", "shipment_mw": 320.0},
++            {"city": "芜湖", "shipment_mw": 220.0},
++            {"city": "马鞍山", "shipment_mw": 120.0},
++            {"city": "滁州", "shipment_mw": 80.0},
++            {"city": "安庆", "shipment_mw": 60.0},
++        ][:top_n]
++        return {
++            "total_shipment_mw": sum(float(row["shipment_mw"]) for row in rows),
++            "items": rows,
++            "scope_label": f"{year}年{region_name or province or ''}",
++        }
++
++    def hist_mw_summary(
++        self,
++        *,
++        year: int | None = None,
++        months: list[int] | None = None,
++        region_name: str | None = None,
++        origin_place: str | None = None,
++        transport_mode: str | None = None,
++        carrier_name: str | None = None,
++        customer_name: str | None = None,
++    ) -> dict[str, Any]:
++        """模拟历史总量兜底分支，用于 RED 阶段证明城市 TopN 不应退化到总量。"""
++
++        return {"shipment_mw": 999.0}
++
++    def hist_unit_fee_per_watt(
++        self,
++        *,
++        year: int,
++        province: str | None = None,
++        months: list[int] | None = None,
++        include_extra_fee: bool = False,
++        transport_mode: str | None = None,
++        carrier_name: str | None = None,
++        monthly_breakdown: bool = False,
++    ) -> dict[str, Any] | list[dict[str, Any]]:
++        """模拟历史单瓦价，月度分支返回月份表。"""
++
++        if monthly_breakdown:
++            return [
++                {
++                    "biz_month": "2024-01",
++                    "total_fee_amount": 1200.0,
++                    "extra_fee_amount": 0.0,
++                    "shipment_mw": 100.0,
++                    "unit_fee_per_watt": 0.000012,
++                },
++                {
++                    "biz_month": "2024-02",
++                    "total_fee_amount": 900.0,
++                    "extra_fee_amount": 0.0,
++                    "shipment_mw": 60.0,
++                    "unit_fee_per_watt": 0.000015,
++                },
++            ]
++        return {
++            "total_fee_amount": 2100.0,
++            "extra_fee_amount": 0.0,
++            "shipment_mw": 160.0,
++            "unit_fee_per_watt": 0.00001313,
++        }
++
++    def sys_extra_fee_summary(
++        self,
++        *,
++        year: int,
++        months: list[int] | None = None,
++        base_code: str | None = None,
++    ) -> dict[str, Any]:
++        """模拟 2026 系统侧额外费用总额。"""
++
++        return {"extra_fee_amount": 29610.0, "task_count": 12, "detail_count": 18}
++
++
++class _FakePlanBomPresentationService:
++    """计划 BOM 表达层替身，避免测试依赖 LLM 或真实历史写入。"""
++
++    def build_presentation(self, response):
++        """返回最小 presentation，便于 QA 服务补齐响应。"""
++
++        return PlanBomPresentation(display_type="table", answer=response.answer_summary)
++
++
++class _FakePlanBomRepository:
++    """计划 BOM 服务测试用仓储替身。"""
++
++    db = _FakeDb()
++
++    def list_active_headers(self, order_no_like: str | None = None, order_name_like: str | None = None):
++        """返回一个当前版本 BOM 头，用于默认表格列测试。"""
++
++        return [
++            SimpleNamespace(
++                order_no="GCL-TEST-2025-01073",
++                order_name="NT12R/66GDF（深圳建融-2025-01073）",
++                version_no="B2",
++                raw_file_name="source.xls",
++                order_identity_key="GCL-TEST-2025-01073",
++                effective_date=None,
++            )
++        ]
++
++    def list_headers_by_scope(self, year: int | None = None, model: str | None = None, country: str | None = None, limit: int = 200):
++        """范围查询复用当前版本 BOM 头。"""
++
++        return self.list_active_headers()
++
++    def list_material_lines_for_header(self, *, header: Any, material_categories: list[str]):
++        """返回核心材料行，包含追溯字段以验证默认列是否隐藏。"""
++
++        return [
++            SimpleNamespace(
++                id=1,
++                material_category="glass",
++                material_name="光伏玻璃",
++                description="光伏玻璃\\GCL\\双镀膜",
++                sap_code="1000496680",
++                standard_usage="1000.000000",
++                unit="片",
++            )
++        ]
++
++
++class _FakePlanBomQueryService:
++    """计划 BOM 基础查询服务替身。
++
++    业务口径：服务级 focused 回归只验证 QA 编排与展示边界，
++        不连接真实库；detail/compare 返回与真实 QueryService schema 一致的受控结果。
++    """
++
++    def detail(self, payload) -> PlanBomDetailQueryResponse:
++        """返回单订单材料查询成功结果。
++
++        参数：payload 为 QA 服务构造的 `PlanBomDetailQueryRequest`。
++        返回值：包含一条核心材料的 `PlanBomDetailQueryResponse`。
++        """
++
++        item = PlanBomMaterialItem(
++            order_no=f"GCL-TEST-{payload.order_no or '00000'}",
++            version_no="B2",
++            file_instance_key="file-1",
++            sap_code="1000496680",
++            material_category="glass",
++            material_category_label="玻璃",
++            material_name="光伏玻璃",
++            description="光伏玻璃\\GCL\\双镀膜",
++            standard_usage="1000.000000",
++            unit="片",
++            source_type="excel",
++            source_tag="source.xls",
++        )
++        return PlanBomDetailQueryResponse(
++            query_type="plan_bom_detail",
++            domain="plan_bom",
++            execution_mode="direct",
++            status=PlanBomStatus(code="OK", message="查询成功"),
++            result_explanation={"summary": "fake detail"},
++            response_meta={"result_count": 1},
++            selected_version=PlanBomSelectedVersion(
++                order_identity_key="GCL-TEST-2025-01073",
++                file_instance_key="file-1",
++                order_no="GCL-TEST-2025-01073",
++                order_name="NT12R/66GDF（深圳建融-2025-01073）",
++                version_no="B2",
++                source_type="excel",
++                source_tag="source.xls",
++            ),
++            items=[item],
++            total=1,
++        )
++
++    def compare(self, payload) -> PlanBomCompareResponse:
++        """返回需要候选澄清的 compare 结果。
++
++        参数：payload 为 QA 服务构造的 `PlanBomCompareQueryRequest`。
++        返回值：候选未确认响应，验证多候选负例不能误放行。
++        """
++
++        return PlanBomCompareResponse(
++            query_type="plan_bom_compare",
++            domain="plan_bom",
++            execution_mode="direct",
++            status=PlanBomStatus(code="CANDIDATE_REQUIRED", message="命中多个订单，请选择后继续查询。", severity="warning"),
++            result_explanation={"summary": "fake candidate"},
++            response_meta={"result_count": 0},
++            candidate_scope="order_identity",
++            compare_ready=False,
++        )
++
++
++class _FakePlanBomPowerResolver:
++    """计划 BOM 功率配置解析替身，用于验证尾号候选与显式配置优先级。"""
++
++    def __init__(self) -> None:
++        """记录调用路径，便于断言 no-BOM 分支是否生效。"""
++
++        self.resolve_called = False
++        self.explicit_called = False
++
++    def resolve(self, **kwargs: Any) -> PowerBomConfigResolution:
++        """模拟尾号 00106 命中多候选。"""
++
++        self.resolve_called = True
++        return PowerBomConfigResolution(
++            status=CANDIDATE_REQUIRED_STATUS,
++            message="命中多个 BOM 候选",
++            candidates=[
++                PowerBomCandidate(
++                    order_no="GCL-TEST-00106",
++                    version_no="A0",
++                    order_name="NT12/66GDF(创维-A2026-00106)Bill of materials",
++                    order_identity_key="candidate-1",
++                    file_instance_key="file-1",
++                    source_type="excel",
++                )
++            ],
++            candidate_total_count=1,
++        )
++
++    def resolve_explicit_configuration(self, *, model_code: str | None, configuration: dict[str, Any]) -> PowerBomConfigResolution:
++        """模拟 no-BOM 显式配置已完整解析。"""
++
++        self.explicit_called = True
++        return PowerBomConfigResolution(
++            status=RESOLVED_STATUS,
++            message="显式配置已解析",
++            order_no=None,
++            model_code=model_code,
++            resolved_config={
++                "glass": PowerBomResolvedItem("glass", "高透+间隙铝膜", "explicit", 1.0),
++                "ribbon": PowerBomResolvedItem("ribbon", "0.26", "explicit", 1.0),
++                "cable": PowerBomResolvedItem("cable", "+300/-200mm（4mm²）", "explicit", 1.0),
++                "benchmark": PowerBomResolvedItem("benchmark", "中国计量院", "explicit", 1.0),
++            },
++            warnings=["已忽略未确认订单候选，按显式输入配置执行 no-BOM 推荐。"],
++        )
++
++
++class _FakePowerRecommendationService:
++    """功率供应商推荐替身，避免测试依赖真实模型库。"""
++
++    def recommend(self, **kwargs: Any) -> PowerRecommendationResult:
++        """返回最小可展示供应商推荐结果。"""
++
++        efficiency_row = PowerEfficiencyRow(
++            efficiency_value=0.256,
++            ratio_value=1.0,
++            actual_power=720.0,
++            theoretical_power=742.0,
++            row_index=29,
++            source_cell_ref="C29",
++            bin_probabilities={"715": 0.2, "720": 0.8},
++        )
++        prediction = PowerPredictionResult(
++            version_id=1,
++            model_code=kwargs["model_code"],
++            sheet_id=1,
++            sheet_name=kwargs["model_code"],
++            supplier_name="通威",
++            center_power=720.0,
++            base_power=720.0,
++            area=3.1,
++            std_dev=3.0,
++            cell_count=132,
++            center_efficiency=0.256,
++            factor_traces=[],
++            efficiency_rows=[efficiency_row],
++            power_bins=[715.0, 720.0],
++            boundary_bins=[712.5, 717.5, 722.5],
++            weighted_distribution={"715": 0.2, "720": 0.8},
++            total_ratio=1.0,
++        )
++        item = PowerRecommendationItem(
++            supplier_name="通威",
++            score=95.0,
++            predicted_target_ratio={"720": 0.8},
++            target_diff={"720": -0.2},
++            leakage_ratio=0.2,
++            coverage_ratio=1.0,
++            suggested_efficiency_segments=[
++                {
++                    "efficiency_value": 0.256,
++                    "efficiency_percent": 25.6,
++                    "target_contribution_ratio": 0.8,
++                    "supplier_efficiency_ratio": 1.0,
++                }
++            ],
++            prediction=prediction,
++            warnings=[],
++        )
++        return PowerRecommendationResult(
++            model_code=kwargs["model_code"],
++            target_power_ratio={"720": 1.0},
++            recommendations=[item],
++            rejected_suppliers=[],
++            warnings=[],
++        )
++
++
++@pytest.fixture()
++def logistics_service():
++    """构造服务级物流问答测试实例。
++
++    参数：无。
++    返回值：`LogisticsDataQaService` 实例。
++    业务口径：使用 fake repository 验证路由和过滤下推；真实库验收受本地端口权限限制，另写报告说明。
++    """
++
++    yield LogisticsDataQaService(
++        db=_FakeDb(),
++        repository=_FakeLogisticsRepository(),
++        query_log_repository=_FakeQueryLogRepository(),
++        answer_presentation_service=LogisticsLlmAnswerPresentationService(enabled=False, base_url=None, api_key=None, model=""),
++    )
++
++
++@pytest.fixture()
++def plan_bom_qa_service():
++    """构造服务级计划 BOM 问答测试实例。
++
++    参数：无。
++    返回值：`PlanBomQaService` 实例。
++    业务口径：用 fake 组件验证 QA 编排分支，不连接数据库、不让 LLM 参与计算。
++    """
++
++    repository = _FakePlanBomRepository()
++    yield PlanBomQaService(
++        repository=repository,  # type: ignore[arg-type]
++        query_service=_FakePlanBomQueryService(),  # type: ignore[arg-type]
++        nlu_service=PlanBomNluCenterService(repository=repository, base_url="", api_key="", model=""),  # type: ignore[arg-type]
++        presentation_service=_FakePlanBomPresentationService(),  # type: ignore[arg-type]
++        power_config_resolver=_FakePlanBomPowerResolver(),  # type: ignore[arg-type]
++        power_recommendation_service=_FakePowerRecommendationService(),  # type: ignore[arg-type]
++        query_log_repository=_FakeQueryLogRepository(),  # type: ignore[arg-type]
++    )
++
++
++def _ask_logistics(service: LogisticsDataQaService, question: str):
++    """执行物流问答并返回结果。
++
++    参数：
++        service: 物流问答服务。
++        question: 业务员自然语言问题。
++    返回值：
++        `LogisticsDataQaResult`。
++    业务口径：统一关闭 LLM 参与链路，当前测试只验确定性 planner 与查询结果。
++    """
++
++    return service.query(LogisticsDataQaQueryRequest(question=question), trace_id="business-feedback-regression")
++
++
++def test_r17_customer_suffix_is_trimmed_and_month_filter_is_kept(logistics_service: LogisticsDataQaService) -> None:
++    """R17：客户名尾部助词“的”不能进入实体，且历史客户发运量必须保留月份过滤。"""
++
++    result = _ask_logistics(logistics_service, "2024年1月份客户华阳的总发运量是多少MW？")
++
++    assert result.status and result.status.code == "OK"
++    assert result.query_plan.query_key == "hist_customer_mw"
++    assert result.query_plan.filters["customer_name"] == "华阳"
++    assert result.query_plan.filters["months"] == [1]
++    assert "2024年1月" in result.answer_summary
++    assert result.result_table.rows[0]["shipment_mw"] == pytest.approx(200.187, rel=0.001)
++
++
++def test_r50_logistics_company_each_routes_to_carrier_group(logistics_service: LogisticsDataQaService) -> None:
++    """R50：“物流公司/承运商 + 分别/各”应进入承运商分组，不应退化为年度总量。"""
++
++    result = _ask_logistics(logistics_service, "25年物流公司发货量分别是多少？")
++
++    assert result.status and result.status.code == "OK"
++    assert result.query_plan.query_key == "hist_carrier_kpi_by_year"
++    assert result.query_plan.filters["year"] == 2025
++    assert result.result_table.columns[:2] == ["carrier_name", "shipment_mw"]
++    assert len(result.result_table.rows) > 1
++
++
++def test_r57_carrier_group_respects_region_filter(logistics_service: LogisticsDataQaService) -> None:
++    """R57：承运商年度分组在用户指定区域时必须下推区域过滤。"""
++
++    global_result = _ask_logistics(logistics_service, "2025年各家物流承运商的承运量分别是多少？")
++    regional_result = _ask_logistics(logistics_service, "2025年各家物流承运商在西北区域的承运量分别是多少")
++
++    assert regional_result.status and regional_result.status.code == "OK"
++    assert regional_result.query_plan.query_key == "hist_carrier_kpi_by_year"
++    assert regional_result.query_plan.filters["region_name"] == "西北"
++    assert "西北" in regional_result.answer_summary
++    assert regional_result.result_table.rows
++    assert regional_result.result_table.rows != global_result.result_table.rows
++
++
++@pytest.mark.parametrize(
++    ("question", "expected_filter"),
++    [
++        ("25年华东区域发货量排名前5的城市是哪些，发货量分别是多少", {"year": 2025, "region_name": "华东"}),
++        ("请列出2025年安徽各城市发运量TOP5及具体数值", {"year": 2025, "province": "安徽"}),
++        ("2024年安徽省各城市发运量排名前五？", {"year": 2024, "province": "安徽"}),
++    ],
++)
++def test_r51_r52_r53_city_mw_topn_returns_city_table(
++    logistics_service: LogisticsDataQaService,
++    question: str,
++    expected_filter: dict[str, object],
++) -> None:
++    """R51/R52/R53：历史区域或省份下城市发运量 TopN 应返回城市维度表格。"""
++
++    result = _ask_logistics(logistics_service, question)
++
++    assert result.status and result.status.code == "OK"
++    assert result.query_plan.query_key == "hist_city_mw_rank"
++    for key, value in expected_filter.items():
++        assert result.query_plan.filters[key] == value
++    assert result.query_plan.limit == 5
++    assert result.result_table.columns == ["city", "shipment_mw"]
++    assert 1 <= len(result.result_table.rows) <= 5
++    assert all(row["city"] for row in result.result_table.rows)
++
++
++def test_r22_monthly_unit_fee_per_watt_returns_month_rows(logistics_service: LogisticsDataQaService) -> None:
++    """R22：用户要求 1-12 月单瓦价时，应返回月度总费用、总发运 MW 和单瓦价表。"""
++
++    result = _ask_logistics(logistics_service, "24年 1-12月 目的地是江苏省的单瓦价是多少")
++
++    assert result.status and result.status.code == "OK"
++    assert result.query_plan.query_key == "hist_unit_fee_per_watt"
++    assert result.query_plan.dimensions == ["biz_month"]
++    assert result.result_table.columns == ["biz_month", "total_fee_amount", "extra_fee_amount", "shipment_mw", "unit_fee_per_watt"]
++    assert 1 <= len(result.result_table.rows) <= 12
++    assert all(row["biz_month"] for row in result.result_table.rows)
++    assert all("unit_fee_per_watt" in row for row in result.result_table.rows)
++
++
++def test_r45_extra_fee_total_answers_even_when_detail_reason_not_fixed(logistics_service: LogisticsDataQaService) -> None:
++    """R45：月份明确时先返回额外费用总额，项目/原因明细未固化时用 caveat 说明。"""
++
++    result = _ask_logistics(logistics_service, "2026年1月份额外费用产生多少金额，分别是什么项目？什么原因产生的？")
++
++    assert result.status and result.status.code == "OK"
++    assert result.query_plan.query_key == "sys_extra_fee_summary"
++    assert result.query_plan.filters["months"] == [1]
++    assert result.result_table.rows[0]["extra_fee_amount"] == pytest.approx(29610.0, rel=0.001)
++    assert any("项目" in warning and "原因" in warning for warning in result.warnings)
++
++
++def test_r39_explicit_power_configuration_is_not_blocked_by_tail_candidates(plan_bom_qa_service: PlanBomQaService) -> None:
++    """R39：显式材料配置完整时，不应被不可靠订单尾号多候选阻断 no-BOM 功率推荐。"""
++
++    question = "创维210N—00106，0.24+0.26焊带+高透玻璃+间隙铝膜+300/200线长，计量院基准，单一需求720功率，各个供应商厂家从什么电池效率可以满足"
++    response = plan_bom_qa_service.ask(question, use_llm=False, trace_id="business-feedback-r39")
++
++    assert response.status.code == "OK", response.model_dump(mode="json")
++    assert response.classification == "A"
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.result_table.rows
++    assert response.raw_result["bom_config_resolution"]["order_no"] is None
++    assert any("未确认订单候选" in warning or "忽略" in warning for warning in response.warnings)
++
++
++@pytest.mark.parametrize(
++    "question",
++    [
++        "NT12R/66GDF（法国Synapsun-2026-00114）订单的玻璃，焊带，汇流条，间隙贴膜线盒的规格，并生成表格",
++        "NT12R/66GDF（深圳建融-2025-01073）玻璃焊带线长汇流条是什么搭配并生成表格可导出版本",
++    ],
++)
++def test_plan_bom_default_material_table_uses_business_columns(plan_bom_qa_service: PlanBomQaService, question: str) -> None:
++    """R34/R55：默认业务表格应隐藏追溯字段，避免 source/version/SAP 撑爆表格。"""
++
++    response = plan_bom_qa_service.ask(question, use_llm=False, trace_id="business-feedback-bom-columns")
++
++    assert response.status.code == "OK"
++    assert response.result_table.rows
++    assert "source_file" not in response.result_table.columns
++    assert "sap_code" not in response.result_table.columns
++    assert "version_no" not in response.result_table.columns
++    assert response.result_table.columns == ["material_category", "material_name", "description", "standard_usage", "unit"]
++
++
++def test_negative_project_name_dimension_still_uses_safe_boundary(logistics_service: LogisticsDataQaService) -> None:
++    """负例：项目名称维度仍未固化，不能扩大为客户维度或硬答。"""
++
++    result = _ask_logistics(logistics_service, "项目名称：国科新能源有限公司 已发出总运量是多少？")
++
++    assert result.status and result.status.code == "UNSUPPORTED_QUESTION"
++    assert result.query_plan.intent == "unsupported"
++    assert not result.result_table.rows
++
++
++def test_negative_same_order_compare_still_clarifies(plan_bom_qa_service: PlanBomQaService) -> None:
++    """负例：同一订单自对比不能被业务列精简修复误放行。"""
++
++    question = "NT12R/66GDF（法国Synapsun-2026-00114）和NT12R/66GDF（法国Synapsun-2026-00114）订单的玻璃，焊带，汇流条，间隙贴膜线盒的规格对比"
++    response = plan_bom_qa_service.ask(question, use_llm=False, trace_id="business-feedback-negative-self-compare")
++
++    assert response.status.code == "CLARIFICATION_REQUIRED"
++    assert response.classification == "B"
++
++
++def test_negative_multi_candidate_without_explicit_power_config_still_clarifies(plan_bom_qa_service: PlanBomQaService) -> None:
++    """负例：只有多候选订单、没有完整显式功率配置时仍应追问，不得硬选 BOM。"""
++
++    question = "订单00067和订单00106玻璃、间隙贴膜，焊带、汇流条、接线盒的规格描述有什么不一样，并用表格统计出来"
++    response = plan_bom_qa_service.ask(question, use_llm=False, trace_id="business-feedback-negative-candidates")
++
++    assert response.status.code == "CLARIFICATION_REQUIRED"
++    assert response.classification == "B"

@@ -1,0 +1,177 @@
+diff --git a/backend/app/domains/logistics/services/data_qa_service.py b/backend/app/domains/logistics/services/data_qa_service.py
+index 1e5de38..764fdb7 100644
+--- a/backend/app/domains/logistics/services/data_qa_service.py
++++ b/backend/app/domains/logistics/services/data_qa_service.py
+@@ -1334,12 +1334,16 @@ class LogisticsDataQaService:
+                 vehicle_type=filters["vehicle_type"],
+                 view_mode=filters["view_mode"],
+                 origin_place=filters.get("origin_place"),
+                 province=filters.get("province"),
+                 city=filters.get("city"),
++                price_metric=filters.get("price_metric", "total_fee"),
+             )
+             view_mode = filters["view_mode"]
++            price_metric = filters.get("price_metric", "total_fee")
++            price_metric_label = "单价/车" if price_metric == "unit_price_per_vehicle" else "总费用"
++            price_summary_label = "报价" if price_metric == "unit_price_per_vehicle" else "运费"
+             if filters.get("default_year_scope_label"):
+                 scope_parts = [filters["default_year_scope_label"]]
+                 warnings.append(
+                     f"当前题目未明确统计年份与指标口径，系统默认按{filters['default_year_scope_label']}平均运费返回。"
+                 )
+@@ -1354,34 +1358,41 @@ class LogisticsDataQaService:
+             if filters.get("city"):
+                 scope_parts.append(filters["city"])
+             scope_parts.append(f"{filters['vehicle_type']}车")
+             scope_text = "".join(scope_parts)
+             if view_mode == "monthly_avg":
+-                summary = f"{scope_text}每月平均运费已按月份返回。"
++                summary = f"{scope_text}每月平均{price_summary_label}已按月份返回。"
+                 table_columns = ["biz_month", "avg_fee", "row_count"]
+             elif view_mode == "year_compare":
+-                summary = f"{scope_text}运价对比已按年份返回。"
++                missing_years = [int(year) for year in data.get("missing_years") or []]
++                summary = f"{scope_text}{price_summary_label}对比已按年份返回。"
++                if missing_years:
++                    missing_year_text = "、".join(f"{year}年" for year in missing_years)
++                    summary = f"{summary}其中{missing_year_text}无匹配记录。"
++                    warnings.append(
++                        f"{scope_text}在{missing_year_text}无匹配记录，已保留空值行，避免显式年份被静默遗漏。"
++                    )
+                 table_columns = ["biz_year", "avg_fee", "row_count"]
+             elif view_mode == "fee_extremes":
+                 summary_row = data["summary_row"] or {}
+                 summary = (
+-                    f"{scope_text}最高价为{int(summary_row.get('max_fee') or 0):,}元，"
+-                    f"最低价为{int(summary_row.get('min_fee') or 0):,}元。"
++                    f"{scope_text}最高{price_summary_label}为{int(summary_row.get('max_fee') or 0):,}元，"
++                    f"最低{price_summary_label}为{int(summary_row.get('min_fee') or 0):,}元。"
+                 )
+                 table_columns = ["min_fee", "max_fee", "avg_fee", "row_count"]
+             else:
+                 summary_row = data["summary_row"] or {}
+-                summary = f"{scope_text}平均运费为{int(summary_row.get('avg_fee') or 0):,}元。"
++                summary = f"{scope_text}平均{price_summary_label}为{int(summary_row.get('avg_fee') or 0):,}元。"
+                 table_columns = ["avg_fee", "row_count"]
+             return self._build_result(
+                 answer_summary=summary,
+                 plan=plan,
+                 table_columns=table_columns,
+                 table_rows=data["items"],
+                 calculation_logic=[
+-                    "历史线路运价统一按 dwd_logistics_hist_shipment_detail.total_fee 统计。",
+-                    "当问题指定城市时优先按 city 过滤；否则按 province 过滤。",
++                    f"历史线路{price_summary_label}按 dwd_logistics_hist_shipment_detail.{price_metric}（{price_metric_label}）统计。",
++                    "当问题指定城市时优先按 city 模糊过滤，兼容广州/广州市等同一城市写法；否则按 province 过滤。",
+                     "车型口径通过 required_vehicle_type 模糊匹配实现。",
+                 ],
+                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
+                 warnings=warnings,
+             )
+@@ -2124,10 +2135,12 @@ class LogisticsDataQaService:
+                 customer_name=filters.get("customer_name"),
+                 transport_mode=filters.get("transport_mode"),
+                 special_scope=filters.get("special_scope"),
+                 base_code=filters.get("base_code"),
+                 procurement_type=filters.get("procurement_type"),
++                expand_dept=filters.get("expand_dept"),
++                entrusted_person=filters.get("entrusted_person"),
+                 monthly_breakdown=bool(filters.get("monthly_breakdown")),
+             )
+             if data.get("parse_fail_count"):
+                 warnings.append(
+                     f"共有 {int(data['parse_fail_count'])} 条任务的 project_name 无法解析总车数，未纳入总运费统计。"
+@@ -2139,51 +2152,61 @@ class LogisticsDataQaService:
+             scope_parts = [f"{filters['year']}年"]
+             if filters.get("months"):
+                 scope_parts.append("、".join(f"{month}月" for month in filters["months"]))
+             if filters.get("base_name"):
+                 scope_parts.append(filters["base_name"])
++            if filters.get("expand_dept"):
++                scope_parts.append(f"扩充部门={filters['expand_dept']}")
++            if filters.get("entrusted_person"):
++                scope_parts.append(f"委托人={filters['entrusted_person']}")
+             if filters.get("customer_name"):
+                 scope_parts.append(f"客户{filters['customer_name']}")
+             if filters.get("company_name"):
+                 scope_parts.append(f"承运商{filters['company_name']}")
+             if filters.get("transport_mode"):
+                 scope_parts.append(f"{filters['transport_mode']}运输")
+             if filters.get("procurement_type"):
+                 scope_parts.append(f"{filters['procurement_type']}采购方式")
+             scope_text = "".join(scope_parts)
+             if filters.get("monthly_breakdown") and data.get("monthly_rows"):
++                calculation_logic = [
++                    "系统总运费口径沿用当前正式系统计算方式：ship_product.price × project_name 解析总车数。",
++                    "按月拆分使用 pickup_date；pickup_date 缺失时按 biz_date 归属月份。",
++                    "按月返回只改变展示颗粒度，不改变总费用计算口径。",
++                ]
++                if filters.get("expand_dept") or filters.get("entrusted_person"):
++                    calculation_logic.append("业务范围词已按受控字段下推过滤：扩充部门使用 expand_dept，委托人使用 entrusted_person。")
+                 monthly_rows = list(data["monthly_rows"])
+                 summary = (
+                     f"{scope_text}总运费已按月返回，"
+                     f"合计总运费为{float(data.get('total_fee') or 0):,.2f}元。"
+                 )
+                 return self._build_result(
+                     answer_summary=summary,
+                     plan=plan,
+                     table_columns=["biz_month", "total_fee", "task_count", "parse_fail_count", "price_missing_count"],
+                     table_rows=monthly_rows,
+-                    calculation_logic=[
+-                        "系统总运费口径沿用当前正式系统计算方式：ship_product.price × project_name 解析总车数。",
+-                        "按月拆分使用 pickup_date；pickup_date 缺失时按 biz_date 归属月份。",
+-                        "按月返回只改变展示颗粒度，不改变总费用计算口径。",
+-                    ],
++                    calculation_logic=calculation_logic,
+                     data_scope={"tables": ["dwd_logistics_ship_task", "dwd_logistics_ship_product"], **filters},
+                     warnings=warnings,
+                 )
+             summary = f"{scope_text}按当前系统口径统计的总运费为{float(data.get('total_fee') or 0):,.2f}元。"
++            calculation_logic = [
++                "系统总运费口径沿用当前正式系统计算方式：ship_product.price × project_name 解析总车数。",
++                "月份过滤优先使用 pickup_date，缺失时退回 biz_date。",
++                "客户过滤当前按 project_name 模糊命中，不额外承诺独立 customer 字段。",
++                "运输方式过滤仅在用户明确指定公路、铁路等运输方式时下推。",
++                "采购方式过滤仅在用户明确指定招标、询比价等系统字段时下推。",
++            ]
++            if filters.get("expand_dept") or filters.get("entrusted_person"):
++                calculation_logic.append("业务范围词已按受控字段下推过滤：扩充部门使用 expand_dept，委托人使用 entrusted_person。")
+             return self._build_result(
+                 answer_summary=summary,
+                 plan=plan,
+                 table_columns=["total_fee", "task_count", "parse_fail_count", "price_missing_count"],
+                 table_rows=[data],
+-                calculation_logic=[
+-                    "系统总运费口径沿用当前正式系统计算方式：ship_product.price × project_name 解析总车数。",
+-                    "月份过滤优先使用 pickup_date，缺失时退回 biz_date。",
+-                    "客户过滤当前按 project_name 模糊命中，不额外承诺独立 customer 字段。",
+-                    "运输方式过滤仅在用户明确指定公路、铁路等运输方式时下推。",
+-                    "采购方式过滤仅在用户明确指定招标、询比价等系统字段时下推。",
+-                ],
++                calculation_logic=calculation_logic,
+                 data_scope={"tables": ["dwd_logistics_ship_task", "dwd_logistics_ship_product"], **filters},
+                 warnings=warnings,
+             )
+ 
+         if plan.query_key == "sys_task_count_ranking":
+@@ -2527,16 +2550,17 @@ class LogisticsDataQaService:
+ 
+         sub_plan_payloads = plan.filters.get("sub_plans") or []
+         sub_results: list[dict[str, Any]] = []
+         merged_rows: list[dict[str, Any]] = []
+         merged_columns: list[str] = ["section"]
++        decomposition_source = str(plan.filters.get("decomposition_source") or "rule_guardrail")
+         calculation_logic = [
+-            "先识别顶层并列子问题，再把每个子问题映射到既有受控 query_key。",
++            "由 LLM 先识别顶层并列子问题，规则层再把每个子问题映射到既有受控 query_key。",
+             "每个子查询独立执行仓储层确定性统计，最终仅在表达层合并结果，不做跨来源二次推理。",
+         ]
+         warnings = [
+-            f"已将复合问题拆成 {len(sub_plan_payloads)} 个可独立审计的子问题分别查询后合并返回。",
++            f"已基于 {decomposition_source} 拆成 {len(sub_plan_payloads)} 个可独立审计的子问题分别查询后合并返回。",
+             "历史高运费地址使用 2023-2025 历史台账口径；2026 系统侧采购方式发运量使用正式系统采购方式字段，两者不做跨源混算。",
+         ]
+         answer_parts: list[str] = []
+ 
+         for raw_sub_plan in sub_plan_payloads:

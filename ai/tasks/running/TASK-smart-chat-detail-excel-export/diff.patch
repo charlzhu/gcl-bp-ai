@@ -1,0 +1,316 @@
+diff --git a/frontend/src/views/business-chat/BusinessChatPage.vue b/frontend/src/views/business-chat/BusinessChatPage.vue
+index 3475e1b..542dce7 100644
+--- a/frontend/src/views/business-chat/BusinessChatPage.vue
++++ b/frontend/src/views/business-chat/BusinessChatPage.vue
+@@ -68,7 +68,7 @@
+ 
+             <div
+               v-if="message.presentation"
+-              :class="['result', `result--${resolveResultTone(message.status)}`]"
++              :class="['result', `result--${resolveResultTone(message.status)}`, resolveAssistantResultLayout(message)]"
+               data-testid="assistant-result"
+             >
+               <div class="result-hero">
+@@ -82,9 +82,12 @@
+                   <span v-if="message.presentation.displayType" class="display-badge">
+                     {{ formatDisplayTypeLabel(message.presentation.displayType) }}
+                   </span>
++                  <span class="display-badge display-badge--layout">
++                    {{ resolveAssistantReplyKicker(message) }}
++                  </span>
+                 </div>
+                 <div v-if="message.presentation.title" class="result-title" data-testid="result-title">{{ message.presentation.title }}</div>
+-                <p v-if="message.presentation.answer" class="result-answer" data-testid="result-answer">{{ message.presentation.answer }}</p>
++                <p v-if="message.presentation.answer" class="result-answer assistant-prose" data-testid="result-answer">{{ message.presentation.answer }}</p>
+                 <div v-if="buildResultSummaryItems(message).length" class="result-summary-strip">
+                   <span
+                     v-for="item in buildResultSummaryItems(message)"
+@@ -204,7 +207,7 @@
+                 </svg>
+               </div>
+ 
+-              <div v-if="message.presentation.cards.length" class="metric-grid" data-testid="result-cards">
++              <div v-if="shouldShowMetricCards(message)" class="metric-grid" data-testid="result-cards">
+                 <div v-for="card in message.presentation.cards" :key="card.label" class="metric-card">
+                   <div class="metric-accent" />
+                   <div class="metric-body">
+@@ -215,13 +218,26 @@
+                 </div>
+               </div>
+ 
+-              <div v-if="message.presentation.table" class="result-table-card">
++              <div v-if="shouldShowResultTable(message)" class="result-table-card">
+                 <div class="result-table-card__head">
+-                  <span>明细数据</span>
+-                  <em>{{ message.presentation.table.rows.length }} 行</em>
++                  <div class="result-table-card__title">
++                    <span>明细数据</span>
++                    <em>{{ message.presentation.table?.rows.length || 0 }} 行</em>
++                  </div>
++                  <el-button
++                    type="primary"
++                    plain
++                    size="small"
++                    class="result-table-card__export"
++                    data-testid="export-result-table-excel"
++                    :disabled="!message.presentation.table?.rows.length"
++                    @click="exportAssistantTableToExcel(message)"
++                  >
++                    导出 Excel
++                  </el-button>
+                 </div>
+                 <el-table
+-                  :data="message.presentation.table.rows"
++                  :data="message.presentation.table?.rows || []"
+                   size="small"
+                   border
+                   class="result-table"
+@@ -230,7 +246,7 @@
+                   empty-text="暂无明细数据"
+                 >
+                   <el-table-column
+-                    v-for="column in message.presentation.table.columns"
++                    v-for="column in message.presentation.table?.columns || []"
+                     :key="column"
+                     :prop="column"
+                     :label="column"
+@@ -300,6 +316,8 @@
+ 
+ <script setup lang="ts">
+ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
++import { ElMessage } from 'element-plus'
++import * as XLSX from 'xlsx'
+ import { fetchLogisticsDataQaQuery, type LogisticsDataQaResult } from '@/api/logistics'
+ import { askPlanBomQuestion, type PlanBomQaResponse } from '@/api/planBom'
+ import {
+@@ -385,6 +403,8 @@ interface ResultSummaryItem {
+   value: string
+ }
+ 
++type AssistantResultLayoutClass = 'ai-response-card--narrative' | 'ai-response-card--data' | 'ai-response-card--chart'
++
+ const pieChartColors = ['#2f7a4a', '#60a5fa', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b']
+ 
+ const question = ref('')
+@@ -1334,6 +1354,128 @@ function buildResultSummaryItems(message: BusinessChatMessage): ResultSummaryIte
+   return items
+ }
+ 
++/** 判断助手回复应采用叙事、数据还是图表布局；只控制 UI 层，不改变后端业务结果。 */
++function resolveAssistantResultLayout(message: BusinessChatMessage): AssistantResultLayoutClass {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  if (presentation?.chart) return 'ai-response-card--chart'
++  if (presentation?.table?.rows.length || presentation?.cards.length) return 'ai-response-card--data'
++  return 'ai-response-card--narrative'
++}
++
++/** 指标卡只在后端返回卡片且当前布局需要数据摘要时展示。 */
++function shouldShowMetricCards(message: BusinessChatMessage): boolean {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return Boolean(presentation?.cards.length)
++}
++
++/** 表格只在后端返回有效列和行时展示，避免空表占据叙事型回答空间。 */
++function shouldShowResultTable(message: BusinessChatMessage): boolean {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return Boolean(presentation?.table?.columns.length && presentation.table.rows.length)
++}
++
++/**
++ * 将当前助手回复中的明细表导出为 Excel。
++ *
++ * 参数：
++ *   message: 当前助手消息，导出其中 presentation.table 的已展示明细。
++ *
++ * 返回：
++ *   无返回值；浏览器侧触发 xlsx 文件下载。
++ */
++function exportAssistantTableToExcel(message: BusinessChatMessage) {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  const table = presentation?.table
++  if (!table?.columns.length || !table.rows.length) {
++    ElMessage.warning('当前回答没有可导出的明细数据')
++    return
++  }
++
++  const exportRows = buildAssistantTableExportRows(table)
++  const worksheet = XLSX.utils.json_to_sheet(exportRows, { header: table.columns })
++  // 按中文列名和单元格内容给出保守列宽，避免导出后业务用户第一眼只能看到截断内容。
++  worksheet['!cols'] = table.columns.map((column) => ({
++    wch: Math.max(12, Math.min(36, String(column).length + 8)),
++  }))
++  const workbook = XLSX.utils.book_new()
++  XLSX.utils.book_append_sheet(workbook, worksheet, '明细数据')
++  XLSX.writeFile(workbook, buildAssistantTableExportFileName(message))
++  ElMessage.success(`已导出 ${table.rows.length} 行明细数据`)
++}
++
++/**
++ * 构造 Excel 导出行，保持列顺序与页面表格一致。
++ *
++ * 参数：
++ *   table: 已归一化的页面展示表格。
++ *
++ * 返回：
++ *   适合 XLSX.utils.json_to_sheet 的对象数组。
++ */
++function buildAssistantTableExportRows(table: UnifiedTable): Array<Record<string, string | number | boolean>> {
++  return table.rows.map((row) => {
++    const next: Record<string, string | number | boolean> = {}
++    table.columns.forEach((column) => {
++      next[column] = normalizeAssistantTableExportCell(row[column])
++    })
++    return next
++  })
++}
++
++/** 归一化 Excel 单元格值，避免对象/数组导出成 [object Object]。 */
++function normalizeAssistantTableExportCell(value: unknown): string | number | boolean {
++  if (value === null || value === undefined) return ''
++  if (typeof value === 'number' || typeof value === 'boolean') return value
++  if (value instanceof Date) return value.toISOString()
++  if (Array.isArray(value)) return value.map((item) => normalizeAssistantTableExportCell(item)).join('、')
++  if (typeof value === 'object') {
++    try {
++      return JSON.stringify(value)
++    } catch (_error) {
++      return String(value)
++    }
++  }
++  return String(value)
++}
++
++/** 根据回答标题和时间生成安全 Excel 文件名。 */
++function buildAssistantTableExportFileName(message: BusinessChatMessage) {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  const fallbackTitle = domainLabelMap[message.domain] || '智能助手明细数据'
++  const safeTitle = sanitizeAssistantTableExportFileName(presentation?.title || fallbackTitle) || '智能助手明细数据'
++  return `${safeTitle.slice(0, 36)}_${formatAssistantTableExportTimestamp(new Date())}.xlsx`
++}
++
++/** 清理文件名中的系统保留字符。 */
++function sanitizeAssistantTableExportFileName(value: string) {
++  return String(value || '')
++    .replace(/[\\/:*?"<>|\r\n\t]+/g, '_')
++    .replace(/\s+/g, ' ')
++    .trim()
++}
++
++/** 构造导出时间戳，便于同一回答多次导出时区分文件。 */
++function formatAssistantTableExportTimestamp(date: Date) {
++  const pad = (value: number) => String(value).padStart(2, '0')
++  return [
++    date.getFullYear(),
++    pad(date.getMonth() + 1),
++    pad(date.getDate()),
++    '_',
++    pad(date.getHours()),
++    pad(date.getMinutes()),
++    pad(date.getSeconds()),
++  ].join('')
++}
++
++/** 根据回答布局生成轻量提示词，不参与业务判断。 */
++function resolveAssistantReplyKicker(message: BusinessChatMessage): string {
++  const layout = resolveAssistantResultLayout(message)
++  if (layout === 'ai-response-card--chart') return '图表视图'
++  if (layout === 'ai-response-card--data') return '数据视图'
++  return '文字说明'
++}
++
+ /** 展示类型中文化，便于把后端 display_type 作为轻量徽标呈现。 */
+ function formatDisplayTypeLabel(displayType?: string) {
+   const mapping: Record<string, string> = {
+@@ -1646,6 +1788,15 @@ onBeforeUnmount(() => {
+   animation: fadeIn 0.3s ease-out;
+ }
+ 
++.ai-response-card--narrative {
++  max-width: 780px;
++}
++
++.ai-response-card--data,
++.ai-response-card--chart {
++  max-width: 100%;
++}
++
+ .result-hero {
+   display: grid;
+   gap: 8px;
+@@ -1715,6 +1866,10 @@ onBeforeUnmount(() => {
+   word-break: break-word;
+ }
+ 
++.assistant-prose {
++  white-space: pre-wrap;
++}
++
+ .result-summary-strip {
+   display: flex;
+   flex-wrap: wrap;
+@@ -1965,6 +2120,13 @@ onBeforeUnmount(() => {
+   font-weight: 700;
+ }
+ 
++.result-table-card__title {
++  display: inline-flex;
++  align-items: center;
++  gap: 8px;
++  min-width: 0;
++}
++
+ .result-table-card__head em {
+   flex: none;
+   font-style: normal;
+@@ -1973,6 +2135,17 @@ onBeforeUnmount(() => {
+   font-weight: 500;
+ }
+ 
++.result-table-card__export {
++  flex: none;
++  border-color: var(--brand-green-border);
++}
++
++.result-table-card__export:not(.is-disabled):hover {
++  border-color: var(--brand-green);
++  background: var(--brand-green-bg);
++  color: var(--brand-green);
++}
++
+ :deep(.result-table .el-table__header-wrapper th) {
+   background: #f8fafb;
+   color: #374151;
+diff --git a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+index 4c11a7a..d526757 100644
+--- a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
++++ b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+@@ -203,6 +203,29 @@ def test_business_chat_assistant_response_layout_is_adaptive_not_fixed_template(
+     assert "v-if=\"message.presentation.table\" class=\"result-table-card\"" not in template
+ 
+ 
++def test_business_chat_detail_table_can_export_excel_when_rows_exist() -> None:
++    """智能助手回复中存在明细表格时，业务用户应能直接导出 Excel 文件。"""
++    chat = (FRONTEND / "views" / "business-chat" / "BusinessChatPage.vue").read_text(encoding="utf-8")
++    template = chat.split("<script setup", 1)[0]
++
++    assert "import * as XLSX from 'xlsx'" in chat
++    assert "import { ElMessage } from 'element-plus'" in chat
++    assert "data-testid=\"export-result-table-excel\"" in template
++    assert "导出 Excel" in template
++    assert "@click=\"exportAssistantTableToExcel(message)\"" in template
++    assert "shouldShowResultTable(message)" in template
++    assert "function exportAssistantTableToExcel" in chat
++    assert "function buildAssistantTableExportRows" in chat
++    assert "function buildAssistantTableExportFileName" in chat
++    assert "XLSX.utils.json_to_sheet" in chat
++    assert "XLSX.utils.book_append_sheet" in chat
++    assert "XLSX.writeFile" in chat
++    assert "ElMessage.warning('当前回答没有可导出的明细数据')" in chat
++    assert "ElMessage.success(`已导出 ${table.rows.length} 行明细数据`)" in chat
++    assert "智能助手明细数据" in chat
++    assert "xlsx" in chat
++
++
+ def test_power_model_token_dependency_removed_from_current_backend_sources() -> None:
+     """临时功率模型 token 功能应从当前后端源码移除，后续改由用户权限模块接管。"""
+     deps = (BACKEND / "api" / "deps.py").read_text(encoding="utf-8")

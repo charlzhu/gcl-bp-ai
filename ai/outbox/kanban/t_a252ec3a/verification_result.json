@@ -1,0 +1,103 @@
+{
+  "overall": "PASS",
+  "checks": [
+    {
+      "check": "deliverables_exist",
+      "status": "PASS",
+      "detail": "11/11 docs present"
+    },
+    {
+      "check": "requirement_doc_list_covered",
+      "status": "PASS",
+      "detail": "all 11 expected docs match requirement.md list"
+    },
+    {
+      "check": "exact_env_secret_scan",
+      "status": "PASS",
+      "detail": "0 exact sensitive .env value matches across 11 docs"
+    },
+    {
+      "check": "high_confidence_secret_pattern_scan",
+      "status": "PASS",
+      "detail": "0 high-confidence token/password/DSN patterns"
+    },
+    {
+      "check": "m1_boundary_statements_present",
+      "status": "PASS",
+      "detail": "required no-dev/no-direct-oracle/no-free-sql boundaries present"
+    },
+    {
+      "check": "oracle_smoke_blocker_recorded",
+      "status": "PASS",
+      "detail": "driver blocker recorded without fabricated Oracle results"
+    },
+    {
+      "check": "focused_patch_docs_only",
+      "status": "PASS",
+      "detail": "focused patch contains docs only; files=11"
+    },
+    {
+      "check": "placeholder_scan",
+      "status": "PASS",
+      "detail": "0 TBD/TODO/FIXME/待补充 placeholders"
+    }
+  ],
+  "doc_stats": [
+    {
+      "path": "docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md",
+      "lines": 113,
+      "bytes": 9638
+    },
+    {
+      "path": "docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md",
+      "lines": 103,
+      "bytes": 6135
+    },
+    {
+      "path": "docs/SAP_MID_SYNC_DESIGN.md",
+      "lines": 88,
+      "bytes": 5303
+    },
+    {
+      "path": "docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md",
+      "lines": 71,
+      "bytes": 4746
+    },
+    {
+      "path": "docs/PLAN_BOM_SAP_DATA_SOURCE_MIGRATION_PLAN.md",
+      "lines": 67,
+      "bytes": 3996
+    },
+    {
+      "path": "docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md",
+      "lines": 87,
+      "bytes": 4515
+    },
+    {
+      "path": "docs/SAP_MID_INTEGRATION_ROADMAP.md",
+      "lines": 47,
+      "bytes": 3236
+    },
+    {
+      "path": "docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md",
+      "lines": 56,
+      "bytes": 2009
+    },
+    {
+      "path": "docs/CURRENT_STATUS.md",
+      "lines": 61,
+      "bytes": 2787
+    },
+    {
+      "path": "docs/NEXT_TASK.md",
+      "lines": 91,
+      "bytes": 3014
+    },
+    {
+      "path": "docs/HANDOFF.md",
+      "lines": 70,
+      "bytes": 2730
+    }
+  ],
+  "failures": []
+}

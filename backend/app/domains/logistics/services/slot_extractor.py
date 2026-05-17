@@ -181,6 +181,18 @@ class LogisticsSlotExtractor:
                 for year in range(start_year, end_year + 1):
                     if year not in years:
                         years.append(year)
+        for match in re.finditer(
+            r"(?<!\d)(?P<start>2[3-6])年?(?:到|至|-|–|—|~)(?P<end>2[3-6])年",
+            compact,
+        ):
+            # 业务常把“2023年至2025年”简写成“23年-25年”。
+            # 这里在单年命中前先展开两位年份区间，确保“分别/对比”类问题保留中间年份。
+            start_year = self._resolve_year_token(match.group("start"))
+            end_year = self._resolve_year_token(match.group("end"))
+            if start_year and end_year and start_year <= end_year:
+                for year in range(start_year, end_year + 1):
+                    if year not in years:
+                        years.append(year)
         for match in re.finditer(r"(?P<year>\d{2,4})年", compact):
             year = self._resolve_year_token(match.group("year"))
             if year and year not in years:
@@ -354,10 +366,10 @@ class LogisticsSlotExtractor:
         compact = self.compact(question)
         patterns = (
             r"([\u4e00-\u9fa5]{2,10})城市发运中",
-            # “合肥至马鞍山17.5米车的平均运费”里的“至/到”是线路连接词，
+            # “合肥至马鞍山17.5米车的平均运费”里的“至/到/-”是线路连接词，
             # 目的城市右侧以车型或费用指标为边界；左侧只接受句首/时间词/“从、由”等明确始发前缀，避免命中多段路径中间片段。
-            # 目的城市内部也排除“至/到”，防止把“马鞍山到南京”这类中转路线吞成单一城市。
-            r"(?:^|[0-9年月日从由：:,，；;])(?:合肥|阜宁)(?:至|到)((?:(?![至到])[\u4e00-\u9fa5]){2,10}?)(?:17\.5米车|17\.5米|17\.5车|17\.5|17米五|17米5|13m|13米车|13米|9\.6米|9米6|9\.6|车|(?:的)?(?:平均|总|累计|全年)|每车|单车|运输费用|运输成本|费用|运费|运价|报价)",
+            # 目的城市内部也排除线路连接词，防止把“马鞍山到南京”这类中转路线吞成单一城市。
+            r"(?:^|[0-9年月日间从由：:,，；;])(?:合肥|阜宁)(?:至|到|-|－|–|—)((?:(?![至到\-－–—])[\u4e00-\u9fa5]){2,10}?)(?:17\.5米车|17\.5米|17\.5车|17\.5|17米五|17米5|13m|13米车|13米|9\.6米|9米6|9\.6|车|(?:的)?(?:平均|均价|总|累计|全年)|每车|单车|运输费用|运输成本|费用|运费|运价|报价)",
             # “发往苏州的平均运输费用”这类业务问法会把指标写成“运输费用”，
             # 先用非贪婪城市匹配截住目的城市，避免后续 planner 误入澄清分支。
             r"发往([\u4e00-\u9fa5]{2,10}?)(?:的)?(?:平均|总|累计|全年)?(?:每车|单车)?(?:运输费用|运输成本|费用|运费|运价|报价)",

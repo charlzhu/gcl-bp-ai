@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     milvus_port: int = 19530
     milvus_user: str = ""
     milvus_password: str = ""
+    milvus_collection_prefix: str = "gcl_bp_ai"
+    embedding_model: str = ""
+    embedding_dimension: int = 2560
+    rerank_model: str = ""
+    rerank_endpoint_path: str = "/api/v1/services/rerank/text-rerank/text-rerank"
+    nl2sql_recall_top_k: int = 12
+    nl2sql_rerank_top_k: int = 6
+    nl2sql_rerank_min_score: float = 0.0
     source_mysql_host: str = "10.76.13.161"
     source_mysql_port: int = 19531
     source_mysql_db: str = "jyjh_db"
@@ -360,6 +368,34 @@ class Settings(BaseSettings):
     @property
     def MILVUS_COLLECTION_PREFIX(self) -> str:
         return self.milvus_collection_prefix
+
+    @property
+    def EMBEDDING_MODEL(self) -> str:
+        return self.embedding_model
+
+    @property
+    def EMBEDDING_DIMENSION(self) -> int:
+        return self.embedding_dimension
+
+    @property
+    def RERANK_MODEL(self) -> str:
+        return self.rerank_model
+
+    @property
+    def RERANK_ENDPOINT_PATH(self) -> str:
+        return self.rerank_endpoint_path
+
+    @property
+    def NL2SQL_RECALL_TOP_K(self) -> int:
+        return self.nl2sql_recall_top_k
+
+    @property
+    def NL2SQL_RERANK_TOP_K(self) -> int:
+        return self.nl2sql_rerank_top_k
+
+    @property
+    def NL2SQL_RERANK_MIN_SCORE(self) -> float:
+        return self.nl2sql_rerank_min_score
 
     @property
     def SOURCE_MYSQL_HOST(self) -> str:

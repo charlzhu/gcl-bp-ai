@@ -698,6 +698,60 @@ class LogisticsDataQaRepository:
         ).scalar()
         return {"shipment_mw": shipment_mw}
 
+    def hist_mw_by_year(
+        self,
+        *,
+        years: list[int],
+        carrier_name: str | None = None,
+    ) -> dict[str, Any]:
+        """历史发运量按年份拆分。
+
+        参数：
+            years: 用户明确请求的历史年份列表，仅接受 2023-2025。
+            carrier_name: 可选承运商/物流公司过滤，使用包含匹配兼容简称和全称。
+        返回：
+            items 为按请求年份对齐的逐年发运量行；missing_years 为无匹配记录的年份。
+        业务逻辑：
+            用户显式询问多个年份“分别/每年”时，不能静默丢弃无数据年份，必须保留 row_count=0 的空值行。
+        """
+
+        safe_years = sorted({int(year) for year in years if int(year) in {2023, 2024, 2025}})
+        if not safe_years:
+            return {"items": [], "missing_years": []}
+        year_placeholders = ", ".join(str(year) for year in safe_years)
+        filters = [f"biz_year IN ({year_placeholders})"]
+        params: dict[str, Any] = {}
+        if carrier_name:
+            filters.append("logistics_company_name LIKE :carrier_name")
+            params["carrier_name"] = f"%{carrier_name}%"
+        where_sql = " AND ".join(filters)
+        rows = self.db.execute(
+            text(
+                f"""
+                SELECT
+                    biz_year,
+                    ROUND(SUM(actual_watt) / 1000000.0, 3) AS shipment_mw,
+                    COUNT(*) AS row_count
+                FROM dwd_logistics_hist_shipment_detail
+                WHERE {where_sql}
+                GROUP BY biz_year
+                ORDER BY biz_year ASC
+                """
+            ),
+            params,
+        ).mappings().all()
+        rows_by_year = {int(row["biz_year"]): dict(row) for row in rows if row.get("biz_year") is not None}
+        items: list[dict[str, Any]] = []
+        missing_years: list[int] = []
+        for requested_year in safe_years:
+            year_row = rows_by_year.get(requested_year)
+            if year_row is None:
+                items.append({"biz_year": requested_year, "shipment_mw": None, "row_count": 0})
+                missing_years.append(requested_year)
+            else:
+                items.append(year_row)
+        return {"items": items, "missing_years": missing_years}
+
     def mixed_mw_summary_2023_2026(
         self,
         *,
@@ -1491,12 +1545,17 @@ class LogisticsDataQaRepository:
 
         说明：
             1. 该方法服务于 Round2 的历史线路运价题族；
-            2. 统计口径按 price_metric 选择：报价/运价使用 unit_price_per_vehicle（单价/车），运费类默认使用 total_fee；
+            2. 报价 / 单价题按单价/车字段求样本均值，线路均价按总费用 / 总车次计算；
             3. 如果目的地给的是城市，则优先按 city 模糊过滤；否则按 province 过滤。
         """
         filters = ["required_vehicle_type LIKE :vehicle_type"]
         params: dict[str, Any] = {"vehicle_type": f"%{vehicle_type}%"}
         metric_column = "unit_price_per_vehicle" if price_metric == "unit_price_per_vehicle" else "total_fee"
+        avg_fee_expr = (
+            "ROUND(AVG(unit_price_per_vehicle), 0)"
+            if price_metric == "unit_price_per_vehicle"
+            else "ROUND(SUM(total_fee) / NULLIF(SUM(shipment_trip_count), 0), 0)"
+        )
         year_placeholders = ", ".join(f":year_{idx}" for idx, _ in enumerate(years))
         filters.append(f"biz_year IN ({year_placeholders})")
         for idx, year in enumerate(years):
@@ -1518,7 +1577,9 @@ class LogisticsDataQaRepository:
                     f"""
                     SELECT
                         DATE_FORMAT(biz_date, '%Y-%m') AS biz_month,
-                        ROUND(AVG({metric_column}), 0) AS avg_fee,
+                        {avg_fee_expr} AS avg_fee,
+                        ROUND(SUM(total_fee), 0) AS total_fee,
+                        ROUND(SUM(shipment_trip_count), 0) AS shipment_trip_count,
                         COUNT(*) AS row_count
                     FROM dwd_logistics_hist_shipment_detail
                     WHERE {where_sql}
@@ -1537,7 +1598,9 @@ class LogisticsDataQaRepository:
                     f"""
                     SELECT
                         biz_year,
-                        ROUND(AVG({metric_column}), 0) AS avg_fee,
+                        {avg_fee_expr} AS avg_fee,
+                        ROUND(SUM(total_fee), 0) AS total_fee,
+                        ROUND(SUM(shipment_trip_count), 0) AS shipment_trip_count,
                         COUNT(*) AS row_count
                     FROM dwd_logistics_hist_shipment_detail
                     WHERE {where_sql}
@@ -1556,7 +1619,15 @@ class LogisticsDataQaRepository:
                 # 输出顺序遵循 query_plan.sort 的 biz_year 升序，便于审计和图表展示稳定。
                 year_row = rows_by_year.get(int(requested_year))
                 if year_row is None:
-                    items.append({"biz_year": int(requested_year), "avg_fee": None, "row_count": 0})
+                    items.append(
+                        {
+                            "biz_year": int(requested_year),
+                            "avg_fee": None,
+                            "total_fee": None,
+                            "shipment_trip_count": 0,
+                            "row_count": 0,
+                        }
+                    )
                     missing_years.append(int(requested_year))
                 else:
                     items.append(year_row)
@@ -1569,7 +1640,9 @@ class LogisticsDataQaRepository:
                     SELECT
                         ROUND(MIN({metric_column}), 0) AS min_fee,
                         ROUND(MAX({metric_column}), 0) AS max_fee,
-                        ROUND(AVG({metric_column}), 0) AS avg_fee,
+                        {avg_fee_expr} AS avg_fee,
+                        ROUND(SUM(total_fee), 0) AS total_fee,
+                        ROUND(SUM(shipment_trip_count), 0) AS shipment_trip_count,
                         COUNT(*) AS row_count
                     FROM dwd_logistics_hist_shipment_detail
                     WHERE {where_sql}
@@ -1583,7 +1656,9 @@ class LogisticsDataQaRepository:
             text(
                 f"""
                 SELECT
-                    ROUND(AVG({metric_column}), 0) AS avg_fee,
+                    {avg_fee_expr} AS avg_fee,
+                    ROUND(SUM(total_fee), 0) AS total_fee,
+                    ROUND(SUM(shipment_trip_count), 0) AS shipment_trip_count,
                     COUNT(*) AS row_count
                 FROM dwd_logistics_hist_shipment_detail
                 WHERE {where_sql}

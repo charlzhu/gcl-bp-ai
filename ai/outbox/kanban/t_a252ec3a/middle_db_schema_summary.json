@@ -1,0 +1,1377 @@
+{
+  "sys_task_log": {
+    "file": "ai/inbox/attachments/middle_db/sys_task_log.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "sys_task_error_log": {
+    "file": "ai/inbox/attachments/middle_db/sys_task_error_log.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "ods_logistic_ship_task": {
+    "file": "ai/inbox/attachments/middle_db/Result_12.xlsx",
+    "column_count": 34,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": null
+      },
+      {
+        "name": "sync_batch_no",
+        "definition": "varchar(64) NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "source_id",
+        "definition": "bigint NOT NULL",
+        "comment": "源系统主键"
+      },
+      {
+        "name": "task_id",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "company_id",
+        "definition": "bigint DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "project_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "pickup_date",
+        "definition": "date DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "warehouse_id",
+        "definition": "bigint DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "status",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "ship_type",
+        "definition": "varchar(32) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "expand_dept",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "entrusted_person",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "transport",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "contract_number",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "inquiry_number",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "bidding_number",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "shipping_instruction",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "rd_number",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "procurement_type",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "car_model",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "loading_trucks",
+        "definition": "decimal(18,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "delivery_province",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "delivery_city",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "delivery_area",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "delivery_distance",
+        "definition": "decimal(18,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "reconciliation_status",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "extra_cost_audited",
+        "definition": "varchar(32) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "base_code",
+        "definition": "varchar(32) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "del_flag",
+        "definition": "varchar(8) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "biz_date",
+        "definition": "date DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "source_created_at",
+        "definition": "datetime DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "source_updated_at",
+        "definition": "datetime DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "raw_json",
+        "definition": "json DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "UNIQUE KEY `uk_sync_ship_task` (`sync_batch_no`,`source_id`)",
+      "UNIQUE KEY `uk_ods_ship_task_source_id` (`source_id`)",
+      "KEY `idx_task_id` (`task_id`)",
+      "KEY `idx_biz_date` (`biz_date`)",
+      "KEY `idx_status` (`status`)"
+    ],
+    "ddl_line_count": 42
+  },
+  "dwd_logistics_ship_task": {
+    "file": "ai/inbox/attachments/middle_db/Result_12_2.xlsx",
+    "column_count": 38,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": null
+      },
+      {
+        "name": "source_id",
+        "definition": "bigint NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "task_id",
+        "definition": "varchar(64) NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "company_id",
+        "definition": "bigint DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "company_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "project_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "pickup_date",
+        "definition": "date DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "warehouse_id",
+        "definition": "bigint DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "warehouse_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "status",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "ship_type",
+        "definition": "varchar(32) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "expand_dept",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "entrusted_person",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "transport_mode",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "contract_no",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "inquiry_no",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "bidding_no",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "ship_instruction_no",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "rd_no",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "procurement_type",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "car_model",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "loading_trucks",
+        "definition": "decimal(18,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "delivery_province",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "delivery_city",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "delivery_area",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "normalized_region_name",
+        "definition": "varchar(32) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "region_resolve_source",
+        "definition": "varchar(32) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "delivery_distance",
+        "definition": "decimal(18,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "reconciliation_status",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "extra_cost_audited",
+        "definition": "varchar(32) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "base_code",
+        "definition": "varchar(32) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "del_flag",
+        "definition": "varchar(8) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "biz_date",
+        "definition": "date DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "biz_year",
+        "definition": "int DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "biz_month",
+        "definition": "varchar(16) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "is_formal_data",
+        "definition": "tinyint NOT NULL DEFAULT '1'",
+        "comment": "仅保留2026+正式数据"
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": null
+      },
+      {
+        "name": "updated_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "UNIQUE KEY `uk_task_id` (`task_id`)",
+      "UNIQUE KEY `uk_dwd_ship_task_source_id` (`source_id`)",
+      "KEY `idx_biz_date` (`biz_date`)",
+      "KEY `idx_biz_year_month` (`biz_year`,`biz_month`)",
+      "KEY `idx_company_id` (`company_id`)",
+      "KEY `idx_status` (`status`)"
+    ],
+    "ddl_line_count": 47
+  },
+  "dws_logistics_detail_union": {
+    "file": "ai/inbox/attachments/middle_db/Result_12_3.xlsx",
+    "column_count": 26,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": null
+      },
+      {
+        "name": "source_type",
+        "definition": "varchar(32) NOT NULL",
+        "comment": "HIST/SYS"
+      },
+      {
+        "name": "biz_date",
+        "definition": "date DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "biz_year",
+        "definition": "int DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "biz_month",
+        "definition": "varchar(16) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "task_id",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "contract_no",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "inquiry_no",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "ship_instruction_no",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "sap_order_no",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "customer_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "logistics_company_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "warehouse_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "region_name",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "origin_place",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "transport_mode",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "plate_number",
+        "definition": "varchar(512) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "product_spec",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "product_power",
+        "definition": "decimal(18,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "shipment_count",
+        "definition": "decimal(18,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "shipment_watt",
+        "definition": "decimal(20,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "shipment_trip_count",
+        "definition": "decimal(18,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "total_fee",
+        "definition": "decimal(18,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "extra_fee",
+        "definition": "decimal(18,4) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "source_ref",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": "来源ID或复合主键"
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "KEY `idx_biz_date` (`biz_date`)",
+      "KEY `idx_contract_no` (`contract_no`)",
+      "KEY `idx_inquiry_no` (`inquiry_no`)",
+      "KEY `idx_ship_instruction_no` (`ship_instruction_no`)",
+      "KEY `idx_sap_order_no` (`sap_order_no`)",
+      "KEY `idx_plate_number` (`plate_number`)",
+      "KEY `idx_task_id` (`task_id`)"
+    ],
+    "ddl_line_count": 36
+  },
+  "dws_logistics_monthly_metric": {
+    "file": "ai/inbox/attachments/middle_db/Result_12_4.xlsx",
+    "column_count": 18,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": null
+      },
+      {
+        "name": "source_type",
+        "definition": "varchar(32) NOT NULL",
+        "comment": "HIST/SYS/MIXED"
+      },
+      {
+        "name": "biz_year",
+        "definition": "int NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "biz_month",
+        "definition": "varchar(16) NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "customer_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "logistics_company_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "region_name",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "warehouse_name",
+        "definition": "varchar(255) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "transport_mode",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "origin_place",
+        "definition": "varchar(128) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "metric_type",
+        "definition": "varchar(32) NOT NULL DEFAULT 'WATT'",
+        "comment": "WATT/COUNT/TRIP/FEE"
+      },
+      {
+        "name": "shipment_watt",
+        "definition": "decimal(20,4) DEFAULT '0.0000'",
+        "comment": null
+      },
+      {
+        "name": "shipment_count",
+        "definition": "decimal(20,4) DEFAULT '0.0000'",
+        "comment": null
+      },
+      {
+        "name": "shipment_trip_count",
+        "definition": "decimal(20,4) DEFAULT '0.0000'",
+        "comment": null
+      },
+      {
+        "name": "total_fee",
+        "definition": "decimal(20,4) DEFAULT '0.0000'",
+        "comment": null
+      },
+      {
+        "name": "extra_fee",
+        "definition": "decimal(20,4) DEFAULT '0.0000'",
+        "comment": null
+      },
+      {
+        "name": "row_count",
+        "definition": "int DEFAULT '0'",
+        "comment": null
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "KEY `idx_year_month` (`biz_year`,`biz_month`)",
+      "KEY `idx_company_month` (`logistics_company_name`,`biz_year`,`biz_month`)",
+      "KEY `idx_region_month` (`region_name`,`biz_year`,`biz_month`)",
+      "KEY `idx_warehouse_month` (`warehouse_name`,`biz_year`,`biz_month`)"
+    ],
+    "ddl_line_count": 25
+  },
+  "dm_logistics_company_month_rank": {
+    "file": "ai/inbox/attachments/middle_db/Result_12_5.xlsx",
+    "column_count": 10,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": null
+      },
+      {
+        "name": "biz_year",
+        "definition": "int NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "biz_month",
+        "definition": "varchar(16) NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "logistics_company_name",
+        "definition": "varchar(255) NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "shipment_watt",
+        "definition": "decimal(20,4) DEFAULT '0.0000'",
+        "comment": null
+      },
+      {
+        "name": "shipment_trip_count",
+        "definition": "decimal(20,4) DEFAULT '0.0000'",
+        "comment": null
+      },
+      {
+        "name": "total_fee",
+        "definition": "decimal(20,4) DEFAULT '0.0000'",
+        "comment": null
+      },
+      {
+        "name": "rank_by_watt",
+        "definition": "int DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "rank_by_fee",
+        "definition": "int DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "KEY `idx_year_month` (`biz_year`,`biz_month`)",
+      "KEY `idx_company` (`logistics_company_name`)"
+    ],
+    "ddl_line_count": 15
+  },
+  "plan_bom_import_batch": {
+    "file": "ai/inbox/attachments/middle_db/Result_13.xlsx",
+    "column_count": 12,
+    "columns": [
+      {
+        "name": "batch_id",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "导入批次号"
+      },
+      {
+        "name": "source_type",
+        "definition": "varchar(32) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'EXCEL'",
+        "comment": "数据来源类型，一期为 EXCEL，后续可扩展 SAP"
+      },
+      {
+        "name": "source_tag",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'manual_import_source'",
+        "comment": "来源标记，Excel 开发期固定为 manual_import_source"
+      },
+      {
+        "name": "file_name",
+        "definition": "varchar(512) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "原始文件名"
+      },
+      {
+        "name": "file_hash",
+        "definition": "varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "文件哈希，用于防重复导入"
+      },
+      {
+        "name": "status",
+        "definition": "varchar(32) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending'",
+        "comment": "导入批次状态"
+      },
+      {
+        "name": "total_files",
+        "definition": "int NOT NULL DEFAULT '0'",
+        "comment": "本批次文件数量"
+      },
+      {
+        "name": "total_headers",
+        "definition": "int NOT NULL DEFAULT '0'",
+        "comment": "解析出的 BOM 头数量"
+      },
+      {
+        "name": "total_lines",
+        "definition": "int NOT NULL DEFAULT '0'",
+        "comment": "解析出的材料行数量"
+      },
+      {
+        "name": "error_message",
+        "definition": "text COLLATE utf8mb4_general_ci",
+        "comment": "内部失败原因"
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": "创建时间"
+      },
+      {
+        "name": "finished_at",
+        "definition": "datetime DEFAULT NULL",
+        "comment": "完成时间"
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`batch_id`)",
+      "KEY `ix_plan_bom_import_batch_file_hash` (`file_hash`)",
+      "KEY `ix_plan_bom_import_batch_status` (`status`)"
+    ],
+    "ddl_line_count": 17
+  },
+  "plan_bom_header": {
+    "file": "ai/inbox/attachments/middle_db/Result_13_2.xlsx",
+    "column_count": 16,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": "技术主键"
+      },
+      {
+        "name": "order_no",
+        "definition": "varchar(128) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "订单号，评审号别名最终也查该字段"
+      },
+      {
+        "name": "version_no",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "版本号，例如 A0、A1、A10"
+      },
+      {
+        "name": "file_no",
+        "definition": "varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "BOM 文件号"
+      },
+      {
+        "name": "order_name",
+        "definition": "varchar(512) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "订单名称，支持模糊查询"
+      },
+      {
+        "name": "effective_date",
+        "definition": "date DEFAULT NULL",
+        "comment": "生效日期，当前版本排序优先字段"
+      },
+      {
+        "name": "source_type",
+        "definition": "varchar(32) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'EXCEL'",
+        "comment": "来源类型"
+      },
+      {
+        "name": "source_tag",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'manual_import_source'",
+        "comment": "来源标记"
+      },
+      {
+        "name": "import_batch_id",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "导入批次号"
+      },
+      {
+        "name": "raw_file_name",
+        "definition": "varchar(512) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "原始文件名"
+      },
+      {
+        "name": "raw_sheet_name",
+        "definition": "varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "原始 sheet 名"
+      },
+      {
+        "name": "is_active",
+        "definition": "smallint NOT NULL DEFAULT '1'",
+        "comment": "是否当前有效记录，1 表示有效"
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": "创建时间"
+      },
+      {
+        "name": "updated_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+        "comment": "更新时间"
+      },
+      {
+        "name": "order_identity_key",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "file_instance_key",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "UNIQUE KEY `uk_plan_bom_header_identity_file_version_source` (`order_identity_key`,`file_instance_key`,`version_no`,`source_type`)",
+      "KEY `idx_plan_bom_header_order` (`order_no`)",
+      "KEY `idx_plan_bom_header_order_name` (`order_name`)",
+      "KEY `idx_plan_bom_header_effective` (`order_no`,`effective_date`)",
+      "KEY `ix_plan_bom_header_import_batch_id` (`import_batch_id`)",
+      "KEY `idx_plan_bom_header_identity` (`order_identity_key`)",
+      "KEY `idx_plan_bom_header_identity_version_source` (`order_identity_key`,`version_no`,`source_type`)",
+      "KEY `idx_plan_bom_header_file_instance` (`file_instance_key`)"
+    ],
+    "ddl_line_count": 27
+  },
+  "plan_bom_revision": {
+    "file": "ai/inbox/attachments/middle_db/Result_13_3.xlsx",
+    "column_count": 14,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": "技术主键"
+      },
+      {
+        "name": "order_no",
+        "definition": "varchar(128) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "订单号"
+      },
+      {
+        "name": "version_no",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "版本号"
+      },
+      {
+        "name": "revision_version",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "修订版本"
+      },
+      {
+        "name": "revision_content",
+        "definition": "text COLLATE utf8mb4_general_ci",
+        "comment": "修订内容"
+      },
+      {
+        "name": "reviser",
+        "definition": "varchar(128) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "修订人"
+      },
+      {
+        "name": "effective_date",
+        "definition": "date DEFAULT NULL",
+        "comment": "生效日期"
+      },
+      {
+        "name": "source_type",
+        "definition": "varchar(32) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'EXCEL'",
+        "comment": "来源类型"
+      },
+      {
+        "name": "source_tag",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'manual_import_source'",
+        "comment": "来源标记"
+      },
+      {
+        "name": "import_batch_id",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "导入批次号"
+      },
+      {
+        "name": "raw_row_no",
+        "definition": "int DEFAULT NULL",
+        "comment": "原始 Excel 行号"
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": "创建时间"
+      },
+      {
+        "name": "order_identity_key",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "file_instance_key",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "KEY `idx_plan_bom_revision_order` (`order_no`)",
+      "KEY `idx_plan_bom_revision_version` (`order_no`,`version_no`)",
+      "KEY `idx_plan_bom_revision_effective` (`order_no`,`effective_date`)",
+      "KEY `ix_plan_bom_revision_import_batch_id` (`import_batch_id`)",
+      "KEY `idx_plan_bom_revision_identity_version` (`order_identity_key`,`version_no`)",
+      "KEY `idx_plan_bom_revision_identity_file_version` (`order_identity_key`,`file_instance_key`,`version_no`)"
+    ],
+    "ddl_line_count": 23
+  },
+  "plan_bom_material_line": {
+    "file": "ai/inbox/attachments/middle_db/Result_13_4.xlsx",
+    "column_count": 21,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": "技术主键"
+      },
+      {
+        "name": "order_no",
+        "definition": "varchar(128) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "订单号"
+      },
+      {
+        "name": "version_no",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "版本号"
+      },
+      {
+        "name": "sap_code",
+        "definition": "varchar(128) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "SAP 编码，材料行唯一键组成部分"
+      },
+      {
+        "name": "line_no",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "Excel 原始序号，不作为稳定主键"
+      },
+      {
+        "name": "material_name",
+        "definition": "varchar(256) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "原始物料名称"
+      },
+      {
+        "name": "material_category",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "系统材料归类"
+      },
+      {
+        "name": "description",
+        "definition": "text COLLATE utf8mb4_general_ci",
+        "comment": "原始规格描述"
+      },
+      {
+        "name": "standard_usage",
+        "definition": "decimal(18,6) DEFAULT NULL",
+        "comment": "标准用量"
+      },
+      {
+        "name": "unit",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "单位"
+      },
+      {
+        "name": "production_loss",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "生产损耗，保留原始文本"
+      },
+      {
+        "name": "remark",
+        "definition": "text COLLATE utf8mb4_general_ci",
+        "comment": "备注"
+      },
+      {
+        "name": "replacement_marker",
+        "definition": "varchar(32) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "明确替代标识，仅原样展示"
+      },
+      {
+        "name": "source_type",
+        "definition": "varchar(32) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'EXCEL'",
+        "comment": "来源类型"
+      },
+      {
+        "name": "source_tag",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'manual_import_source'",
+        "comment": "来源标记"
+      },
+      {
+        "name": "import_batch_id",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "导入批次号"
+      },
+      {
+        "name": "raw_row_no",
+        "definition": "int DEFAULT NULL",
+        "comment": "原始 Excel 行号"
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": "创建时间"
+      },
+      {
+        "name": "updated_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+        "comment": "更新时间"
+      },
+      {
+        "name": "order_identity_key",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "file_instance_key",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "UNIQUE KEY `uk_plan_bom_line_identity_file_version_sap_source` (`order_identity_key`,`file_instance_key`,`version_no`,`sap_code`,`source_type`)",
+      "KEY `idx_plan_bom_line_order_version` (`order_no`,`version_no`)",
+      "KEY `idx_plan_bom_line_category` (`material_category`)",
+      "KEY `idx_plan_bom_line_sap` (`sap_code`)",
+      "KEY `ix_plan_bom_material_line_import_batch_id` (`import_batch_id`)",
+      "KEY `idx_plan_bom_line_identity_version` (`order_identity_key`,`version_no`)",
+      "KEY `idx_plan_bom_line_identity_file_version` (`order_identity_key`,`file_instance_key`,`version_no`)"
+    ],
+    "ddl_line_count": 31
+  },
+  "plan_bom_export_task": {
+    "file": "ai/inbox/attachments/middle_db/Result_13_5.xlsx",
+    "column_count": 13,
+    "columns": [
+      {
+        "name": "export_id",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "导出任务 ID"
+      },
+      {
+        "name": "batch_id",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "导出批次号"
+      },
+      {
+        "name": "query_log_id",
+        "definition": "bigint DEFAULT NULL",
+        "comment": "关联 sys_query_log.id"
+      },
+      {
+        "name": "query_type",
+        "definition": "varchar(64) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "导出对应的查询类型"
+      },
+      {
+        "name": "export_format",
+        "definition": "varchar(16) COLLATE utf8mb4_general_ci NOT NULL",
+        "comment": "导出格式，xlsx 或 csv"
+      },
+      {
+        "name": "status",
+        "definition": "varchar(32) COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'pending'",
+        "comment": "导出任务状态"
+      },
+      {
+        "name": "total_rows",
+        "definition": "int NOT NULL DEFAULT '0'",
+        "comment": "导出总行数"
+      },
+      {
+        "name": "part_total",
+        "definition": "int NOT NULL DEFAULT '0'",
+        "comment": "总分段数"
+      },
+      {
+        "name": "expires_at",
+        "definition": "datetime NOT NULL",
+        "comment": "文件过期时间"
+      },
+      {
+        "name": "error_message",
+        "definition": "text COLLATE utf8mb4_general_ci",
+        "comment": "内部失败原因"
+      },
+      {
+        "name": "user_message",
+        "definition": "varchar(256) COLLATE utf8mb4_general_ci DEFAULT NULL",
+        "comment": "用户可见提示"
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": "创建时间"
+      },
+      {
+        "name": "updated_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+        "comment": "更新时间"
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`export_id`)",
+      "KEY `idx_plan_bom_export_query_log` (`query_log_id`)",
+      "KEY `idx_plan_bom_export_status` (`status`)",
+      "KEY `ix_plan_bom_export_task_batch_id` (`batch_id`)"
+    ],
+    "ddl_line_count": 19
+  },
+  "Result_14": {
+    "file": "ai/inbox/attachments/middle_db/Result_14.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_dm_logics_company_month_rank": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_dm_logics_company_month_rank.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_dwd_logistics_ship_task": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_dwd_logistics_ship_task.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_dws_logistics_detail_union": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_dws_logistics_detail_union.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_dws_logistics_monthly_metric": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_dws_logistics_monthly_metric.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_ods_logistic_ship_task": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_ods_logistic_ship_task.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_plan_bom_header": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_plan_bom_header.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_plan_bom_import_batch": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_plan_bom_import_batch.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_plan_bom_material_line": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_plan_bom_material_line.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_plan_bom_revision": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_plan_bom_revision.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "logistics_ai_sys_query_log": {
+    "file": "ai/inbox/attachments/middle_db/logistics_ai_sys_query_log.xlsx",
+    "column_count": 0,
+    "columns": [],
+    "indexes": [],
+    "ddl_line_count": 0
+  },
+  "sys_data_source": {
+    "file": "ai/inbox/attachments/middle_db/sys_data_source.xlsx",
+    "column_count": 9,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": null
+      },
+      {
+        "name": "source_code",
+        "definition": "varchar(64) NOT NULL",
+        "comment": "数据源编码"
+      },
+      {
+        "name": "source_name",
+        "definition": "varchar(128) NOT NULL",
+        "comment": "数据源名称"
+      },
+      {
+        "name": "source_type",
+        "definition": "varchar(32) NOT NULL",
+        "comment": "EXCEL/MYSQL/API"
+      },
+      {
+        "name": "biz_domain",
+        "definition": "varchar(64) NOT NULL",
+        "comment": "业务域，如 logistics"
+      },
+      {
+        "name": "source_desc",
+        "definition": "varchar(500) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "is_enabled",
+        "definition": "tinyint NOT NULL DEFAULT '1'",
+        "comment": null
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": null
+      },
+      {
+        "name": "updated_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "UNIQUE KEY `uk_source_code` (`source_code`)"
+    ],
+    "ddl_line_count": 13
+  },
+  "sys_query_log": {
+    "file": "ai/inbox/attachments/middle_db/sys_query_log.xlsx",
+    "column_count": 11,
+    "columns": [
+      {
+        "name": "id",
+        "definition": "bigint NOT NULL AUTO_INCREMENT",
+        "comment": null
+      },
+      {
+        "name": "trace_id",
+        "definition": "varchar(64) NOT NULL",
+        "comment": null
+      },
+      {
+        "name": "query_type",
+        "definition": "varchar(64) NOT NULL",
+        "comment": "METRICS/COMPARE/DETAIL/CHAT"
+      },
+      {
+        "name": "question_text",
+        "definition": "text",
+        "comment": null
+      },
+      {
+        "name": "request_payload",
+        "definition": "json DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "route_type",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": "HIST/SYS/MIXED"
+      },
+      {
+        "name": "metric_type",
+        "definition": "varchar(64) DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "result_count",
+        "definition": "int DEFAULT NULL",
+        "comment": null
+      },
+      {
+        "name": "status",
+        "definition": "varchar(32) NOT NULL DEFAULT 'SUCCESS'",
+        "comment": null
+      },
+      {
+        "name": "message",
+        "definition": "text",
+        "comment": null
+      },
+      {
+        "name": "created_at",
+        "definition": "datetime NOT NULL DEFAULT CURRENT_TIMESTAMP",
+        "comment": null
+      }
+    ],
+    "indexes": [
+      "PRIMARY KEY (`id`)",
+      "KEY `idx_trace_id` (`trace_id`)",
+      "KEY `idx_query_type` (`query_type`)",
+      "KEY `idx_created_at` (`created_at`)"
+    ],
+    "ddl_line_count": 17
+  }
+}

@@ -1,0 +1,1275 @@
+diff --git a/docs/CURRENT_STATUS.md b/docs/CURRENT_STATUS.md
+index 9719809..d0e6da1 100644
+--- a/docs/CURRENT_STATUS.md
++++ b/docs/CURRENT_STATUS.md
+@@ -1,145 +1,60 @@
++
+ # CURRENT_STATUS.md
+ 
+-## 当前阶段：计划 BOM 功率预测智能问答 M1.5 已完成，等待进入 M2 确认
++## 当前阶段：物管域 SAP MID 接入 M1 方案已完成，建议进入 M2 准备
+ 
+ 当前正式任务：
+ 
+ ```text
+-计划 BOM 功率预测智能问答 / 功率测试基准能力
++物管域 SAP Oracle MID 数据同步、智能问数与前端适配建设
+ ```
+ 
+-该能力属于现有 **计划 BOM 业务域** 的子能力，不新建独立业务域。
++本轮只执行 M1：数据资产审计、同步方案、中间库建模、智能问数链路、计划 BOM SAP 数据源改造、前端适配方案、Oracle 只读 smoke test 报告。
+ 
+ ---
+ 
+-## 一、当前完成状态
+-
+-### 1. M1 已完成
+-
+-M1 已完成以下工作：
+-
+-1. 审计旧版 `GCL功率测试基准（V2.1）26.03.26 (1).xlsm——副本.xlsm`。
+-2. 梳理计划 BOM 现有导入、查询、QA、智能助手链路。
+-3. 输出：
+-   - `docs/PLAN_POWER_EXCEL_FORMULA_AUDIT.md`
+-   - `docs/PLAN_POWER_IMPLEMENTATION_PLAN.md`
+-
+-M1 未修改后端业务代码、未新增接口、未新增迁移、未修改前端、未接入 PlanBom QA、未实现正式计算引擎。
+-
+-### 2. M1.5 已完成
+-
+-M1.5 已完成：
+-
+-1. 固化业务口径。
+-2. 补充审计新版 Excel：
+-   - `ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm`
+-3. 判断 M2 开发准入。
+-4. 新增 / 更新文档：
+-   - `docs/PLAN_POWER_BUSINESS_CONFIRMATION.md`
+-   - `docs/PLAN_POWER_EXCEL_FORMULA_AUDIT.md`
+-   - `docs/PLAN_POWER_IMPLEMENTATION_PLAN.md`
+-   - `docs/CURRENT_STATUS.md`
+-   - `docs/NEXT_TASK.md`
+-   - `ai/inbox/attachments_manifest.md`
+-
+-M1.5 仍未创建数据库迁移、未新增正式接口、未实现正式计算引擎、未接入 PlanBom QA、未修改前端、未 hardcode 样例题。
++## 一、M1 已完成内容
++
++1. 只读审计 `ai/inbox/requirement.md`。
++2. 只读审计 SAP MID 附件：87 个视图、7718 行字段元数据、16 个重点视图样例、87 条视图 SQL 记录。
++3. 只读审计智能助手中间库附件：物流 ODS/DWD/DWS/DM、计划 BOM 表、sys_task/sys_query 日志表。
++4. 只读审计现有后端：物流同步/问数链路、计划 BOM Excel 导入/查询/QA、配置与 DB session。
++5. 只读审计现有前端：路由、布局、BusinessChatPage、物流/计划 BOM API、ResultTable、流式 API。
++6. 完成 Oracle 只读 smoke test 前置检查：`SAP_ORACLE_*` 配置项存在，但本地缺少 `oracledb/cx_Oracle` 驱动，未连接 Oracle、未执行 SQL、未导出数据。
++7. 输出 M1 文档：
++   - `docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md`
++   - `docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md`
++   - `docs/SAP_MID_SYNC_DESIGN.md`
++   - `docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md`
++   - `docs/PLAN_BOM_SAP_DATA_SOURCE_MIGRATION_PLAN.md`
++   - `docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md`
++   - `docs/SAP_MID_INTEGRATION_ROADMAP.md`
++   - `docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md`
+ 
+ ---
+ 
+-## 二、当前主分析文件
++## 二、本轮未做事项
+ 
+-后续 M2/M3/M4/M5 默认以新版 TOPCon 文件作为目标：
+-
+-```text
+-ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm
+-```
+-
+-旧版 Excel 仅作为历史审计参考。
+-
+-新版文件补充审计结论：
+-
+-1. Sheet 数量未变：仍为 12 个 Sheet。
+-2. 版型模型页未变：仍为 10 个版型模型页。
+-3. 配置区位置未变：`A1:Y27`。
+-4. 功率档位区未变：10 档版型为 `K28:T28`，48/54 系列有效 8 档。
+-5. 供应商效率分布区未变：`C77:Y96`。
+-6. 公式结构未发生阻塞性变化：仍以 `NORMSDIST`、`SUM`、固定行列引用和 VBA 写值为核心。
+-7. `标板基准` 页从 `A1:D10` 变为 `A1:E10`，新增 `功率最优` 列。
+-8. `更改履历` 更新到 2026.04.13。
+-9. `R30:R34` 疑似问题未完全消失，新版仍发现 `NT12R-66GDF!R30/R32` 需要语义修正。
++1. 未新增正式业务接口。
++2. 未修改前端页面。
++3. 未创建数据库迁移。
++4. 未接入用户问答生产链路。
++5. 未让智能助手实时直接查询 SAP Oracle MID。
++6. 未让 LLM 自由生成 SQL 并执行。
++7. 未导出 Oracle 大表。
++8. 未写入或泄露真实 Oracle 账号密码。
+ 
+ ---
+ 
+-## 三、已固化业务口径
+-
+-详见：`docs/PLAN_POWER_BUSINESS_CONFIRMATION.md`。
+-
+-### 1. 公式策略
+-
+-```text
+-formula_policy = semantic_fixed_mode
+-```
+-
+-含义：后端计算引擎不完全按 Excel 原疑似错误公式照搬，而是按公式语义修正 `R30:R34` 的疑似复制错误。
+-
+-### 2. BOM 映射口径
+-
+-| BOM / 用户问法 | 功率模型标准项 | 默认归一结果 |
+-|---|---|---|
+-| 间隙贴膜 | 玻璃选型 | 间隙铝膜 |
+-| 接线盒 300/200 | 线缆长度 | +300/-200mm |
+-| 北德 / 新北德 / TÜV北德 | 标板基准 | 新北德 |
+-| 计量院 | 标板基准 | 中国计量院 |
+-| 莱茵 | 标板基准 | 莱茵基准 |
+-| NT12/66GDF | 版型 | NT12-66GDF |
+-| NT12R/66GDF | 版型 | NT12R-66GDF |
+-
+----
+-
+-## 四、M2 准入判断
+-
+-建议可以进入 M2：功率模型版本化入库。
+-
+-准入依据：
+-
+-1. 新版 Excel 核心结构可解析。
+-2. Sheet / 配置区 / 功率档位区 / 供应商效率分布区可稳定定位。
+-3. `formula_policy = semantic_fixed_mode` 已固化。
+-4. BOM 映射口径已固化。
+-5. M2 表结构和解析器设计不需要大改。
+-6. 未发现新的宏 / 公式阻塞项。
+-
+-M2 范围限制：只做模型版本化入库和解析校验；不要实现正式计算引擎，不接入 QA，不修改前端。
+-
+----
+-
+-## 五、现有能力基线
+-
+-上一阶段“全量样例题真实网页 E2E”验收已完成：
+-
+-- 真实网页 E2E：`3281/3281`
+-- 自动比对：`PASS=3281 / FAIL=0`
+-- B 类正确追问：`1429/1429`
+-- C 类正确拒答解释：`93/93`
+-
+-当前能力基线：
+-
+-- 物流：`A=656 / B=178 / C=69 / D=0`
+-- BOM：`A=86 / B=40 / C=3 / D=0`
+-- BOM QA API E2E：`30/30`
+-- BOM 多问法语义回归：`129/129`
++## 三、当前结论
+ 
+-M1/M1.5 文档工作不应改变上述能力边界。
++1. M2 可优先从库存/出入库两视图开始：`V_HF_SAP_INOUT_DAILY`、`V_SAP_HFFN_CRKLSZ`。
++2. 现有物流链路可复用同步日志、ODS/DWD/DWS/DM 分层、SQL 模板、查询服务、StreamingResponse 和前端结果表格模式。
++3. 现有计划 BOM 已具备 `source_type/source_tag/import_batch_id` 等多来源基础，但 `SAP` 与需求中的 `SAP_MID` 命名需要 M2 前人工确认。
++4. Oracle live 验证当前被驱动缺失阻塞，M2 开发前必须补齐驱动并做只读 `SELECT 1`、字段结构、count、小样本验证。
+ 
+ ---
+ 
+-## 六、当前边界
++## 四、现有能力基线仍需保持
+ 
+-1. 没有 mock 数据。
+-2. 没有 hardcode 样例题答案。
+-3. 不绕过真实业务主链路。
+-4. M1/M1.5 不修改业务主链路。
+-5. M1/M1.5 不新增数据库结构。
+-6. M1/M1.5 不新增前端页面。
+-7. `BOM配置搭配问询：.docx` 只作为题型和问法参考，其中数据为假数据。
+-8. 后续正式测试必须基于真实 BOM 数据和 active 功率模型自行生成可验证测试题。
++历史物流/计划 BOM/功率预测能力不属于本轮 M1 改造对象。本轮文档工作不应改变既有能力边界：物流、计划 BOM、功率预测、试运行 E2E 基线均需在 M2 开发时继续回归。
+diff --git a/docs/HANDOFF.md b/docs/HANDOFF.md
+index 94686c9..063adb9 100644
+--- a/docs/HANDOFF.md
++++ b/docs/HANDOFF.md
+@@ -1,78 +1,69 @@
++
+ # HANDOFF.md
+ 
+-## 交接结论：全量样例题真实网页 E2E 已完成
+-
+-当前接手者无需继续续跑 E2E。本轮已经完成 `1391` 条原题 + `1890` 条变体，共 `3281` 条真实网页 E2E，自动比对 `3281/3281` 通过。当前下一步已切换为领导演示、小范围业务试运行和真实反馈闭环。
+-
+-### 真实网页入口
+-
+-- 首页：`/smart-chat`
+-- 智能问答：`/smart-chat`
+-- BOM 数据管理：`/bom-data`
+-- 试运行说明：`/trial-guide`
+-
+-### 样例题验收资产
+-
+-- 样例题台账脚本：`scripts/trial_sample_question_ledger.py`
+-- 标准答案脚本：`scripts/trial_sample_expected_answer_builder.py`
+-- 真实网页 E2E 脚本：`scripts/trial_sample_frontend_e2e_eval.py`
+-- 循环批量 runner：`scripts/trial_sample_e2e_batch_runner.py`
+-- 答案比对脚本：`scripts/trial_sample_answer_comparator.py`
+-- 总编排脚本：`scripts/trial_sample_full_e2e_acceptance.py`
+-
+-### 当前验收结果
+-
+-- 样例题：`1391` 条。
+-- 变体：`1890` 条。
+-- 网页 E2E 全量计划用例：`3281` 条。
+-- 已执行真实网页 E2E：`3281` 条。
+-- 待执行：`0` 条。
+-- 前端执行状态：`pass=3281`。
+-- 自动比对：`PASS=3281 / FAIL=0`。
+-- B 类正确追问：`1429/1429`。
+-- C 类正确拒答解释：`93/93`。
+-- 停止条件：`all_cases_completed`。
+-- `failed_cases.json` 当前为空。
+-
+-### 已完成修复
+-
+-1. `scripts/trial_sample_eval_common.py`：修复 BOM 线盒/接线盒变体生成，避免“接接线盒”。
+-2. `frontend/src/views/business-chat/BusinessChatPage.vue`：修复自动识别，物流历史发运/规格、运价、报价、发货类问题优先走物流。
+-3. `backend/app/domains/logistics/services/slot_extractor.py`：补齐全国省份别名，并增强“总运输费用/运量/累计/各按”等口语清洗。
+-4. `backend/app/domains/logistics/services/data_qa_planner.py`：补齐运量、运输费用、运价/报价等同义表达、复杂报表 B/C 边界和历史始发地车型汇总。
+-5. `backend/app/domains/logistics/repositories/data_qa_repository.py`：历史区域发运件数支持按年份过滤，并补齐历史始发地车型汇总查询。
+-6. `backend/app/domains/logistics/services/data_qa_service.py`：补齐历史始发地车型汇总服务分支，并在相关摘要中展示年份/口径。
+-7. `scripts/trial_sample_expected_answer_builder.py`：补齐线路运价、2026 客户/承运商/基地/特殊用车、系统 MW、项目名称、额外费用、备注关键词、宽表/矩阵/报表类 B/C 口径。
+-8. `scripts/trial_sample_frontend_e2e_eval.py`：增加逐题 checkpoint、服务日志、`--only-failed`、全量计划数统计，并修正 `--max-cases` 与空失败集保护。
+-9. `scripts/trial_sample_answer_comparator.py`：兼容恢复型 checkpoint 行，避免历史修复数据影响全量比对。
+-10. `scripts/trial_sample_e2e_batch_runner.py`：新增循环批量执行，自动跑前端 E2E + comparator 并记录可恢复状态。
+-11. `backend/app/domains/logistics/services/nlu_center_service.py`：补齐既有 903 A 基线的 NLU 诊断候选，不改变正式查询边界。
+-
+-### 数据口径
+-
+-- 物流标准答案以 `logistics_ai` 中间库为准。
+-- 物流源数据为 `23 年至 25 年物流台账数据.zip`、`物流 26 年源数据.zip`，只用于源文件核验和差异说明。
+-- BOM 标准答案来自真实 BOM 标准化材料数据。
+-
+-### 边界
+-
+-- 未修改物流 A/B/C 边界：`A=656 / B=178 / C=69 / D=0`
+-- 未修改 BOM A/B/C 边界：`A=86 / B=40 / C=3 / D=0`
+-- 未使用 mock 数据。
+-- 未 hardcode 样例题答案。
+-- 未绕过真实前端页面。
+-- 未绕过真实业务主链路。
+-- 不要继续硬迁 A，不要扩 query_key，不要再把 E2E 未完成当成当前状态。
+-
+-### 已执行检查
+-
+-- Python 编译检查：通过。
+-- 真实网页 E2E：`3281/3281`。
+-- 自动比对：`3281/3281`。
+-- 前端 build：通过。
+-- BOM QA API E2E：`30/30` 通过。
+-- BOM 多问法语义回归：`129/129` 通过。
+-- 物流 NLU Center dry-run：`122/122` 通过。
+-- 物流 903 语义回归：`1559/1559` 通过。
+-- 物流 Guardrail bounded check：`10/10` 通过。
+-- 发布前 readiness check：通过。
++## 交接结论：物管域 SAP MID 接入 M1 方案已完成
++
++本轮完成的是 M1 文档和只读审计，不是正式开发。未新增正式接口、未修改前端页面、未创建迁移、未导出 Oracle 大表、未把用户问答接到 Oracle。
++
++---
++
++## 一、已完成产物
++
++1. `docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md`
++2. `docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md`
++3. `docs/SAP_MID_SYNC_DESIGN.md`
++4. `docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md`
++5. `docs/PLAN_BOM_SAP_DATA_SOURCE_MIGRATION_PLAN.md`
++6. `docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md`
++7. `docs/SAP_MID_INTEGRATION_ROADMAP.md`
++8. `docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md`
++9. `docs/CURRENT_STATUS.md`
++10. `docs/NEXT_TASK.md`
++11. `docs/HANDOFF.md`
++
++审计中间材料位于：`ai/outbox/kanban/t_a252ec3a/`。
++
++---
++
++## 二、关键结论
++
++1. SAP MID 附件显示 87 个视图、7718 行字段元数据；16 个重点视图覆盖库存、出入库、采购、工单、SAP BOM。
++2. M2 建议只做库存/出入库 MVP：`V_HF_SAP_INOUT_DAILY` 与 `V_SAP_HFFN_CRKLSZ`。
++3. 用户问数必须查智能助手中间库，不能实时直接查 SAP Oracle MID。
++4. LLM 只负责理解和表达，程序负责基于模板准确查数；禁止 LLM 自由 SQL。
++5. 计划 BOM 可扩展 SAP MID 数据源，但需确认 `SAP_MID` 与现有 `SAP` source_type 命名兼容策略。
++
++---
++
++## 三、Oracle smoke test 状态
++
++`SAP_ORACLE_*` 配置项存在性已确认，但本地 `backend/.venv` 缺少 Oracle Python 驱动（`oracledb` / `cx_Oracle` 均不可导入），因此未连接 Oracle、未执行 `SELECT 1 FROM dual`、未做 count、未读取 live 字段结构、未抽样 Oracle 数据。
++
++不要伪造 Oracle 结果。M2 前必须先补齐驱动并做只读 smoke test。
++
++---
++
++## 四、下一步建议
++
++进入 M2 前，先处理 Oracle 驱动和只读连接验证；验证通过后，由 Codex/开发子任务按 `docs/NEXT_TASK.md` 拆分实现库存/出入库同步 MVP、查询模板和前端物管入口 MVP。
++
++---
++
++## 五、人工确认项
++
++1. Oracle 驱动和网络权限。
++2. MID schema/owner 与只读账号权限。
++3. 库存/出入库业务口径：移动类型方向、库存结存、退料/冲销净额化。
++4. `source_type = SAP_MID` 是否作为正式枚举。
++5. 前端物管入口命名、同步管理权限和展示口径。
++
++---
++
++## 六、边界提醒
++
++1. 不要改 main。
++2. 不要恢复任何临时 token。
++3. 不要把真实账号密码写入文档/日志/代码。
++4. 不要让智能助手问答直接查 Oracle。
++5. 不要在 M2 范围外提前做采购、工单、SAP BOM 的正式开发。
++6. 每轮开发必须保留并回归现有物流、计划 BOM、功率预测能力。
+diff --git a/docs/NEXT_TASK.md b/docs/NEXT_TASK.md
+index 1705181..b528f90 100644
+--- a/docs/NEXT_TASK.md
++++ b/docs/NEXT_TASK.md
+@@ -1,19 +1,19 @@
++
+ # NEXT_TASK.md
+ 
+-## 下一步任务：M2 功率模型版本化入库
++## 下一步任务：M2 库存 / 出入库同步 MVP + 物管问答入口 MVP
+ 
+-M1 与 M1.5 已完成。下一轮建议进入：
++M1 已完成。下一轮建议进入：
+ 
+ ```text
+-M2：功率模型版本化入库
++M2：库存 / 出入库同步 MVP + 物管问答前端入口 MVP
+ ```
+ 
+-M2 的目标是把新版 `GCL功率测试基准` xlsm 从动态 Excel 转成可追溯、可校验、可激活的结构化模型版本。
+-
+-当前主文件：
++首批范围：
+ 
+ ```text
+-ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm
++V_HF_SAP_INOUT_DAILY
++V_SAP_HFFN_CRKLSZ
+ ```
+ 
+ ---
+@@ -22,180 +22,69 @@ ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm
+ 
+ 1. `AGENTS.md`
+ 2. `README_WORKSPACE.md`
+-3. `docs/CURRENT_STATUS.md`
+-4. `docs/NEXT_TASK.md`
+-5. `docs/PLAN_POWER_BUSINESS_CONFIRMATION.md`
+-6. `docs/PLAN_POWER_EXCEL_FORMULA_AUDIT.md`
+-7. `docs/PLAN_POWER_IMPLEMENTATION_PLAN.md`
+-8. `ai/inbox/attachments_manifest.md`
+-9. `ai/inbox/attachments/GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm`
++3. `ai/inbox/requirement.md`
++4. `docs/CURRENT_STATUS.md`
++5. `docs/NEXT_TASK.md`
++6. `docs/HANDOFF.md`
++7. `docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md`
++8. `docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md`
++9. `docs/SAP_MID_SYNC_DESIGN.md`
++10. `docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md`
++11. `docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md`
++12. `docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md`
+ 
+ ---
+ 
+-## 二、M2 开发准入结论
+-
+-可以进入 M2。
++## 二、M2 前置阻塞必须处理
+ 
+-依据：
+-
+-1. 新版 Excel 核心结构可解析。
+-2. 12 个 Sheet / 10 个版型模型页稳定。
+-3. 配置区仍为 `A1:Y27`。
+-4. 电池效率区仍为 `C29:C48`。
+-5. 功率档位区仍为 `K28:T28` 或 48/54 系列有效 8 档。
+-6. 供应商效率分布区仍为 `C77:Y96`。
+-7. 公式结构未出现新阻塞项。
+-8. 业务已确认 `formula_policy = semantic_fixed_mode`。
+-9. BOM 映射、标板别名、版型别名已固化。
+-10. M2 表结构和解析器设计不需要大改。
++1. 安装并锁定 Oracle Python 驱动：优先 `oracledb`。
++2. 使用 `SAP_ORACLE_*` 环境变量完成只读连接 smoke test。
++3. 验证 `SELECT 1 FROM dual`。
++4. 验证白名单字段结构。
++5. 对首批两个视图执行 count 与 `ROWNUM <= 5` 小样本。
++6. 不输出真实 host/user/password/DSN。
+ 
+ ---
+ 
+-## 三、M2 必须固化的业务口径
+-
+-### 1. 公式策略
++## 三、M2 后端任务清单
+ 
+-```text
+-formula_policy = semantic_fixed_mode
+-```
+-
+-M2 解析器必须记录 Excel 原始公式 issue，尤其：
+-
+-```text
+-NT12R-66GDF!R30
+-NT12R-66GDF!R32
+-```
+-
+-这两个单元格在新版中仍出现疑似 `L行-$S$28` 引用；M3 计算时应按 `I行-$S$28` 语义修正。
+-
+-### 2. BOM 映射口径
+-
+-| BOM / 用户问法 | 标准归一结果 |
+-|---|---|
+-| 间隙贴膜 | 间隙铝膜 |
+-| 接线盒 300/200 | +300/-200mm |
+-| 北德 / 新北德 / TÜV北德 | 新北德 |
+-| 计量院 | 中国计量院 |
+-| 莱茵 | 莱茵基准 |
+-| NT12/66GDF | NT12-66GDF |
+-| NT12R/66GDF | NT12R-66GDF |
++1. 新建 `backend/app/domains/material_management/` 基础目录。
++2. 新增 Oracle 基础设施层或遵循当前配置规范增加 Oracle client/config。
++3. 新增白名单视图注册：只开放 `V_HF_SAP_INOUT_DAILY` 与 `V_SAP_HFFN_CRKLSZ`。
++4. 新增库存/出入库 ODS/DWD 表迁移。
++5. 新增同步任务服务：手动同步、增量同步、分批读取、幂等 upsert、任务日志、错误日志。
++6. 新增库存/出入库查询服务和 SQL 模板。
++7. 新增物管问答最小链路：业务域识别、意图分类、参数抽取、程序查中间库、LLM 润色。
++8. 写 focused tests、compile、static scan、review 材料。
+ 
+ ---
+ 
+-## 四、M2 具体任务清单
+-
+-### 1. 数据库 / ORM
+-
+-新增并迁移以下表，表名以实际项目规范为准，但需覆盖这些实体：
+-
+-1. `plan_power_model_version`
+-   - 保存模型版本、文件名、文件哈希、业务版本标签、active 状态、解析状态、`formula_policy`、parse summary、warning/error。
+-2. `plan_power_model_sheet`
+-   - 保存每个模型 Sheet 的原始 Sheet 名、normalized model code、cell count、基础功率、面积、标准差、source range。
+-3. `plan_power_factor_option`
+-   - 保存配置项及选项：焊带、玻璃、电池厂家、电池尺寸、线缆长度、汇流条、电池工艺 / 影响因子、标板基准。
+-4. `plan_power_supplier_efficiency_distribution`
+-   - 保存供应商、效率段、占比、source cell、有效性标记。
+-5. `plan_power_power_bin`
+-   - 保存每个 Sheet 的功率档位和 source cell。
+-6. `plan_power_benchmark_factor`
+-   - 保存标板基准页数据，并支持原始标板名与 normalized 标板名。
+-7. `plan_power_model_validation_case`
+-   - 预留 M3 公式 parity / 抽样校验用例和结果。
+-8. `plan_power_parse_issue`
+-   - 保存锚点缺失、异常供应商标题、`#REF!`、`R30/R32` 语义修正等问题。
+-
+-### 2. 解析服务
+-
+-新增：
+-
+-```text
+-backend/app/domains/plan_bom/services/power_excel_parser_service.py
+-```
+-
+-职责：
+-
+-1. 读取 xlsm，但不执行 VBA。
+-2. 校验 workbook 是否有 `xl/vbaProject.bin`。
+-3. 校验 Sheet 集合：10 个版型模型页 + `标板基准` + `更改履历`。
+-4. 校验固定锚点：`A3/A6/A9/A12/A17/A20/A23/A26/A76`。
+-5. 提取配置项、选项、影响值、source cell。
+-6. 提取功率档位、供应商效率分布、标板基准、更改履历。
+-7. 识别并记录异常供应商标题，如 `0`、`#REF!`、占位 `厂家X`。
+-8. 识别并记录 `R30/R32` semantic fix issue。
+-9. 输出内存解析结构，供 service 落库。
+-
+-### 3. 模型版本服务
+-
+-新增：
+-
+-```text
+-backend/app/domains/plan_bom/services/power_model_service.py
+-```
+-
+-职责：
+-
+-1. 按 `file_hash` 防重复导入。
+-2. 创建模型版本和所有解析子记录。
+-3. 查询版本列表 / 版本详情。
+-4. 激活模型版本，确保最多一个 active 版本。
+-5. 返回 parse issues 和 warnings。
+-
+-### 4. API（M2 可新增，但不要接入 QA）
++## 四、M2 前端任务清单
+ 
+-建议新增内部管理接口：
+-
+-```text
+-backend/app/domains/plan_bom/api/endpoints/power_model.py
+-```
+-
+-接口建议：
+-
+-1. `POST /api/v1/plan-bom/power-model/import`
+-2. `GET /api/v1/plan-bom/power-model/versions`
+-3. `GET /api/v1/plan-bom/power-model/versions/{id}`
+-4. `POST /api/v1/plan-bom/power-model/versions/{id}/activate`
+-
+-注意：M2 只做模型导入 / 查询 / 激活，不实现正式功率计算，不接入智能问答。
+-
+-### 5. 测试
+-
+-M2 至少新增 / 运行：
+-
+-1. xlsm 解析单测：Sheet 数、版型、配置区、功率档、供应商分布。
+-2. 新版 `26.04.13` 文件解析回归。
+-3. `formula_policy` 保存测试。
+-4. `R30/R32` parse issue 记录测试。
+-5. 异常供应商标题过滤 / issue 测试。
+-6. 文件 hash 去重测试。
+-7. active 版本切换测试。
+-8. 不执行 VBA 的约束测试。
++1. 在智能问答 domain switch 中增加物管入口或后端 readiness 后显示入口。
++2. 新增 `frontend/src/api/materialManagement.ts`。
++3. 复用 BusinessChatPage、streamingApi、ResultTable 展示库存/出入库结果。
++4. 展示查询条件、来源中间库表、同步批次、数据日期。
++5. 不改变现有物流和计划 BOM 页面行为。
+ 
+ ---
+ 
+-## 五、M2 禁止事项
++## 五、M2 验收标准
+ 
+-1. 不实现正式功率预测计算引擎。
+-2. 不接入 PlanBom QA。
+-3. 不修改前端。
+-4. 不 hardcode 样例题。
+-5. 不使用 `BOM配置搭配问询：.docx` 中的假订单、假版型、假项目名作为真实测试数据。
+-6. 不让 LLM 计算功率预测结果。
+-7. 不自动进入 M3/M4/M5。
++1. Oracle 只读 smoke test 通过，且无密钥泄露。
++2. 可从 Oracle MID 抽取受控小批量库存/出入库数据写入中间库。
++3. 重复同步不产生重复脏数据。
++4. 同步日志和错误日志可追溯。
++5. 至少 5 个库存/出入库测试问题可基于中间库回答。
++6. 前端可进入物管问答入口并展示库存/出入库结果。
++7. 现有物流、计划 BOM、功率预测功能回归通过。
+ 
+ ---
+ 
+-## 六、M2 完成后报告要求
+-
+-完成 M2 后必须输出：
++## 六、M2 禁止事项
+ 
+-1. 修改了哪些文件。
+-2. 创建了哪些表 / 迁移。
+-3. 解析了哪个 Excel 文件和文件 hash。
+-4. 解析到哪些 Sheet、版型、配置项、功率档、供应商。
+-5. 记录了哪些 parse issues / warnings。
+-6. `formula_policy` 是否已入库。
+-7. active 模型版本是否可查询。
+-8. 运行了哪些测试，实际执行数量 / 总测试数量是多少。
+-9. 是否影响现有 BOM / 物流能力。
+-10. 是否建议进入 M3。
++1. 不全量导出 Oracle 大表。
++2. 不让用户问答直接查 SAP Oracle MID。
++3. 不让 LLM 自由生成 SQL 并执行。
++4. 不把真实账号密码写入文档、日志、代码注释或提交记录。
++5. 不扩展到采购、工单、SAP BOM，除非 M2 验收后另开任务。
+
+diff --git a/docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md b/docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md
+new file mode 100644
+index 0000000..c83e04b
+--- /dev/null
++++ b/docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md
+@@ -0,0 +1,112 @@
++
++# 物管域 SAP MID 数据资产审计（M1）
++
++执行时间：2026-05-14 17:02:43 CST
++范围：只读审计 `ai/inbox/requirement.md`、SAP MID 元数据/样例附件、智能助手中间库附件和现有后端/前端代码；未连接 Oracle 执行业务表导出，未修改正式业务代码。
++
++## 1. MID 资源库总体判断
++
++1. `ai/inbox/attachments/sap_mid/` 提供了 MID 视图清单、字段元数据、视图 SQL 和 16 个重点视图样例。
++2. 附件审计到 MID 视图总数 87 个，字段元数据 7718 行，视图 SQL 记录 87 条。
++3. 16 个重点视图覆盖 M2-M5 规划范围：库存、出入库、采购执行、工单组件、SAP BOM。
++4. 样例附件每个重点视图均为受控小样本（本次读取为 20 行样例），可用于字段理解和模型设计；不能当作正式源数据。
++5. Oracle 真实只读 smoke test 受本地 Python Oracle 驱动缺失阻塞；本报告中关于字段、主键和增量字段的判断均来自附件和现有代码，只能作为 M1 初步方案，M2 进入前必须用只读 Oracle 连接复核。
++
++## 2. 物管相关视图清单与主题归属
++
++
++| 主题 | MID 视图 | 样例规模 | 初步用途 | 主键/关联键候选 | 增量字段候选 |
++|---|---:|---:|---|---|---|
++| 库存 | V_HF_SAP_INOUT_DAILY | 20 行 / 35 列 | ZMB52 实时库存、现存量、结存数量、工厂、库存地点、批次、客户/供应商库存 | 物料编码 + 工厂代码 + 库存地点 + 批次 + 评估类型 + 库存日期；无批次时需 source_hash 兜底 | TS、库存日期 |
++| 出入库流水 | V_SAP_HFFN_CRKLSZ | 20 行 / 68 列 | ZMB51 出入库明细、移动类型、过账日期、入库/出库数量、采购/工单关联 | 年度 + 单据号 + 单据行 + 工厂代码 + 物料编码；必要时拼接移动类型/过账日期 | 过账日期、创建日期、过账时间 |
++| 采购申请 | V_SAP_HFFN_EBAN | 20 行 / 46 列 | 采购申请、申请数量、采购订单回写、需求日期 | BANFN + BNFPO | ERDAT、申请日期、计划日期、批准日期 |
++| 采购订单头 | V_SAP_HFFN_EKKO | 20 行 / 169 列 | 采购订单头、供应商、组织、币种、合同/状态 | MANDT + EBELN | AEDAT、BEDAT、RELEASE_DATE |
++| 采购订单行 | V_SAP_HFFN_EKPO | 20 行 / 348 列 | 采购订单行、物料、工厂、数量、价格、删除标识 | MANDT + EBELN + EBELP | AEDAT、交货/变更相关字段需业务确认 |
++| 交货计划 | V_SAP_HFFN_EKET | 20 行 / 79 列 | 采购订单交期、计划数量、已收货数量 | MANDT + EBELN + EBELP + ETENR | EINDT、SLFDT |
++| 采购历史 | V_SAP_HFFN_EKBE | 20 行 / 91 列 | 到货、退货、发票、采购历史流水 | MANDT + EBELN + EBELP + GJAHR + BELNR + BUZEI | BUDAT |
++| 生产订单头 | V_SAP_HFFN_AFKO | 20 行 / 167 列 | 工单计划日期、数量、BOM/路线关联 | MANDT + AUFNR | GSTRP、GLTRP、FTRMS；变更字段需确认 |
++| 生产订单行 | V_SAP_HFFN_AFPO | 20 行 / 100 列 | 工单产出物料、销售订单关联、计划/入库数量 | MANDT + AUFNR + POSNR | STRMP、ETRMP |
++| 工单主数据 | V_SAP_HFFN_AUFK | 20 行 / 127 列 | 工单类型、文本、公司/工厂、状态辅助 | MANDT + AUFNR | ERDAT、AEDAT |
++| 工单组件 | V_SAP_HFFN_RESB | 20 行 / 205 列 | 预留/组件需求、组件物料、需求数量、领料状态 | MANDT + RSNUM + RSPOS + RSART；或 AUFNR + MATNR + BDTER 辅助 | BDTER、变更/删除字段需确认 |
++| BOM 分配 | V_SAP_HFFN_MAST | 20 行 / 13 列 | 物料到 BOM 的分配关系 | MANDT + MATNR + WERKS + STLAN + STLNR + STLAL | ANDAT、AEDAT |
++| BOM 头 | V_SAP_HFFN_STKO | 20 行 / 30 列 | BOM 头、用途、替代、有效期、基数量 | MANDT + STLTY + STLNR + STLAL + STKOZ | DATUV、ANDAT、AEDAT |
++| BOM 组件 | V_SAP_HFFN_STPO | 20 行 / 139 列 | BOM 组件、组件物料、数量、项目类别、有效性 | MANDT + STLTY + STLNR + STLKN + STPOZ | DATUV、ANDAT、AEDAT |
++| BOM 选择/替代 | V_SAP_HFFN_STAS | 20 行 / 21 列 | BOM 项目选择、替代、有效性 | MANDT + STLTY + STLNR + STLAL + STLKN + STASZ | DATUV、ANDAT、AEDAT |
++| BOM 永久数据 | V_SAP_HFFN_STZU | 20 行 / 24 列 | BOM 辅助/永久属性 | MANDT + STLTY + STLNR + STLAN | HISDT、辅助变更字段需确认 |
++
++
++## 3. 库存视图分析
++
++`V_HF_SAP_INOUT_DAILY` 对应实时库存/结存快照。核心字段包括物料编码、物料描述、物料组、批次、现存量、结存数量、公司/工厂/库存地点、供应商、客户、库存日期、TS。建议 ODS 保留原始字段与 `raw_json`，DWD 统一到 `material_code/material_name/plant_code/storage_location/batch_no/on_hand_qty/balance_qty/uom/inventory_date`。
++
++初步风险：库存视图是状态快照，不是流水；同步策略应按快照日期/TS 幂等覆盖，不能简单累加数量。
++
++## 4. 出入库流水视图分析
++
++`V_SAP_HFFN_CRKLSZ` 对应 ZMB51 物料移动明细。核心字段包括工厂、创建/过账日期、移动类型、单据号/单据行、物料、批次、入库数量、出库数量、采购订单、投产工单号、金额、采购申请部门等。建议 DWD 拆出 `movement_direction`，将入库数量/出库数量统一为带方向的 `movement_qty`，同时保留原始数量列用于追溯。
++
++初步风险：移动类型与业务方向需要物管业务确认；同一单据可能存在冲销/退料，问数口径需明确是否净额化。
++
++## 5. 采购执行视图分析
++
++采购主题由 EBAN/EKKO/EKPO/EKET/EKBE 组成：
++
++1. EBAN：采购申请，主键候选 BANFN+BNFPO。
++2. EKKO：采购订单头，主键候选 MANDT+EBELN。
++3. EKPO：采购订单行，主键候选 MANDT+EBELN+EBELP。
++4. EKET：交货计划，主键候选 MANDT+EBELN+EBELP+ETENR。
++5. EKBE：采购历史，到货/退货/发票流水，主键候选 MANDT+EBELN+EBELP+GJAHR+BELNR+BUZEI。
++
++DWS 建议沉淀采购执行行宽表，指标包括下单数量、计划交货日期、已到货数量、未到货数量、延期天数、供应商、工厂、物料。
++
++## 6. 工单组件视图分析
++
++工单主题由 AFKO/AFPO/AUFK/RESB 组成。AFKO/AUFK 以 AUFNR 关联工单头与主数据；AFPO 描述产出物料/销售订单关联；RESB 描述组件预留和需求。问数优先基于 RESB + AFKO/AFPO/AUFK 形成 `dwd_mm_work_order_component`，再结合库存主题形成缺料分析。
++
++初步风险：RESB 与 STPO 语义不同，RESB 更偏生产订单实际组件需求，STPO 更偏理论 BOM；问答中必须区分“工单实际需求”和“理论 BOM 组件”。
++
++## 7. BOM 视图分析
++
++SAP BOM 主题由 MAST/STKO/STPO/STAS/STZU 组成：MAST 负责物料与 BOM 分配，STKO 负责 BOM 头，STPO 负责组件行，STAS 负责项目选择/替代/有效性，STZU 负责辅助永久数据。后续应先形成 SAP BOM ODS，再转换到计划 BOM 标准模型，不应直接替换现有 Excel BOM 表。
++
++## 8. 字段含义初步解释
++
++1. SAP 标准编码字段：MATNR 物料、WERKS 工厂、LGORT 库存地点、CHARG 批次、EBELN/EBELP 采购订单/行、BANFN/BNFPO 采购申请/行、AUFNR 工单、RSNUM/RSPOS 预留、STLNR/STLAL/STLKN/STPOZ BOM 编号/替代/节点/项目。
++2. 中文增强字段：物料描述、工厂名称、供应商名称、客户名称、移动类型描述等可直接用于前端展示和 LLM 润色，但查询主键不应依赖中文名称。
++3. 时间字段：SAP 视图里同时存在 YYYYMMDD 字符串、DATE/TIMESTAMP 和业务日期字段，DWD 必须统一转换为 date/datetime 并保留 raw 值。
++
++## 9. 主键/关联键初步判断
++
++详见上方清单。通用原则：ODS 以 SAP 原始主键或业务联合键生成 `source_pk`；无法稳定判断时使用“关键业务字段 + source_view + source_hash”兜底。DWD/DWS 只消费 ODS 的稳定 `source_pk`，不直接依赖 Oracle ROWID。
++
++## 10. 增量同步字段候选
++
++1. 库存：TS、库存日期。
++2. 出入库：过账日期、创建日期、过账时间。
++3. 采购：ERDAT/AEDAT/BEDAT/EINDT/BUDAT 等，按视图分别确认。
++4. 工单：ERDAT/AEDAT、计划开始/结束日期、需求日期 BDTER。
++5. BOM：ANDAT/AEDAT/DATUV。
++
++M2 前需要 Oracle 字段结构、count 和小样本抽验确认这些字段是否可用、是否有索引、是否支持跨天增量。
++
++## 11. 数据质量问题
++
++1. 多数视图字段 nullable，需要在 DWD 建立必填校验和异常隔离。
++2. 部分中文字段长度很长（供应商/客户/特殊库存等），中间库 varchar 长度需保守设计或使用 text/raw_json 兜底。
++3. SAP 日期存在字符串格式，必须处理空字符串、00000000、非法日期。
++4. 库存快照与流水不可混算，必须区分存量指标和流量指标。
++5. 采购/工单/BOM 视图字段数量较多，M2 不应一次性全建宽表，应按问数 MVP 先覆盖关键字段。
++
++## 12. 当前缺失信息
++
++1. Oracle live 连接未通过，未获取真实 count、执行计划、权限范围和字段 owner 复核。
++2. 物管业务没有确认移动类型方向、库存结存口径、采购未到货计算口径、缺料风险阈值。
++3. 未确认增量字段的稳定性和是否存在软删除/冲销标记。
++4. 未确认前端最终菜单命名、同步管理权限边界。
++
++## 13. 人工确认项
++
++1. Oracle 驱动采用 `oracledb` thin 模式还是需要 instant client thick 模式。
++2. MID schema/owner、白名单视图完整名称和只读账号权限。
++3. M2 首批只做 `V_HF_SAP_INOUT_DAILY` 与 `V_SAP_HFFN_CRKLSZ` 是否满足业务优先级。
++4. `source_type` 是否统一采用需求文档中的 `SAP_MID`；现有代码里计划 BOM 常量已有 `SAP`，需确认兼容命名。
+
+diff --git a/docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md b/docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md
+new file mode 100644
+index 0000000..2c3e5e1
+--- /dev/null
++++ b/docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md
+@@ -0,0 +1,102 @@
++
++# 物管域智能助手中间库建模方案（M1）
++
++## 1. ODS / DWD / DWS / DM 分层方案
++
++1. ODS：按 SAP MID 视图一视图一表落地，保留原始字段、来源视图、同步批次、source_pk、source_hash、raw_json。只做最小类型转换和幂等控制。
++2. DWD：按业务对象标准化，统一物料、工厂、库存地点、供应商、客户、采购单、工单、BOM 等字段命名和日期/数量单位。
++3. DWS：面向问数主题形成可直接查询的宽表/汇总表，支持库存、出入库、采购执行、工单组件、缺料分析、SAP BOM 组件关系。
++4. DM：面向高频问题和前端展示形成轻量结果表或物化汇总，例如库存排行、延期采购、缺料风险清单。
++
++## 2. 表命名建议
++
++ODS：
++- `ods_mm_sap_inventory_snapshot` ← V_HF_SAP_INOUT_DAILY
++- `ods_mm_sap_material_flow` ← V_SAP_HFFN_CRKLSZ
++- `ods_mm_sap_purchase_requisition` ← V_SAP_HFFN_EBAN
++- `ods_mm_sap_purchase_order_header` ← V_SAP_HFFN_EKKO
++- `ods_mm_sap_purchase_order_line` ← V_SAP_HFFN_EKPO
++- `ods_mm_sap_purchase_schedule` ← V_SAP_HFFN_EKET
++- `ods_mm_sap_purchase_history` ← V_SAP_HFFN_EKBE
++- `ods_mm_sap_work_order_header` ← V_SAP_HFFN_AFKO / AUFK 可拆表
++- `ods_mm_sap_work_order_item` ← V_SAP_HFFN_AFPO
++- `ods_mm_sap_reservation_component` ← V_SAP_HFFN_RESB
++- `ods_plan_bom_sap_mast/stko/stpo/stas/stzu`
++
++DWD/DWS/DM：
++- `dwd_mm_inventory_balance`
++- `dwd_mm_material_movement`
++- `dwd_mm_purchase_execution_line`
++- `dwd_mm_work_order_component`
++- `dwd_mm_material_consumption`
++- `dwd_plan_bom_sap_component`
++- `dws_mm_inventory_current`
++- `dws_mm_material_flow_daily`
++- `dws_mm_purchase_delivery_status`
++- `dws_mm_work_order_component_need`
++- `dws_mm_shortage_risk`
++- `dm_mm_inventory_rank`、`dm_mm_delayed_purchase`、`dm_mm_shortage_risk_rank`
++
++## 3. 字段设计建议
++
++通用字段：`id`、`source_system`、`source_view`、`source_type`、`source_pk`、`source_hash`、`sync_batch_no`、`sync_task_id`、`source_created_at`、`source_updated_at`、`raw_json`、`created_at`、`updated_at`。
++
++业务字段应采用英文稳定名并保留中文展示名映射：
++- 物料：`material_code`、`material_name`、`material_group_code`、`material_group_name`
++- 组织：`company_code`、`company_name`、`plant_code`、`plant_name`、`storage_location`、`storage_location_name`
++- 数量金额：`qty`、`in_qty`、`out_qty`、`balance_qty`、`amount_without_tax`、`amount_with_tax`、`currency`
++- 日期：`biz_date`、`posting_date`、`create_date`、`delivery_date`、`need_date`、`inventory_date`
++- 采购：`purchase_order_no`、`purchase_order_item`、`purchase_requisition_no`、`supplier_code`、`supplier_name`
++- 工单：`work_order_no`、`component_material_code`、`required_qty`、`issued_qty`、`shortage_qty`
++- BOM：`bom_no`、`bom_alt_no`、`bom_usage`、`bom_item_node`、`component_code`、`component_qty`、`effective_date`
++
++## 4. 来源追溯字段
++
++所有 DWD/DWS/DM 结果至少保留：`source_view`、`source_pk`、`sync_batch_no`、`source_row_count`、`source_ref`。前端展示时只展示业务化来源：来源主题、来源中间库表、同步批次、数据日期；不展示 Oracle 账号、DSN 或敏感连接信息。
++
++## 5. 幂等字段
++
++1. `source_pk`：优先 SAP 原主键/联合键。
++2. `source_hash`：原视图关键字段 JSON 排序后哈希，用于无主键或变更检测。
++3. ODS 唯一索引：`source_view + source_pk` 或 `source_view + source_hash`。
++4. DWD 唯一索引：业务主键 + `source_type`，避免 SAP/Excel/历史数据互相覆盖。
++
++## 6. 同步批次字段
++
++复用/扩展 `sys_task_log`、`sys_task_error_log`、`sys_data_source`。同步批次字段建议包括：`task_id`、`task_type`、`biz_domain`、`business_topic`、`source_system`、`source_view`、`target_table`、`sync_mode`、`sync_batch_no`、`trigger_type`、`operator`、`read_count`、`insert_count`、`update_count`、`skip_count`、`error_count`。
++
++## 7. 库存主题模型
++
++`dwd_mm_inventory_balance` 保留每个物料/工厂/库存地点/批次/库存日期的快照。`dws_mm_inventory_current` 只保留当前可问数口径，支持查询某物料当前库存、库存为 0、库存不足、库存排行。
++
++## 8. 出入库流水主题模型
++
++`dwd_mm_material_movement` 以物料凭证行或单据号/单据行作为粒度，统一 `movement_direction`、`movement_qty`、`posting_date`、`movement_type`。支持物料流水、工单领料、退料、按时间汇总。
++
++## 9. 采购执行主题模型
++
++`dwd_mm_purchase_execution_line` 关联 EBAN/EKKO/EKPO/EKET/EKBE，形成采购订单行级执行状态。DWS 计算下单数量、计划交货数量、已到货数量、未到货数量、延期状态、供应商维度交付情况。
++
++## 10. 工单组件主题模型
++
++`dwd_mm_work_order_component` 以工单 + 组件物料 + 预留行为粒度，关联 AFKO/AFPO/AUFK/RESB。支持查询某工单组件、某物料被哪些工单需求、需求数量/已领数量/缺口数量。
++
++## 11. 物料消耗主题模型
++
++物料消耗由 `dwd_mm_material_movement` 中领料/退料移动类型沉淀，按工单、物料、工厂、日期聚合到 `dws_mm_material_consumption_daily`。移动类型净额化规则需业务确认后实现。
++
++## 12. 缺料分析主题模型
++
++`dws_mm_shortage_risk` 将工单组件需求与当前库存关联，计算 `shortage_qty = required_qty - issued_qty - available_qty`。MVP 只做静态缺口提示，不做复杂排产承诺。
++
++## 13. 数据质量规则
++
++1. 主键字段缺失进入异常表，不进入 DWD。
++2. 日期无法解析时保留 raw 值并标记 quality_issue。
++3. 数量字段统一 Decimal，单位不一致时先不强转，等待业务换算规则。
++4. 删除/冲销/冻结标记进入状态字段，问数模板按业务口径过滤。
++5. 每批同步输出质量统计和异常样例，不输出敏感连接信息。
++
++## 14. 后续迁移建议
++
++M2 只落地库存/出入库最小表和迁移；M3-M5 再分主题增加采购、工单、SAP BOM。每阶段先写 Alembic + ORM + repository + focused tests，再接同步和问数模板。
+
+diff --git a/docs/SAP_MID_SYNC_DESIGN.md b/docs/SAP_MID_SYNC_DESIGN.md
+new file mode 100644
+index 0000000..81698bf
+--- /dev/null
++++ b/docs/SAP_MID_SYNC_DESIGN.md
+@@ -0,0 +1,87 @@
++
++# SAP MID 自动/手动同步方案（M1）
++
++## 1. Oracle 连接配置读取方案
++
++新增基础设施层建议路径：`backend/app/infra/oracle/`。配置只从环境变量读取：`SAP_ORACLE_HOST`、`SAP_ORACLE_PORT`、`SAP_ORACLE_SERVICE`、`SAP_ORACLE_USER`、`SAP_ORACLE_PASSWORD`。文档、日志和错误返回只记录配置项是否存在，不记录真实值。
++
++## 2. Oracle 连接池方案
++
++优先采用 `oracledb` thin 模式；如企业环境要求 Oracle Client，再启用 thick 模式。连接池设置建议：最小连接 1、最大连接 3-5、连接超时 5-10 秒、查询超时 60-300 秒、fetch size 1000-5000。连接层只暴露白名单视图读取接口，不暴露任意 SQL 执行。
++
++## 3. 白名单视图设计
++
++以配置文件/常量注册允许视图、业务主题、主键候选、增量字段、默认字段集合、最大单批行数。M2 首批白名单只开放：`V_HF_SAP_INOUT_DAILY`、`V_SAP_HFFN_CRKLSZ`。后续按路线逐步开放采购、工单、SAP BOM。
++
++## 4. 自动同步设计
++
++自动同步由调度器触发 `business_topic + sync_mode`。支持全量初始化、增量、指定视图、指定主题。每次执行创建 `sys_task_log`，同步中分批读取 Oracle，写 ODS，再转换 DWD/DWS，最后写统计和状态。
++
++## 5. 手动同步设计
++
++手动同步入口只触发后端同步任务，不允许前端直接连 Oracle。请求参数：主题、视图、同步模式、时间范围、重跑批次、操作人。后端校验白名单与权限后创建任务。
++
++## 6. 全量同步设计
++
++全量同步仅用于初始化或人工批准重建。必须分批分页，不允许无条件大表导出。写入时采用 staging/临时批次策略，批次成功后切换 active 标记；失败批次不污染现有可用数据。
++
++## 7. 增量同步设计
++
++按视图配置的增量字段读取 `last_success_watermark` 之后的数据，并设置回看窗口（例如 1-3 天）处理迟到更新。ODS upsert 以 `source_pk/source_hash` 幂等。
++
++## 8. 指定时间范围同步设计
++
++时间范围同步要求选择支持的时间字段，例如库存日期、过账日期、BUDAT、EINDT。时间范围必须有上限，避免误触发大表导出。
++
++## 9. 指定视图同步设计
++
++视图名必须命中白名单。执行前检查目标 ODS 表、字段映射和主键配置是否存在，缺失则拒绝执行并写错误日志。
++
++## 10. 指定主题同步设计
++
++主题映射：inventory、material_flow、purchase_execution、work_order_component、sap_bom。主题同步内部按依赖顺序执行多个视图，例如采购先头/行/交货计划/历史，再构建 DWS。
++
++## 11. 分批读取设计
++
++Oracle 侧只选择必要字段；分页可用 ROWNUM 包装、时间窗口或主键范围。每批记录 read_count、insert_count、update_count、skip_count、error_count。单批失败可重试，超过阈值后任务失败并保留已成功批次状态。
++
++## 12. 幂等写入设计
++
++ODS 使用唯一键 `source_view + source_pk`；无源主键时使用 `source_view + source_hash`。DWD/DWS 使用业务主键 + `source_type`。重复同步应更新变更字段或跳过完全一致记录。
++
++## 13. 失败重试设计
++
++失败重试按任务/视图/批次粒度进行。可重试错误：网络断开、查询超时、临时锁等待；不可重试错误：白名单外视图、字段映射缺失、主键缺失率过高。重试需继承原始任务上下文并生成新 run 记录。
++
++## 14. 同步日志设计
++
++复用 `sys_task_log` 记录任务级状态；扩展业务字段：business_topic、source_system、source_view、target_table、sync_mode、sync_batch_no、trigger_type、operator、watermark_start/end、read/insert/update/skip/error_count。
++
++## 15. 错误日志设计
++
++复用 `sys_task_error_log`，记录 error_stage、source_view、target_table、source_pk、safe_error_code、safe_error_message、raw_sample_hash。错误日志不得包含 Oracle DSN、用户名、密码或完整敏感 SQL。
++
++## 16. 安全控制
++
++1. Oracle 账号只读。
++2. 视图白名单 + 字段白名单。
++3. 不接受用户输入拼接 SQL。
++4. 前端无 Oracle 密码展示。
++5. 问数只查中间库。
++6. 日志和文档只保存配置存在性与安全错误摘要。
++
++## 17. 性能风险
++
++风险包括 Oracle 大视图、网络抖动、无索引增量字段、字段宽度大、DWD/DWS 聚合慢。应通过限流、分批、回看窗口、只读副本时间窗和异步任务规避。
++
++## 18. Oracle 不可访问时的降级策略
++
++当前本机 smoke test 因 Oracle Python 驱动缺失阻塞。Oracle 不可访问时不伪造结果，使用附件继续设计；同步任务在运行态应返回 `ORACLE_UNAVAILABLE` 并提示人工检查网络、驱动、权限。
++
++## 19. 前端手动同步触发接口规划
++
++M2 后端接口建议：`POST /api/v1/material-management/sap-mid/sync-tasks`。请求包括 topic、view_name、sync_mode、date_range、rerun_batch_no。响应返回 task_id 和初始状态。
++
++## 20. 前端同步状态查询接口规划
++
++建议：`GET /api/v1/material-management/sap-mid/sync-tasks`、`GET /api/v1/material-management/sap-mid/sync-tasks/{task_id}`、`POST /api/v1/material-management/sap-mid/sync-tasks/{task_id}/retry`。状态展示只返回业务统计和安全错误摘要。
+
+diff --git a/docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md b/docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md
+new file mode 100644
+index 0000000..25a0481
+--- /dev/null
++++ b/docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md
+@@ -0,0 +1,70 @@
++
++# 物管域智能问数链路设计（M1）
++
++## 1. 总体链路
++
++用户问题 → LLM 识别业务域/意图/参数 → 程序选择物管查询能力与 SQL 模板 → 查询智能助手中间库 → 返回结构化结果/查询条件/来源 → LLM 仅基于结果润色回答 → 前端展示自然语言、表格、条件、来源和状态。
++
++## 2. 与物流问数链路的复用点
++
++复用 `backend/app/domains/logistics/services/data_qa_service.py` 的“计划/执行/结果组装”思路，复用查询日志 `sys_query_log`、SQL 白名单、模板注册、StreamingResponse、前端流式展示与 ResultTable 组件模式。物管域应新建独立 `material_management` domain，不把逻辑混入物流。
++
++## 3. 与计划 BOM 问答链路的复用点
++
++复用计划 BOM 的候选确认、多数据源 `source_type/source_tag`、结果解释和 answer presentation 思路。SAP BOM 接入后仍通过标准中间库模型供现有 PlanBomQaService 逐步兼容。
++
++## 4. 业务域识别
++
++业务域候选：logistics、plan_bom、material_management、business_analysis。物管触发词包括库存、现存量、结存、出入库、移动类型、采购申请、采购订单、到货、未到货、工单、领料、退料、缺料、组件、预留。
++
++## 5. 意图识别
++
++首批意图：`inventory_current`、`inventory_zero`、`inventory_shortage`、`material_flow_recent`、`work_order_material_flow`、`purchase_delivery_status`、`delayed_purchase_orders`、`supplier_delivery_summary`、`work_order_components`、`material_required_by_orders`、`bom_components`。
++
++## 6. 参数抽取
++
++参数包括物料编码/名称、工厂、库存地点、批次、时间范围、移动类型、采购单号、采购申请号、供应商、工单号、BOM 编号/物料、是否延期、排行/TopN。缺少关键参数时返回业务化澄清，不暴露字段名或 SQL。
++
++## 7. 字段字典
++
++建立 `material_management` 字段字典，映射中文问法到标准字段：物料→material_code/material_name，工厂→plant_code/plant_name，库位→storage_location，库存→on_hand_qty/balance_qty，到货→received_qty，未到货→open_qty，工单→work_order_no，组件→component_material_code。
++
++## 8. 业务口语词典
++
++库存：现存量、库存量、结存、在库；出入库：流水、领料、退料、发料、入库；采购：采购单、PO、采购申请、未交、欠交、延期；工单：生产订单、工单、组件、预留、缺料。
++
++## 9. SQL 模板设计
++
++只允许预定义模板，例如按物料查库存、查最近流水、查采购未到货、查工单组件、查缺料风险。模板参数必须类型化校验，禁止 LLM 自由生成 SQL，禁止查询 Oracle MID。
++
++## 10. 查询服务设计
++
++建议目录：`backend/app/domains/material_management/services/`、`repositories/`、`schemas/`。Repository 只查中间库 DWD/DWS/DM；Service 负责意图分发、参数校验、空结果/澄清/不支持状态和结果解释。
++
++## 11. 结果解释设计
++
++回答必须业务化：说明查询口径、时间范围、关键结果、异常/空结果原因和来源批次。LLM 只基于结构化结果润色，不新增事实。
++
++## 12. 来源追溯设计
++
++响应元数据包含 source_topic、source_table、source_view、sync_batch_no、data_date、row_count。前端展示“数据来源：智能助手中间库，来源主题/批次/数据日期”，不展示 Oracle DSN。
++
++## 13. 查询日志设计
++
++`sys_query_log` 增加/复用 query_type、domain、route_type、metric_type、request_payload、result_count、status、message、trace_id。敏感参数脱敏。
++
++## 14. 测试题集设计
++
++M2 至少 5 个库存/出入库问题；M3 增加采购执行问题；M4 增加工单组件/缺料；M5 增加 SAP BOM；M6 增加趋势、排行、明细穿透和澄清/拒答边界题。
++
++## 15. 不允许 LLM 自由生成 SQL
++
++物管域第一阶段必须采用业务域识别 + 意图分类 + 参数抽取 + SQL 模板 + 白名单表字段 + 程序执行。LLM 不能生成任意 SQL，不能直接访问 SAP Oracle MID。
++
++## 16. 前端问答结果数据结构设计
++
++沿用现有流式 done payload：status、answer、presentation、result_table、query_conditions、source_trace、warnings、clarification。物管新增 result_type：inventory、material_flow、purchase_execution、work_order_component、shortage_risk、sap_bom。
++
++## 17. 前端结构化结果展示建议
++
++库存展示物料/工厂/库位/批次/当前库存/单位/库存日期；流水展示过账日期/移动类型/方向/数量/单据/工单/采购单；采购展示采购单/物料/供应商/下单/到货/未到货/交期/延期；工单展示工单/产品/组件/需求/已领/缺口。
+
+diff --git a/docs/PLAN_BOM_SAP_DATA_SOURCE_MIGRATION_PLAN.md b/docs/PLAN_BOM_SAP_DATA_SOURCE_MIGRATION_PLAN.md
+new file mode 100644
+index 0000000..c5da29f
+--- /dev/null
++++ b/docs/PLAN_BOM_SAP_DATA_SOURCE_MIGRATION_PLAN.md
+@@ -0,0 +1,66 @@
++
++# 计划 BOM SAP 数据源改造方案（M1）
++
++## 1. 当前 Excel BOM 数据源现状
++
++现有计划 BOM 能力以 Excel 上传为主，已有导入批次、BOM 头、修订、材料行、查询、compare、QA 和功率模型相关能力。M1 不修改这些能力。
++
++## 2. 当前 plan_bom 表结构理解
++
++`plan_bom_import_batch`、`plan_bom_header`、`plan_bom_material_line` 已包含 `source_type`、`source_tag`、`import_batch_id`、`order_identity_key`、`file_instance_key` 等追溯/并存字段。材料行唯一键包含 `source_type`，具备多来源并存基础。
++
++## 3. SAP BOM 视图关系
++
++1. MAST：物料与 BOM 分配，连接 MATNR/WERKS/STLAN/STLNR/STLAL。
++2. STKO：BOM 头，连接 STLNR/STLAL，有效日期 DATUV、基数量 BMENG。
++3. STPO：BOM 组件明细，连接 STLNR/STLKN/STPOZ，组件物料 IDNRK。
++4. STAS：项目选择/替代/有效性，连接 STLNR/STLAL/STLKN。
++5. STZU：BOM 辅助属性，连接 STLNR/STLAN。
++
++## 4. MAST/STKO/STPO/STAS/STZU 关系分析
++
++标准链路：MATNR/WERKS/STLAN → MAST.STLNR/STLAL → STKO BOM 头 → STPO 组件行；STAS 用于选择有效组件；STZU 提供辅助属性。有效日期、删除标识和替代 BOM 需要业务确认后参与当前版本判定。
++
++## 5. Excel BOM 与 SAP BOM 差异
++
++Excel BOM 以订单/文件/版本/材料行为核心，字段更贴近计划 BOM 业务展示；SAP BOM 以物料、工厂、用途、BOM 编号、替代 BOM、有效期和组件节点为核心。Excel 有文件实例、修订说明和手动上传批次；SAP 有系统主键、有效性和替代项目。
++
++## 6. 多数据源并存方案
++
++需求文档要求并存：`source_type = EXCEL` 与 `source_type = SAP_MID`。现有代码常量已有 `SOURCE_TYPE_SAP = "SAP"`，建议 M2 人工确认后采用一种兼容策略：
++
++1. 推荐：新增 `SOURCE_TYPE_SAP_MID = "SAP_MID"`，查询层将旧 `SAP` 作为兼容别名。
++2. 或：沿用 `SAP`，但在展示层 source_tag 明确 `sap_mid`。该方案与需求文本不完全一致，不推荐。
++
++## 7. source_type / source_tag 设计建议
++
++- Excel：source_type=EXCEL，source_tag=manual_import_source。
++- SAP MID：source_type=SAP_MID，source_tag=sap_mid_sync，import_batch_id=同步批次号。
++- 所有查询响应展示“Excel 上传”或“SAP MID 同步”，不展示技术主键。
++
++## 8. 标准 BOM 模型演进建议
++
++先新增 SAP BOM ODS 表；再新增或扩展标准 DWD：`dwd_plan_bom_sap_header`、`dwd_plan_bom_sap_component`；最后将可兼容字段映射到现有 `plan_bom_header/material_line` 或统一查询视图。不要直接把 SAP 原始宽字段塞进现有材料行。
++
++## 9. 如何不影响现有 BOM 查询
++
++1. Excel 查询默认仍查 EXCEL active 数据。
++2. 未显式选择 SAP_MID 时，不改变现有候选排序。
++3. 所有 SAP 接入先 shadow，对比通过后再开放。
++4. 回归测试覆盖现有 BOM QA、compare、上传、功率模型。
++
++## 10. 如何不影响功率预测
++
++功率预测现阶段依赖计划 BOM 标准材料和 active 功率模型。SAP BOM 接入不得恢复临时 token，不得改变功率模型激活权限；SAP BOM 映射到功率问答前必须经过材料类别归一、客户实例/单号消歧和业务验收。
++
++## 11. 分阶段迁移路线
++
++M1 文档方案；M2-M4 先完成物管库存/采购/工单；M5 单独实施 SAP BOM ODS/DWD、标准模型和查询兼容；M6 再增强问答体验和来源展示。
++
++## 12. 风险和人工确认项
++
++风险：SAP BOM 有效性语义复杂、替代 BOM/替代项目可能与 Excel 版本不一致、组件单位换算不明、source_type 命名需统一。人工确认：是否以 SAP_MID 作为正式枚举、当前版本判定规则、Excel/SAP 数据优先级。
++
++## 13. 前端 BOM 来源展示方案
++
++计划 BOM 结果中增加来源标签：Excel 上传 / SAP MID 同步；展示 BOM 生效日期、版本/替代、同步批次、来源主题。用户可筛选数据源，但默认不改变现有 Excel 查询体验。
+
+diff --git a/docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md b/docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md
+new file mode 100644
+index 0000000..33ad5f8
+--- /dev/null
++++ b/docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md
+@@ -0,0 +1,86 @@
++
++# 前端物管域与 SAP/MID 适配方案（M1）
++
++## 1. 当前前端页面结构分析
++
++当前路由在 `frontend/src/router/index.ts`，主布局在 `frontend/src/layouts/AppLayout.vue`，统一智能问答页在 `frontend/src/views/business-chat/BusinessChatPage.vue`，API 封装在 `frontend/src/api/`，结果表格组件为 `frontend/src/components/ResultTable.vue`。
++
++## 2. 当前物流问答页面如何实现
++
++物流问答通过 `frontend/src/api/logistics.ts` 调用 `/logistics/data-qa/query` 与 `/logistics/data-qa/query/stream`，前端支持流式文本、结构化结果、查询历史和错误/澄清状态。
++
++## 3. 当前计划 BOM 问答页面如何实现
++
++计划 BOM 通过 `frontend/src/api/planBom.ts` 调用 `/plan-bom/qa/ask` 与 `/plan-bom/qa/ask/stream`，在 BusinessChatPage 内按 domain 区分展示计划 BOM 结果。
++
++## 4. 当前前端路由结构
++
++已存在 `/smart-chat`、`/logistics/data-qa`、`/plan-bom/detail-query`、`/bom-data`、`/trial-guide` 等。M1 不新增路由；M2 可先复用 `/smart-chat`，M6 再考虑同步管理页。
++
++## 5. 当前 API 调用封装方式
++
++前端统一使用 `http` 与 `postJsonLineStream`。物管建议新增 `frontend/src/api/materialManagement.ts`，封装问答、同步任务创建、任务列表、任务详情、重试。
++
++## 6. 当前问答结果组件结构
++
++BusinessChatPage 已有 domain switch、流式回答、结果 presentation 和表格展示；ResultTable 可复用。物管新增 result_type 配置和列映射即可先做 MVP。
++
++## 7. 物管业务域前端入口设计
++
++在现有 domain switch 中增加“物管数据”，枚举值建议 `material_management`。自动识别命中物管时切换到物管链路；用户手动选择时优先物管。
++
++## 8. 物管问答页面设计
++
++M2 MVP 仍使用智能问答页：输入框、流式回答、结果表格、查询条件、来源追溯、空结果/澄清/错误状态。避免新建大页面。
++
++## 9. 智能问答页如何增加物管业务域
++
++新增 domain 枚举、按钮文案、提交分支和结果解析。后端提供 `/material-management/qa/ask/stream` 后再接入；未就绪前前端不暴露不可用入口或展示“建设中”。
++
++## 10. 库存查询结果展示设计
++
++列：物料编码、物料名称、工厂、库存地点、批次、当前库存、单位、库存日期、来源表/同步批次。
++
++## 11. 出入库流水结果展示设计
++
++列：过账日期、物料编码、物料名称、移动类型、入库/出库方向、数量、单位、单据号、工单号、采购单号、来源。
++
++## 12. 采购执行结果展示设计
++
++列：采购单号、行号、物料、供应商、下单数量、已到货数量、未到货数量、交货日期、是否延期、来源。
++
++## 13. 工单组件结果展示设计
++
++列：工单号、产品物料、组件物料、组件名称、需求数量、已领数量、缺口数量、工厂、来源。
++
++## 14. SAP/MID 手动同步入口设计
++
++M2 后端接口稳定后，可在管理区或物管页面增加“SAP/MID 同步”入口。入口只调用后端任务接口，不保存、不展示 Oracle 连接信息。
++
++## 15. 手动同步触发交互设计
++
++表单字段：同步主题、视图、模式（全量/增量/时间范围/重跑）、时间范围、备注。提交后展示 task_id、状态和统计。
++
++## 16. 同步任务状态展示设计
++
++状态：待执行、执行中、成功、失败、部分成功。展示开始/结束时间、读取/插入/更新/跳过/失败行数、错误摘要。
++
++## 17. 同步日志查看页面设计
++
++M6 可增加任务详情抽屉/页面，展示视图级批次、错误阶段、错误摘要、重试入口。错误内容必须脱敏。
++
++## 18. 来源追溯展示设计
++
++问答结果底部展示来源主题、来源中间库表、源视图名、同步批次、数据日期、行数。不展示 Oracle host/user/password。
++
++## 19. 复用方案
++
++复用 BusinessChatPage、streamingApi、ResultTable、现有黑灰蓝绿视觉基调、空结果/错误/澄清卡片。新增物管列配置而不是复制整套页面。
++
++## 20. M2-M6 前端开发路线
++
++M2：物管入口 + 库存/出入库结果 MVP；M3：采购结果卡片；M4：工单/缺料；M5：BOM 来源展示；M6：同步管理页和体验增强。
++
++## 21. 不影响现有页面的风险控制方案
++
++所有前端改动必须通过 domain feature flag 或后端 readiness 控制；每阶段跑现有物流、计划 BOM、BOM 数据管理和 build 回归。M1 不修改前端文件。
+
+diff --git a/docs/SAP_MID_INTEGRATION_ROADMAP.md b/docs/SAP_MID_INTEGRATION_ROADMAP.md
+new file mode 100644
+index 0000000..207cb91
+--- /dev/null
++++ b/docs/SAP_MID_INTEGRATION_ROADMAP.md
+@@ -0,0 +1,46 @@
++
++# SAP MID 集成路线图（M1-M6）
++
++## 1. M1-M6 阶段路线
++
++| 阶段 | 目标 | 允许事项 | 禁止事项 | 验收标准 | 预计改动范围 |
++|---|---|---|---|---|---|
++| M1 | 数据资产审计、总体方案、前端适配方案 | 读附件、读代码、写文档、只读 smoke test | 正式开发、前端页面修改、大表导出、直接问答查 Oracle | 输出 8 个方案文档 + CURRENT_STATUS/NEXT_TASK/HANDOFF | docs、审计材料 |
++| M2 | 库存/出入库同步 MVP + 物管问答入口 MVP | Oracle 连接器、两视图 ODS/DWD、手动同步、基础问数 | 采购/工单/BOM 全量扩展 | 小批量同步、幂等、5 个库存/出入库问题、前端入口可展示 | backend material_management、alembic、frontend smart-chat 小改 |
++| M3 | 采购执行同步与问数 | EBAN/EKKO/EKPO/EKET/EKBE、采购 DWS、采购结果展示 | 工单/BOM 范围外扩张 | 可查采购单、未到货、延期、供应商交付 | 后端采购主题、前端采购展示 |
++| M4 | 工单组件/实际用料同步与问数 | AFKO/AFPO/AUFK/RESB、缺料初步分析 | 理论 BOM 与实际工单混淆 | 可查工单组件、物料需求、基础缺料 | 后端工单主题、前端工单展示 |
++| M5 | 计划 BOM SAP 数据源改造 | MAST/STKO/STPO/STAS/STZU ODS/DWD、source_type 并存 | 破坏 Excel BOM/功率预测 | SAP BOM 可查，Excel 原功能可用 | plan_bom 多数据源、BOM 来源展示 |
++| M6 | 物管问数增强和同步管理增强 | 词典、模板、评测、状态页、日志页 | LLM 自由 SQL、前端直连 Oracle | 常见物管问数可回答，来源可追溯，同步管理可用 | 前后端体验增强 |
++
++## 2. 后续 Codex 任务拆分建议
++
++1. M2-A：Oracle 依赖和只读连接器，含配置脱敏测试。
++2. M2-B：库存/出入库 ODS/DWD 迁移与 ORM。
++3. M2-C：白名单同步服务、CLI/管理接口和日志。
++4. M2-D：库存/出入库查询服务和 SQL 模板。
++5. M2-E：前端物管 domain switch 与结果展示 MVP。
++6. M2-F：focused/full/build/reviewer 验收材料。
++
++## 3. 人工确认节点
++
++1. Oracle 驱动、网络和只读账号权限。
++2. M2 首批视图与同步时间窗口。
++3. 移动类型方向、库存口径、未到货口径、缺料阈值。
++4. `SAP_MID` source_type 命名。
++5. 前端菜单命名和同步管理权限。
++
++## 4. 回滚策略
++
++1. 数据库迁移按阶段独立，可回滚新增表/索引。
++2. 同步任务默认写新表，不覆盖现有物流/计划 BOM 数据。
++3. 前端入口用 feature flag 或后端 readiness 控制。
++4. 问数模板按 domain 隔离，物管失败不影响物流/计划 BOM。
++5. SAP BOM 接入先 shadow，不改变 Excel 默认来源。
++
++## 5. 风险清单
++
++Oracle 驱动/网络不可用、视图数据量过大、增量字段不稳定、SAP 日期/删除标记口径复杂、移动类型业务含义未确认、Excel/SAP BOM source_type 命名冲突、前端入口过早暴露、LLM 润色越界。
++
++## 6. 前后端协同开发节奏
++
++后端先提供稳定 schema、同步任务状态和问答响应结构；前端先接 MVP result_type 和来源展示；每阶段后端接口冻结后再做前端增强。所有阶段必须保留现有物流、计划 BOM、功率预测回归。
+
+diff --git a/docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md b/docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md
+new file mode 100644
+index 0000000..31b3a51
+--- /dev/null
++++ b/docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md
+@@ -0,0 +1,55 @@
++
++# SAP MID Oracle 只读 Smoke Test 报告（M1）
++
++执行时间：2026-05-14 16:55:42 CST
++范围：只读 smoke test；不导出大表；不写 Oracle；不记录真实 host/user/password/DSN。
++
++## 1. 是否读取到 SAP_ORACLE_* 配置
++
++读取方式：仅检查 `backend/.env` 与环境变量中的配置项存在性，不输出真实值。
++
++| 配置项 | 存在性 |
++|---|---|
++| SAP_ORACLE_HOST | present |
++| SAP_ORACLE_PORT | present |
++| SAP_ORACLE_SERVICE | present |
++| SAP_ORACLE_USER | present |
++| SAP_ORACLE_PASSWORD | present |
++
++## 2. 是否成功连接 Oracle
++
++未执行连接。阻塞原因：当前 `backend/.venv` 中未安装 Oracle Python 驱动，`oracledb` 与 `cx_Oracle` 均不可导入。
++
++## 3. 是否成功执行 SELECT 1 FROM dual
++
++未执行。原因同上。
++
++## 4. 是否能读取白名单视图字段结构
++
++未通过 Oracle live 读取。M1 已基于 `ai/inbox/attachments/sap_mid/MID下所有视图字段.xlsx` 完成附件字段审计，不能替代真实连接验证。
++
++## 5. 是否能对重点视图做 ROWNUM <= 5 抽样
++
++未执行。原因同上。本次只读取了已提供的 20 行样例附件，没有从 Oracle 抽样。
++
++## 6. 是否能做 count 验证
++
++未执行。原因同上。
++
++## 7. 遇到的错误
++
++安全摘要：Oracle Python driver not installed (`oracledb` / `cx_Oracle` unavailable)。错误报告不包含连接元数据、用户名、密码或 DSN。
++
++## 8. 网络 / 权限 / 驱动问题
++
++1. 驱动：阻塞，需安装 `oracledb` 或确认 thick 模式依赖。
++2. 网络：未探测，因驱动前置检查未通过。
++3. 权限：未验证，需 M2 前确认只读账号可访问白名单视图和 `all_tab_columns`。
++
++## 9. 后续建议
++
++1. M2 前先安装并锁定 Oracle 驱动版本。
++2. 先执行 `SELECT 1 FROM dual`。
++3. 再读取白名单字段结构。
++4. 再对 M2 两个视图执行 count 与 `ROWNUM <= 5` 小样本。
++5. 所有报告继续只记录存在性、行数、字段名和安全错误摘要，不记录真实连接信息。

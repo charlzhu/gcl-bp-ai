@@ -1,0 +1,13 @@
+backend/app/domains/logistics/repositories/data_qa_repository.py
+backend/app/domains/logistics/repositories/sync_repository.py
+backend/app/domains/logistics/services/data_qa_planner.py
+backend/app/domains/logistics/services/data_qa_service.py
+backend/app/domains/logistics/services/llm_answer_presentation_service.py
+backend/app/domains/logistics/services/llm_understanding_guardrail_service.py
+backend/app/domains/logistics/services/llm_understanding_service.py
+backend/app/domains/plan_bom/services/answer_presentation_service.py
+frontend/src/views/business-chat/BusinessChatPage.vue
+tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
+tests/business_acceptance/test_logistics_system_sync_normalization.py
+tests/business_acceptance/test_plan_power_docx_question_regression.py
+tests/business_acceptance/test_plan_power_m5_qa_integration.py

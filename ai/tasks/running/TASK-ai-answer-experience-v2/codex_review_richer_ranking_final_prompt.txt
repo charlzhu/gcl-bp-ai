@@ -1,0 +1,8 @@
+You are an independent code reviewer. Read only:
+1) ai/tasks/running/TASK-ai-answer-experience-v2/review_bundle_richer_ranking_final.md
+2) ai/tasks/running/TASK-ai-answer-experience-v2/diff-richer-ranking-final.patch
+
+Return ONLY valid JSON:
+{"passed": true/false, "security_concerns": [], "logic_errors": [], "suggestions": [], "summary": "..."}
+
+Focus: ranking answer deterministic/fact-preserving; stream fallback safe; prompt whitelist strips internal keys/string values and excludes query_plan/query_key/group_by; streamed-answer numeric validation uses compacted prompt context; row entity/value mismatch, swapped same-sentence values, numeric-looking entity swaps, respectively-style multi-row swaps, multi-entity single-value claims, and paid_amount-like metric fields safe; no user-facing SQL/query_key/planner/guardrail leak.

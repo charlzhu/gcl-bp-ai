@@ -1,0 +1,40 @@
+## agent/TASK-business-feedback-excel-qa-fix
+?? ai/eval/runs/run_20260507_001940_full_all/clarification_batch_state.md
+?? ai/eval/scripts/cron_batch_recover_plan_power_branch_prompt.md
+?? ai/tasks/running/TASK-ai-answer-stream/
+?? ai/tasks/running/TASK-bom-layout-v2/
+?? ai/tasks/running/TASK-bom-query-log/
+?? ai/tasks/running/TASK-bom-typography/
+?? ai/tasks/running/TASK-bom-visual-polish/
+?? ai/tasks/running/TASK-business-chat-markdown-rendering/
+?? ai/tasks/running/TASK-business-feedback-excel-qa-fix/
+?? ai/tasks/running/TASK-logistics-city-fee-topn/
+?? ai/tasks/running/TASK-logistics-ranking-topn-generalization/
+?? ai/tasks/running/TASK-plan-bom-batch-upload/
+?? ai/tasks/running/TASK-plan-power-exact-bom-disambiguation/
+?? ai/tasks/running/TASK-plan-power-fall-ratio-excel-like-table/
+?? ai/tasks/running/TASK-plan-power-fall-ratio-real-subrows/
+?? ai/tasks/running/TASK-plan-power-fall-ratio-subrows/
+?? ai/tasks/running/TASK-plan-power-no-bom-explicit-config/
+?? ai/tasks/running/TASK-plan-power-real-business-qa-fix/
+?? ai/tasks/running/TASK-plan-power-recommendation-export-polish/
+?? ai/tasks/running/TASK-plan-power-recommendation-table-polish/
+?? ai/tasks/running/TASK-smart-chat-detail-excel-export/
+?? ai/tasks/running/TASK-smart-chat-excel-alignment/
+?? ai/tasks/running/TASK-smart-chat-single-fallback/
+?? backend/app/services/business_answer_stream_service.py
+?? frontend/src/utils/businessMarkdown.ts
+?? frontend/src/utils/streamingApi.ts
+?? tests/business_acceptance/test_ai_streaming_answer.py
+?? tests/business_acceptance/test_business_chat_markdown_rendering.py
+?? tests/business_acceptance/test_business_chat_session_lifecycle.py
+?? tests/business_acceptance/test_logistics_region_business_answer.py
+?? tests/business_acceptance/test_plan_bom_batch_upload_endpoint.py
+?? tests/business_acceptance/test_plan_bom_query_log.py
+?? tests/business_acceptance/test_plan_power_real_business_qa_regression.py
+?? "\347\273\217\350\220\245\350\256\241\345\210\222\346\231\272\350\203\275\344\275\223\346\265\213\350\257\225\347\273\237\350\256\241.xlsx"
+---branch---
+agent/TASK-business-feedback-excel-qa-fix
+---excel---
+exists True
+size 14264

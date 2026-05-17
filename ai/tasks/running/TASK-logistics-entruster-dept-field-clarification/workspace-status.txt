@@ -1,0 +1,61 @@
+## agent/TASK-logistics-entruster-dept-field-clarification
+ M backend/app/domains/logistics/repositories/data_qa_repository.py
+ M backend/app/domains/logistics/repositories/sync_repository.py
+ M backend/app/domains/logistics/schemas/llm_understanding.py
+ M backend/app/domains/logistics/services/data_qa_planner.py
+ M backend/app/domains/logistics/services/data_qa_service.py
+ M backend/app/domains/logistics/services/llm_answer_presentation_service.py
+ M backend/app/domains/logistics/services/llm_understanding_guardrail_service.py
+ M backend/app/domains/logistics/services/llm_understanding_service.py
+ M backend/app/domains/plan_bom/services/answer_presentation_service.py
+ M frontend/src/views/business-chat/BusinessChatPage.vue
+ M tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
+ M tests/business_acceptance/test_logistics_system_sync_normalization.py
+ M tests/business_acceptance/test_plan_power_docx_question_regression.py
+ M tests/business_acceptance/test_plan_power_m5_qa_integration.py
+?? "2023\345\271\264\345\256\211\345\276\275\345\220\210\350\202\245\345\217\221\350\277\220\345\217\260\350\264\246.xlsx"
+?? "2023\345\271\264\345\256\211\345\276\275\351\230\234\345\256\201\347\211\251\346\265\201\345\217\221\350\277\220\345\217\260\350\264\246.xlsx"
+?? "2024\345\271\264\347\211\251\346\265\201\345\217\221\350\277\220\346\200\273\345\217\260\350\264\246.xlsx"
+?? "2025\345\271\264\347\211\251\346\265\201\345\217\221\350\277\220\346\200\273\345\217\260\350\264\246.xlsx"
+?? ai/eval/runs/run_20260507_001940_full_all/clarification_batch_state.md
+?? ai/eval/scripts/cron_batch_recover_plan_power_branch_prompt.md
+?? ai/tasks/running/TASK-ai-answer-stream/
+?? ai/tasks/running/TASK-bom-layout-v2/
+?? ai/tasks/running/TASK-bom-query-log/
+?? ai/tasks/running/TASK-bom-typography/
+?? ai/tasks/running/TASK-bom-visual-polish/
+?? ai/tasks/running/TASK-business-chat-markdown-rendering/
+?? ai/tasks/running/TASK-business-feedback-excel-qa-fix/
+?? ai/tasks/running/TASK-llm-led-composite-decomposition/
+?? ai/tasks/running/TASK-logistics-2025-hefei-guangzhou-17_5-price/
+?? ai/tasks/running/TASK-logistics-city-carrier-scope-fix/
+?? ai/tasks/running/TASK-logistics-city-fee-topn/
+?? ai/tasks/running/TASK-logistics-composite-decomposition/
+?? ai/tasks/running/TASK-logistics-entruster-dept-field-clarification/
+?? ai/tasks/running/TASK-logistics-explicit-month-caveat/
+?? ai/tasks/running/TASK-logistics-explicit-year-scope/
+?? ai/tasks/running/TASK-logistics-railway-sync-scope/
+?? ai/tasks/running/TASK-logistics-ranking-topn-generalization/
+?? ai/tasks/running/TASK-logistics-route-year-compare-2023-fix/
+?? ai/tasks/running/TASK-plan-bom-batch-upload/
+?? ai/tasks/running/TASK-plan-power-exact-bom-disambiguation/
+?? ai/tasks/running/TASK-plan-power-fall-ratio-excel-like-table/
+?? ai/tasks/running/TASK-plan-power-fall-ratio-real-subrows/
+?? ai/tasks/running/TASK-plan-power-fall-ratio-subrows/
+?? ai/tasks/running/TASK-plan-power-no-bom-explicit-config/
+?? ai/tasks/running/TASK-plan-power-real-business-qa-fix/
+?? ai/tasks/running/TASK-plan-power-recommendation-export-polish/
+?? ai/tasks/running/TASK-plan-power-recommendation-table-polish/
+?? ai/tasks/running/TASK-smart-chat-detail-excel-export/
+?? ai/tasks/running/TASK-smart-chat-excel-alignment/
+?? ai/tasks/running/TASK-smart-chat-new-session-button/
+?? ai/tasks/running/TASK-smart-chat-single-fallback/
+?? backend/app/services/business_answer_stream_service.py
+?? frontend/src/utils/businessMarkdown.ts
+?? frontend/src/utils/streamingApi.ts
+?? screenshot-1778555840892.png
+?? screenshot-1778558137607.png
+?? screenshot-1778562130026.png
+?? tests/business_acceptance/test_business_chat_answer_format_preference.py
+?? tests/business_acceptance/test_logistics_field_scope_clarification.py
+?? tests/business_acceptance/test_logistics_llm_led_composite_decomposition.py

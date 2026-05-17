@@ -1,0 +1,116 @@
+diff --git a/tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py b/tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
+index f6d350f..3be4d80 100644
+--- a/tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
++++ b/tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
+@@ -636,10 +636,111 @@ def test_clarification_audit_unknown_origin_vehicle_loading_summary_requires_cla
+     assert plan.query_key is None
+     assert "始发地" in "".join(plan.clarification_missing_slots)
+ 
+ 
+ 
++def test_2025_hefei_to_guangzhou_17_5_quote_uses_unit_price_per_vehicle() -> None:
++    """验证截图反馈的 2025 合肥发广州 17.5 报价按单价/车而不是总费用返回。
++
++    参数：无。
++    返回值：无；通过断言验证 planner 槽位、城市归一和 service 结果。
++    业务逻辑：历史源 Excel 中“报价”对应 `单价/车`；同一目的城市的“广州/广州市”应视为同一城市过滤范围。
++    """
++
++    question = "2025年合肥发广州17.5车报价最高价和最低价是多少？"
++    plan = LogisticsDataQaPlanner().build_plan(question)
++
++    assert plan.query_key == "hist_route_pricing_analysis"
++    assert not plan.needs_clarification
++    assert plan.filters == {
++        "years": [2025],
++        "vehicle_type": "17.5",
++        "view_mode": "fee_extremes",
++        "price_metric": "unit_price_per_vehicle",
++        "origin_place": "合肥",
++        "city": "广州",
++    }
++
++    with SessionLocal() as db:
++        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question, use_llm=False))
++
++    assert not result.needs_clarification
++    assert result.result_table is not None
++    row = result.result_table.rows[0]
++    assert int(row["min_fee"] or 0) == 10148
++    assert int(row["max_fee"] or 0) == 10480
++    assert int(row["avg_fee"] or 0) == 10314
++    assert int(row["row_count"] or 0) == 2
++    assert "10,480" in result.answer_summary
++    assert "10,148" in result.answer_summary
++    assert "52,400" not in result.answer_summary
++    assert any("单价/车" in item for item in result.calculation_logic)
++
++
++
++def test_multi_year_route_pricing_keeps_requested_year_when_city_has_no_rows() -> None:
++    """验证多年线路运价对比不会静默丢弃无匹配记录的显式年份。
++
++    参数：无。
++    返回值：无；通过断言验证 2023/2024/2025 三个显式年份都出现在结果表。
++    业务逻辑：用户明确问“23/24/25 年分别运价”时，即使某一年当前筛选条件无记录，也必须保留该年份并给出无数据提示，不能只返回有数据年份。
++    """
++
++    question = "23年、24年、25年合肥发广州17.5车运价分别是多少？"
++    plan = LogisticsDataQaPlanner().build_plan(question)
++
++    assert plan.query_key == "hist_route_pricing_analysis"
++    assert not plan.needs_clarification
++    assert plan.filters == {
++        "years": [2023, 2024, 2025],
++        "vehicle_type": "17.5",
++        "view_mode": "year_compare",
++        "price_metric": "unit_price_per_vehicle",
++        "origin_place": "合肥",
++        "city": "广州",
++    }
++
++    with SessionLocal() as db:
++        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question, use_llm=False))
++
++    assert not result.needs_clarification
++    assert result.result_table is not None
++    rows_by_year = {int(row["biz_year"]): row for row in result.result_table.rows}
++    assert list(rows_by_year) == [2023, 2024, 2025]
++    assert rows_by_year[2023]["avg_fee"] is None
++    assert int(rows_by_year[2023]["row_count"] or 0) == 0
++    assert int(rows_by_year[2024]["row_count"] or 0) > 0
++    assert int(rows_by_year[2025]["row_count"] or 0) > 0
++    assert "2023年无匹配记录" in result.answer_summary
++    assert any("2023年" in warning and "无匹配记录" in warning for warning in result.warnings)
++
++
++def test_multi_year_route_pricing_does_not_drop_existing_province_year_rows() -> None:
++    """验证目的省份口径下真实存在的 2023-2025 年度运价仍完整返回。
++
++    参数：无。
++    返回值：无；通过断言验证省份过滤不是硬编码补 2023，而是保留所有有数据年度。
++    业务逻辑：同类多年对比应按请求年份补齐，同时对真实有数据年份继续返回确定性均价和记录数。
++    """
++
++    question = "23年24年25年合肥发广东17.5车运价分别是多少？"
++
++    with SessionLocal() as db:
++        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question, use_llm=False))
++
++    assert not result.needs_clarification
++    assert result.result_table is not None
++    rows_by_year = {int(row["biz_year"]): row for row in result.result_table.rows}
++    assert list(rows_by_year) == [2023, 2024, 2025]
++    assert int(rows_by_year[2023]["avg_fee"] or 0) == 11842
++    assert int(rows_by_year[2023]["row_count"] or 0) == 103
++    assert int(rows_by_year[2024]["row_count"] or 0) > 0
++    assert int(rows_by_year[2025]["row_count"] or 0) > 0
++    assert not result.warnings
++
++
++
+ def test_clarification_audit_2026_all_ship_task_status_distribution_is_supported() -> None:
+     """验证 Q0746 明确问 2026 年各任务状态数量时可直接返回主任务表状态分布。
+ 
+     参数：无。
+     返回值：无；通过断言验证 planner 与 service 都不会进入澄清。

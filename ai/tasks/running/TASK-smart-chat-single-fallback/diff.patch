@@ -1,0 +1,126 @@
+diff --git a/frontend/src/utils/businessChatSessions.ts b/frontend/src/utils/businessChatSessions.ts
+index 27ec197..84d1aa8 100644
+--- a/frontend/src/utils/businessChatSessions.ts
++++ b/frontend/src/utils/businessChatSessions.ts
+@@ -206,7 +206,8 @@ export function removeBusinessChatSession(sessionId: string): BusinessChatSessio
+     return getBusinessChatSession(nextSummary.id) || createBlankBusinessChatSession()
+   }
+   clearActiveBusinessChatSessionId()
+-  emitBusinessChatSessionUpdated()
++  // 删除唯一会话时不能先广播“空列表”状态，否则布局页和聊天页监听器会同时 ensure 并抢先创建一个新会话；
++  // 这里直接创建唯一兜底会话，由 createBlankBusinessChatSession 负责统一设置激活 ID 和广播更新。
+   return createBlankBusinessChatSession()
+ }
+ 
+diff --git a/tests/business_acceptance/test_business_chat_session_lifecycle.py b/tests/business_acceptance/test_business_chat_session_lifecycle.py
+new file mode 100644
+index 0000000..3a47c65
+--- /dev/null
++++ b/tests/business_acceptance/test_business_chat_session_lifecycle.py
+@@ -0,0 +1,106 @@
++"""智能问答会话生命周期前端契约测试。"""
++
++from __future__ import annotations
++
++import subprocess
++import textwrap
++from pathlib import Path
++
++
++ROOT = Path(__file__).resolve().parents[2]
++FRONTEND = ROOT / "frontend"
++SESSION_SOURCE = FRONTEND / "src" / "utils" / "businessChatSessions.ts"
++
++
++def _compile_business_chat_sessions(tmp_path: Path) -> Path:
++    """编译无框架依赖的会话工具模块，便于用 Node 模拟浏览器本地存储事件。"""
++    out_dir = tmp_path / "compiled"
++    out_dir.mkdir()
++    tsc = FRONTEND / "node_modules" / ".bin" / "tsc"
++    subprocess.run(
++        [
++            str(tsc),
++            str(SESSION_SOURCE),
++            "--target",
++            "ES2020",
++            "--module",
++            "commonjs",
++            "--outDir",
++            str(out_dir),
++            "--skipLibCheck",
++            "--esModuleInterop",
++        ],
++        cwd=ROOT,
++        check=True,
++    )
++    return out_dir / "businessChatSessions.js"
++
++
++def test_deleting_only_business_chat_session_creates_exactly_one_fallback_session(tmp_path: Path) -> None:
++    """删除唯一对话时，即使布局和页面同时监听更新事件，也只能保留 1 个新对话。"""
++    compiled_module = _compile_business_chat_sessions(tmp_path)
++    harness = tmp_path / "delete-only-session.cjs"
++    harness.write_text(
++        textwrap.dedent(
++            f"""
++            const sessions = require({str(compiled_module)!r});
++
++            class LocalStorageMock {{
++              constructor() {{
++                this.store = new Map();
++              }}
++              getItem(key) {{
++                return this.store.has(key) ? this.store.get(key) : null;
++              }}
++              setItem(key, value) {{
++                this.store.set(key, String(value));
++              }}
++              removeItem(key) {{
++                this.store.delete(key);
++              }}
++              clear() {{
++                this.store.clear();
++              }}
++            }}
++
++            const eventTarget = new EventTarget();
++            global.localStorage = new LocalStorageMock();
++            global.window = {{
++              addEventListener: eventTarget.addEventListener.bind(eventTarget),
++              removeEventListener: eventTarget.removeEventListener.bind(eventTarget),
++              dispatchEvent: eventTarget.dispatchEvent.bind(eventTarget),
++            }};
++            global.CustomEvent = global.CustomEvent || class CustomEvent extends Event {{
++              constructor(type, params = {{}}) {{
++                super(type, params);
++                this.detail = params.detail;
++              }}
++            }};
++
++            const eventName = sessions.getBusinessChatSessionEventName();
++            // 模拟 AppLayout 与 BusinessChatPage 两个组件都在收到更新事件后执行 ensure。
++            window.addEventListener(eventName, () => sessions.ensureBusinessChatSession());
++            window.addEventListener(eventName, () => sessions.ensureBusinessChatSession());
++
++            const initial = sessions.createBlankBusinessChatSession();
++            const beforeDelete = sessions.listBusinessChatSessions();
++            if (beforeDelete.length !== 1) {{
++              throw new Error(`初始化后应只有 1 个对话，实际 ${{beforeDelete.length}} 个`);
++            }}
++
++            sessions.removeBusinessChatSession(initial.id);
++            const afterDelete = sessions.listBusinessChatSessions();
++            if (afterDelete.length !== 1) {{
++              throw new Error(`删除唯一对话后应只创建 1 个新对话，实际 ${{afterDelete.length}} 个：${{afterDelete.map((item) => item.id).join(',')}}`);
++            }}
++            if (afterDelete[0].id === initial.id) {{
++              throw new Error('删除后仍指向已删除对话');
++            }}
++            if (sessions.getActiveBusinessChatSessionId() !== afterDelete[0].id) {{
++              throw new Error('删除后激活对话必须指向唯一的新对话');
++            }}
++            """
++        ),
++        encoding="utf-8",
++    )
++    subprocess.run(["node", str(harness)], cwd=ROOT, check=True)

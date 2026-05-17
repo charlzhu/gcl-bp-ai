@@ -1,0 +1,29 @@
+{
+  "task_id": "TASK-logistics-railway-sync-scope",
+  "passed": true,
+  "review_time": "2026-05-12 13:14:25 CST",
+  "blocking_findings": [],
+  "non_blocking_findings": [
+    {
+      "id": "NB-1",
+      "status": "noted",
+      "finding": "验收日志中包含真实任务 ID、功率、数量、MW 等业务排查明细；未发现硬编码凭据或连接信息，但如果材料会对外流转，建议脱敏业务明细。"
+    },
+    {
+      "id": "NB-2",
+      "status": "addressed",
+      "finding": "建议补充 pickup_date IS NULL 且 create_time >= start_date 的回归用例，锁住 COALESCE(..., create_time) 的兼容行为。",
+      "resolution": "已在 test_fetch_ship_tasks_uses_pickup_date_as_formal_scope 中增加 task_id=11151，断言按 create_time 兜底生成 biz_date。"
+    },
+    {
+      "id": "NB-3",
+      "status": "accepted",
+      "finding": "DATE(COALESCE(pickup_date, create_time)) 属于函数过滤，理论上不利于索引利用；旧逻辑 DATE(create_time) 已存在同类问题，当前不是阻塞风险。"
+    }
+  ],
+  "recommendation": "需要在用户确认后执行一次 start_date=2026-01-01、updated_since=None 的正式补同步/全量同步，使 ODS/DWD 补齐 11147-11150 等历史漏同步铁路任务。",
+  "security": {
+    "credential_scan": "PASS",
+    "notes": "任务范围文件未发现硬编码凭据或连接信息。"
+  }
+}

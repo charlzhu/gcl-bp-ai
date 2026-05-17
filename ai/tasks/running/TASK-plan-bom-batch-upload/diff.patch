@@ -1,0 +1,876 @@
+diff --git a/backend/app/domains/plan_bom/api/endpoints/import_excel.py b/backend/app/domains/plan_bom/api/endpoints/import_excel.py
+index e82c0f3..097a913 100644
+--- a/backend/app/domains/plan_bom/api/endpoints/import_excel.py
++++ b/backend/app/domains/plan_bom/api/endpoints/import_excel.py
+@@ -1,16 +1,21 @@
+ from __future__ import annotations
+ 
+ from pathlib import Path
++from typing import Any
+ 
+ from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+ 
+ from backend.app.api.deps import get_plan_bom_import_service
+-from backend.app.domains.plan_bom.schemas.import_excel import PlanBomUploadHistoryResponse
++from backend.app.domains.plan_bom.schemas.import_excel import PlanBomImportReport, PlanBomUploadHistoryResponse
+ from backend.app.domains.plan_bom.services.excel_import_service import PlanBomExcelImportService
+ from backend.app.schemas.common import ApiResponse
+ 
+ router = APIRouter()
+ 
++ALLOWED_BOM_EXCEL_SUFFIXES = {".xls", ".xlsx", ".xlsm"}
++MAX_SINGLE_BOM_UPLOAD_BYTES = 20 * 1024 * 1024
++MAX_BATCH_BOM_UPLOAD_FILES = 50
++
+ 
+ def _upload_failure_payload(
+     *,
+@@ -19,7 +24,7 @@ def _upload_failure_payload(
+     file_size: int = 0,
+     next_action: str,
+     error: str | None = None,
+-) -> dict:
++) -> dict[str, Any]:
+     """构造计划 BOM 上传失败响应。
+ 
+     参数：
+@@ -49,6 +54,229 @@ def _upload_failure_payload(
+     }
+ 
+ 
++def _build_quality_summary(
++    *,
++    report: PlanBomImportReport,
++    source: str,
++    overwrite: bool,
++    remark: str | None,
++) -> dict[str, Any]:
++    """构造单个 BOM 文件解析质量摘要。
++
++    参数：
++        report: 后端 Excel 导入服务返回的解析报告；
++        source: 上传来源；
++        overwrite: 是否允许覆盖同文件实例；
++        remark: 上传备注。
++
++    返回：
++        前端可展示、审计可追溯的质量摘要。
++    """
++
++    return {
++        "sheet_count": report.sheet_count,
++        "revision_count": report.revision_count,
++        "persisted_business_data": report.persisted_business_data,
++        "rollback_applied": report.rollback_applied,
++        "source": source,
++        "overwrite": overwrite,
++        "remark": remark,
++    }
++
++
++def _upload_success_payload(
++    *,
++    report: PlanBomImportReport,
++    file_size: int,
++    source: str,
++    overwrite: bool,
++    remark: str | None,
++) -> dict[str, Any]:
++    """构造单个计划 BOM Excel 上传成功/解析完成响应。
++
++    参数：
++        report: 导入服务返回的解析报告；
++        file_size: 上传文件字节数；
++        source: 上传来源；
++        overwrite: 是否覆盖同一文件实例；
++        remark: 上传备注。
++
++    返回：
++        与历史单文件接口兼容的 payload。
++    """
++
++    return {
++        "success": report.status == "success",
++        "message": "BOM Excel 上传解析成功。" if report.status == "success" else "BOM Excel 上传解析失败，请查看错误明细。",
++        "import_batch_id": report.batch_id,
++        "file_name": report.file_name,
++        "file_size": file_size,
++        "parsed_orders_count": report.header_count,
++        "parsed_materials_count": report.material_line_count,
++        "warning_count": report.warning_count,
++        "error_count": report.error_count,
++        "data_quality_summary": _build_quality_summary(report=report, source=source, overwrite=overwrite, remark=remark),
++        "report_path": f"tmp/plan_bom/import_reports/{report.batch_id}.json",
++        "next_action": "可以进入 /api/v1/plan-bom/qa/ask 查询。" if report.status == "success" else "请修正 Excel 后重新上传。",
++        "errors": [item.model_dump(mode="json") for item in report.errors[:20]],
++        "warnings": [item.model_dump(mode="json") for item in report.warnings[:20]],
++    }
++
++
++async def _import_one_upload_file(
++    *,
++    upload_file: UploadFile,
++    service: PlanBomExcelImportService,
++    source: str,
++    overwrite: bool,
++    remark: str | None,
++) -> dict[str, Any]:
++    """读取并导入单个上传文件，返回逐文件结果。
++
++    参数：
++        upload_file: FastAPI 上传文件对象；
++        service: 计划 BOM Excel 导入服务；
++        source: 上传来源；
++        overwrite: 是否覆盖同一文件实例；
++        remark: 上传备注。
++
++    返回：
++        单文件成功或失败 payload。批量上传会逐个调用本函数，确保单个坏文件不阻断其它文件。
++    """
++
++    content = await upload_file.read()
++    file_name = upload_file.filename or "plan_bom.xlsx"
++    suffix = Path(file_name).suffix.lower()
++    if suffix not in ALLOWED_BOM_EXCEL_SUFFIXES:
++        return _upload_failure_payload(
++            message="仅支持 .xls / .xlsx / .xlsm 格式的 BOM Excel 文件。",
++            file_name=file_name,
++            file_size=len(content),
++            next_action="请上传有效的 BOM Excel 文件。",
++        )
++    if not content:
++        return _upload_failure_payload(message="上传文件为空。", file_name=file_name, file_size=0, next_action="请重新选择非空 Excel 文件。")
++    if len(content) > MAX_SINGLE_BOM_UPLOAD_BYTES:
++        return _upload_failure_payload(
++            message="上传文件超过 20MB 限制。",
++            file_name=file_name,
++            file_size=len(content),
++            next_action="请拆分文件或联系管理员调整上传限制。",
++        )
++
++    try:
++        report = service.import_bytes(content, file_name=file_name)
++    except Exception as exc:  # noqa: BLE001
++        return _upload_failure_payload(
++            message="BOM Excel 上传解析失败，请确认文件是有效 Excel 且符合计划 BOM 模板。",
++            file_name=file_name,
++            file_size=len(content),
++            next_action="请修正 Excel 后重新上传。",
++            error=str(exc)[:300],
++        )
++    return _upload_success_payload(report=report, file_size=len(content), source=source, overwrite=overwrite, remark=remark)
++
++
++def _batch_upload_payload(
++    *,
++    items: list[dict[str, Any]],
++    source: str,
++    overwrite: bool,
++    remark: str | None,
++) -> dict[str, Any]:
++    """汇总多个 BOM 文件的上传结果。
++
++    参数：
++        items: 逐文件上传结果；
++        source: 上传来源；
++        overwrite: 是否覆盖同一文件实例；
++        remark: 上传备注。
++
++    返回：
++        批量上传汇总 payload，既包含总体成功/失败，也保留逐文件明细。
++    """
++
++    total_files = len(items)
++    success_count = sum(1 for item in items if item.get("success") is True)
++    failed_count = total_files - success_count
++    parsed_orders_count = sum(int(item.get("parsed_orders_count") or 0) for item in items)
++    parsed_materials_count = sum(int(item.get("parsed_materials_count") or 0) for item in items)
++    warning_count = sum(int(item.get("warning_count") or 0) for item in items)
++    error_count = sum(int(item.get("error_count") or 0) for item in items)
++    if total_files == 0:
++        message = "未选择任何 BOM Excel 文件。"
++    elif failed_count == 0:
++        message = f"BOM Excel 批量上传成功：{success_count} 个文件已完成解析。"
++    else:
++        message = f"BOM Excel 批量上传完成：成功 {success_count} 个，失败 {failed_count} 个。"
++    return {
++        "success": total_files > 0 and failed_count == 0,
++        "message": message,
++        "total_files": total_files,
++        "success_count": success_count,
++        "failed_count": failed_count,
++        "parsed_orders_count": parsed_orders_count,
++        "parsed_materials_count": parsed_materials_count,
++        "warning_count": warning_count,
++        "error_count": error_count,
++        "data_quality_summary": {
++            "batch_mode": True,
++            "source": source,
++            "overwrite": overwrite,
++            "remark": remark,
++        },
++        "items": items,
++        "next_action": "可以进入 /api/v1/plan-bom/qa/ask 查询。" if failed_count == 0 and total_files > 0 else "请查看逐文件结果，修正失败文件后重新上传。",
++    }
++
++
++def _business_type_failure_response(
++    *,
++    upload_files: list[UploadFile],
++    is_batch_request: bool,
++    trace_id: str,
++) -> ApiResponse:
++    """构造 business_type 非 plan_bom 时的失败响应。
++
++    参数：
++        upload_files: 本次请求携带的文件列表；
++        is_batch_request: 是否使用批量 files 字段；
++        trace_id: 请求追踪号。
++
++    返回：
++        单文件保持旧结构，批量 files 字段返回批量结构。
++    """
++
++    if is_batch_request:
++        items = [
++            _upload_failure_payload(
++                message="当前上传接口仅支持 business_type=plan_bom。",
++                file_name=upload_file.filename,
++                file_size=0,
++                next_action="请将 business_type 改为 plan_bom 后重新上传。",
++            )
++            for upload_file in upload_files
++        ] or [
++            _upload_failure_payload(
++                message="当前上传接口仅支持 business_type=plan_bom。",
++                file_name=None,
++                file_size=0,
++                next_action="请将 business_type 改为 plan_bom 后重新上传。",
++            )
++        ]
++        return ApiResponse.success(_batch_upload_payload(items=items, source="invalid_business_type", overwrite=True, remark=None), trace_id=trace_id)
++    file_name = upload_files[0].filename if upload_files else None
++    return ApiResponse.success(
++        _upload_failure_payload(
++            message="当前上传接口仅支持 business_type=plan_bom。",
++            file_name=file_name,
++            file_size=0,
++            next_action="请将 business_type 改为 plan_bom 后重新上传。",
++        ),
++        trace_id=trace_id,
++    )
++
++
+ @router.post("/excel", response_model=ApiResponse)
+ async def import_plan_bom_excel(
+     request: Request,
+@@ -90,102 +318,59 @@ def list_plan_bom_upload_history(
+ @router.post("/upload", response_model=ApiResponse)
+ async def upload_plan_bom_excel(
+     request: Request,
+-    file: UploadFile = File(...),
++    file: UploadFile | None = File(default=None),
++    files: list[UploadFile] | None = File(default=None),
+     business_type: str = Form(default="plan_bom"),
+     source: str = Form(default="manual_upload"),
+     overwrite: bool = Form(default=True),
+     remark: str | None = Form(default=None),
+     service: PlanBomExcelImportService = Depends(get_plan_bom_import_service),
+ ) -> ApiResponse:
+-    """计划 BOM Excel 上传与导入入口。
++    """计划 BOM Excel 上传与导入入口，兼容单文件和批量上传。
+ 
+     参数：
+-        file: 必填，支持 `.xls` / `.xlsx` / `.xlsm`；
++        file: 兼容旧前端的单文件字段，支持 `.xls` / `.xlsx` / `.xlsm`；
++        files: 批量上传字段，可一次传入多个 BOM Excel；
+         business_type: 业务类型，当前默认并限制为 plan_bom；
+         source: 上传来源标记，例如 manual_upload / trial_import；
+         overwrite: 是否覆盖同一文件实例，当前复用既有导入仓储的幂等覆盖策略；
+         remark: 上传备注，仅回传到报告摘要中，不参与事实解析。
+ 
+     返回：
+-        面向前端验收的上传结果字段，包含批次号、文件大小、解析数量、质量摘要和下一步动作。
++        单文件请求保持旧响应结构；files 批量请求返回汇总字段和逐文件 items。
+     """
+ 
+     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
+-    content = await file.read()
+-    suffix = Path(file.filename or "").suffix.lower()
+-    max_bytes = 20 * 1024 * 1024
++    is_batch_request = files is not None
++    upload_files = [item for item in (files or []) if item is not None]
++    if not upload_files and file is not None:
++        upload_files = [file]
++
+     if business_type != "plan_bom":
++        return _business_type_failure_response(upload_files=upload_files, is_batch_request=is_batch_request, trace_id=trace_id)
++
++    if not upload_files:
+         return ApiResponse.success(
+-            _upload_failure_payload(
+-                message="当前上传接口仅支持 business_type=plan_bom。",
+-                file_name=file.filename,
+-                file_size=len(content),
+-                next_action="请将 business_type 改为 plan_bom 后重新上传。",
+-            ),
+-            trace_id=trace_id,
+-        )
+-    if suffix not in {".xls", ".xlsx", ".xlsm"}:
+-        return ApiResponse.success(
+-            _upload_failure_payload(
+-                message="仅支持 .xls / .xlsx / .xlsm 格式的 BOM Excel 文件。",
+-                file_name=file.filename,
+-                file_size=len(content),
+-                next_action="请上传有效的 BOM Excel 文件。",
+-            ),
+-            trace_id=trace_id,
+-        )
+-    if not content:
+-        return ApiResponse.success(
+-            _upload_failure_payload(message="上传文件为空。", file_name=file.filename, file_size=0, next_action="请重新选择非空 Excel 文件。"),
+-            trace_id=trace_id,
+-        )
+-    if len(content) > max_bytes:
+-        return ApiResponse.success(
+-            _upload_failure_payload(
+-                message="上传文件超过 20MB 限制。",
+-                file_name=file.filename,
+-                file_size=len(content),
+-                next_action="请拆分文件或联系管理员调整上传限制。",
+-            ),
++            _upload_failure_payload(message="请至少选择一个 BOM Excel 文件。", next_action="请选择 .xls / .xlsx / .xlsm 文件后重新上传。"),
+             trace_id=trace_id,
+         )
+ 
+-    try:
+-        report = service.import_bytes(content, file_name=file.filename or "plan_bom.xlsx")
+-    except Exception as exc:  # noqa: BLE001
+-        return ApiResponse.success(
++    if is_batch_request and len(upload_files) > MAX_BATCH_BOM_UPLOAD_FILES:
++        items = [
+             _upload_failure_payload(
+-                message="BOM Excel 上传解析失败，请确认文件是有效 Excel 且符合计划 BOM 模板。",
+-                file_name=file.filename,
+-                file_size=len(content),
+-                next_action="请修正 Excel 后重新上传。",
+-                error=str(exc)[:300],
+-            ),
+-            trace_id=trace_id,
+-        )
+-    quality_summary = {
+-        "sheet_count": report.sheet_count,
+-        "revision_count": report.revision_count,
+-        "persisted_business_data": report.persisted_business_data,
+-        "rollback_applied": report.rollback_applied,
+-        "source": source,
+-        "overwrite": overwrite,
+-        "remark": remark,
+-    }
+-    payload = {
+-        "success": report.status == "success",
+-        "message": "BOM Excel 上传解析成功。" if report.status == "success" else "BOM Excel 上传解析失败，请查看错误明细。",
+-        "import_batch_id": report.batch_id,
+-        "file_name": report.file_name,
+-        "file_size": len(content),
+-        "parsed_orders_count": report.header_count,
+-        "parsed_materials_count": report.material_line_count,
+-        "warning_count": report.warning_count,
+-        "error_count": report.error_count,
+-        "data_quality_summary": quality_summary,
+-        "report_path": f"tmp/plan_bom/import_reports/{report.batch_id}.json",
+-        "next_action": "可以进入 /api/v1/plan-bom/qa/ask 查询。" if report.status == "success" else "请修正 Excel 后重新上传。",
+-        "errors": [item.model_dump(mode="json") for item in report.errors[:20]],
+-        "warnings": [item.model_dump(mode="json") for item in report.warnings[:20]],
+-    }
+-    return ApiResponse.success(payload, trace_id=trace_id)
++                message=f"单次最多支持上传 {MAX_BATCH_BOM_UPLOAD_FILES} 个 BOM Excel 文件。",
++                file_name=upload_file.filename,
++                next_action="请拆分为多次批量上传。",
++            )
++            for upload_file in upload_files
++        ]
++        return ApiResponse.success(_batch_upload_payload(items=items, source=source, overwrite=overwrite, remark=remark), trace_id=trace_id)
++
++    if not is_batch_request:
++        item = await _import_one_upload_file(upload_file=upload_files[0], service=service, source=source, overwrite=overwrite, remark=remark)
++        return ApiResponse.success(item, trace_id=trace_id)
++
++    items: list[dict[str, Any]] = []
++    for upload_file in upload_files:
++        items.append(await _import_one_upload_file(upload_file=upload_file, service=service, source=source, overwrite=overwrite, remark=remark))
++    return ApiResponse.success(_batch_upload_payload(items=items, source=source, overwrite=overwrite, remark=remark), trace_id=trace_id)
+diff --git a/frontend/src/api/planBom.ts b/frontend/src/api/planBom.ts
+index b2c1f8e..f57d0bf 100644
+--- a/frontend/src/api/planBom.ts
++++ b/frontend/src/api/planBom.ts
+@@ -214,17 +214,44 @@ function emitUploadProgress(event: UploadProgressEventLike, callback?: (percenta
+ export async function uploadPlanBomExcel(file: File, options: PlanBomUploadOptions = {}) {
+   const formData = new FormData()
+   formData.append('file', file)
++  appendPlanBomUploadFields(formData, options)
++  const resp = await http.post('/plan-bom/upload', formData, {
++    headers: { 'Content-Type': 'multipart/form-data' },
++    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
++  })
++  return resp.data
++}
++
++/**
++ * 批量上传计划 BOM Excel 文件。
++ * 说明：
++ * 1. 多个文件统一使用后端 files 字段，后端逐文件解析并返回汇总；
++ * 2. 前端不解析 Excel 内容，只负责选择文件、上传和展示逐文件结果；
++ * 3. 继续复用单文件上传的 source / overwrite / remark / 进度参数。
++ */
++export async function uploadPlanBomExcelBatch(files: File[], options: PlanBomUploadOptions = {}) {
++  const formData = new FormData()
++  files.forEach((file) => {
++    formData.append('files', file)
++  })
++  appendPlanBomUploadFields(formData, options)
++  const resp = await http.post('/plan-bom/upload', formData, {
++    headers: { 'Content-Type': 'multipart/form-data' },
++    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
++  })
++  return resp.data
++}
++
++/**
++ * 追加 BOM 上传公共表单字段。
++ */
++function appendPlanBomUploadFields(formData: FormData, options: PlanBomUploadOptions) {
+   formData.append('business_type', options.business_type || 'plan_bom')
+   formData.append('source', options.source || 'manual_upload')
+   formData.append('overwrite', String(options.overwrite ?? true))
+   if (options.remark) {
+     formData.append('remark', options.remark)
+   }
+-  const resp = await http.post('/plan-bom/upload', formData, {
+-    headers: { 'Content-Type': 'multipart/form-data' },
+-    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
+-  })
+-  return resp.data
+ }
+ 
+ /**
+diff --git a/frontend/src/views/plan-bom/BomDataManagementPage.vue b/frontend/src/views/plan-bom/BomDataManagementPage.vue
+index faf41b0..3981abe 100644
+--- a/frontend/src/views/plan-bom/BomDataManagementPage.vue
++++ b/frontend/src/views/plan-bom/BomDataManagementPage.vue
+@@ -38,13 +38,13 @@
+         </div>
+         <div class="upload-card">
+           <div class="upload-main">
+-            <input ref="fileInputRef" class="native-file-input" type="file" accept=".xls,.xlsx,.xlsm" @change="handleFileChange" />
++            <input ref="fileInputRef" class="native-file-input" type="file" accept=".xls,.xlsx,.xlsm" multiple @change="handleFileChange" />
+             <div class="file-info">
+-              <strong>{{ selectedFile?.name || '请选择 BOM Excel 文件' }}</strong>
+-              <span>{{ selectedFile ? formatFileSize(selectedFile.size) : '可用于问答' }}</span>
++              <strong>{{ selectedBomFileSummary }}</strong>
++              <span>{{ selectedBomFileSizeSummary }}</span>
+             </div>
+           </div>
+-          <el-button type="primary" :disabled="!selectedFile" :loading="uploading" @click="uploadFile">上传并解析</el-button>
++          <el-button type="primary" :disabled="!selectedFiles.length" :loading="uploading" @click="uploadFile">批量上传并解析</el-button>
+         </div>
+         <div v-if="uploading || bomUploadProgress > 0" class="upload-progress">
+           <span>BOM 上传进度：{{ bomUploadProgress }}%</span>
+@@ -143,6 +143,20 @@
+           </div>
+         </div>
+         <p class="next-action">{{ uploadResult.next_action || '上传完成，可进入智能问答' }}</p>
++        <div v-if="uploadBatchResult?.items?.length" class="batch-result-list">
++          <div class="result-subtitle">逐文件结果</div>
++          <el-table :data="uploadBatchResult.items" size="small" stripe>
++            <el-table-column prop="file_name" label="文件名" min-width="220" show-overflow-tooltip />
++            <el-table-column prop="success" label="状态" width="96">
++              <template #default="{ row }">
++                <el-tag :type="row.success ? 'success' : 'danger'">{{ row.success ? '成功' : '失败' }}</el-tag>
++              </template>
++            </el-table-column>
++            <el-table-column prop="parsed_orders_count" label="订单数" width="92" />
++            <el-table-column prop="parsed_materials_count" label="物料数" width="92" />
++            <el-table-column prop="message" label="结果说明" min-width="220" show-overflow-tooltip />
++          </el-table>
++        </div>
+       </div>
+ 
+       <div v-if="uploadPowerModelResult" class="result-card power-result-card">
+@@ -292,7 +306,7 @@ import {
+   activatePlanPowerModelVersion,
+   fetchPlanBomUploadHistory,
+   fetchPlanPowerModelVersions,
+-  uploadPlanBomExcel,
++  uploadPlanBomExcelBatch,
+   uploadPlanPowerModel,
+   type PlanBomUploadHistoryItem,
+   type PlanBomUploadHistoryResponse,
+@@ -303,6 +317,10 @@ import {
+ interface UploadResult {
+   success?: boolean
+   message?: string
++  file_name?: string
++  total_files?: number
++  success_count?: number
++  failed_count?: number
+   parsed_orders_count?: number
+   parsed_materials_count?: number
+   warning_count?: number
+@@ -310,6 +328,10 @@ interface UploadResult {
+   next_action?: string
+ }
+ 
++interface UploadBatchResult extends UploadResult {
++  items?: UploadResult[]
++}
++
+ interface PowerModelUploadResult {
+   success?: boolean
+   message?: string
+@@ -326,11 +348,12 @@ interface PowerModelUploadResult {
+ }
+ 
+ const fileInputRef = ref<HTMLInputElement | null>(null)
+-const selectedFile = ref<File | null>(null)
++const selectedFiles = ref<File[]>([])
+ const uploading = ref(false)
+ const uploadError = ref('')
+ const uploadSuccessMessage = ref('')
+ const uploadResult = ref<UploadResult | null>(null)
++const uploadBatchResult = ref<UploadBatchResult | null>(null)
+ const bomUploadProgress = ref(0)
+ 
+ const powerModelFileInputRef = ref<HTMLInputElement | null>(null)
+@@ -355,9 +378,23 @@ const powerHistoryPageSize = 8
+ const activePowerModelVersion = computed(() => powerModelVersions.value.find((item) => item.is_active) || null)
+ 
+ const hasUploadFeedback = computed(
+-  () => Boolean(uploadSuccessMessage.value || uploadError.value || powerModelUploadSuccessMessage.value || powerModelUploadError.value || uploadResult.value || uploadPowerModelResult.value),
++  () => Boolean(uploadSuccessMessage.value || uploadError.value || powerModelUploadSuccessMessage.value || powerModelUploadError.value || uploadResult.value || uploadBatchResult.value || uploadPowerModelResult.value),
+ )
+ 
++/** BOM 文件选择摘要：多文件只展示数量，避免长文件名挤压上传卡片。 */
++const selectedBomFileSummary = computed(() => {
++  if (!selectedFiles.value.length) return '请选择 1 个或多个 BOM Excel 文件'
++  if (selectedFiles.value.length === 1) return selectedFiles.value[0].name
++  return `已选择 ${selectedFiles.value.length} 个 BOM Excel 文件`
++})
++
++/** BOM 文件大小摘要：批量上传展示总大小，便于业务用户预估等待时间。 */
++const selectedBomFileSizeSummary = computed(() => {
++  if (!selectedFiles.value.length) return '可用于问答，支持批量上传'
++  const totalSize = selectedFiles.value.reduce((sum, file) => sum + file.size, 0)
++  return selectedFiles.value.length === 1 ? formatFileSize(totalSize) : `合计 ${formatFileSize(totalSize)}`
++})
++
+ /** 功率模型结果卡下一步提示，避免解析失败版本被误读为已生效。 */
+ const powerModelResultNextAction = computed(() => {
+   const result = uploadPowerModelResult.value
+@@ -400,13 +437,14 @@ onMounted(() => {
+   void loadUploadHistory()
+ })
+ 
+-/** 记录用户选择的 BOM 文件，实际解析仍由后端上传接口完成。 */
++/** 记录用户选择的 BOM 文件列表，实际解析仍由后端上传接口完成。 */
+ function handleFileChange(event: Event) {
+   const input = event.target as HTMLInputElement
+-  selectedFile.value = input.files?.[0] || null
++  selectedFiles.value = Array.from(input.files || [])
+   uploadError.value = ''
+   uploadSuccessMessage.value = ''
+   uploadResult.value = null
++  uploadBatchResult.value = null
+   bomUploadProgress.value = 0
+ }
+ 
+@@ -415,29 +453,31 @@ function handleBomUploadProgress(percentage: number) {
+   bomUploadProgress.value = Math.max(0, Math.min(99, percentage))
+ }
+ 
+-/** 上传 BOM Excel 到真实后端接口，不在前端伪造解析结果。 */
++/** 上传 BOM Excel 到真实后端接口，支持单选和批量多选，不在前端伪造解析结果。 */
+ async function uploadFile() {
+-  if (!selectedFile.value || uploading.value) return
++  if (!selectedFiles.value.length || uploading.value) return
+   uploading.value = true
+   uploadError.value = ''
+   uploadSuccessMessage.value = ''
+   uploadResult.value = null
++  uploadBatchResult.value = null
+   bomUploadProgress.value = 0
+   try {
+-    const resp = await uploadPlanBomExcel(selectedFile.value, {
++    const resp = await uploadPlanBomExcelBatch(selectedFiles.value, {
+       source: 'trial_run_ui',
+       overwrite: true,
+-      remark: '业务试运行页面上传',
++      remark: '业务试运行页面批量上传',
+       onUploadProgress: handleBomUploadProgress,
+     })
+-    uploadResult.value = unwrapResponseData<UploadResult>(resp)
++    uploadBatchResult.value = unwrapResponseData<UploadBatchResult>(resp)
++    uploadResult.value = uploadBatchResult.value
+     bomUploadProgress.value = 100
+     void loadUploadHistory()
+-    if (uploadResult.value?.success === false) {
+-      uploadError.value = `BOM 上传失败：${uploadResult.value.message || '请检查文件内容。'}`
++    if (uploadBatchResult.value?.success === false) {
++      uploadError.value = `BOM 批量上传存在失败：${uploadBatchResult.value.message || '请查看逐文件结果。'}`
+       return
+     }
+-    uploadSuccessMessage.value = `BOM Excel 上传成功：${uploadResult.value?.message || '已完成解析。'}`
++    uploadSuccessMessage.value = `BOM Excel 批量上传成功：${uploadBatchResult.value?.message || '已完成解析。'}`
+   } catch (error) {
+     uploadError.value = `BOM 上传失败：${extractUploadErrorMessage(error)}`
+   } finally {
+@@ -988,6 +1028,18 @@ function handlePowerHistoryPageChange(page: number) {
+   color: var(--enterprise-primary);
+ }
+ 
++.batch-result-list {
++  display: grid;
++  gap: 10px;
++  margin-top: 14px;
++}
++
++.result-subtitle {
++  color: #334155;
++  font-size: 13px;
++  font-weight: 650;
++}
++
+ .power-result-card {
+   border-color: rgba(139, 92, 246, 0.22);
+   background: #fbfaff;
+diff --git a/frontend/src/views/plan-bom/PlanBomDetailQueryPage.vue b/frontend/src/views/plan-bom/PlanBomDetailQueryPage.vue
+index 123bba2..031969b 100644
+--- a/frontend/src/views/plan-bom/PlanBomDetailQueryPage.vue
++++ b/frontend/src/views/plan-bom/PlanBomDetailQueryPage.vue
+@@ -15,7 +15,7 @@
+           <div class="section-heading">
+             <div>
+               <h3 class="section-title">BOM 问答与上传</h3>
+-              <p class="section-subtitle">支持自然语言查询、业务化追问、拒答解释，以及单个 BOM Excel 上传导入。</p>
++              <p class="section-subtitle">支持自然语言查询、业务化追问、拒答解释，以及 BOM Excel 批量上传导入。</p>
+             </div>
+           </div>
+ 
+@@ -29,7 +29,7 @@
+             <div class="qa-actions__footer">
+               <el-space wrap>
+                 <el-button type="primary" :loading="qaLoading" round @click="submitQaQuestion">发送问题</el-button>
+-                <input type="file" accept=".xls,.xlsx,.xlsm" @change="handleUploadInputChange" />
++                <input type="file" accept=".xls,.xlsx,.xlsm" multiple @change="handleUploadInputChange" />
+               </el-space>
+               <span class="query-actions__hint">上传接口：POST /api/v1/plan-bom/upload</span>
+             </div>
+@@ -328,7 +328,7 @@ import type {
+   PlanBomMaterialItem,
+   PlanBomQaResponse,
+ } from '@/api/planBom'
+-import { askPlanBomQuestion, fetchPlanBomDetailQuery, uploadPlanBomExcel } from '@/api/planBom'
++import { askPlanBomQuestion, fetchPlanBomDetailQuery, uploadPlanBomExcelBatch } from '@/api/planBom'
+ 
+ interface CandidateSelectionState {
+   order_identity_key: string
+@@ -800,15 +800,15 @@ async function submitQaQuestion() {
+ }
+ 
+ /**
+- * 上传单个 BOM Excel 文件。
++ * 批量上传 BOM Excel 文件。
+  */
+ async function handleUploadInputChange(event: Event) {
+   const target = event.target as HTMLInputElement
+-  const file = target.files?.[0]
+-  if (!file) return
++  const files = Array.from(target.files || [])
++  if (!files.length) return
+   qaError.value = ''
+   try {
+-    const resp = await uploadPlanBomExcel(file)
++    const resp = await uploadPlanBomExcelBatch(files)
+     uploadResult.value = typeof resp === 'object' && resp !== null && 'data' in resp ? resp.data : resp
+   } catch (error: any) {
+     qaError.value = error?.response?.data?.message || error?.message || 'BOM 上传失败，请稍后重试'
+diff --git a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+index 4c11a7a..a96996e 100644
+--- a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
++++ b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+@@ -31,6 +31,35 @@ def test_bom_data_management_exposes_separate_power_model_upload_entry_without_t
+     assert "上传失败" in page
+ 
+ 
++def test_bom_excel_upload_supports_batch_files_end_to_end_contract() -> None:
++    """BOM Excel 上传应支持一次选择多个文件，并由后端返回批量汇总与逐文件结果。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++    query_page = (FRONTEND / "views" / "plan-bom" / "PlanBomDetailQueryPage.vue").read_text(encoding="utf-8")
++    api = (FRONTEND / "api" / "planBom.ts").read_text(encoding="utf-8")
++    endpoint = (BACKEND / "domains" / "plan_bom" / "api" / "endpoints" / "import_excel.py").read_text(encoding="utf-8")
++
++    assert "type=\"file\"" in page
++    assert "multiple" in page
++    assert "selectedFiles" in page
++    assert "请选择 1 个或多个 BOM Excel 文件" in page
++    assert "uploadPlanBomExcelBatch" in page
++    assert "uploadBatchResult" in page
++    assert "批量上传" in page
++    assert "逐文件结果" in page
++    assert "BOM Excel 批量上传导入" in query_page
++    assert "multiple @change=\"handleUploadInputChange\"" in query_page
++    assert "uploadPlanBomExcelBatch(files)" in query_page
++    assert "files.forEach" in api
++    assert "formData.append('files', file)" in api
++    assert "uploadPlanBomExcelBatch(files: File[]" in api
++    assert "total_files" in endpoint
++    assert "success_count" in endpoint
++    assert "failed_count" in endpoint
++    assert "items" in endpoint
++    assert "files: list[UploadFile] | None = File(default=None)" in endpoint
++    assert "file: UploadFile | None = File(default=None)" in endpoint
++
++
+ def test_bom_data_management_progress_and_status_are_isolated_per_upload_type() -> None:
+     """BOM 和功率模型上传必须分别维护进度与提示，避免两个入口状态串扰。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+@@ -203,6 +232,29 @@ def test_business_chat_assistant_response_layout_is_adaptive_not_fixed_template(
+     assert "v-if=\"message.presentation.table\" class=\"result-table-card\"" not in template
+ 
+ 
++def test_business_chat_detail_table_can_export_excel_when_rows_exist() -> None:
++    """智能助手回复中存在明细表格时，业务用户应能直接导出 Excel 文件。"""
++    chat = (FRONTEND / "views" / "business-chat" / "BusinessChatPage.vue").read_text(encoding="utf-8")
++    template = chat.split("<script setup", 1)[0]
++
++    assert "import * as XLSX from 'xlsx'" in chat
++    assert "import { ElMessage } from 'element-plus'" in chat
++    assert "data-testid=\"export-result-table-excel\"" in template
++    assert "导出 Excel" in template
++    assert "@click=\"exportAssistantTableToExcel(message)\"" in template
++    assert "shouldShowResultTable(message)" in template
++    assert "function exportAssistantTableToExcel" in chat
++    assert "function buildAssistantTableExportRows" in chat
++    assert "function buildAssistantTableExportFileName" in chat
++    assert "XLSX.utils.json_to_sheet" in chat
++    assert "XLSX.utils.book_append_sheet" in chat
++    assert "XLSX.writeFile" in chat
++    assert "ElMessage.warning('当前回答没有可导出的明细数据')" in chat
++    assert "ElMessage.success(`已导出 ${table.rows.length} 行明细数据`)" in chat
++    assert "智能助手明细数据" in chat
++    assert "xlsx" in chat
++
++
+ def test_power_model_token_dependency_removed_from_current_backend_sources() -> None:
+     """临时功率模型 token 功能应从当前后端源码移除，后续改由用户权限模块接管。"""
+     deps = (BACKEND / "api" / "deps.py").read_text(encoding="utf-8")
+diff --git a/tests/business_acceptance/test_plan_bom_batch_upload_endpoint.py b/tests/business_acceptance/test_plan_bom_batch_upload_endpoint.py
+new file mode 100644
+index 0000000..7a68906
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_bom_batch_upload_endpoint.py
+@@ -0,0 +1,104 @@
++from __future__ import annotations
++
++import asyncio
++from types import SimpleNamespace
++
++from backend.app.domains.plan_bom.api.endpoints.import_excel import upload_plan_bom_excel
++from backend.app.domains.plan_bom.schemas.import_excel import PlanBomImportReport
++
++
++class FakeUploadFile:
++    """用于直接调用 FastAPI endpoint 的最小上传文件桩。"""
++
++    def __init__(self, filename: str, content: bytes) -> None:
++        self.filename = filename
++        self._content = content
++
++    async def read(self) -> bytes:
++        """返回测试预置的文件内容。"""
++        return self._content
++
++
++class FakePlanBomImportService:
++    """记录导入调用并返回可预测报告，避免测试依赖真实 Excel 解析。"""
++
++    def __init__(self) -> None:
++        self.calls: list[tuple[str, bytes]] = []
++
++    def import_bytes(self, content: bytes, *, file_name: str, batch_id: str | None = None) -> PlanBomImportReport:
++        """模拟单文件入库成功报告。"""
++        self.calls.append((file_name, content))
++        return PlanBomImportReport(
++            batch_id=batch_id or f"batch-{len(self.calls)}",
++            status="success",
++            file_name=file_name,
++            file_hash=f"hash-{len(self.calls)}",
++            sheet_count=1,
++            header_count=len(self.calls),
++            material_line_count=len(content),
++            revision_count=0,
++            warning_count=0,
++            error_count=0,
++            persisted_business_data=True,
++        )
++
++
++def test_plan_bom_upload_endpoint_accepts_multiple_files_and_returns_batch_summary() -> None:
++    """后端 BOM 上传接口应兼容 files[] 批量上传，并返回逐文件结果与汇总。"""
++    request = SimpleNamespace(state=SimpleNamespace(trace_id="trace-batch-upload"))
++    service = FakePlanBomImportService()
++
++    response = asyncio.run(
++        upload_plan_bom_excel(
++            request=request,
++            file=None,
++            files=[FakeUploadFile("bom-a.xlsx", b"aaa"), FakeUploadFile("bom-b.xlsm", b"bb")],
++            business_type="plan_bom",
++            source="trial_run_ui",
++            overwrite=True,
++            remark="批量上传验收",
++            service=service,
++        )
++    )
++
++    payload = response.data
++    assert response.trace_id == "trace-batch-upload"
++    assert service.calls == [("bom-a.xlsx", b"aaa"), ("bom-b.xlsm", b"bb")]
++    assert payload["success"] is True
++    assert payload["total_files"] == 2
++    assert payload["success_count"] == 2
++    assert payload["failed_count"] == 0
++    assert payload["parsed_orders_count"] == 3
++    assert payload["parsed_materials_count"] == 5
++    assert [item["file_name"] for item in payload["items"]] == ["bom-a.xlsx", "bom-b.xlsm"]
++    assert all(item["success"] for item in payload["items"])
++
++
++def test_plan_bom_batch_upload_keeps_partial_failures_per_file() -> None:
++    """批量上传中某个文件格式不合法时，不应阻断其它合法 BOM 文件导入。"""
++    request = SimpleNamespace(state=SimpleNamespace(trace_id="trace-batch-partial"))
++    service = FakePlanBomImportService()
++
++    response = asyncio.run(
++        upload_plan_bom_excel(
++            request=request,
++            file=None,
++            files=[FakeUploadFile("bom-ok.xlsx", b"ok"), FakeUploadFile("readme.txt", b"not excel")],
++            business_type="plan_bom",
++            source="trial_run_ui",
++            overwrite=True,
++            remark=None,
++            service=service,
++        )
++    )
++
++    payload = response.data
++    assert service.calls == [("bom-ok.xlsx", b"ok")]
++    assert payload["success"] is False
++    assert payload["total_files"] == 2
++    assert payload["success_count"] == 1
++    assert payload["failed_count"] == 1
++    assert payload["items"][0]["success"] is True
++    assert payload["items"][1]["success"] is False
++    assert payload["items"][1]["file_name"] == "readme.txt"
++    assert "仅支持 .xls / .xlsx / .xlsm" in payload["items"][1]["message"]

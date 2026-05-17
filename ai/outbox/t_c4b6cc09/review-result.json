@@ -1,0 +1,1 @@
+{"passed":true,"security_concerns":[],"logic_errors":[],"suggestions":["可选加强：若希望 time_range.source_scope/time_scope 一旦出现就必须非空匹配，可将当前 truthy 判断改为 key 存在即校验。"],"summary":"针对指定阻塞项复审通过：where 递归禁用、NaN/Infinity 严格 JSON 拒绝、未知顶层字段拒绝、source_scope/time_scope 独立校验均已覆盖。"}

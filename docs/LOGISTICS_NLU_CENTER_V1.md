@@ -15,27 +15,28 @@
 
 ## 指标结果
 
-- intent 命中：122/122，命中率 1.0
-- route 命中：122/122，命中率 1.0
-- query_key 候选命中：122/122，命中率 1.0
+- intent 命中：120/122，命中率 0.9836
+- route 命中：120/122，命中率 0.9836
+- query_key 候选命中：121/122，命中率 0.9918
 - metric slot 命中：122/122，命中率 1.0
 - source_scope 命中：122/122，命中率 1.0
-- clarification 识别：122/122，命中率 1.0
+- clarification 识别：121/122，命中率 0.9918
 - unsupported 识别：122/122，命中率 1.0
 - 多问题识别：122/122，命中率 1.0
-- 误落 success：0
+- 误落 success：1
 - 误落 unsupported：0
 - Guardrail 改写 B/C 边界：0
 
 ## 当前判断
 
-- 是否适合 shadow / diagnostic：True
+- 是否适合 shadow / diagnostic：False
 - 是否建议替换 planner：False
 - 是否真实调用 LLM：False
 
 ## 未命中样本
 
-- 无。
+- B_REAL_004：2026年经营计划总发运量是多少？，失败项=['intent_hit', 'route_hit', 'clarification_hit', 'mis_success']，actual_intent=aggregate，actual_route=answerable，query_keys=['sys_mw_and_trip_count']
+- TOP200_A_006：2024年江苏省各城市总费用排名前五的是哪些？，失败项=['intent_hit', 'route_hit', 'query_key_candidate_hit']，actual_intent=clarification，actual_route=clarification，query_keys=[]
 
 ## 下一步建议
 

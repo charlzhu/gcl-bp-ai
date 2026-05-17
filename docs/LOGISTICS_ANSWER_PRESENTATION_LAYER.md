@@ -188,21 +188,21 @@ LLM 不允许：
 - `LLM_API_KEY` 只能来自环境变量或 `.env`，不允许写入代码、文档或报告。
 - 如果缺少 `LLM_BASE_URL`、`LLM_API_KEY` 或可用模型名，则不真实调用 LLM，自动降级到确定性展示编排。
 
-本地 DashScope OpenAI 兼容模式示例：
+本地 OpenAI 兼容 LLM 配置示例：
 
 ```bash
-export LLM_BASE_URL="https://dashscope.aliyuncs.com/compatible-mode/v1"
-export LLM_API_KEY="<your_dashscope_api_key>"
-export LLM_MODEL="qwen-plus"
+export LLM_BASE_URL="<your_openai_compatible_base_url>"
+export LLM_API_KEY=""  # 填入实际供应商 API Key；不要提交真实密钥
+export LLM_MODEL="deepseek-v4-flash"
 export LLM_ANSWER_PRESENTATION_ENABLED="true"
-export LLM_ANSWER_PRESENTATION_MODEL="qwen-plus"
+export LLM_ANSWER_PRESENTATION_MODEL="deepseek-v4-flash"
 export LLM_ANSWER_PRESENTATION_TIMEOUT="30"
 export LLM_ANSWER_PRESENTATION_MAX_RETRIES="1"
 
 python scripts/logistics_answer_presentation_live_shadow_eval.py
 ```
 
-如果不单独设置 `LLM_ANSWER_PRESENTATION_MODEL`，但 `LLM_MODEL=qwen-plus` 已配置，表达层会在启用状态下使用通用模型兜底。
+如果不单独设置 `LLM_ANSWER_PRESENTATION_MODEL`，但 `LLM_MODEL=deepseek-v4-flash` 已配置，表达层会在启用状态下使用通用模型兜底。
 
 ## 十二、live shadow 验收
 
@@ -229,8 +229,8 @@ python scripts/logistics_answer_presentation_live_shadow_eval.py
 最新结果摘要：
 
 - live LLM 配置：已具备 `LLM_BASE_URL / LLM_API_KEY / LLM_MODEL`。
-- 本轮模型来源：`LLM_MODEL=qwen-plus`，因为未单独设置 `LLM_ANSWER_PRESENTATION_MODEL`。
-- 是否真实发起 live 调用：是。
+- 模型来源：优先 `LLM_ANSWER_PRESENTATION_MODEL`，未单独设置时兜底 `LLM_MODEL`；具体模型值以运行时报告为准。
+- 是否真实发起 live 调用：以最新验收报告为准。
 - live LLM 成功编排数以 `LOGISTICS_ANSWER_PRESENTATION_LIVE_LLM_ACCEPTANCE.md` 最新报告为准。
 - deterministic fallback 与安全降级仍保持可用。
 - 代表折线图样例仍通过：后端返回 2026 年 1–3 月 rows，前端可按确定性 `line_chart` 渲染。
@@ -248,7 +248,7 @@ python scripts/logistics_answer_presentation_live_shadow_eval.py
 - 不是 demo，不新建独立演示页。
 - 不使用 mock 数据，不 hardcode 样例结果。
 - 调用真实 `LogisticsDataQaService.query()`，经过 planner / repository / data_qa_service 主链路。
-- `qwen-plus` 只在确定性结果之后做表达优化和展示编排。
+- `deepseek-v4-flash` 只在确定性结果之后做表达优化和展示编排。
 - LLM 不查数、不生成 SQL、不改写 planner / query_key / A/B/C 边界、不修改后端数值。
 - 前端真实页面使用 `response.presentation` 动态渲染，同时保留旧响应无 `presentation` 时的降级展示。
 
@@ -259,7 +259,7 @@ python scripts/logistics_answer_presentation_live_shadow_eval.py
 - 失败：`0`
 - 真实 data-qa 主链路样例：`11`
 - 前端静态兼容检查：`2`
-- qwen-plus 是否真实调用：是
+- 是否真实调用 LLM：以最新验收报告为准
 - 模型来源：`LLM_MODEL`
 - fallback 数：`4`，原因均为 `llm_text_number_hallucination`，已安全降级到确定性展示。
 - 代表样例“请将 2026 年 1 月到三月，这三个月的运量综合用折线图统计出来”通过：真实 planner 命中 `sys_mw_and_trip_count`，真实 repository 返回 2026 年 1–3 月 rows，前端可按 `line_chart` 渲染。

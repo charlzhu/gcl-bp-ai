@@ -1,0 +1,26 @@
+{
+  "task": "TASK-logistics-explicit-month-caveat",
+  "passed": true,
+  "reviewer": "delegate_task independent code review",
+  "blocking_findings": [],
+  "non_blocking_findings": [
+    {
+      "id": "NB-1",
+      "status": "addressed",
+      "summary": "R17 原先在 answer_presentation_service disabled 时断言 presentation.caveats，实际未覆盖前台 caveats。已改为 enabled=True + base_url/api_key/model 为空，走确定性 fallback，并显式断言 result.presentation is not None、caveats 包含明确年月过滤口径且不包含“未给年份”。"
+    },
+    {
+      "id": "NB-2",
+      "status": "addressed",
+      "summary": "R17 fake repository 原先返回 200.187，偏向 2024 全年值；已按 SQL 验证结果改为截图问题对应的 2024 年 1 月单月基线 86.506。"
+    }
+  ],
+  "verification_notes": [
+    "根因修复位于后端 service 的 hist_customer_mw calculation_logic 生成处，不是只过滤前端 caveats。",
+    "只有 filters.year 为 null 时保留“未给年份默认 2023–2025 历史累计”提示；明确年月时输出“已按用户给出的年份和月份过滤统计”。",
+    "SQL 验证：2024年1月华阳=86.506MW，2024全年=200.186MW，2023-2025累计=874.148MW。",
+    "focused/month/year/business-feedback/logistics-glob/compile/static-scan 均通过。"
+  ],
+  "security_concerns": [],
+  "logic_errors": []
+}

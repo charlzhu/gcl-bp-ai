@@ -1,0 +1,24 @@
+ backend/app/core/config.py                         | 39 ++++++++++++++++++++++
+ .../query_planning/schemas/query_plan_v2.py        |  6 ++++
+ .../query_planning/services/logistics_adapter.py   | 26 ++++++++++++++-
+ 3 files changed, 70 insertions(+), 1 deletion(-)
+ .../services/query_planner_v2/__init__.py          | 33 ++++++++++++++++++++++
+ 1 file changed, 33 insertions(+)
+ .../query_planner_v2/capability_registry.py        | 179 +++++++++++++++++++++
+ 1 file changed, 179 insertions(+)
+ .../services/query_planner_v2/fallback.py          | 135 +++++++++++++++++++++
+ 1 file changed, 135 insertions(+)
+ .../services/query_planner_v2/legacy_adapter.py    | 143 +++++++++++++++++++++
+ 1 file changed, 143 insertions(+)
+ .../services/query_planner_v2/llm_parser.py        | 274 +++++++++++++++++++++
+ 1 file changed, 274 insertions(+)
+ .../services/query_planner_v2/normalizer.py        | 358 +++++++++++++++++++++
+ 1 file changed, 358 insertions(+)
+ .../logistics/services/query_planner_v2/planner.py | 139 +++++++++++++++++++++
+ 1 file changed, 139 insertions(+)
+ .../services/query_planner_v2/prompt_builder.py    | 74 ++++++++++++++++++++++
+ 1 file changed, 74 insertions(+)
+ .../services/query_planner_v2/validator.py         | 216 +++++++++++++++++++++
+ 1 file changed, 216 insertions(+)
+ .../test_logistics_query_planner_v2.py             | 329 +++++++++++++++++++++
+ 1 file changed, 329 insertions(+)
