@@ -1,0 +1,122 @@
+# M4 verification log
+started_at=2026-05-17T16:49:32.249615
+
+## focused M4 renderer/safety/execution
+$ backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_sql_renderer.py tests/unit/logistics/nl2sql/test_sql_safety.py tests/unit/logistics/nl2sql/test_sql_execution.py -q
+.........................................                                [100%]
+41 passed in 2.30s
+
+exit_code=0
+
+## adjacent NL2SQL/planner regression
+$ backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_sql_plan.py tests/unit/logistics/nl2sql/test_semantic_catalog.py tests/unit/logistics/nl2sql/test_catalog_retrieval.py tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py -q
+........................................................................ [ 91%]
+.......                                                                  [100%]
+=============================== warnings summary ===============================
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  /opt/anaconda3/lib/python3.12/site-packages/pymilvus/client/__init__.py:6: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
+    from pkg_resources import DistributionNotFound, get_distribution
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('sphinxcontrib')`.
+  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
+    declare_namespace(pkg)
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('zope')`.
+  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
+    declare_namespace(pkg)
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.MessageMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.ScalarMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+79 passed, 9 warnings in 2.75s
+
+exit_code=0
+
+## logistics unit regression
+$ backend/.venv/bin/python -m pytest tests/unit/logistics -q
+........................................................................ [ 60%]
+................................................                         [100%]
+=============================== warnings summary ===============================
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  /opt/anaconda3/lib/python3.12/site-packages/pymilvus/client/__init__.py:6: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
+    from pkg_resources import DistributionNotFound, get_distribution
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('sphinxcontrib')`.
+  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
+    declare_namespace(pkg)
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('zope')`.
+  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
+    declare_namespace(pkg)
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.MessageMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.ScalarMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+120 passed, 9 warnings in 4.66s
+
+exit_code=0
+
+## all unit regression
+$ backend/.venv/bin/python -m pytest tests/unit -q
+........................................................................ [ 43%]
+........................................................................ [ 87%]
+....................                                                     [100%]
+=============================== warnings summary ===============================
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  /opt/anaconda3/lib/python3.12/site-packages/pymilvus/client/__init__.py:6: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
+    from pkg_resources import DistributionNotFound, get_distribution
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('sphinxcontrib')`.
+  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
+    declare_namespace(pkg)
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('zope')`.
+  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
+    declare_namespace(pkg)
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.MessageMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
+
+tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
+  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.ScalarMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+164 passed, 9 warnings in 5.65s
+
+exit_code=0
+
+## py_compile
+$ backend/.venv/bin/python -m py_compile backend/app/domains/logistics/services/nl2sql/sql_renderer.py backend/app/domains/logistics/services/nl2sql/sql_safety.py backend/app/domains/logistics/services/nl2sql/sql_execution.py
+
+exit_code=0
+
+## git diff check
+$ git diff --check
+
+exit_code=0
