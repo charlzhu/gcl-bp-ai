@@ -1,0 +1,33 @@
+{
+  "scoped_paths": [
+    "backend/app/domains/logistics/services/nl2sql/__init__.py",
+    "backend/app/domains/logistics/services/nl2sql/sql_plan.py",
+    "tests/unit/logistics/nl2sql/test_sql_plan.py",
+    "ai/outbox/kanban/t_d4358d4d/test.log",
+    "ai/outbox/kanban/t_d4358d4d/static-scan.json",
+    "ai/outbox/kanban/t_d4358d4d/review-result-final.json",
+    "ai/outbox/kanban/t_d4358d4d/final-acceptance.md"
+  ],
+  "diff_patch": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/ai/outbox/kanban/t_d4358d4d/diff.patch",
+  "generated_at": "2026-05-17T14:49:29",
+  "checks": [
+    {
+      "cmd": "git diff --check -- <scoped paths>",
+      "exit_code": 0,
+      "output": ""
+    }
+  ],
+  "whitespace_findings": [],
+  "security_scan_patterns": [
+    "hardcoded_secret",
+    "shell_injection",
+    "dangerous_eval_exec",
+    "unsafe_deserialization",
+    "sql_string_format"
+  ],
+  "security_findings": [],
+  "passed": true,
+  "notes": [
+    "Scanned task-scoped tracked diff plus untracked source/test/artifact files included via git diff --no-index."
+  ]
+}

@@ -10,10 +10,22 @@ from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
     LogisticsCatalogRecallService,
 )
 from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
+from backend.app.domains.logistics.services.nl2sql.sql_plan import (
+    LogisticsSqlPlan,
+    LogisticsSqlPlanCandidate,
+    LogisticsSqlPlanValidationResult,
+    LogisticsSqlPlanValidator,
+    validate_logistics_sql_plan_candidate,
+)
 
 __all__ = [
     "LogisticsCatalogRecallDocumentBuilder",
     "LogisticsCatalogRecallService",
     "LogisticsNl2SqlBusinessRules",
     "LogisticsSemanticCatalogLoader",
+    "LogisticsSqlPlan",
+    "LogisticsSqlPlanCandidate",
+    "LogisticsSqlPlanValidationResult",
+    "LogisticsSqlPlanValidator",
+    "validate_logistics_sql_plan_candidate",
 ]

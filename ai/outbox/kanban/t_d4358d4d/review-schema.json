@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["passed", "security_concerns", "logic_errors", "suggestions", "summary"],
+  "properties": {
+    "passed": {"type": "boolean"},
+    "security_concerns": {"type": "array", "items": {"type": "string"}},
+    "logic_errors": {"type": "array", "items": {"type": "string"}},
+    "suggestions": {"type": "array", "items": {"type": "string"}},
+    "summary": {"type": "string"}
+  }
+}

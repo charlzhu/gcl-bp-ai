@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "建议补充少量回归用例：逐一覆盖 sql/where/having/free_sql 禁止键、candidate 顶层 catalog_version mismatch、已知 plan 引用但缺失 catalog_ref 的 sqlplan_missing_catalog_ref。",
+    "建议后续考虑对错误码中回显的非 SQL 类候选值（如 catalog_version、requested_unit、未知 ID）做统一截断/脱敏，以进一步降低日志侧泄露风险。",
+    "建议后续扩展 unsupported_tonnage 的单位同义词覆盖，例如 t、tonnage、万吨等，或确保上游业务规则必定产出 unsupported_tonnage。"
+  ],
+  "summary": "独立只读复审通过：未发现 SQL 生成、执行、EXPLAIN、查库或正式 QA 接入；validator 对禁止 SQL 字段、SQL-like 字符串、未知 catalog/table/field/join、catalog_version 不匹配、unsupported_tonnage、非整数/越界年份均 fail-closed；catalog_ref 通过 canonical catalog 版本和 ID 回查；未发现硬编码密钥/DSN。此前 review-result-round2.json 的 blocker 已由后续测试和实现覆盖关闭。"
+}
