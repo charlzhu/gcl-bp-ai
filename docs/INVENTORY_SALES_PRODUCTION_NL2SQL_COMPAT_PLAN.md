@@ -303,11 +303,14 @@ DM：为高频问题、排行、趋势、对比生成轻量汇总。
 | 销售量 | `shipment_volume` | 同上 |
 | 发货量 | `shipment_volume` | 同上 |
 | 实际发出量 | `shipment_volume` | 2024 原始字段 |
+| 组件事业部剔除内部交易 | `shipment_external_excluding_internal` | 用户已确认作为 2024 默认对外销量口径 |
 | 开票销量 | `invoice_sales_volume` | 仅显式问开票时使用 |
 | 开票合计 | `invoice_sales_volume` | 2023 原始字段 |
-| 存货 | `ending_inventory_volume` | 时点指标 |
-| 库存 | `ending_inventory_volume` | 时点指标 |
-| 寄存仓 | `consigned_inventory_volume` | 时点指标 |
+| 存货 | `ending_inventory_volume` | 用户已确认与库存、库存（SAP数据）完全等价 |
+| 库存 | `ending_inventory_volume` | 用户已确认与存货、库存（SAP数据）完全等价 |
+| 库存（SAP数据） | `ending_inventory_volume` | 用户已确认与库存、存货完全等价 |
+| 寄存仓 | `consigned_inventory_volume` | 用户已确认与寄存合计完全等价 |
+| 寄存合计 | `consigned_inventory_volume` | 用户已确认与寄存仓完全等价 |
 
 ---
 
@@ -346,7 +349,7 @@ FactNormalizer
 组件事业部月度产销存-2026.06.xlsx
 ```
 
-如果文件名无法识别截止月份，应进入待确认状态，不自动按全年导入。
+如果文件名无法识别截止月份，应进入待确认状态，不自动按全年导入。后续每月更新文件后，相应月份或季度列出现数据才视为已发布；无数据、隐藏列或 0 不能被解释为业务实际值。
 
 ### 4.3 2023 解析策略
 
@@ -366,9 +369,9 @@ FactNormalizer
 4. 对问答默认指标优先级：
 
 ```text
-发货/销量：优先 `2024` sheet 的发货合计；需要明细时使用 `明细` sheet 发货细分。
+发货/销量：用户问默认销量/对外销量时，2024 优先使用 `明细` sheet 的“组件事业部（剔除内部交易，含绿能等）”；用户明确问总发货/基地发货时，再使用 `2024` sheet 或 `明细` sheet 对应发货细分。
 产量：优先 `2024` sheet 的产出合计；需要目标/版型/工厂明细时使用 `明细` sheet。
-库存：使用 `2024` sheet 的库存（SAP数据）。
+库存：使用 `2024` sheet 的库存（SAP数据），其与“库存”“存货”完全等价。
 ```
 
 5. 预算达成率可由 `明细` sheet 中目标与实际产量计算，但必须明确目标口径。
@@ -405,6 +408,8 @@ FactNormalizer
 | 时点 LAST | 取期间最后已发布月份 | 库存、存货、寄存 |
 | 比率 CALCULATED | 后端分子/分母重算 | 预算达成率 |
 | 显式开票 | 仅显式触发 | 开票销量 |
+
+补充限制：库存周转率、平均库存等衍生经营指标当前 Excel 原始数据不足时，不允许猜测或用 LLM 编数字；后端应识别缺少的数据项，并以业务化方式反问业务员补充所需数据。
 
 ### 5.2 2023 年度重算策略
 
@@ -465,6 +470,7 @@ policy_sales_defaults_to_shipment_volume
 ```text
 用户问：销量、销售量、卖了多少、出货量、发货量、实际发出量
 默认指标：shipment_volume
+2024 对外销量默认指标：shipment_external_excluding_internal
 ```
 
 显式例外：
