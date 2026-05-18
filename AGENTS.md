@@ -336,3 +336,30 @@ LLM 只允许负责：
 4. M5：接入 PlanBom QA 和智能助手。
 
 当前不再继续物流 E2E 自动续跑，不继续强行迁 B 到 A，不扩经营分析，不扩 RAG，不扩 Agent。
+
+
+# Hermes 命令安全执行规则
+为了减少人工审批阻塞，并保证本机项目安全，后续执行命令时必须遵守：
+
+1. 禁止使用以下高风险命令模式：
+   - `curl ... | bash`
+   - `curl ... | sh`
+   - `wget ... | bash`
+   - `command | python`
+   - `command | python -`
+   - `command | node`
+   - `command | bash`
+   - `python - <<'PY'`
+   - `bash - <<'SH'`
+   - 将外部命令输出直接 pipe 给解释器执行或处理
+
+2. 如果需要处理 JSON / 日志 / 命令输出：
+   - 先将输出保存到 `tmp/hermes/` 目录下的临时文件
+   - 再调用项目内固定脚本处理
+   - 不允许在 shell 命令中临时拼接大段 Python / Bash 代码
+
+3. 推荐模式：
+   ```bash
+   mkdir -p tmp/hermes
+   hermes kanban show <task_id> --json > tmp/hermes/kanban_<task_id>.json
+   backend/.venv/bin/python scripts/dev/parse_kanban_show.py tmp/hermes/kanban_<task_id>.json
