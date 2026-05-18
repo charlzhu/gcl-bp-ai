@@ -1,0 +1,23 @@
+PASS: table_exists:ods_ba_isp_excel_workbook :: rows=4
+PASS: table_exists:ods_ba_isp_excel_sheet :: rows=5
+PASS: table_exists:dim_ba_isp_metric :: rows=17
+PASS: table_exists:dim_ba_isp_metric_alias :: rows=11
+PASS: table_exists:dwd_ba_isp_monthly_fact :: rows=1413
+PASS: row_count:ods_ba_isp_excel_workbook :: actual=4, expected=4
+PASS: row_count:ods_ba_isp_excel_sheet :: actual=5, expected=5
+PASS: row_count:dwd_ba_isp_monthly_fact :: actual=1413, expected=1413
+PASS: metric_catalog_seeded :: metric_count=17
+PASS: metric_alias_seeded :: alias_count=11
+year_month_ranges:
+  2023: min_month=1, max_month=12, facts=295
+  2024: min_month=1, max_month=12, facts=457
+  2025: min_month=1, max_month=12, facts=503
+  2026: min_month=1, max_month=4, facts=158
+PASS: year_ranges :: actual={2023: (1, 12, 295), 2024: (1, 12, 457), 2025: (1, 12, 503), 2026: (1, 4, 158)}
+PASS: 2026_future_months_blocked :: future_month_facts=0
+PASS: 2023_december_budget_loaded :: value=1805.22000000
+PASS: 2023_quality_flag_mentions_annual_recompute :: quality_flag_present=True
+PASS: 2026_april_inventory_loaded :: value=374.23911000
+PASS: 2024_default_external_sales_loaded :: value=385.33235300, default=1
+PASS: query_executor_rejects_unpublished_2026_may :: status=clarification
+PASS: query_executor_inventory_uses_period_end :: status=success, months=[4]
