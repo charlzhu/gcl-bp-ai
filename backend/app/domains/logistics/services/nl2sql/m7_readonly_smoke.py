@@ -404,11 +404,11 @@ def _write_report(path: Path, report: LogisticsNl2SqlEvaluationReport) -> None:
 
 
 def _render_m7_markdown(report: LogisticsNl2SqlEvaluationReport) -> str:
-    """复用 M6 报表渲染器，并替换标题为 M7 只读 smoke。"""
+    """复用通用报表渲染器，并替换标题为 M7 只读 smoke。"""
 
     markdown = render_logistics_nl2sql_evaluation_report_markdown(report)
     return markdown.replace(
-        "# NL2SQL Logistics M6 Shadow Smoke Evaluation Report",
+        "# NL2SQL Logistics Shadow Smoke Evaluation Report",
         "# NL2SQL Logistics M7 Readonly Middle DB Shadow Smoke Evaluation Report",
         1,
     )

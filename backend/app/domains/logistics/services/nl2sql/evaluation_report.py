@@ -89,6 +89,20 @@ class LogisticsNl2SqlEvaluationReport(BaseModel):
     safety_block_count: int
     execution_failure_count: int
     sql_hash_coverage: float
+    by_metric_id: dict[str, int] = Field(default_factory=dict)
+    by_dimension_id: dict[str, int] = Field(default_factory=dict)
+    by_table_id: dict[str, int] = Field(default_factory=dict)
+    by_category: dict[str, int] = Field(default_factory=dict)
+    by_business_case: dict[str, int] = Field(default_factory=dict)
+    by_metric_family: dict[str, int] = Field(default_factory=dict)
+    expected_status_match_count: int = 0
+    expected_status_mismatch_count: int = 0
+    expected_status_match_rate: float = 0.0
+    safety_pass_count: int = 0
+    executor_touched_count: int = 0
+    executor_not_touched_count: int = 0
+    catalog_ref_coverage: float = 0.0
+    distinct_catalog_ref_count: int = 0
     top_errors: list[LogisticsNl2SqlEvaluationReportTopError] = Field(default_factory=list)
     sample_outcomes: list[LogisticsNl2SqlEvaluationReportSampleOutcome] = Field(default_factory=list)
     warnings: list[str] = Field(default_factory=list)
@@ -100,7 +114,18 @@ class LogisticsNl2SqlEvaluationReport(BaseModel):
 
         return _safe_report_text(str(value or "")) or EVALUATION_REPORT_SCHEMA_VERSION
 
-    @field_validator("by_status", "by_stage", "by_error_code", mode="before")
+    @field_validator(
+        "by_status",
+        "by_stage",
+        "by_error_code",
+        "by_metric_id",
+        "by_dimension_id",
+        "by_table_id",
+        "by_category",
+        "by_business_case",
+        "by_metric_family",
+        mode="before",
+    )
     @classmethod
     def _sanitize_counter_dict(cls, value: Any) -> dict[str, int]:
         """报表聚合 key 可能来自外部状态/错误码，直接构造时也要脱敏。"""
@@ -116,6 +141,12 @@ class LogisticsNl2SqlEvaluationReport(BaseModel):
         "fail_closed_count",
         "safety_block_count",
         "execution_failure_count",
+        "distinct_catalog_ref_count",
+        "expected_status_match_count",
+        "expected_status_mismatch_count",
+        "safety_pass_count",
+        "executor_touched_count",
+        "executor_not_touched_count",
         mode="before",
     )
     @classmethod
@@ -124,7 +155,7 @@ class LogisticsNl2SqlEvaluationReport(BaseModel):
 
         return _safe_report_non_negative_int(value)
 
-    @field_validator("success_rate", "sql_hash_coverage", mode="before")
+    @field_validator("success_rate", "sql_hash_coverage", "catalog_ref_coverage", "expected_status_match_rate", mode="before")
     @classmethod
     def _sanitize_ratio_field(cls, value: Any) -> float:
         """比例字段限制在 0-1 范围。"""
@@ -145,6 +176,8 @@ def build_logistics_nl2sql_evaluation_report(
     sample_ids: dict[str, str] | None = None,
     sample_descriptions: dict[str, str] | None = None,
     warnings: list[str] | None = None,
+    include_catalog_breakdown: bool = False,
+    sample_metadata: dict[str, dict[str, Any]] | None = None,
 ) -> LogisticsNl2SqlEvaluationReport:
     """基于 M5 evaluation log 生成 M6 离线评估报表。
 
@@ -153,6 +186,10 @@ def build_logistics_nl2sql_evaluation_report(
         sample_ids: 可选 trace_id 到业务样例 ID 的映射，smoke runner 用它还原稳定样例 ID。
         sample_descriptions: 可选 trace_id 到业务描述的映射。
         warnings: 报表级别告警，会执行同一套脱敏逻辑。
+        include_catalog_breakdown: 是否输出 catalog ref 的指标/维度/表覆盖聚合；默认关闭，避免 M6/M7
+            通用报表扩大内部表名暴露面。M8 shadow-only 评估显式开启。
+        sample_metadata: 可选 trace_id 到样例评估元数据的映射，用于 M8 输出 category、metric_family
+            和 expected_status 一致率；默认关闭，不影响 M6/M7 旧报表。
     返回：
         可 JSON 序列化、可 Markdown 渲染的安全报表对象。
     """
@@ -178,6 +215,13 @@ def build_logistics_nl2sql_evaluation_report(
     failure_count = max(0, total - success_count - skipped_count - unsupported_count)
     eligible_hash_records = [record for record in safe_records if record.status in SQL_HASH_ELIGIBLE_STATUSES]
     hash_present_count = sum(1 for record in eligible_hash_records if record.sql_hash)
+    metric_counter, dimension_counter, table_counter, records_with_catalog_refs, distinct_catalog_refs = _catalog_breakdown(
+        safe_records,
+        enabled=include_catalog_breakdown,
+    )
+    metadata_summary = _sample_metadata_summary(safe_records, sample_metadata or {})
+    safety_pass_count = sum(1 for record in safe_records if record.sql_hash and record.status != "safety_failed")
+    executor_touched_count = sum(1 for record in safe_records if record.stage in {"explain", "trial"})
 
     report_warnings = _dedupe_report_texts(
         [*(warnings or []), *(warning for record in safe_records for warning in record.warnings)]
@@ -199,6 +243,20 @@ def build_logistics_nl2sql_evaluation_report(
         safety_block_count=status_counter.get("safety_failed", 0),
         execution_failure_count=sum(status_counter.get(status, 0) for status in EXECUTION_FAILURE_STATUSES),
         sql_hash_coverage=(hash_present_count / len(eligible_hash_records)) if eligible_hash_records else 0.0,
+        by_metric_id=dict(metric_counter),
+        by_dimension_id=dict(dimension_counter),
+        by_table_id=dict(table_counter),
+        by_category=dict(metadata_summary["by_category"]),
+        by_business_case=dict(metadata_summary["by_business_case"]),
+        by_metric_family=dict(metadata_summary["by_metric_family"]),
+        expected_status_match_count=metadata_summary["expected_status_match_count"],
+        expected_status_mismatch_count=metadata_summary["expected_status_mismatch_count"],
+        expected_status_match_rate=metadata_summary["expected_status_match_rate"],
+        safety_pass_count=safety_pass_count,
+        executor_touched_count=executor_touched_count,
+        executor_not_touched_count=max(0, total - executor_touched_count),
+        catalog_ref_coverage=(records_with_catalog_refs / total) if include_catalog_breakdown and total else 0.0,
+        distinct_catalog_ref_count=len(distinct_catalog_refs) if include_catalog_breakdown else 0,
         top_errors=[
             LogisticsNl2SqlEvaluationReportTopError(error_code=error_code, count=count)
             for error_code, count in sorted(error_counter.items(), key=lambda item: (-item[1], first_seen_error_order[item[0]]))[:10]
@@ -228,7 +286,7 @@ def render_logistics_nl2sql_evaluation_report_markdown(report: LogisticsNl2SqlEv
 
     safe_report = LogisticsNl2SqlEvaluationReport.model_validate(report.model_dump(mode="json"))
     lines: list[str] = [
-        "# NL2SQL Logistics M6 Shadow Smoke Evaluation Report",
+        "# NL2SQL Logistics Shadow Smoke Evaluation Report",
         "",
         "## Summary",
         f"- total: {safe_report.total}",
@@ -239,8 +297,16 @@ def render_logistics_nl2sql_evaluation_report_markdown(report: LogisticsNl2SqlEv
         f"- success_rate: {safe_report.success_rate:.4f}",
         f"- fail_closed_count: {safe_report.fail_closed_count}",
         f"- safety_block_count: {safe_report.safety_block_count}",
+        f"- safety_pass_count: {safe_report.safety_pass_count}",
+        f"- executor_touched_count: {safe_report.executor_touched_count}",
+        f"- executor_not_touched_count: {safe_report.executor_not_touched_count}",
+        f"- expected_status_match_count: {safe_report.expected_status_match_count}",
+        f"- expected_status_mismatch_count: {safe_report.expected_status_mismatch_count}",
+        f"- expected_status_match_rate: {safe_report.expected_status_match_rate:.4f}",
         f"- execution_failure_count: {safe_report.execution_failure_count}",
         f"- sql_hash_coverage: {safe_report.sql_hash_coverage:.4f}",
+        f"- catalog_ref_coverage: {safe_report.catalog_ref_coverage:.4f}",
+        f"- distinct_catalog_ref_count: {safe_report.distinct_catalog_ref_count}",
         "",
         "## By Status",
     ]
@@ -252,6 +318,24 @@ def render_logistics_nl2sql_evaluation_report_markdown(report: LogisticsNl2SqlEv
         lines.extend(f"- {item.error_code}: {item.count}" for item in safe_report.top_errors)
     else:
         lines.append("- none")
+    if safe_report.by_metric_id:
+        lines.extend(["", "## By Metric"])
+        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_metric_id.items())
+    if safe_report.by_dimension_id:
+        lines.extend(["", "## By Dimension"])
+        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_dimension_id.items())
+    if safe_report.by_table_id:
+        lines.extend(["", "## By Table"])
+        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_table_id.items())
+    if safe_report.by_category:
+        lines.extend(["", "## By Category"])
+        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_category.items())
+    if safe_report.by_business_case:
+        lines.extend(["", "## By Business Case"])
+        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_business_case.items())
+    if safe_report.by_metric_family:
+        lines.extend(["", "## By Metric Family"])
+        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_metric_family.items())
     lines.extend(["", "## Sample Outcomes", "| sample_id | description | status | stage | error_codes |", "| --- | --- | --- | --- | --- |"])
     for outcome in safe_report.sample_outcomes:
         lines.append(
@@ -273,6 +357,96 @@ def render_logistics_nl2sql_evaluation_report_markdown(report: LogisticsNl2SqlEv
     else:
         lines.append("- none")
     return "\n".join(lines) + "\n"
+
+
+def _catalog_breakdown(
+    records: list[LogisticsNl2SqlEvaluationLogRecord],
+    *,
+    enabled: bool,
+) -> tuple[Counter[str], Counter[str], Counter[str], int, set[str]]:
+    """按 catalog ref 聚合 M8 shadow-only 评估维度。
+
+    默认报表不输出该聚合；M8 显式开启后，只从 evaluation log 的 `catalog_ids` 中解析
+    `metric:*` / `dimension:*` / `table:*`，不读取 SQL 原文或参数值。
+    """
+
+    metric_counter: Counter[str] = Counter()
+    dimension_counter: Counter[str] = Counter()
+    table_counter: Counter[str] = Counter()
+    records_with_catalog_refs = 0
+    distinct_catalog_refs: set[str] = set()
+    if not enabled:
+        return metric_counter, dimension_counter, table_counter, records_with_catalog_refs, distinct_catalog_refs
+
+    for record in records:
+        safe_ids = _dedupe_report_texts(list(record.catalog_ids))
+        if safe_ids:
+            records_with_catalog_refs += 1
+        for catalog_id in safe_ids:
+            if ":" not in catalog_id:
+                continue
+            ref_type, ref_value = catalog_id.split(":", 1)
+            ref_value = (_safe_report_text(ref_value) or "").strip()
+            if not ref_value:
+                continue
+            distinct_catalog_refs.add(catalog_id)
+            if ref_type == "metric":
+                metric_counter[ref_value] += 1
+            elif ref_type == "dimension":
+                dimension_counter[ref_value] += 1
+            elif ref_type == "table":
+                table_counter[ref_value] += 1
+    return metric_counter, dimension_counter, table_counter, records_with_catalog_refs, distinct_catalog_refs
+
+
+def _sample_metadata_summary(
+    records: list[LogisticsNl2SqlEvaluationLogRecord],
+    metadata_by_trace: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """汇总 M8 样例元数据维度。
+
+    参数：
+        records: 已脱敏 evaluation log 记录。
+        metadata_by_trace: trace_id 到样例元数据的映射，可包含 category、business_case、
+            metric_family、expected_status。
+    返回：
+        计数器和 expected-vs-actual 一致率；未提供元数据时返回空聚合，兼容旧 M6/M7 报表。
+    业务逻辑：
+        只聚合稳定枚举/样例标签，不读取 SQL 文本或参数值。
+    """
+
+    by_category: Counter[str] = Counter()
+    by_business_case: Counter[str] = Counter()
+    by_metric_family: Counter[str] = Counter()
+    match_count = 0
+    mismatch_count = 0
+    expected_count = 0
+    for record in records:
+        metadata = metadata_by_trace.get(record.trace_id) or {}
+        category = _safe_report_text(str(metadata.get("category") or "")) or ""
+        business_case = _safe_report_text(str(metadata.get("business_case") or "")) or ""
+        metric_family = _safe_report_text(str(metadata.get("metric_family") or "")) or ""
+        expected_status = _safe_report_text(str(metadata.get("expected_status") or "")) or ""
+        if category:
+            by_category[category] += 1
+        if business_case:
+            by_business_case[business_case] += 1
+        if metric_family:
+            by_metric_family[metric_family] += 1
+        if expected_status:
+            expected_count += 1
+            if expected_status == record.status:
+                match_count += 1
+            else:
+                mismatch_count += 1
+    return {
+        "by_category": by_category,
+        "by_business_case": by_business_case,
+        "by_metric_family": by_metric_family,
+        "expected_status_match_count": match_count,
+        "expected_status_mismatch_count": mismatch_count,
+        "expected_status_match_rate": (match_count / expected_count) if expected_count else 0.0,
+    }
 
 
 def _safe_report_text(value: str | None) -> str | None:
