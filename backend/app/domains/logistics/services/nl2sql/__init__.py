@@ -24,6 +24,14 @@ from backend.app.domains.logistics.services.nl2sql.evaluation_report import (
     build_logistics_nl2sql_evaluation_report,
     render_logistics_nl2sql_evaluation_report_markdown,
 )
+from backend.app.domains.logistics.services.nl2sql.m7_readonly_smoke import (
+    M7_READONLY_SMOKE_VERSION,
+    LogisticsNl2SqlM7ReadonlySmokeOutcome,
+    LogisticsNl2SqlM7ReadonlySmokeRunResult,
+    LogisticsNl2SqlM7ReadonlySmokeSample,
+    build_default_logistics_nl2sql_m7_readonly_smoke_samples,
+    run_logistics_nl2sql_m7_readonly_smoke,
+)
 from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
 from backend.app.domains.logistics.services.nl2sql.shadow_pipeline import (
     LogisticsNl2SqlShadowPipeline,
@@ -74,6 +82,10 @@ __all__ = [
     "LogisticsNl2SqlEvaluationReportSampleOutcome",
     "LogisticsNl2SqlEvaluationReportTopError",
     "LogisticsNl2SqlBusinessRules",
+    "M7_READONLY_SMOKE_VERSION",
+    "LogisticsNl2SqlM7ReadonlySmokeOutcome",
+    "LogisticsNl2SqlM7ReadonlySmokeRunResult",
+    "LogisticsNl2SqlM7ReadonlySmokeSample",
     "LogisticsNl2SqlShadowPipeline",
     "LogisticsNl2SqlShadowPipelineRequest",
     "LogisticsNl2SqlShadowPipelineResult",
@@ -92,11 +104,13 @@ __all__ = [
     "LogisticsSqlSafetyChecker",
     "LogisticsSqlSafetyResult",
     "check_logistics_sql_safety",
+    "build_default_logistics_nl2sql_m7_readonly_smoke_samples",
     "build_default_logistics_nl2sql_shadow_smoke_samples",
     "build_logistics_nl2sql_evaluation_report",
     "redact_evaluation_text",
     "render_logistics_sql",
     "render_logistics_nl2sql_evaluation_report_markdown",
+    "run_logistics_nl2sql_m7_readonly_smoke",
     "run_logistics_nl2sql_shadow_smoke",
     "summarize_evaluation_logs",
     "validate_logistics_sql_plan_candidate",

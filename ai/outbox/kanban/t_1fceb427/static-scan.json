@@ -1,0 +1,70 @@
+{
+  "task_id": "t_1fceb427",
+  "branch": "feature/nl2sql-m7-readonly-middle-db-smoke",
+  "scope": [
+    "backend/app/domains/logistics/services/nl2sql/readonly_middle_db.py",
+    "backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py",
+    "backend/app/domains/logistics/services/nl2sql/__init__.py",
+    "scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py",
+    "tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py",
+    "docs/NL2SQL_LOGISTICS_M7_READONLY_MIDDLE_DB_SMOKE_MVP_PLAN.md",
+    "ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md",
+    "ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl"
+  ],
+  "status": "passed",
+  "blocking_findings": [],
+  "scans": [
+    {
+      "name": "production_added_sensitive_or_dangerous_patterns",
+      "status": "passed",
+      "matches": []
+    },
+    {
+      "name": "m7_artifact_secret_sql_leak_scan",
+      "status": "passed",
+      "patterns": [
+        "SELECT ",
+        "EXPLAIN ",
+        "mysql://",
+        "Bearer",
+        "sk-",
+        "password",
+        "token",
+        "MYSQL_HOST",
+        "MYSQL_USER",
+        "MYSQL_PASSWORD",
+        "MYSQL_DB",
+        "DSN",
+        "host",
+        "user"
+      ],
+      "matches": []
+    },
+    {
+      "name": "test_fixture_sensitive_pattern_review",
+      "status": "passed_with_non_production_fixture",
+      "matches": [
+        {
+          "path": "tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py",
+          "classification": "unit-password/db.internal/admin_user 仅为单元测试脱敏 fixture，不是真实连接信息"
+        }
+      ]
+    },
+    {
+      "name": "agents_command_safety_scan",
+      "status": "passed",
+      "matches": []
+    },
+    {
+      "name": "git_diff_check",
+      "status": "passed",
+      "matches": []
+    },
+    {
+      "name": "post_review_suggestion_fix_scan",
+      "status": "passed",
+      "summary": "已补齐 INTO OUTFILE/DUMPFILE、UNION、LOAD_FILE、SQL 注释、FOR UPDATE、LOCK IN SHARE MODE、PROCEDURE ANALYSE、SLEEP、BENCHMARK 等危险 SELECT 变体的 driver 前拒绝测试。"
+    }
+  ],
+  "summary": "No production hardcoded secret, shell injection, eval/exec, pickle, SQL string-formatting, temporary token, or AGENTS.md command-safety findings. M7 generated report/JSONL did not contain SQL text, DSN, host/user/password, token, Bearer, or sk- patterns."
+}
