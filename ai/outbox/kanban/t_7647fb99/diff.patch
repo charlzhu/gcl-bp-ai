@@ -1,0 +1,28 @@
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/semantic_catalog.py b/backend/app/domains/business_analysis/services/inventory_sales_production/semantic_catalog.py
+index da744eb..da5411b 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/semantic_catalog.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/semantic_catalog.py
+@@ -235,7 +235,13 @@ class InventorySalesProductionSemanticCatalog(BaseModel):
+             raise ValueError(f"catalog_query_key_dimension_required::{query_key}")
+         if query_key == "ba_isp_inventory_snapshot" and metric.aggregation != "period_end":
+             raise ValueError(f"catalog_query_key_metric_mismatch::{query_key}::{metric.metric_id}")
+-        if query_key == "ba_isp_budget_achievement" and metric.metric_id != "production_budget_achievement_rate":
++        if query_key == "ba_isp_budget_achievement" and dimensions:
++            raise ValueError(f"catalog_query_key_dimension_mismatch::{query_key}::{dimensions[0]}")
++        budget_achievement_compatible_metrics = {
++            "production_budget_achievement_rate",
++            "production_actual_including_oem",
++        }
++        if query_key == "ba_isp_budget_achievement" and metric.metric_id not in budget_achievement_compatible_metrics:
+             raise ValueError(f"catalog_query_key_metric_mismatch::{query_key}::{metric.metric_id}")
+         if metric.metric_id == "production_budget_achievement_rate" and query_key != "ba_isp_budget_achievement":
+             raise ValueError(f"catalog_query_key_metric_mismatch::{query_key}::{metric.metric_id}")
+@@ -528,8 +534,6 @@ class InventorySalesProductionSemanticCatalogLoader:
+     def _validate_allowed_table_columns(table: InventorySalesProductionCatalogTable) -> None:
+         """阻断 allowed_read 表暴露来源、原始行或链路追踪字段。"""
+ 
+-        if not table.allowed_read:
+-            return
+         for column in table.columns:
+             blocked_by_name = column.name.startswith(ISP_BLOCKED_ALLOWED_COLUMN_PREFIXES)
+             blocked_by_role = column.semantic_role == "trace"
