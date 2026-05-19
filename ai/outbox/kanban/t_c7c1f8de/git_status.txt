@@ -1,0 +1,11 @@
+## feature/isp-m5-inventory-nl2sql-integration
+ M ai/outbox/kanban/t_c7c1f8de/diff-check.log
+ M ai/outbox/kanban/t_c7c1f8de/diff.patch
+ M ai/outbox/kanban/t_c7c1f8de/review-result.json
+ M ai/outbox/kanban/t_c7c1f8de/review_bundle.md
+ M ai/outbox/kanban/t_c7c1f8de/static-scan.json
+ M ai/outbox/kanban/t_c7c1f8de/static-scan.log
+ M ai/outbox/kanban/t_c7c1f8de/test.log
+ M backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py
+ M tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py
+?? ai/outbox/kanban/t_c7c1f8de/git_status.txt

@@ -25,7 +25,11 @@ SQL_LIKE_STRING_RE = re.compile(
     r"|\b[a-z_][a-z0-9_.]*\s*\([^)]*\)",
     re.IGNORECASE,
 )
-INTERNAL_IDENTIFIER_RE = re.compile(r"\bsys_query_log\b", re.IGNORECASE)
+# 内部日志/审计表标识属于治理和追溯资产，不能作为 NL2SQL 业务候选值回显。
+INTERNAL_IDENTIFIER_RE = re.compile(
+    r"\b(?:[a-z0-9_]*_)?(?:query_log|audit_log|sys_query_log)(?:_[a-z0-9_]+)?\b",
+    re.IGNORECASE,
+)
 SAFE_FILTER_VALUE_TYPES = (str, int, float, bool)
 ISP_SQLPLAN_CANDIDATE_SCHEMA_VERSION = "business_analysis_inventory_sales_production_sqlplan_candidate.v1"
 REQUIRED_ISP_SEMANTIC_CATALOG_VERSION = "business_analysis_inventory_sales_production_catalog.v1"

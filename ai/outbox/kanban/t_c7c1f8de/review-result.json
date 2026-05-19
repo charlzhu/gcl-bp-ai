@@ -2,8 +2,8 @@
   "passed": true,
   "security_concerns": [],
   "logic_errors": [],
-  "suggestions": [],
-  "summary": "独立只读 review 已检查 sql_plan.py、测试、diff.patch、test.log、static-scan.json；未发现剩余 blocker：sys_query_log/SQL-like 动态片段脱敏覆盖 scanner/schema/catalog/support 等错误路径，business_flags/time/month/business_month/group_by support gate 均 fail-closed，未见 SQL 执行、shell/eval/exec/pickle、拼接 SQL 或 raw LLM payload 泄漏。",
-  "reviewer": "delegate_task read-only independent reviewer",
-  "tests_run_by_reviewer": 0
+  "suggestions": [
+    "后续可补充 query_log、audit_log_backup 等正例，以及 query_logistics、audit_flag、quality_audit_level 等负例，防止脱敏范围回归。"
+  ],
+  "summary": "只读审查通过：残留补丁扩展了内部日志/审计类标识脱敏，覆盖 sys_query_log、audit_log、sys_audit_log、query_audit_log、sys_query_log_backup 等同类标识；未发现新增安全问题或逻辑错误。"
 }

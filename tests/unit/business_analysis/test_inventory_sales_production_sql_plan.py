@@ -386,26 +386,30 @@ def test_isp_sql_plan_validator_redacts_sql_like_extra_field_names_from_scanner_
     assert result.normalized_plan is None
 
 
-def test_isp_sql_plan_validator_redacts_standalone_internal_log_table_identifiers() -> None:
+@pytest.mark.parametrize(
+    "internal_identifier",
+    ["sys_query_log", "audit_log", "sys_audit_log", "query_audit_log", "sys_query_log_backup"],
+)
+def test_isp_sql_plan_validator_redacts_internal_log_table_identifiers(internal_identifier: str) -> None:
     """日志/审计类内部表名即使未组成 SELECT 语句，也不能出现在任何错误码动态片段中。"""
 
     candidate = _valid_candidate()
     candidate["catalog_refs"] = [
-        {"catalog_id": "table:sys_query_log", "catalog_version": CATALOG_VERSION},
-        {"catalog_id": "metric:sys_query_log", "catalog_version": CATALOG_VERSION},
-        {"catalog_id": "dimension:sys_query_log", "catalog_version": CATALOG_VERSION},
+        {"catalog_id": f"table:{internal_identifier}", "catalog_version": CATALOG_VERSION},
+        {"catalog_id": f"metric:{internal_identifier}", "catalog_version": CATALOG_VERSION},
+        {"catalog_id": f"dimension:{internal_identifier}", "catalog_version": CATALOG_VERSION},
     ]
-    candidate["plan"]["tables"] = ["sys_query_log"]
-    candidate["plan"]["metrics"] = ["sys_query_log"]
-    candidate["plan"]["dimensions"] = ["sys_query_log"]
-    candidate["plan"]["filters"] = [_filter("sys_query_log", "=", ["sys_query_log"])]
-    candidate["plan"]["business_flags"] = {"sys_query_log": True}
+    candidate["plan"]["tables"] = [internal_identifier]
+    candidate["plan"]["metrics"] = [internal_identifier]
+    candidate["plan"]["dimensions"] = [internal_identifier]
+    candidate["plan"]["filters"] = [_filter(internal_identifier, "=", [internal_identifier])]
+    candidate["plan"]["business_flags"] = {internal_identifier: True}
 
     result = _validate(candidate)
 
     assert result.ok is False
     joined_errors = "\n".join(result.error_codes).lower()
-    assert "sys_query_log" not in joined_errors
+    assert internal_identifier not in joined_errors
     assert "redacted" in joined_errors
     assert result.normalized_plan is None
 

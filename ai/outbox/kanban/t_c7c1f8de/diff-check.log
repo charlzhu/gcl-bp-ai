@@ -1,8 +1,1 @@
-tracked git diff --check:
-tracked_rc=0
-
-untracked no-index whitespace check: sql_plan.py
-sql_plan_noindex_rc=1 (rc=1 means differences exist; whitespace errors would be printed above)
-
-untracked no-index whitespace check: test_inventory_sales_production_sql_plan.py
-test_noindex_rc=1 (rc=1 means differences exist; whitespace errors would be printed above)
+git diff --check passed for source/test paths

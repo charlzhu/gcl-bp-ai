@@ -1,9 +1,1 @@
-Static scan of added diff lines
-diff_path: /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/isp-m5-inventory-nl2sql-integration/ai/outbox/kanban/t_c7c1f8de/diff.patch
-added_lines_scanned: 1399
-hardcoded_secret_assignment: 0 finding(s)
-shell_injection: 0 finding(s)
-dangerous_eval_exec: 0 finding(s)
-unsafe_pickle: 0 finding(s)
-sql_string_formatting: 0 finding(s)
-findings: none
+STATIC SCAN PASSED: added_lines_scanned=19, findings=0
