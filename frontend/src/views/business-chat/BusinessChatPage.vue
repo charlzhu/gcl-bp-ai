@@ -5,6 +5,7 @@
         <el-radio-button value="auto" data-testid="domain-auto">自动识别</el-radio-button>
         <el-radio-button value="logistics" data-testid="domain-logistics">物流数据</el-radio-button>
         <el-radio-button value="plan_bom" data-testid="domain-plan-bom">计划 BOM</el-radio-button>
+        <el-radio-button value="business_analysis" data-testid="domain-business-analysis">经营分析/产销存</el-radio-button>
       </el-radio-group>
     </div>
 
@@ -24,7 +25,7 @@
             :aria-label="`使用示例问题：${item.text}`"
             @click="useExample(item)"
           >
-            <span class="chip-icon">{{ item.domain === '物流' ? '物流' : 'BOM' }}</span>
+            <span class="chip-icon">{{ resolveExampleDomainLabel(item.domain) }}</span>
             <span class="chip-text">{{ item.text }}</span>
           </button>
         </div>
@@ -446,8 +447,13 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as XLSX from 'xlsx-js-style'
+import {
+  streamInventorySalesProductionQuestion,
+  type InventorySalesProductionQaResponse,
+} from '@/api/inventorySalesProduction'
 import { streamLogisticsDataQaQuery, type LogisticsDataQaResult } from '@/api/logistics'
-import { streamPlanBomQuestion, type PlanBomQaResponse } from '@/api/planBom'
+import * as planBomApi from '@/api/planBom'
+import type { PlanBomQaResponse } from '@/api/planBom'
 import { renderBusinessMarkdown } from '@/utils/businessMarkdown'
 import {
   buildBusinessChatMessageId,
@@ -563,6 +569,8 @@ const examples = [
   { domain: 'BOM', mode: 'plan_bom' as BusinessChatDomain, text: '订单00104做功率预测，给出功率档分布。' },
   { domain: 'BOM', mode: 'plan_bom' as BusinessChatDomain, text: '订单00104目标620W 50%，625W 50%，推荐供应商。' },
   { domain: 'BOM', mode: 'plan_bom' as BusinessChatDomain, text: '哪些订单的接线盒规格不一样，按订单列出来。' },
+  { domain: '经营分析', mode: 'business_analysis' as BusinessChatDomain, text: '2024年组件事业部销量和预算达成率如何？' },
+  { domain: '经营分析', mode: 'business_analysis' as BusinessChatDomain, text: '今年产销存库存和销售量趋势怎么样？' },
 ]
 
 const domainLabelMap: Record<BusinessChatDomain, string> = {
@@ -602,6 +610,21 @@ function loadActiveSession() {
 /** 根据关键词选择真实业务接口，只决定路由，不生成业务答案。 */
 function inferDomain(text: string): Exclude<BusinessChatDomain, 'auto'> | null {
   const normalized = text.toLowerCase()
+  const businessAnalysisKeywords = [
+    '产销存',
+    '经营分析',
+    '预算',
+    '达成率',
+    '销售量',
+    '销量',
+    '产量',
+    '库存',
+    '存货',
+    'sap数据',
+    '寄存仓',
+    '寄存合计',
+    '周转率',
+  ]
   const bomKeywords = [
     'bom',
     'bill of materials',
@@ -690,8 +713,11 @@ function inferDomain(text: string): Exclude<BusinessChatDomain, 'auto'> | null {
     '华东',
     '西北',
   ]
+  const businessAnalysisScore = businessAnalysisKeywords.filter((item) => normalized.includes(item.toLowerCase())).length
   const bomScore = bomKeywords.filter((item) => normalized.includes(item.toLowerCase())).length
   const logisticsScore = logisticsKeywords.filter((item) => normalized.includes(item.toLowerCase())).length
+  // 经营分析关键词命中时优先进入产销存链路，避免“库存/销量”被物流或 BOM 规则误收。
+  if (businessAnalysisScore > 0 && businessAnalysisScore >= logisticsScore && businessAnalysisScore >= bomScore) return 'business_analysis'
   // “规格”在物流产品规格和 BOM 规格中都会出现，不能单独作为 BOM 路由依据。
   if (logisticsScore > 0 && logisticsScore >= bomScore) return 'logistics'
   if (bomScore > 0) return 'plan_bom'
@@ -721,12 +747,19 @@ function useExample(item: (typeof examples)[number]) {
   question.value = item.text
 }
 
+/** 根据示例所属业务域展示短标签，避免新增经营分析示例仍显示为 BOM。 */
+function resolveExampleDomainLabel(domain: string) {
+  if (domain === '物流') return '物流'
+  if (domain === '经营分析') return '产销存'
+  return 'BOM'
+}
+
 /** 点击追问建议后填入输入框，由用户确认发送。 */
 function appendFollowUp(text: string) {
   question.value = text
 }
 
-/** 统一提交入口：物流和 BOM 都继续调用真实后端接口。 */
+/** 统一提交入口：物流、经营分析和 BOM 都继续调用真实后端接口。 */
 async function submitQuestion(input?: string) {
   const text = (input || question.value).trim()
   if (!text || !activeSession.value || currentSessionLoading.value) return
@@ -753,7 +786,7 @@ async function submitQuestion(input?: string) {
 
   if (!resolvedDomain) {
     appendAssistantMessage(sessionId, {
-      content: '请先选择“物流数据”或“计划 BOM”，也可以在问题中补充业务域关键词。',
+      content: '请先选择“物流数据”“计划 BOM”或“经营分析/产销存”，也可以在问题中补充业务域关键词。',
       domain: 'auto',
       status: 'needs_domain',
     })
@@ -789,9 +822,30 @@ async function submitQuestion(input?: string) {
         },
       )
       if (!completed) throw new Error('流式回答未正常结束，请稍后重试。')
+    } else if (resolvedDomain === 'business_analysis') {
+      let completed = false
+      await streamInventorySalesProductionQuestion(
+        { question: text },
+        {
+          onMeta: (meta) => updateAssistantStreamMeta(sessionId, assistantId, meta),
+          onDelta: (chunk) => updateAssistantStreamingContent(sessionId, assistantId, chunk),
+          onDone: (streamData) => {
+            const data = ((streamData as any)?.data || streamData) as InventorySalesProductionQaResponse
+            completed = true
+            completeAssistantMessage(sessionId, assistantId, {
+              content: '',
+              domain: resolvedDomain,
+              status: data?.status?.code || data?.classification || 'OK',
+              presentation: adaptInventorySalesProductionResult(data),
+              rawResponse: data as unknown as Record<string, any>,
+            })
+          },
+        },
+      )
+      if (!completed) throw new Error('流式回答未正常结束，请稍后重试。')
     } else {
       let completed = false
-      await streamPlanBomQuestion(
+      await planBomApi.streamPlanBomQuestion(
         { question: text },
         {
           onMeta: (meta) => updateAssistantStreamMeta(sessionId, assistantId, meta),
@@ -970,6 +1024,26 @@ function mutateSession(sessionId: string, mutator: (session: BusinessChatSession
     activeSession.value = saved
     nextTick(scrollToBottom)
   }
+}
+
+/** 将经营分析产销存结果适配为统一展示结构，前端不补算业务指标。 */
+function adaptInventorySalesProductionResult(data: InventorySalesProductionQaResponse): UnifiedResult {
+  const presentation = data.presentation
+  const unsupported = presentation?.unsupported_explanation
+  const answer = presentation?.answer || data.answer_summary || data.status?.message || ''
+  return normalizeResult({
+    displayType: presentation?.display_type || '',
+    title: presentation?.title || '经营分析产销存问答结果',
+    answer,
+    highlights: filterBusinessTexts(dedupeBusinessTexts(presentation?.highlights || [], [answer])),
+    cards: localizeCards(presentation?.cards || []),
+    chart: normalizeChart((presentation?.chart_spec || null) as NonNullable<LogisticsDataQaResult['presentation']>['chart_spec'] | null),
+    table: resolvePresentationTable(presentation),
+    followUps: localizeFollowUps(presentation?.follow_up?.questions || []),
+    suggestions: filterBusinessTexts(unsupported?.suggestions || []),
+    caveats: filterBusinessTexts(presentation?.caveats || []),
+    caveatItems: normalizeCaveatItems(presentation?.caveat_items as CaveatItem[] | null | undefined, presentation?.caveats || []),
+  })
 }
 
 /** 将物流结果适配为统一展示结构，前端不反推或修改业务事实。 */
