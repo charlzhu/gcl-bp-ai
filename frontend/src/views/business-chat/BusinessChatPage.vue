@@ -569,6 +569,7 @@ const domainLabelMap: Record<BusinessChatDomain, string> = {
   auto: '自动识别',
   logistics: '物流数据',
   plan_bom: '计划 BOM',
+  business_analysis: '产销存经营分析',
 }
 
 /** 当前窗口消息列表，切换窗口时自动隔离。 */
