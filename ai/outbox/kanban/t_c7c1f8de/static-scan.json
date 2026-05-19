@@ -1,0 +1,13 @@
+{
+  "diff_path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/isp-m5-inventory-nl2sql-integration/ai/outbox/kanban/t_c7c1f8de/diff.patch",
+  "added_lines_scanned": 1399,
+  "checks": [
+    "hardcoded_secret_assignment",
+    "shell_injection",
+    "dangerous_eval_exec",
+    "unsafe_pickle",
+    "sql_string_formatting"
+  ],
+  "findings": [],
+  "passed": true
+}

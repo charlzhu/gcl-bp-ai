@@ -1,0 +1,38 @@
+M5-2 产销存 SQLPlan validator 白名单与安全门禁验证日志
+
+环境：
+- workdir: /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/isp-m5-inventory-nl2sql-integration
+- python: /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python
+- PYTHONPATH=.
+
+RED evidence（先补 reviewer blocker 回归测试后、修复生产代码前运行）：
+命令：
+PYTHONPATH=. /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest \
+  tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_redacts_standalone_internal_log_table_identifiers \
+  tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_blocks_time_comparison_flags_in_business_flags \
+  tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_rejects_unknown_business_flags \
+  tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_checks_supplied_month_quarter_even_when_period_type_differs \
+  tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_checks_business_month_filter_boundaries \
+  -q
+结果：12 failed in 0.46s
+关键失败：
+- standalone sys_query_log 可出现在 catalog_id_not_found/table_not_allowed/metric_not_found/dimension_not_found/catalog_support_error 错误码中。
+- business_flags 中 yoy/year_over_year/mom/month_over_month 返回 ok=True。
+- period_type=year 时夹带 month=13、quarter=5、year=2026 month=5 返回 ok=True。
+- filters 中 business_month=13、business_month=5(year=2026)、business_month between [1,3] 未产生月份边界错误。
+
+GREEN focused reviewer blocker tests：
+命令同上。
+结果：12 passed in 0.34s
+
+SQLPlan focused file：
+命令：PYTHONPATH=. /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py -q
+结果：38 passed in 0.36s
+
+business_analysis unit slice：
+命令：PYTHONPATH=. /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis -q
+结果：57 passed in 1.34s
+
+py_compile：
+命令：/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m py_compile backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py
+结果：rc=0，无输出。
