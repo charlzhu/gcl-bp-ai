@@ -1,0 +1,11 @@
+database: logistics_ai
+ods_ba_isp_excel_workbook: exists, rows=4
+ods_ba_isp_excel_sheet: exists, rows=5
+dim_ba_isp_metric: exists, rows=17
+dim_ba_isp_metric_alias: exists, rows=11
+dwd_ba_isp_monthly_fact: exists, rows=1413
+year_month_ranges:
+  2023: min_month=1, max_month=12, facts=295
+  2024: min_month=1, max_month=12, facts=457
+  2025: min_month=1, max_month=12, facts=503
+  2026: min_month=1, max_month=4, facts=158

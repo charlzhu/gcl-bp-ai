@@ -1,0 +1,1539 @@
+diff --git a/ai/outbox/inventory_sales_production_m3/final-acceptance.md b/ai/outbox/inventory_sales_production_m3/final-acceptance.md
+new file mode 100644
+index 0000000..b4f0e2f
+--- /dev/null
++++ b/ai/outbox/inventory_sales_production_m3/final-acceptance.md
+@@ -0,0 +1,86 @@
++# 产销存智能问答 M3 验收说明
++
++完成时间：2026-05-18 13:12:05 CST
++
++## 1. 本轮目标
++
++本轮完成经营分析 / 产销存子域的 QueryPlan / 查询执行器 / 聚合策略 MVP。
++
++边界：
++
++- 不接入前端。
++- 不接入最终智能助手路由。
++- 不让 LLM 生成 SQL 或计算业务数字。
++- 不修改物流、计划 BOM、功率预测链路。
++- 不新增管理 token 或临时权限口。
++
++## 2. 已完成能力
++
++1. 新增产销存受控 QueryPlan Schema。
++2. 新增 QueryPlan 校验与聚合策略选择器。
++3. 新增固定 ORM 查询仓储，不接收自由 SQL。
++4. 新增 QueryExecutor，支持以下 MVP query_key：
++   - `ba_isp_metric_summary`
++   - `ba_isp_metric_breakdown`
++   - `ba_isp_metric_trend`
++   - `ba_isp_budget_achievement`
++   - `ba_isp_inventory_snapshot`
++   - `ba_isp_period_compare`
++5. 支持流量指标 `flow_sum`：产量、发货/销量、预算按已发布月份求和。
++6. 支持时点指标 `period_end`：库存/存货/寄存取最后已发布月份，不累加。
++7. 支持预算达成率 `calculated_ratio`：由后端按实际产量 / 预算重算。
++8. 支持 2026 未发布月份 fail closed，不把空值/隐藏列/未来月份当 0。
++9. 支持 2023 年度按月度事实重算策略提醒。
++10. 支持 2024 销量默认切到“组件事业部剔除内部交易”的对外销量口径。
++11. 支持指标、维度、过滤条件、开票口径显式触发等白名单校验。
++12. 返回业务化摘要，不暴露 SQL、表名、planner、guardrail 等技术实现给用户。
++
++## 3. 修改文件清单
++
++- `backend/app/domains/business_analysis/repositories/__init__.py`
++- `backend/app/domains/business_analysis/repositories/inventory_sales_production_query_repository.py`
++- `backend/app/domains/business_analysis/schemas/__init__.py`
++- `backend/app/domains/business_analysis/schemas/inventory_sales_production_query.py`
++- `backend/app/domains/business_analysis/services/inventory_sales_production/aggregation_policy.py`
++- `backend/app/domains/business_analysis/services/inventory_sales_production/query_executor.py`
++- `tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py`
++
++## 4. 测试结果
++
++完整组合测试：`41 passed in 0.72s`
++
++覆盖范围：
++
++- M3 focused：QueryPlan / QueryExecutor / 聚合策略单元测试 8 条。
++- M2 相邻回归：产销存 Excel fact import 5 条。
++- Query Planning 相邻回归 14 条。
++- 物流 Query Planner V2 相邻回归 14 条。
++
++日志文件：
++
++- `ai/outbox/inventory_sales_production_m3/test.log`
++- `ai/outbox/inventory_sales_production_m3/static-scan.log`
++
++## 5. 静态检查
++
++- `compileall` 通过。
++- 常见凭证、私钥和连接串关键字扫描未发现真实敏感信息。
++- 未恢复或新增功率模型临时管理 token。
++
++## 6. 风险与未解决问题
++
++1. M3 仍是后端 QueryPlan 执行 MVP，尚未接入智能助手入口和前端展示。
++2. `ba_isp_period_compare` 当前作为受控 query_key 纳入白名单，但复杂同比/环比展示建议在 M4/M5 继续细化。
++3. 当前预算达成率 MVP 不支持按维度拆分，后续需要结合预算数据维度完整性再开放。
++4. 用户自然语言到 QueryPlan 的生成还未接入统一 NL2SQL，目前 M3 只提供可执行后端合同。
++
++## 7. 对既有能力影响
++
++- 不影响物流能力。
++- 不影响计划 BOM 能力。
++- 不影响功率预测能力。
++- 不影响现有前端构建链路。
++
++## 8. 建议下一步
++
++M4：接入产销存智能问答入口，完成自然语言问题到受控 QueryPlan 的适配，并对用户可见回答做业务化流式展示。
+\ No newline at end of file
+diff --git a/ai/outbox/inventory_sales_production_m3/static-scan.log b/ai/outbox/inventory_sales_production_m3/static-scan.log
+new file mode 100644
+index 0000000..4e8fb68
+--- /dev/null
++++ b/ai/outbox/inventory_sales_production_m3/static-scan.log
+@@ -0,0 +1,18 @@
++== git status ==
++ M backend/app/domains/business_analysis/repositories/__init__.py
++?? backend/app/domains/business_analysis/repositories/inventory_sales_production_query_repository.py
++?? backend/app/domains/business_analysis/schemas/
++?? backend/app/domains/business_analysis/services/inventory_sales_production/aggregation_policy.py
++?? backend/app/domains/business_analysis/services/inventory_sales_production/query_executor.py
++?? tests/unit/business_analysis/
++
++== compileall ==
++Listing 'backend/app/domains/business_analysis'...
++Listing 'backend/app/domains/business_analysis/repositories'...
++Listing 'backend/app/domains/business_analysis/schemas'...
++Listing 'backend/app/domains/business_analysis/services'...
++Listing 'backend/app/domains/business_analysis/services/inventory_sales_production'...
++Listing 'tests/unit/business_analysis'...
++
++== sensitive keyword scan ==
++Hermes search_files scanned business_analysis code and business_analysis unit tests for common credential/private-key/connection-string patterns: no real sensitive information found.
+diff --git a/ai/outbox/inventory_sales_production_m3/test.log b/ai/outbox/inventory_sales_production_m3/test.log
+new file mode 100644
+index 0000000..a0570b3
+--- /dev/null
++++ b/ai/outbox/inventory_sales_production_m3/test.log
+@@ -0,0 +1,2 @@
++.........................................                                [100%]
++41 passed in 0.72s
+diff --git a/backend/app/domains/business_analysis/repositories/__init__.py b/backend/app/domains/business_analysis/repositories/__init__.py
+index c37e36a..bfc5a6e 100644
+--- a/backend/app/domains/business_analysis/repositories/__init__.py
++++ b/backend/app/domains/business_analysis/repositories/__init__.py
+@@ -1,7 +1,10 @@
+ """经营分析仓储包。"""
+
++from backend.app.domains.business_analysis.repositories.inventory_sales_production_query_repository import (
++    InventorySalesProductionQueryRepository,
++)
+ from backend.app.domains.business_analysis.repositories.inventory_sales_production_repository import (
+     InventorySalesProductionRepository,
+ )
+
+-__all__ = ["InventorySalesProductionRepository"]
++__all__ = ["InventorySalesProductionRepository", "InventorySalesProductionQueryRepository"]
+diff --git a/backend/app/domains/business_analysis/repositories/inventory_sales_production_query_repository.py b/backend/app/domains/business_analysis/repositories/inventory_sales_production_query_repository.py
+new file mode 100644
+index 0000000..ad0c086
+--- /dev/null
++++ b/backend/app/domains/business_analysis/repositories/inventory_sales_production_query_repository.py
+@@ -0,0 +1,281 @@
++from __future__ import annotations
++
++from collections.abc import Iterable
++from decimal import Decimal
++from typing import Any
++
++from sqlalchemy import func
++from sqlalchemy.orm import InstrumentedAttribute, Query, Session
++
++from backend.app.domains.business_analysis.models import BaIspMetric, BaIspMonthlyFact
++
++# 说明：维度白名单同时服务 QueryPlan 校验和固定查询模板，禁止上游传入任意字段名。
++DIMENSION_COLUMN_MAP: dict[str, InstrumentedAttribute] = {
++    "base_name": BaIspMonthlyFact.base_name,
++    "factory_name": BaIspMonthlyFact.factory_name,
++    "model_type": BaIspMonthlyFact.model_type,
++    "production_mode": BaIspMonthlyFact.production_mode,
++    "trade_scope": BaIspMonthlyFact.trade_scope,
++    "business_month": BaIspMonthlyFact.business_month,
++}
++
++# 说明：过滤白名单只允许业务维度，不接受 SQL/where/table 等自由片段。
++FILTER_COLUMN_MAP: dict[str, InstrumentedAttribute] = {
++    "base_name": BaIspMonthlyFact.base_name,
++    "factory_name": BaIspMonthlyFact.factory_name,
++    "model_type": BaIspMonthlyFact.model_type,
++    "production_mode": BaIspMonthlyFact.production_mode,
++    "trade_scope": BaIspMonthlyFact.trade_scope,
++    "is_outsourced": BaIspMonthlyFact.is_outsourced,
++    "is_consigned": BaIspMonthlyFact.is_consigned,
++    "is_default_external_sales": BaIspMonthlyFact.is_default_external_sales,
++}
++
++QUERY_CONTROL_FILTERS = {"explicit_invoice", "include_internal"}
++
++
++class InventorySalesProductionQueryRepository:
++    """产销存受控查询仓储。
++
++    职责：
++        1. 只查询 M2 标准事实长表和指标维表；
++        2. 根据执行器传入的受控参数拼装固定 ORM 查询；
++        3. 不接收 SQL 字符串、不暴露表名字段给用户回答层。
++    """
++
++    def __init__(self, db: Session) -> None:
++        self.db = db
++
++    def get_metric(self, metric_code: str) -> BaIspMetric | None:
++        """按指标编码读取启用的标准指标。
++
++        参数：metric_code 标准指标编码。
++        返回：BaIspMetric 或 None。
++        """
++
++        return (
++            self.db.query(BaIspMetric)
++            .filter(BaIspMetric.metric_code == metric_code, BaIspMetric.is_active == 1)
++            .one_or_none()
++        )
++
++    def list_available_months(self, *, year: int) -> list[int]:
++        """返回某业务年份已导入且已发布的月份列表。
++
++        参数：year 业务年份。
++        返回：升序月份列表；若年份未导入则为空。
++        """
++
++        rows = (
++            self.db.query(BaIspMonthlyFact.business_month)
++            .filter(BaIspMonthlyFact.business_year == year, BaIspMonthlyFact.is_published_month == 1)
++            .distinct()
++            .order_by(BaIspMonthlyFact.business_month.asc())
++            .all()
++        )
++        return [int(row[0]) for row in rows]
++
++    def has_metric_for_year(self, *, metric_code: str, year: int) -> bool:
++        """判断某年份是否存在指定指标事实。
++
++        参数：metric_code 指标编码；year 业务年份。
++        返回：存在返回 True。
++        """
++
++        return (
++            self.db.query(BaIspMonthlyFact.id)
++            .filter(
++                BaIspMonthlyFact.business_year == year,
++                BaIspMonthlyFact.metric_code == metric_code,
++                BaIspMonthlyFact.is_published_month == 1,
++            )
++            .limit(1)
++            .first()
++            is not None
++        )
++
++    def aggregate_metric(
++        self,
++        *,
++        metric: BaIspMetric,
++        year: int,
++        months: list[int],
++        dimensions: list[str],
++        filters: dict[str, Any],
++        aggregation_type: str,
++    ) -> list[dict[str, Any]]:
++        """执行单指标聚合查询。
++
++        参数：
++            metric: 指标维表记录。
++            year/months: 已通过策略校验的业务期间。
++            dimensions: 白名单维度。
++            filters: 白名单过滤条件。
++            aggregation_type: flow_sum 或 period_end。
++        返回：
++            字典列表，包含维度、数值、事实行数和覆盖月份。
++        """
++
++        effective_months = self._resolve_effective_months_for_aggregation(
++            metric_code=metric.metric_code,
++            year=year,
++            months=months,
++            filters=filters,
++            aggregation_type=aggregation_type,
++        )
++        if not effective_months:
++            return []
++        base_query = self._base_fact_query(metric_code=metric.metric_code, year=year, months=effective_months, filters=filters)
++        if dimensions:
++            return self._aggregate_with_dimensions(
++                base_query=base_query,
++                metric=metric,
++                dimensions=dimensions,
++                aggregation_type=aggregation_type,
++                months=effective_months,
++            )
++        return self._aggregate_without_dimensions(
++            base_query=base_query,
++            metric=metric,
++            aggregation_type=aggregation_type,
++            months=effective_months,
++        )
++
++    def sum_metric(
++        self,
++        *,
++        metric_code: str,
++        year: int,
++        months: list[int],
++        filters: dict[str, Any],
++    ) -> tuple[Decimal | None, int, list[int]]:
++        """对指定指标按月求和，用于预算达成率分子/分母。
++
++        参数：metric_code 指标编码；year/months 期间；filters 业务过滤。
++        返回：三元组 `(合计值, 行数, 实际覆盖月份)`。
++        """
++
++        query = self._base_fact_query(metric_code=metric_code, year=year, months=months, filters=filters)
++        value, row_count = query.with_entities(func.sum(BaIspMonthlyFact.value_decimal), func.count(BaIspMonthlyFact.id)).one()
++        covered_months = self._list_months_with_data(metric_code=metric_code, year=year, months=months, filters=filters)
++        return value, int(row_count or 0), covered_months
++
++    def _resolve_effective_months_for_aggregation(
++        self,
++        *,
++        metric_code: str,
++        year: int,
++        months: list[int],
++        filters: dict[str, Any],
++        aggregation_type: str,
++    ) -> list[int]:
++        """根据聚合策略确定实际查询月份。"""
++
++        covered_months = self._list_months_with_data(metric_code=metric_code, year=year, months=months, filters=filters)
++        if aggregation_type == "period_end":
++            return [max(covered_months)] if covered_months else []
++        return covered_months
++
++    def _base_fact_query(self, *, metric_code: str, year: int, months: Iterable[int], filters: dict[str, Any]) -> Query:
++        """构建固定事实查询基础条件。"""
++
++        query = self.db.query(BaIspMonthlyFact).filter(
++            BaIspMonthlyFact.business_year == year,
++            BaIspMonthlyFact.metric_code == metric_code,
++            BaIspMonthlyFact.business_month.in_(list(months)),
++            BaIspMonthlyFact.is_published_month == 1,
++        )
++        return self._apply_filters(query, filters)
++
++    def _apply_filters(self, query: Query, filters: dict[str, Any]) -> Query:
++        """应用白名单过滤条件。"""
++
++        for key, value in filters.items():
++            if key in QUERY_CONTROL_FILTERS or value in (None, "", []):
++                continue
++            column = FILTER_COLUMN_MAP.get(key)
++            if column is None:
++                continue
++            if isinstance(value, (list, tuple, set)):
++                query = query.filter(column.in_(list(value)))
++            else:
++                query = query.filter(column == value)
++        return query
++
++    def _aggregate_without_dimensions(
++        self,
++        *,
++        base_query: Query,
++        metric: BaIspMetric,
++        aggregation_type: str,
++        months: list[int],
++    ) -> list[dict[str, Any]]:
++        """执行无维度聚合。"""
++
++        value, row_count = base_query.with_entities(func.sum(BaIspMonthlyFact.value_decimal), func.count(BaIspMonthlyFact.id)).one()
++        if not row_count or value is None:
++            return []
++        return [
++            {
++                "dimensions": {},
++                "metric_code": metric.metric_code,
++                "metric_name": metric.metric_name,
++                "value_decimal": value,
++                "unit_standard": metric.unit_standard,
++                "aggregation_type": aggregation_type,
++                "months_covered": months,
++                "row_count": int(row_count),
++            }
++        ]
++
++    def _aggregate_with_dimensions(
++        self,
++        *,
++        base_query: Query,
++        metric: BaIspMetric,
++        dimensions: list[str],
++        aggregation_type: str,
++        months: list[int],
++    ) -> list[dict[str, Any]]:
++        """执行维度分组聚合。"""
++
++        dimension_columns = [DIMENSION_COLUMN_MAP[dimension].label(dimension) for dimension in dimensions]
++        value_expr = func.sum(BaIspMonthlyFact.value_decimal).label("value_decimal")
++        count_expr = func.count(BaIspMonthlyFact.id).label("row_count")
++        rows = (
++            base_query.with_entities(*dimension_columns, value_expr, count_expr)
++            .group_by(*dimension_columns)
++            .order_by(value_expr.desc(), *dimension_columns)
++            .all()
++        )
++        result: list[dict[str, Any]] = []
++        for row in rows:
++            row_map = row._asdict()
++            dimensions_payload = {dimension: row_map.get(dimension) for dimension in dimensions}
++            result.append(
++                {
++                    "dimensions": dimensions_payload,
++                    "metric_code": metric.metric_code,
++                    "metric_name": metric.metric_name,
++                    "value_decimal": row_map.get("value_decimal"),
++                    "unit_standard": metric.unit_standard,
++                    "aggregation_type": aggregation_type,
++                    "months_covered": months,
++                    "row_count": int(row_map.get("row_count") or 0),
++                }
++            )
++        return result
++
++    def _list_months_with_data(self, *, metric_code: str, year: int, months: list[int], filters: dict[str, Any]) -> list[int]:
++        """返回指定指标在过滤条件下实际有事实数据的月份。"""
++
++        query = self._base_fact_query(metric_code=metric_code, year=year, months=months, filters=filters)
++        rows = query.with_entities(BaIspMonthlyFact.business_month).distinct().order_by(BaIspMonthlyFact.business_month.asc()).all()
++        return [int(row[0]) for row in rows]
++
++
++__all__ = [
++    "DIMENSION_COLUMN_MAP",
++    "FILTER_COLUMN_MAP",
++    "InventorySalesProductionQueryRepository",
++]
+diff --git a/backend/app/domains/business_analysis/schemas/__init__.py b/backend/app/domains/business_analysis/schemas/__init__.py
+new file mode 100644
+index 0000000..f7a9831
+--- /dev/null
++++ b/backend/app/domains/business_analysis/schemas/__init__.py
+@@ -0,0 +1,15 @@
++"""经营分析业务域 Schema 包。"""
++
++from backend.app.domains.business_analysis.schemas.inventory_sales_production_query import (
++    InventorySalesProductionPeriodSpec,
++    InventorySalesProductionQueryPlan,
++    InventorySalesProductionQueryResult,
++    InventorySalesProductionQueryRow,
++)
++
++__all__ = [
++    "InventorySalesProductionPeriodSpec",
++    "InventorySalesProductionQueryPlan",
++    "InventorySalesProductionQueryResult",
++    "InventorySalesProductionQueryRow",
++]
+diff --git a/backend/app/domains/business_analysis/schemas/inventory_sales_production_query.py b/backend/app/domains/business_analysis/schemas/inventory_sales_production_query.py
+new file mode 100644
+index 0000000..fb5ce8f
+--- /dev/null
++++ b/backend/app/domains/business_analysis/schemas/inventory_sales_production_query.py
+@@ -0,0 +1,174 @@
++from __future__ import annotations
++
++from decimal import Decimal
++from typing import Any, Literal
++
++from pydantic import BaseModel, ConfigDict, Field, model_validator
++
++InventorySalesProductionQueryKey = Literal[
++    "ba_isp_metric_summary",
++    "ba_isp_metric_breakdown",
++    "ba_isp_metric_trend",
++    "ba_isp_budget_achievement",
++    "ba_isp_inventory_snapshot",
++    "ba_isp_period_compare",
++]
++InventorySalesProductionPeriodType = Literal["month", "quarter", "year", "ytd"]
++InventorySalesProductionResultStatus = Literal["success", "empty_result", "clarification", "unsupported", "error"]
++
++
++class InventorySalesProductionPeriodSpec(BaseModel):
++    """产销存 QueryPlan 期间规格。
++
++    参数：
++        period_type: 期间类型，支持月、季度、全年、年初至今。
++        year: 业务年份。
++        month: period_type=month 时的月份。
++        quarter: period_type=quarter 时的季度。
++        start_month/end_month: ytd 或自定义期间的起止月份，MVP 主要使用 end_month。
++    返回：
++        可被执行器确定性展开为已发布月份列表的期间对象。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    period_type: InventorySalesProductionPeriodType
++    year: int
++    month: int | None = None
++    quarter: int | None = None
++    start_month: int | None = None
++    end_month: int | None = None
++
++    @model_validator(mode="after")
++    def validate_period_shape(self) -> "InventorySalesProductionPeriodSpec":
++        """校验期间基础形状。
++
++        业务逻辑：这里只做结构合法性；是否已发布、是否有数据由执行器结合中间库判断。
++        """
++
++        if self.year < 2020 or self.year > 2100:
++            raise ValueError("业务年份超出合理范围")
++        month_values = [self.month, self.start_month, self.end_month]
++        for value in month_values:
++            if value is not None and (value < 1 or value > 12):
++                raise ValueError("月份必须在 1-12 之间")
++        if self.quarter is not None and self.quarter not in {1, 2, 3, 4}:
++            raise ValueError("季度必须在 1-4 之间")
++        if self.period_type == "month" and self.month is None:
++            raise ValueError("月度查询必须提供 month")
++        if self.period_type == "quarter" and self.quarter is None:
++            raise ValueError("季度查询必须提供 quarter")
++        if self.start_month is not None and self.end_month is not None and self.start_month > self.end_month:
++            raise ValueError("起始月份不能晚于结束月份")
++        return self
++
++
++class InventorySalesProductionQueryPlan(BaseModel):
++    """产销存受控 QueryPlan。
++
++    参数：
++        domain/sub_domain: 固定经营分析产销存域，避免误接入物流/计划 BOM。
++        query_key: 受控查询能力，不允许自由 SQL。
++        intent: 上游语义意图快照，仅用于审计。
++        metrics: 标准指标编码，MVP 每次只执行一个主指标。
++        dimensions: 白名单拆分维度。
++        filters: 受控过滤条件，不承载 SQL 片段。
++        period: 查询期间。
++        calculation_policy: 上游建议聚合策略；执行器仍以指标维表和后端策略为准。
++        display_preference: 展示偏好，M3 不驱动前端。
++    返回：
++        可被 M3 执行器校验并执行的 QueryPlan。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    domain: str = "business_analysis"
++    sub_domain: str = "inventory_sales_production"
++    query_key: InventorySalesProductionQueryKey
++    intent: str | None = None
++    metrics: list[str] = Field(default_factory=list)
++    dimensions: list[str] = Field(default_factory=list)
++    filters: dict[str, Any] = Field(default_factory=dict)
++    period: InventorySalesProductionPeriodSpec
++    calculation_policy: str | None = None
++    display_preference: str | None = None
++
++    @model_validator(mode="after")
++    def validate_minimal_contract(self) -> "InventorySalesProductionQueryPlan":
++        """校验 QueryPlan 最小合同。
++
++        业务逻辑：LLM/上游只能提交结构化计划；计划必须保留领域边界且至少包含一个指标。
++        """
++
++        if self.domain != "business_analysis":
++            raise ValueError("产销存 QueryPlan domain 必须是 business_analysis")
++        if self.sub_domain != "inventory_sales_production":
++            raise ValueError("产销存 QueryPlan sub_domain 必须是 inventory_sales_production")
++        if not self.metrics:
++            raise ValueError("产销存 QueryPlan 必须包含 metrics")
++        return self
++
++
++class InventorySalesProductionQueryRow(BaseModel):
++    """产销存查询结果行。
++
++    参数：
++        dimensions: 维度值，如基地/版型/月度。
++        metric_code/metric_name: 实际执行的指标。
++        value_decimal: 后端确定性计算结果。
++        unit_standard: 标准单位。
++        aggregation_type: 本行采用的聚合策略。
++        months_covered: 实际覆盖的已发布月份。
++        row_count: 参与聚合的事实行数。
++        extra: 预算达成率等衍生指标的可审计补充事实。
++    返回：
++        用户回答和后续 NL2SQL shadow 对比可复用的结构化事实行。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    dimensions: dict[str, Any] = Field(default_factory=dict)
++    metric_code: str
++    metric_name: str
++    value_decimal: Decimal | None
++    unit_standard: str
++    aggregation_type: str
++    months_covered: list[int] = Field(default_factory=list)
++    row_count: int = 0
++    extra: dict[str, Any] = Field(default_factory=dict)
++
++
++class InventorySalesProductionQueryResult(BaseModel):
++    """产销存 QueryPlan 执行结果。
++
++    参数：
++        status: 成功、空结果、澄清或不支持状态。
++        answer_summary: 业务化摘要，不暴露表名、SQL、planner 等技术实现。
++        rows: 结构化事实行。
++        warnings: 业务口径提醒。
++        calculation_policy: 实际采用的聚合策略。
++        period_label: 期间标签。
++        query_key: 执行的受控能力。
++    返回：
++        M3 后端确定性结果，可在 M4 接入问答展示。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    status: InventorySalesProductionResultStatus
++    answer_summary: str
++    rows: list[InventorySalesProductionQueryRow] = Field(default_factory=list)
++    warnings: list[str] = Field(default_factory=list)
++    calculation_policy: str | None = None
++    period_label: str | None = None
++    query_key: str | None = None
++    domain: str = "business_analysis"
++    sub_domain: str = "inventory_sales_production"
++
++
++__all__ = [
++    "InventorySalesProductionPeriodSpec",
++    "InventorySalesProductionQueryPlan",
++    "InventorySalesProductionQueryResult",
++    "InventorySalesProductionQueryRow",
++]
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/aggregation_policy.py b/backend/app/domains/business_analysis/services/inventory_sales_production/aggregation_policy.py
+new file mode 100644
+index 0000000..d9cd082
+--- /dev/null
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/aggregation_policy.py
+@@ -0,0 +1,285 @@
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from typing import Any
++
++from backend.app.domains.business_analysis.models import BaIspMetric
++from backend.app.domains.business_analysis.repositories.inventory_sales_production_query_repository import (
++    DIMENSION_COLUMN_MAP,
++    FILTER_COLUMN_MAP,
++    QUERY_CONTROL_FILTERS,
++    InventorySalesProductionQueryRepository,
++)
++from backend.app.domains.business_analysis.schemas.inventory_sales_production_query import (
++    InventorySalesProductionQueryPlan,
++)
++
++SUPPORTED_QUERY_KEYS = {
++    "ba_isp_metric_summary",
++    "ba_isp_metric_breakdown",
++    "ba_isp_metric_trend",
++    "ba_isp_budget_achievement",
++    "ba_isp_inventory_snapshot",
++    "ba_isp_period_compare",
++}
++ALLOWED_PLAN_FILTERS = set(FILTER_COLUMN_MAP) | QUERY_CONTROL_FILTERS | {"business_year", "business_month"}
++
++
++@dataclass(slots=True)
++class InventorySalesProductionPolicyDecision:
++    """产销存聚合策略决策结果。
++
++    参数：
++        accepted: 是否允许执行。
++        status/message: 拒绝时的业务状态和说明。
++        metric: 实际执行指标。
++        months: 已发布月份列表。
++        dimensions/filters: 校验后的维度和过滤条件。
++        aggregation_type/calculation_policy: 实际聚合策略。
++        warnings: 业务口径提醒。
++    返回：
++        执行器可直接消费的策略决策。
++    """
++
++    accepted: bool
++    status: str = "success"
++    message: str = ""
++    metric: BaIspMetric | None = None
++    months: list[int] = field(default_factory=list)
++    dimensions: list[str] = field(default_factory=list)
++    filters: dict[str, Any] = field(default_factory=dict)
++    aggregation_type: str | None = None
++    calculation_policy: str | None = None
++    period_label: str | None = None
++    warnings: list[str] = field(default_factory=list)
++
++
++class InventorySalesProductionAggregationPolicy:
++    """产销存 QueryPlan 校验与聚合策略选择器。
++
++    职责：
++        1. 校验指标、维度、过滤、期间和 query_key 是否在白名单内；
++        2. 将 period 展开为已发布月份，阻断未来/未发布月份；
++        3. 选择 flow_sum、period_end、calculated_ratio 等后端确定性策略；
++        4. 对 2024 销量默认对外口径等业务规则做确定性归一。
++    """
++
++    def __init__(self, repository: InventorySalesProductionQueryRepository) -> None:
++        self.repository = repository
++
++    def resolve(self, plan: InventorySalesProductionQueryPlan) -> InventorySalesProductionPolicyDecision:
++        """校验 QueryPlan 并返回执行策略。
++
++        参数：plan 产销存受控 QueryPlan。
++        返回：InventorySalesProductionPolicyDecision；accepted=False 时执行器不得查数。
++        """
++
++        basic_error = self._validate_basic_plan(plan)
++        if basic_error:
++            return basic_error
++
++        requested_metric_code = plan.metrics[0]
++        metric = self.repository.get_metric(requested_metric_code)
++        if metric is None:
++            return self._blocked("unsupported", f"暂不支持该产销存指标：{requested_metric_code}")
++
++        invoice_error = self._validate_invoice_policy(plan, metric)
++        if invoice_error:
++            return invoice_error
++
++        filter_error = self._validate_filters(plan, plan.filters)
++        if filter_error:
++            return filter_error
++        filters = self._normalize_filters(plan.filters)
++
++        effective_metric, metric_warnings = self._resolve_effective_metric(plan, metric, filters)
++        dimensions = list(plan.dimensions)
++        period_months, period_label, period_warnings, period_error = self._resolve_period_months(plan)
++        if period_error:
++            return period_error
++
++        query_key_error = self._validate_query_key_policy(plan, effective_metric, dimensions)
++        if query_key_error:
++            return query_key_error
++
++        aggregation_type = self._resolve_aggregation_type(plan, effective_metric)
++        warnings = [*metric_warnings, *period_warnings]
++        return InventorySalesProductionPolicyDecision(
++            accepted=True,
++            metric=effective_metric,
++            months=period_months,
++            dimensions=dimensions,
++            filters=filters,
++            aggregation_type=aggregation_type,
++            calculation_policy=aggregation_type,
++            period_label=period_label,
++            warnings=warnings,
++        )
++
++    def _validate_basic_plan(self, plan: InventorySalesProductionQueryPlan) -> InventorySalesProductionPolicyDecision | None:
++        """校验领域、query_key、指标数量和维度白名单。"""
++
++        if plan.domain != "business_analysis" or plan.sub_domain != "inventory_sales_production":
++            return self._blocked("unsupported", "该计划不是产销存经营分析问题，已停止执行。")
++        if plan.query_key not in SUPPORTED_QUERY_KEYS:
++            return self._blocked("unsupported", f"暂不支持该产销存查询能力：{plan.query_key}")
++        if len(plan.metrics) != 1:
++            return self._blocked("unsupported", "MVP 阶段每次只支持一个产销存主指标。")
++        for dimension in plan.dimensions:
++            if dimension not in DIMENSION_COLUMN_MAP:
++                return self._blocked("unsupported", f"暂不支持该拆分维度：{dimension}")
++        return None
++
++    def _validate_invoice_policy(
++        self,
++        plan: InventorySalesProductionQueryPlan,
++        metric: BaIspMetric,
++    ) -> InventorySalesProductionPolicyDecision | None:
++        """校验开票销量必须由显式问法触发。"""
++
++        if metric.metric_code == "invoice_sales_volume" and not bool(plan.filters.get("explicit_invoice")):
++            return self._blocked("clarification", "如需查询开票销量，请在问题中明确说明“开票”口径。")
++        return None
++
++    def _validate_filters(
++        self,
++        plan: InventorySalesProductionQueryPlan,
++        filters: dict[str, Any],
++    ) -> InventorySalesProductionPolicyDecision | None:
++        """校验过滤条件白名单和年份一致性。"""
++
++        for key in filters:
++            if key not in ALLOWED_PLAN_FILTERS:
++                return self._blocked("unsupported", f"暂不支持该产销存过滤条件：{key}")
++        filter_year = filters.get("business_year")
++        if filter_year is not None:
++            try:
++                normalized_filter_year = int(filter_year)
++            except (TypeError, ValueError):
++                return self._blocked("clarification", "查询年份格式不清楚，请确认要查询的业务年份。")
++            if normalized_filter_year != plan.period.year:
++                return self._blocked("clarification", "查询年份与过滤年份不一致，请确认要查询的业务年份。")
++        return None
++
++    def _normalize_filters(self, filters: dict[str, Any]) -> dict[str, Any]:
++        """归一化过滤条件。
++
++        说明：业务年份和月份由 period 统一控制，保留在 filters 中仅用于一致性校验，不进入仓储过滤。
++        """
++
++        normalized = dict(filters)
++        normalized.pop("business_year", None)
++        normalized.pop("business_month", None)
++        return normalized
++
++    def _resolve_effective_metric(
++        self,
++        plan: InventorySalesProductionQueryPlan,
++        metric: BaIspMetric,
++        filters: dict[str, Any],
++    ) -> tuple[BaIspMetric, list[str]]:
++        """根据业务口径确定实际执行指标。
++
++        业务逻辑：2024 年用户默认问“销量/发货量”时，采用组件事业部剔除内部交易的对外销量口径；
++        用户显式要求包含内部交易时不做该替换。
++        """
++
++        warnings: list[str] = []
++        if (
++            metric.metric_code == "shipment_volume"
++            and plan.period.year == 2024
++            and not bool(filters.get("include_internal"))
++            and self.repository.has_metric_for_year(metric_code="shipment_external_excluding_internal", year=2024)
++        ):
++            external_metric = self.repository.get_metric("shipment_external_excluding_internal")
++            if external_metric is not None:
++                warnings.append("2024 年销量默认采用组件事业部剔除内部交易的对外销量口径。")
++                return external_metric, warnings
++        return metric, warnings
++
++    def _resolve_period_months(
++        self,
++        plan: InventorySalesProductionQueryPlan,
++    ) -> tuple[list[int], str, list[str], InventorySalesProductionPolicyDecision | None]:
++        """将期间规格展开为已发布月份。"""
++
++        period = plan.period
++        available_months = self.repository.list_available_months(year=period.year)
++        if not available_months:
++            return [], str(period.year), [], self._blocked("clarification", f"尚未导入 {period.year} 年产销存数据，无法回答。")
++
++        warnings: list[str] = []
++        if period.period_type == "month":
++            assert period.month is not None
++            if period.month not in available_months:
++                return [], f"{period.year}-{period.month:02d}", [], self._blocked(
++                    "clarification",
++                    f"{period.year} 年 {period.month} 月数据尚未发布或未导入，不能按 0 处理。",
++                )
++            return [period.month], f"{period.year}-{period.month:02d}", warnings, None
++
++        if period.period_type == "quarter":
++            assert period.quarter is not None
++            start = (period.quarter - 1) * 3 + 1
++            candidate_months = list(range(start, start + 3))
++            months = [month for month in candidate_months if month in available_months]
++            if not months:
++                return [], f"{period.year}-Q{period.quarter}", [], self._blocked(
++                    "clarification",
++                    f"{period.year} 年 Q{period.quarter} 数据尚未发布或未导入。",
++                )
++            if len(months) < 3:
++                warnings.append(f"{period.year} 年 Q{period.quarter} 仅使用已发布月份：{','.join(map(str, months))} 月。")
++            return months, f"{period.year}-Q{period.quarter}", warnings, None
++
++        end_month = period.end_month or max(available_months)
++        months = [month for month in available_months if month <= end_month]
++        if not months:
++            return [], f"{period.year}-YTD", [], self._blocked("clarification", f"{period.year} 年指定期间尚无已发布数据。")
++        if end_month > max(available_months):
++            warnings.append(f"{period.year} 年目前只发布到 {max(available_months)} 月，未发布月份不参与计算。")
++        if period.period_type == "year" and max(available_months) < 12:
++            warnings.append(f"{period.year} 年全年查询仅使用已发布月份 1-{max(available_months)} 月。")
++        if period.year == 2023 and period.period_type == "year":
++            warnings.append("2023 年年度结果按 1-12 月月度事实重新计算。")
++        period_label = f"{period.year}-YTD" if period.period_type == "ytd" else str(period.year)
++        return months, period_label, warnings, None
++
++    def _validate_query_key_policy(
++        self,
++        plan: InventorySalesProductionQueryPlan,
++        metric: BaIspMetric,
++        dimensions: list[str],
++    ) -> InventorySalesProductionPolicyDecision | None:
++        """校验 query_key 与指标聚合策略是否匹配。"""
++
++        if plan.query_key == "ba_isp_metric_summary" and dimensions:
++            return self._blocked("unsupported", "单指标汇总不支持同时指定拆分维度，请使用拆分查询能力。")
++        if plan.query_key == "ba_isp_metric_breakdown" and not dimensions:
++            return self._blocked("clarification", "请说明需要按哪个维度拆分，例如基地或版型。")
++        if plan.query_key == "ba_isp_inventory_snapshot" and metric.aggregation_type != "period_end":
++            return self._blocked("unsupported", "库存时点查询只支持库存、存货或寄存等时点指标。")
++        if plan.query_key == "ba_isp_budget_achievement" and metric.metric_code == "production_budget":
++            return self._blocked("unsupported", "预算达成率需要实际产量作为主指标，预算只作为分母。")
++        if plan.query_key == "ba_isp_budget_achievement" and dimensions:
++            return self._blocked("unsupported", "MVP 阶段预算达成率暂不支持按维度拆分。")
++        return None
++
++    def _resolve_aggregation_type(self, plan: InventorySalesProductionQueryPlan, metric: BaIspMetric) -> str:
++        """确定实际聚合策略。"""
++
++        if plan.query_key == "ba_isp_budget_achievement":
++            return "calculated_ratio"
++        return metric.aggregation_type
++
++    @staticmethod
++    def _blocked(status: str, message: str) -> InventorySalesProductionPolicyDecision:
++        """构造阻断决策。"""
++
++        return InventorySalesProductionPolicyDecision(accepted=False, status=status, message=message)
++
++
++__all__ = [
++    "InventorySalesProductionAggregationPolicy",
++    "InventorySalesProductionPolicyDecision",
++]
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/query_executor.py b/backend/app/domains/business_analysis/services/inventory_sales_production/query_executor.py
+new file mode 100644
+index 0000000..db684ef
+--- /dev/null
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/query_executor.py
+@@ -0,0 +1,212 @@
++from __future__ import annotations
++
++from decimal import Decimal, ROUND_HALF_UP
++from typing import Any
++
++from sqlalchemy.orm import Session
++
++from backend.app.domains.business_analysis.repositories.inventory_sales_production_query_repository import (
++    InventorySalesProductionQueryRepository,
++)
++from backend.app.domains.business_analysis.schemas.inventory_sales_production_query import (
++    InventorySalesProductionQueryPlan,
++    InventorySalesProductionQueryResult,
++    InventorySalesProductionQueryRow,
++)
++from backend.app.domains.business_analysis.services.inventory_sales_production.aggregation_policy import (
++    InventorySalesProductionAggregationPolicy,
++    InventorySalesProductionPolicyDecision,
++)
++
++_DECIMAL_SCALE = Decimal("0.00000001")
++
++
++class InventorySalesProductionQueryExecutor:
++    """产销存 QueryPlan 查询执行器。
++
++    职责：
++        1. 接收已结构化的受控 QueryPlan；
++        2. 先经聚合策略校验，确认指标、维度、期间和业务口径安全；
++        3. 调用固定仓储查询模板执行，不让 LLM 生成 SQL 或计算业务数字；
++        4. 返回业务化摘要和结构化事实，供 M4 智能问答展示层复用。
++    """
++
++    def __init__(self, db: Session) -> None:
++        self.repository = InventorySalesProductionQueryRepository(db)
++        self.policy = InventorySalesProductionAggregationPolicy(self.repository)
++
++    def execute(self, plan: InventorySalesProductionQueryPlan) -> InventorySalesProductionQueryResult:
++        """执行产销存 QueryPlan。
++
++        参数：plan 产销存受控 QueryPlan。
++        返回：InventorySalesProductionQueryResult；阻断/空结果不会继续查相近指标。
++        """
++
++        decision = self.policy.resolve(plan)
++        if not decision.accepted:
++            return self._blocked_result(plan=plan, decision=decision)
++
++        if plan.query_key == "ba_isp_budget_achievement":
++            return self._execute_budget_achievement(plan=plan, decision=decision)
++
++        dimensions = list(decision.dimensions)
++        if plan.query_key == "ba_isp_metric_trend" and "business_month" not in dimensions:
++            dimensions.append("business_month")
++
++        assert decision.metric is not None
++        rows_payload = self.repository.aggregate_metric(
++            metric=decision.metric,
++            year=plan.period.year,
++            months=decision.months,
++            dimensions=dimensions,
++            filters=decision.filters,
++            aggregation_type=decision.aggregation_type or decision.metric.aggregation_type,
++        )
++        if not rows_payload:
++            return self._empty_result(plan=plan, decision=decision)
++
++        warnings = list(decision.warnings)
++        if decision.aggregation_type == "period_end" and decision.months:
++            warnings.append(f"库存/存货/寄存类时点指标按最后已发布月份 {max(decision.months)} 月取数。")
++
++        rows = [InventorySalesProductionQueryRow(**payload) for payload in rows_payload]
++        return InventorySalesProductionQueryResult(
++            status="success",
++            answer_summary=self._build_success_summary(plan=plan, rows=rows, decision=decision),
++            rows=rows,
++            warnings=warnings,
++            calculation_policy=decision.calculation_policy,
++            period_label=decision.period_label,
++            query_key=plan.query_key,
++        )
++
++    def _execute_budget_achievement(
++        self,
++        *,
++        plan: InventorySalesProductionQueryPlan,
++        decision: InventorySalesProductionPolicyDecision,
++    ) -> InventorySalesProductionQueryResult:
++        """执行预算达成率重算。
++
++        参数：plan/decision 已校验计划与策略。
++        返回：预算达成率结果；缺少预算或预算为 0 时返回澄清。
++        """
++
++        assert decision.metric is not None
++        actual_value, actual_count, actual_months = self.repository.sum_metric(
++            metric_code=decision.metric.metric_code,
++            year=plan.period.year,
++            months=decision.months,
++            filters=decision.filters,
++        )
++        budget_value, budget_count, budget_months = self.repository.sum_metric(
++            metric_code="production_budget",
++            year=plan.period.year,
++            months=decision.months,
++            filters=decision.filters,
++        )
++        if actual_value is None or not actual_count:
++            return InventorySalesProductionQueryResult(
++                status="empty_result",
++                answer_summary="当前期间没有找到实际产量数据，无法计算预算达成率。",
++                rows=[],
++                warnings=decision.warnings,
++                calculation_policy="calculated_ratio",
++                period_label=decision.period_label,
++                query_key=plan.query_key,
++            )
++        if budget_value is None or not budget_count or budget_value == 0:
++            return InventorySalesProductionQueryResult(
++                status="clarification",
++                answer_summary="缺少预算数据或预算为 0，无法可靠计算预算达成率，请补充预算口径后再查询。",
++                rows=[],
++                warnings=decision.warnings,
++                calculation_policy="calculated_ratio",
++                period_label=decision.period_label,
++                query_key=plan.query_key,
++            )
++
++        ratio = ((actual_value / budget_value) * Decimal("100")).quantize(_DECIMAL_SCALE, rounding=ROUND_HALF_UP)
++        months_covered = sorted(set(actual_months) | set(budget_months))
++        row = InventorySalesProductionQueryRow(
++            dimensions={},
++            metric_code=f"{decision.metric.metric_code}_budget_achievement_rate",
++            metric_name="预算达成率",
++            value_decimal=ratio,
++            unit_standard="percent",
++            aggregation_type="calculated_ratio",
++            months_covered=months_covered,
++            row_count=actual_count + budget_count,
++            extra={
++                "actual_metric_code": decision.metric.metric_code,
++                "budget_metric_code": "production_budget",
++                "actual_value": str(actual_value.quantize(_DECIMAL_SCALE, rounding=ROUND_HALF_UP)),
++                "budget_value": str(budget_value.quantize(_DECIMAL_SCALE, rounding=ROUND_HALF_UP)),
++            },
++        )
++        return InventorySalesProductionQueryResult(
++            status="success",
++            answer_summary=f"{decision.period_label or plan.period.year} 预算达成率为 {row.value_decimal}%。",
++            rows=[row],
++            warnings=decision.warnings,
++            calculation_policy="calculated_ratio",
++            period_label=decision.period_label,
++            query_key=plan.query_key,
++        )
++
++    def _blocked_result(
++        self,
++        *,
++        plan: InventorySalesProductionQueryPlan,
++        decision: InventorySalesProductionPolicyDecision,
++    ) -> InventorySalesProductionQueryResult:
++        """构造校验阻断结果。"""
++
++        return InventorySalesProductionQueryResult(
++            status=decision.status,  # type: ignore[arg-type]
++            answer_summary=decision.message,
++            rows=[],
++            warnings=decision.warnings,
++            calculation_policy=decision.calculation_policy,
++            period_label=decision.period_label,
++            query_key=plan.query_key,
++        )
++
++    def _empty_result(
++        self,
++        *,
++        plan: InventorySalesProductionQueryPlan,
++        decision: InventorySalesProductionPolicyDecision,
++    ) -> InventorySalesProductionQueryResult:
++        """构造空结果，不自动放宽用户条件。"""
++
++        return InventorySalesProductionQueryResult(
++            status="empty_result",
++            answer_summary="当前期间和筛选条件下没有找到匹配的产销存数据，未自动放宽条件。",
++            rows=[],
++            warnings=decision.warnings,
++            calculation_policy=decision.calculation_policy,
++            period_label=decision.period_label,
++            query_key=plan.query_key,
++        )
++
++    def _build_success_summary(
++        self,
++        *,
++        plan: InventorySalesProductionQueryPlan,
++        rows: list[InventorySalesProductionQueryRow],
++        decision: InventorySalesProductionPolicyDecision,
++    ) -> str:
++        """生成业务化成功摘要。
++
++        说明：M3 只生成简洁确定性摘要，M4 可在此基础上接入 LLM 润色，但不得改写事实。
++        """
++
++        period_label = decision.period_label or str(plan.period.year)
++        if len(rows) == 1 and not rows[0].dimensions:
++            unit = "%" if rows[0].unit_standard == "percent" else rows[0].unit_standard
++            return f"{period_label} {rows[0].metric_name}为 {rows[0].value_decimal} {unit}。"
++        return f"{period_label} 已按指定维度完成 {rows[0].metric_name} 拆分，共 {len(rows)} 项结果。"
++
++
++__all__ = ["InventorySalesProductionQueryExecutor"]
+diff --git a/tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py b/tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py
+new file mode 100644
+index 0000000..d095217
+--- /dev/null
++++ b/tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py
+@@ -0,0 +1,395 @@
++from __future__ import annotations
++
++from datetime import date
++from decimal import Decimal
++
++import pytest
++from sqlalchemy import create_engine
++from sqlalchemy.orm import sessionmaker
++
++from backend.app.db.base import Base
++from backend.app.domains.business_analysis.models import (
++    BaIspExcelWorkbook,
++    BaIspMetric,
++    BaIspMonthlyFact,
++)
++from backend.app.domains.business_analysis.repositories.inventory_sales_production_repository import METRIC_CATALOG
++from backend.app.domains.business_analysis.schemas.inventory_sales_production_query import (
++    InventorySalesProductionPeriodSpec,
++    InventorySalesProductionQueryPlan,
++)
++from backend.app.domains.business_analysis.services.inventory_sales_production.query_executor import (
++    InventorySalesProductionQueryExecutor,
++)
++
++
++@pytest.fixture()
++def db_session():
++    """创建产销存 M3 单元测试 SQLite 会话。
++
++    说明：测试只验证 QueryPlan/执行器/聚合策略，不依赖真实 Excel 文件，避免把解析验收和查询验收耦合。
++    """
++    engine = create_engine("sqlite:///:memory:")
++    Base.metadata.create_all(engine)
++    SessionLocal = sessionmaker(bind=engine)
++    session = SessionLocal()
++    try:
++        _seed_metric_catalog(session)
++        yield session
++    finally:
++        session.close()
++        Base.metadata.drop_all(engine)
++        engine.dispose()
++
++
++def _seed_metric_catalog(session) -> None:
++    """写入 M2 指标白名单，供 QueryPlan 校验使用。"""
++    for metric in METRIC_CATALOG:
++        session.merge(BaIspMetric(**metric))
++    session.commit()
++
++
++def _seed_workbook(session, *, year: int, cutoff_month: int = 12) -> BaIspExcelWorkbook:
++    """创建一个测试工作簿版本。"""
++    workbook = BaIspExcelWorkbook(
++        source_file_name=f"测试产销存-{year}.xlsx",
++        source_file_sha256=f"sha256-{year}-{cutoff_month}",
++        source_file_size=1024,
++        business_year=year,
++        data_cutoff_month=cutoff_month,
++        source_version_label=f"{year}.{cutoff_month:02d}",
++        upload_batch_no=f"TEST-{year}-{cutoff_month}",
++        sheet_count=1,
++        has_vba=0,
++        external_link_count=0,
++        parser_version="test",
++        quality_status="success",
++    )
++    session.add(workbook)
++    session.flush()
++    return workbook
++
++
++def _source_offset(*values: str | None) -> int:
++    """根据维度值生成稳定来源行偏移，避免测试事实撞到来源坐标唯一约束。"""
++    text = "|".join(value or "" for value in values)
++    return sum(ord(char) for char in text) % 1000
++
++
++def _add_fact(
++    session,
++    *,
++    workbook: BaIspExcelWorkbook,
++    month: int,
++    metric_code: str,
++    metric_name: str,
++    metric_category: str,
++    aggregation_type: str,
++    value: str,
++    base_name: str | None = None,
++    model_type: str | None = None,
++    trade_scope: str | None = None,
++    is_default_external_sales: int = 0,
++) -> None:
++    """插入一条标准月度事实。"""
++    session.add(
++        BaIspMonthlyFact(
++            workbook_id=workbook.id,
++            sheet_id=None,
++            business_year=workbook.business_year,
++            business_month=month,
++            period_label=f"{workbook.business_year}-{month:02d}",
++            period_start_date=date(workbook.business_year, month, 1),
++            period_end_date=date(workbook.business_year, month, 28),
++            data_cutoff_month=workbook.data_cutoff_month,
++            is_published_month=1,
++            domain="business_analysis",
++            sub_domain="inventory_sales_production",
++            metric_code=metric_code,
++            metric_name=metric_name,
++            metric_category=metric_category,
++            aggregation_type=aggregation_type,
++            value_decimal=Decimal(value),
++            unit_standard="MW",
++            base_name=base_name,
++            factory_name=None,
++            model_type=model_type,
++            production_mode=None,
++            trade_scope=trade_scope,
++            is_outsourced=0,
++            is_consigned=1 if metric_category == "consignment" else 0,
++            is_default_external_sales=is_default_external_sales,
++            source_file_name=workbook.source_file_name,
++            source_file_sha256=workbook.source_file_sha256,
++            source_sheet="测试",
++            source_row_index=month + _source_offset(base_name, model_type, trade_scope),
++            source_col_index=month + 10,
++            source_cell_ref=f"A{month + _source_offset(base_name, model_type, trade_scope)}",
++            raw_category=metric_category,
++            raw_item=metric_name,
++            raw_unit="MW",
++            parser_version="test",
++            quality_flags="{}",
++        )
++    )
++
++
++def _plan(
++    *,
++    query_key: str,
++    metric: str,
++    year: int,
++    period_type: str = "year",
++    dimensions: list[str] | None = None,
++    filters: dict | None = None,
++    month: int | None = None,
++    end_month: int | None = None,
++) -> InventorySalesProductionQueryPlan:
++    """构造测试 QueryPlan。"""
++    return InventorySalesProductionQueryPlan(
++        query_key=query_key,
++        intent="metric_query",
++        metrics=[metric],
++        dimensions=dimensions or [],
++        filters=filters or {},
++        period=InventorySalesProductionPeriodSpec(
++            period_type=period_type,
++            year=year,
++            month=month,
++            end_month=end_month,
++        ),
++    )
++
++
++def test_query_executor_flow_sum_summary_recomputes_year_from_monthly_facts(db_session) -> None:
++    """流量型指标必须按已发布月度事实求和，不能依赖 Excel 年度列。"""
++    workbook = _seed_workbook(db_session, year=2025)
++    _add_fact(
++        db_session,
++        workbook=workbook,
++        month=1,
++        metric_code="production_actual_including_oem",
++        metric_name="实际产量（含委外）",
++        metric_category="production",
++        aggregation_type="flow_sum",
++        value="100.25",
++    )
++    _add_fact(
++        db_session,
++        workbook=workbook,
++        month=2,
++        metric_code="production_actual_including_oem",
++        metric_name="实际产量（含委外）",
++        metric_category="production",
++        aggregation_type="flow_sum",
++        value="200.75",
++    )
++    db_session.commit()
++
++    result = InventorySalesProductionQueryExecutor(db_session).execute(
++        _plan(query_key="ba_isp_metric_summary", metric="production_actual_including_oem", year=2025)
++    )
++
++    assert result.status == "success"
++    assert result.rows[0].value_decimal == Decimal("301.00000000")
++    assert result.rows[0].months_covered == [1, 2]
++    assert result.calculation_policy == "flow_sum"
++    assert "SQL" not in result.answer_summary
++    assert "planner" not in result.answer_summary.lower()
++
++
++def test_query_executor_period_end_inventory_uses_last_published_month_not_sum(db_session) -> None:
++    """时点库存必须取最后已发布月份，不允许把多个月库存相加。"""
++    workbook = _seed_workbook(db_session, year=2026, cutoff_month=4)
++    for month, value in [(1, "100"), (4, "120")]:
++        _add_fact(
++            db_session,
++            workbook=workbook,
++            month=month,
++            metric_code="ending_inventory_volume",
++            metric_name="期末库存/存货",
++            metric_category="inventory",
++            aggregation_type="period_end",
++            value=value,
++        )
++    db_session.commit()
++
++    result = InventorySalesProductionQueryExecutor(db_session).execute(
++        _plan(query_key="ba_isp_inventory_snapshot", metric="ending_inventory_volume", year=2026)
++    )
++
++    assert result.status == "success"
++    assert result.rows[0].value_decimal == Decimal("120.00000000")
++    assert result.rows[0].months_covered == [4]
++    assert result.calculation_policy == "period_end"
++    assert any("最后已发布月份" in warning for warning in result.warnings)
++
++
++def test_query_executor_rejects_unpublished_future_month(db_session) -> None:
++    """显式查询未发布月份必须 fail closed，不能把空值或未来月份当 0。"""
++    workbook = _seed_workbook(db_session, year=2026, cutoff_month=4)
++    _add_fact(
++        db_session,
++        workbook=workbook,
++        month=4,
++        metric_code="shipment_volume",
++        metric_name="发货量/销量",
++        metric_category="shipment",
++        aggregation_type="flow_sum",
++        value="88",
++    )
++    db_session.commit()
++
++    result = InventorySalesProductionQueryExecutor(db_session).execute(
++        _plan(query_key="ba_isp_metric_summary", metric="shipment_volume", year=2026, period_type="month", month=5)
++    )
++
++    assert result.status == "clarification"
++    assert "未发布" in result.answer_summary
++    assert result.rows == []
++
++
++def test_query_executor_breakdown_groups_by_allowed_dimension(db_session) -> None:
++    """按基地拆分时，执行器只能使用白名单维度并返回确定性分组结果。"""
++    workbook = _seed_workbook(db_session, year=2025)
++    for base_name, value in [("合肥", "100"), ("阜宁", "50")]:
++        _add_fact(
++            db_session,
++            workbook=workbook,
++            month=1,
++            metric_code="shipment_by_base",
++            metric_name="基地发货量/销量",
++            metric_category="shipment",
++            aggregation_type="flow_sum",
++            value=value,
++            base_name=base_name,
++        )
++    db_session.commit()
++
++    result = InventorySalesProductionQueryExecutor(db_session).execute(
++        _plan(query_key="ba_isp_metric_breakdown", metric="shipment_by_base", year=2025, dimensions=["base_name"])
++    )
++
++    assert result.status == "success"
++    assert [(row.dimensions["base_name"], row.value_decimal) for row in result.rows] == [
++        ("合肥", Decimal("100.00000000")),
++        ("阜宁", Decimal("50.00000000")),
++    ]
++    assert result.query_key == "ba_isp_metric_breakdown"
++
++
++def test_query_executor_budget_achievement_recomputes_ratio_from_actual_and_budget(db_session) -> None:
++    """预算达成率必须由后端用实际产量和预算月度事实重算。"""
++    workbook = _seed_workbook(db_session, year=2023)
++    for month, actual, budget in [(1, "80", "100"), (2, "120", "100")]:
++        _add_fact(
++            db_session,
++            workbook=workbook,
++            month=month,
++            metric_code="production_actual_including_oem",
++            metric_name="实际产量（含委外）",
++            metric_category="production",
++            aggregation_type="flow_sum",
++            value=actual,
++        )
++        _add_fact(
++            db_session,
++            workbook=workbook,
++            month=month,
++            metric_code="production_budget",
++            metric_name="产量预算/目标",
++            metric_category="budget",
++            aggregation_type="flow_sum",
++            value=budget,
++        )
++    db_session.commit()
++
++    result = InventorySalesProductionQueryExecutor(db_session).execute(
++        _plan(query_key="ba_isp_budget_achievement", metric="production_actual_including_oem", year=2023)
++    )
++
++    assert result.status == "success"
++    assert result.rows[0].value_decimal == Decimal("100.00000000")
++    assert result.rows[0].unit_standard == "percent"
++    assert result.rows[0].extra["actual_value"] == "200.00000000"
++    assert result.rows[0].extra["budget_value"] == "200.00000000"
++    assert result.calculation_policy == "calculated_ratio"
++
++
++def test_query_executor_budget_achievement_fails_closed_when_budget_missing(db_session) -> None:
++    """缺少预算分母时不能退化成产量查询或让 LLM 猜测达成率。"""
++    workbook = _seed_workbook(db_session, year=2025)
++    _add_fact(
++        db_session,
++        workbook=workbook,
++        month=1,
++        metric_code="production_actual_including_oem",
++        metric_name="实际产量（含委外）",
++        metric_category="production",
++        aggregation_type="flow_sum",
++        value="100",
++    )
++    db_session.commit()
++
++    result = InventorySalesProductionQueryExecutor(db_session).execute(
++        _plan(query_key="ba_isp_budget_achievement", metric="production_actual_including_oem", year=2025)
++    )
++
++    assert result.status == "clarification"
++    assert "缺少预算" in result.answer_summary
++    assert result.rows == []
++
++
++def test_query_executor_2024_sales_defaults_to_external_sales_scope(db_session) -> None:
++    """2024 用户问销量时应采用组件事业部剔除内部交易的默认对外销量口径。"""
++    workbook = _seed_workbook(db_session, year=2024)
++    _add_fact(
++        db_session,
++        workbook=workbook,
++        month=12,
++        metric_code="shipment_volume",
++        metric_name="发货量/销量",
++        metric_category="shipment",
++        aggregation_type="flow_sum",
++        value="999",
++    )
++    _add_fact(
++        db_session,
++        workbook=workbook,
++        month=12,
++        metric_code="shipment_external_excluding_internal",
++        metric_name="对外销量（剔除内部交易）",
++        metric_category="shipment",
++        aggregation_type="flow_sum",
++        value="385.332353",
++        trade_scope="剔除内部交易",
++        is_default_external_sales=1,
++    )
++    db_session.commit()
++
++    result = InventorySalesProductionQueryExecutor(db_session).execute(
++        _plan(query_key="ba_isp_metric_summary", metric="shipment_volume", year=2024)
++    )
++
++    assert result.status == "success"
++    assert result.rows[0].metric_code == "shipment_external_excluding_internal"
++    assert result.rows[0].value_decimal == Decimal("385.33235300")
++    assert any("剔除内部交易" in warning for warning in result.warnings)
++
++
++def test_query_plan_validator_rejects_unknown_metric_dimension_and_invoice_without_explicit_phrase(db_session) -> None:
++    """QueryPlan 校验必须 fail closed：未知指标/维度和开票隐式触发都不能执行。"""
++    executor = InventorySalesProductionQueryExecutor(db_session)
++
++    bad_metric = executor.execute(_plan(query_key="ba_isp_metric_summary", metric="fake_metric", year=2025))
++    bad_dimension = executor.execute(
++        _plan(query_key="ba_isp_metric_breakdown", metric="shipment_by_base", year=2025, dimensions=["table_name"])
++    )
++    bad_invoice = executor.execute(_plan(query_key="ba_isp_metric_summary", metric="invoice_sales_volume", year=2025))
++
++    assert bad_metric.status == "unsupported"
++    assert "暂不支持该产销存指标" in bad_metric.answer_summary
++    assert bad_dimension.status == "unsupported"
++    assert "暂不支持该拆分维度" in bad_dimension.answer_summary
++    assert bad_invoice.status == "clarification"
++    assert "开票" in bad_invoice.answer_summary
