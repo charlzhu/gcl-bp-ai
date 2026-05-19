@@ -1,0 +1,3 @@
+$ backend/.venv/bin/python scripts/dev/run_logistics_nl2sql_m9_shadow_sqlplan_generation.py --artifact-dir ai/outbox/kanban/t_bc1100bb --live-provider-smoke --max-live-samples 1 --live-provider-timeout-seconds 60
+{"by_status": {"success": 1}, "expected_status_mismatch_count": 0, "generated_count": 1, "live_provider_smoke": true, "records_path": "ai/outbox/kanban/t_bc1100bb/m9-shadow-sqlplan-generation-records.jsonl", "report_path": "ai/outbox/kanban/t_bc1100bb/m9-shadow-sqlplan-generation-report.md", "shadow_only": true, "success_count": 1, "total": 1, "validation_pass_count": 1, "version": "logistics_nl2sql_m9_shadow_sqlplan_generation.v1"}
+rc=0
