@@ -1,0 +1,658 @@
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/nl_query_planner.py b/backend/app/domains/business_analysis/services/inventory_sales_production/nl_query_planner.py
+index 7ef67f7..06b768a 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/nl_query_planner.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/nl_query_planner.py
++
+
+     _YEAR_PATTERN = re.compile(r"(?<!\d)(20\d{2}|2[3-9])\s*年?")
+     _MONTH_PATTERN = re.compile(r"(?<!\d)(1[0-2]|[1-9])\s*月")
++    _MONTH_RANGE_PATTERN = re.compile(r"(?<!\d)(1[0-2]|[1-9])\s*月?\s*(?:-|—|~|至|到)\s*(1[0-2]|[1-9])\s*月")
++    _YTD_END_MONTH_PATTERN = re.compile(r"(?:截至|截止|前)\s*(1[0-2]|[1-9])\s*(?:个)?月")
+     _QUARTER_PATTERN = re.compile(r"(?:Q|q|第)\s*([1-4])\s*(?:季度|季)?")
++
+
+     def build_plan(self, question: str) -> InventorySalesProductionQueryPlan:
+         """将用户问题转换为产销存受控 QueryPlan。
+@@ -95,18 +98,51 @@ class InventorySalesProductionNlQueryPlanner:
++
+
+     def _extract_period(self, text: str, year: int) -> InventorySalesProductionPeriodSpec:
+-        """提取月度、季度、年度或当前累计期间。"""
++        """提取月度、季度、年度或当前累计期间。
++
+
++            1. “截至/截止/前 N 个月/累计到 N 月”优先识别为年初至指定月份累计；
++            2. 中文“一季度/二季度”等真实问法需要等价于 Q1/Q2；
++            3. 普通“4 月库存”仍保持月度时点查询，不误扩成累计。
++        """
++
+
++        if ytd_end_month is not None:
++            return InventorySalesProductionPeriodSpec(period_type="ytd", year=year, start_month=1, end_month=ytd_end_month)
++
+
++        if quarter is not None:
++
+
+         month_match = self._MONTH_PATTERN.search(text)
+         if month_match:
+             return InventorySalesProductionPeriodSpec(period_type="month", year=year, month=int(month_match.group(1)))
+-        quarter_match = self._QUARTER_PATTERN.search(text)
+-        if quarter_match:
+-            return InventorySalesProductionPeriodSpec(period_type="quarter", year=year, quarter=int(quarter_match.group(1)))
+-        if "累计" in text or "截至" in text or "到现在" in text:
++        if "累计" in text or "截至" in text or "截止" in text or "到现在" in text:
+             return InventorySalesProductionPeriodSpec(period_type="ytd", year=year)
++
+
++    def _extract_ytd_end_month(self, text: str) -> int | None:
++        """识别年初至指定月份累计的截止月份。"""
++
+
++        if match:
++            return int(match.group(1))
++        month_match = self._MONTH_PATTERN.search(text)
++        if month_match and "累计" in text:
++            return int(month_match.group(1))
++        return None
++
+
++        """识别阿拉伯数字和中文数字季度。"""
++
+
++        if quarter_match:
++            return int(quarter_match.group(1))
++        chinese_quarter_match = self._CHINESE_QUARTER_PATTERN.search(text)
++        if chinese_quarter_match:
++            return {"一": 1, "二": 2, "三": 3, "四": 4}[chinese_quarter_match.group(1)]
++        return None
++
+
++
+
+@@ -136,7 +172,7 @@ class InventorySalesProductionNlQueryPlanner:
+         dimensions: list[str] = []
+         if "各基地" in text or "按基地" in text or "分基地" in text:
+             dimensions.append("base_name")
+-        if "按版型" in text or "各版型" in text:
++        if "按版型" in text or "各版型" in text or "分版型" in text:
+             dimensions.append("model_type")
++
+
+@@ -148,15 +184,20 @@ class InventorySalesProductionNlQueryPlanner:
+         不拼接字段名、不生成 SQL。
++
+
+-        if "base_name" not in dimensions:
+-            return metric_code
+-        mapping = {
+-            "shipment_volume": "shipment_by_base",
+-            "production_actual_including_oem": "production_by_base",
+-            "ending_inventory_volume": "ending_inventory_by_base",
+-            "consigned_inventory_volume": "consigned_inventory_by_base",
+-        }
+-        return mapping.get(metric_code, metric_code)
++        if "base_name" in dimensions:
++            mapping = {
++                "shipment_volume": "shipment_by_base",
++                "production_actual_including_oem": "production_by_base",
++                "ending_inventory_volume": "ending_inventory_by_base",
++                "consigned_inventory_volume": "consigned_inventory_by_base",
++            }
++            return mapping.get(metric_code, metric_code)
++        if "model_type" in dimensions:
++            mapping = {
++                "production_actual_including_oem": "production_by_model_type",
++            }
++            return mapping.get(metric_code, metric_code)
++
+
+     @staticmethod
+     def _resolve_intent(query_key: str) -> str:
+@@ -175,6 +216,21 @@ class InventorySalesProductionNlQueryPlanner:
+     def _reject_known_unsupported(text: str) -> None:
++
+
++        if InventorySalesProductionNlQueryPlanner._MONTH_RANGE_PATTERN.search(text):
++            raise InventorySalesProductionPlanningError(
++                "unsupported",
++                "当前产销存版本暂不支持任意月份区间查询，请改问全年、季度、单月或截至某月累计。",
++            )
++        if "同比" in text:
++            raise InventorySalesProductionPlanningError(
++                "unsupported",
++                "同比增长率需要可比期间和业务确认的同比口径，当前产销存版本暂不支持同比类问题。",
++            )
++        if "环比" in text:
++            raise InventorySalesProductionPlanningError(
++                "unsupported",
++                "环比变化需要相邻期间和业务确认的环比口径，当前产销存版本暂不支持环比类问题。",
++            )
+         if "库存周转" in text or "周转率" in text or "平均库存" in text:
+             raise InventorySalesProductionPlanningError(
+                 "clarification",
+diff --git a/tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py b/tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py
+new file mode 100644
+index 0000000..8b755f8
+--- /dev/null
++++ b/tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py
+@@ -0,0 +1,425 @@
++from __future__ import annotations
++
+
++from decimal import Decimal
++from typing import Any
++
+
++from sqlalchemy import create_engine
++from sqlalchemy.orm import sessionmaker
++
+
++from backend.app.domains.business_analysis.models import BaIspExcelWorkbook, BaIspMetric, BaIspMonthlyFact
++from backend.app.domains.business_analysis.repositories.inventory_sales_production_repository import METRIC_CATALOG
++from backend.app.domains.business_analysis.services.inventory_sales_production.qa_service import (
++    InventorySalesProductionQaService,
++)
++
+
+
++
+
+
++def db_session():
++    """创建 M4-6 真实问法回归用的临时中间库。
++
+
++        1. 本测试只模拟智能助手中间库，不直接读取 Excel 或外部系统；
++        2. 数据值来自 M2/M3 已确认的业务口径样例，保证问法回归可重复执行；
++        3. 每个用例都走 QA Service -> NL Planner -> QueryExecutor，避免绕过真实问答主链路。
++    返回：
++        SQLAlchemy Session，测试结束后自动释放。
++    """
++
+
++    Base.metadata.create_all(engine)
++    SessionLocal = sessionmaker(bind=engine)
++    session = SessionLocal()
++    try:
++        _seed_metric_catalog(session)
++        _seed_acceptance_facts(session)
++        yield session
++    finally:
++        session.close()
++        Base.metadata.drop_all(engine)
++        engine.dispose()
++
+
+
++    """初始化产销存指标白名单。
++
+
++        session: 当前测试数据库会话。
++    返回：
++        无返回值。
++    """
++
+
++        session.merge(BaIspMetric(**metric))
++    session.commit()
++
+
+
++    """写入一个业务年份工作簿版本。
++
+
++        session: 当前测试数据库会话。
++        year: 业务年份。
++        cutoff_month: 数据发布截止月份。
++    返回：
++        已 flush 的工作簿 ORM 对象。
++    """
++
+
++        source_file_name=f"M4-6产销存验收-{year}.xlsx",
++        source_file_sha256=f"m4-6-sha256-{year}-{cutoff_month}",
++        source_file_size=2048,
++        business_year=year,
++        data_cutoff_month=cutoff_month,
++        source_version_label=f"{year}.{cutoff_month:02d}",
++        upload_batch_no=f"M4-6-ACCEPTANCE-{year}-{cutoff_month}",
++        sheet_count=1,
++        has_vba=0,
++        external_link_count=0,
++        parser_version="m4_6_acceptance",
++        quality_status="success",
++    )
++    session.add(workbook)
++    session.flush()
++    return workbook
++
+
+
++    """根据维度组合生成稳定来源行号偏移。
++
+
++        values: 参与区分来源坐标的维度文本。
++    返回：
++        小范围整数偏移，避免同月同指标测试数据撞唯一来源坐标。
++    """
++
+
++
+
+
++    session,
++    *,
++    workbook: BaIspExcelWorkbook,
++    month: int,
++    metric_code: str,
++    metric_name: str,
++    metric_category: str,
++    aggregation_type: str,
++    value: str,
++    base_name: str | None = None,
++    model_type: str | None = None,
++    trade_scope: str | None = None,
++    is_default_external_sales: int = 0,
++    is_consigned: int = 0,
++) -> None:
++    """写入一条产销存标准月度事实。
++
+
++        session: 当前测试数据库会话。
++        workbook: 来源工作簿版本。
++        month: 业务月份。
++        metric_code/metric_name/metric_category/aggregation_type: 标准指标信息。
++        value: 业务数值，统一按 MW 或百分比分子分母事实保存。
++        base_name/model_type/trade_scope: 可选业务维度。
++        is_default_external_sales/is_consigned: 业务口径标记。
++    返回：
++        无返回值。
++    """
++
+
++    session.add(
++        BaIspMonthlyFact(
++            workbook_id=workbook.id,
++            sheet_id=None,
++            business_year=workbook.business_year,
++            business_month=month,
++            period_label=f"{workbook.business_year}-{month:02d}",
++            period_start_date=date(workbook.business_year, month, 1),
++            period_end_date=date(workbook.business_year, month, 28),
++            data_cutoff_month=workbook.data_cutoff_month,
++            is_published_month=1,
++            domain="business_analysis",
++            sub_domain="inventory_sales_production",
++            metric_code=metric_code,
++            metric_name=metric_name,
++            metric_category=metric_category,
++            aggregation_type=aggregation_type,
++            value_decimal=Decimal(value),
++            unit_standard="MW",
++            base_name=base_name,
++            factory_name=None,
++            model_type=model_type,
++            production_mode=None,
++            trade_scope=trade_scope,
++            is_outsourced=0,
++            is_consigned=is_consigned,
++            is_default_external_sales=is_default_external_sales,
++            source_file_name=workbook.source_file_name,
++            source_file_sha256=workbook.source_file_sha256,
++            source_sheet="M4-6真实问法验收",
++            source_row_index=row_no,
++            source_col_index=month + 20,
++            source_cell_ref=f"B{row_no}",
++            raw_category=metric_category,
++            raw_item=metric_name,
++            raw_unit="MW",
++            parser_version="m4_6_acceptance",
++            quality_flags="{}",
++        )
++    )
++
+
+
++    """写入覆盖 A/B/C 边界的产销存验收事实。
++
+
++        1. 2024 销量默认采用“剔除内部交易”的对外销量口径；
++        2. 2026 只发布到 4 月，全年/累计问法只能使用 1-4 月；
++        3. 库存/寄存是时点指标，按最后已发布月份取数；
++        4. 版型、基地拆分只使用白名单维度和标准指标。
++    返回：
++        无返回值。
++    """
++
+
++    workbook_2024 = _seed_workbook(session, year=2024, cutoff_month=12)
++    workbook_2025 = _seed_workbook(session, year=2025, cutoff_month=12)
++    workbook_2026 = _seed_workbook(session, year=2026, cutoff_month=4)
++
+
++        _add_fact(
++            session,
++            workbook=workbook_2023,
++            month=month,
++            metric_code="production_actual_including_oem",
++            metric_name="实际产量（含委外）",
++            metric_category="production",
++            aggregation_type="flow_sum",
++            value=actual,
++        )
++        _add_fact(
++            session,
++            workbook=workbook_2023,
++            month=month,
++            metric_code="production_budget",
++            metric_name="产量预算/目标",
++            metric_category="budget",
++            aggregation_type="flow_sum",
++            value=budget,
++        )
++
+
++        session,
++        workbook=workbook_2024,
++        month=12,
++        metric_code="shipment_external_excluding_internal",
++        metric_name="对外销量（剔除内部交易）",
++        metric_category="shipment",
++        aggregation_type="flow_sum",
++        value="385.332353",
++        trade_scope="剔除内部交易",
++        is_default_external_sales=1,
++    )
++
+
++        _add_fact(
++            session,
++            workbook=workbook_2025,
++            month=month,
++            metric_code="shipment_volume",
++            metric_name="发货量/销量",
++            metric_category="shipment",
++            aggregation_type="flow_sum",
++            value=value,
++        )
++    _add_fact(
++        session,
++        workbook=workbook_2025,
++        month=12,
++        metric_code="invoice_sales_volume",
++        metric_name="开票销量",
++        metric_category="shipment",
++        aggregation_type="flow_sum",
++        value="55",
++    )
++    for model_type, value in [("N型", "150"), ("P型", "80")]:
++        _add_fact(
++            session,
++            workbook=workbook_2025,
++            month=12,
++            metric_code="production_by_model_type",
++            metric_name="版型产量",
++            metric_category="production",
++            aggregation_type="flow_sum",
++            value=value,
++            model_type=model_type,
++        )
++    for base_name, value in [("合肥", "260"), ("阜宁", "140")]:
++        _add_fact(
++            session,
++            workbook=workbook_2025,
++            month=12,
++            metric_code="ending_inventory_by_base",
++            metric_name="基地期末库存/存货",
++            metric_category="inventory",
++            aggregation_type="period_end",
++            value=value,
++            base_name=base_name,
++        )
++
+
++        _add_fact(
++            session,
++            workbook=workbook_2026,
++            month=month,
++            metric_code="shipment_volume",
++            metric_name="发货量/销量",
++            metric_category="shipment",
++            aggregation_type="flow_sum",
++            value=value,
++        )
++    _add_fact(
++        session,
++        workbook=workbook_2026,
++        month=4,
++        metric_code="ending_inventory_volume",
++        metric_name="期末库存/存货",
++        metric_category="inventory",
++        aggregation_type="period_end",
++        value="374.23911",
++    )
++    _add_fact(
++        session,
++        workbook=workbook_2026,
++        month=4,
++        metric_code="consigned_inventory_volume",
++        metric_name="寄存库存",
++        metric_category="consignment",
++        aggregation_type="period_end",
++        value="40.978995",
++        is_consigned=1,
++    )
++    session.commit()
++
+
+
++    """调用产销存 QA 服务执行真实问法。
++
+
++        session: 当前测试数据库会话。
++        question: 真实业务问法。
++    返回：
++        InventorySalesProductionQaResponse。
++    """
++
+
++
+
+
++    """校验用户可见结果不包含内部技术实现词。
++
+
++        payload: 字符串、列表或字典形式的用户可见内容。
++    返回：
++        无返回值；发现泄露时断言失败。
++    """
++
+
++    for word in FORBIDDEN_VISIBLE_WORDS:
++        assert word.lower() not in text.lower()
++
+
+
++    ("question", "expected_value", "expected_phrases"),
++    [
++        ("2024年销量是多少？", "385.33235300", ["剔除内部交易"]),
++        ("2025年Q1销量是多少？", "60.00000000", ["2025-Q1", "1月,2月,3月"]),
++        ("2025年一季度销售量是多少？", "60.00000000", ["2025-Q1", "1月,2月,3月"]),
++        ("2026年截至4月累计销量是多少？", "100.00000000", ["1月,2月,3月,4月"]),
++        ("2026年截止4月累计销量是多少？", "100.00000000", ["1月,2月,3月,4月"]),
++        ("2026年累计到4月销量是多少？", "100.00000000", ["1月,2月,3月,4月"]),
++        ("2026年前4个月发货量多少？", "100.00000000", ["1月,2月,3月,4月"]),
++        ("2026年4月存货合计是多少？", "374.23911000", ["最后已发布月份", "4月"]),
++        ("2026年4月寄存仓还有多少？", "40.97899500", ["最后已发布月份", "4月"]),
++        ("2023年预算达成率是多少？", "100.00000000", ["预算达成率"]),
++        ("2025年开票销量是多少？", "55.00000000", ["开票销量"]),
++    ],
++)
++def test_m4_6_real_question_success_samples_are_stable(db_session, question: str, expected_value: str, expected_phrases: list[str]) -> None:
++    """真实问法 A 类样例必须稳定返回业务结果。
++
+
++        db_session: 已写入验收事实的临时中间库。
++        question: 业务用户自然语言问法。
++        expected_value: 期望核心数值。
++        expected_phrases: 期望出现在回答、表格或口径提醒中的业务短语。
++    返回：
++        无返回值。
++    """
++
+
++
+
++    assert result.result_table is not None
++    visible_payload = {
++        "answer": result.answer_summary,
++        "presentation": result.presentation,
++        "warnings": result.warnings,
++        "table": result.result_table,
++    }
++    assert expected_value in str(visible_payload)
++    for phrase in expected_phrases:
++        assert phrase in str(visible_payload)
++    _assert_no_user_visible_technical_leak(visible_payload)
++
+
+
++    """按版型拆分产量时必须使用标准版型指标，不能误查无版型维度的总产量。"""
++
+
++
+
++    assert result.result_table is not None
++    rows = result.result_table["rows"]
++    assert [(row["版型"], row["数值"]) for row in rows] == [("N型", "150.00000000"), ("P型", "80.00000000")]
++    _assert_no_user_visible_technical_leak(result.result_table)
++
+
+
++    """按基地看库存时必须走基地库存时点指标，并按最后已发布月份取数。"""
++
+
++
+
++    assert result.result_table is not None
++    rows = result.result_table["rows"]
++    assert [(row["基地"], row["数值"]) for row in rows] == [("合肥", "260.00000000"), ("阜宁", "140.00000000")]
++    assert any("最后已发布月份" in warning for warning in result.warnings)
++    _assert_no_user_visible_technical_leak({"warnings": result.warnings, "table": result.result_table})
++
+
+
++    ("question", "expected_status", "expected_phrase"),
++    [
++        ("2025年销量同比增长率是多少？", "UNSUPPORTED", "同比"),
++        ("2025年销量环比趋势如何？", "UNSUPPORTED", "环比"),
++        ("2026年2月至4月销量是多少？", "UNSUPPORTED", "月份区间"),
++        ("2026年4月至6月销量是多少？", "UNSUPPORTED", "月份区间"),
++        ("2025年库存周转率是多少？", "CLARIFICATION_REQUIRED", "库存周转率"),
++        ("2027年销量是多少？", "CLARIFICATION_REQUIRED", "尚未导入"),
++    ],
++)
++def test_m4_6_real_question_boundary_samples_fail_closed(db_session, question: str, expected_status: str, expected_phrase: str) -> None:
++    """真实问法 B/C 类边界必须业务化阻断，不能编造或误答。"""
++
+
++
+
++    assert result.result_table is None
++    assert expected_phrase in result.answer_summary or expected_phrase in result.status["message"]
++    _assert_no_user_visible_technical_leak({"answer": result.answer_summary, "presentation": result.presentation})
+diff --git a/docs/INVENTORY_SALES_PRODUCTION_M4_6_REAL_QUESTION_REGRESSION.md b/docs/INVENTORY_SALES_PRODUCTION_M4_6_REAL_QUESTION_REGRESSION.md
+new file mode 100644
+index 0000000..2c4fdd4
+--- /dev/null
++++ b/docs/INVENTORY_SALES_PRODUCTION_M4_6_REAL_QUESTION_REGRESSION.md
+@@ -0,0 +1,88 @@
++# 产销存 M4-6 业务验收与真实问法回归样例固化
++
+
++
+
++
+
++
+
++
+
++
+
++2. 产销存查询执行器已支持流量、时点、预算达成率等确定性计算。
++3. 产销存智能问答服务已接入后端和前端业务域入口。
++4. M4-4 focused、M2/M3 回归、编译、静态扫描和前端 build 已有验收记录。
++
+
++
+
++2. 覆盖销量、销售量、发货量、库存、存货、寄存、开票销量、预算达成率、按基地、按版型、季度、累计、未发布年份、同比/环比、库存周转率等边界。
++3. 修复中文季度、截至/截止累计、按版型产量、同比/环比误答等问法缺口。
++4. 所有新增验收样例均走智能问答主链路，不绕过中间库和后端确定性计算。
++
+
++
+
++|---|---|---|---|
++| A | 2024年销量是多少？ | 可直接回答 | 2024 销量默认采用剔除内部交易的对外销量口径 |
++| A | 2025年Q1销量是多少？ | 可直接回答 | Q1 展开为 1-3 月 |
++| A | 2025年一季度销售量是多少？ | 可直接回答 | 中文季度等价于 Q1，销售量等价发货量 |
++| A | 2026年截至4月累计销量是多少？ | 可直接回答 | 截至 4 月累计使用 1-4 月已发布数据 |
++| A | 2026年截止4月累计销量是多少？ | 可直接回答 | 截止 4 月累计使用 1-4 月已发布数据 |
++| A | 2026年累计到4月销量是多少？ | 可直接回答 | 累计到 4 月使用 1-4 月已发布数据 |
++| A | 2026年前4个月发货量多少？ | 可直接回答 | 前 4 个月等价于 1-4 月累计 |
++| A | 2026年4月存货合计是多少？ | 可直接回答 | 存货等价库存，按 4 月时点取数 |
++| A | 2026年4月寄存仓还有多少？ | 可直接回答 | 寄存仓等价寄存库存，按 4 月时点取数 |
++| A | 2023年预算达成率是多少？ | 可直接回答 | 后端按实际产量 / 预算重算 |
++| A | 2025年开票销量是多少？ | 可直接回答 | 只有显式问“开票”才使用开票口径 |
++| A | 2025年各版型产量排名 | 可直接回答 | 使用标准版型产量指标并按版型拆分 |
++| A | 2025年按基地看库存情况 | 可直接回答 | 使用基地库存时点指标，按最后已发布月份取数 |
++| B/C | 2025年销量同比增长率是多少？ | 暂不支持 | 同比口径未开放时必须业务化阻断 |
++| B/C | 2025年销量环比趋势如何？ | 暂不支持 | 环比口径未开放时不能误答成趋势查询 |
++| B/C | 2026年2月至4月销量是多少？ | 暂不支持 | 任意月份区间暂未开放，不能误答成年初累计 |
++| B/C | 2026年4月至6月销量是多少？ | 暂不支持 | 任意月份区间暂未开放，不能误答成年初累计 |
++| B | 2025年库存周转率是多少？ | 需要补充口径 | 缺少平均库存/周转公式时必须澄清 |
++| B | 2027年销量是多少？ | 需要补充数据 | 未导入年份不能编造结果 |
++
+
++
+
++2. 2024 年销量默认使用“组件事业部剔除内部交易”的对外销量口径。
++3. “库存 / 存货 / 存货合计 / 库存（SAP 数据）”按同一库存时点指标处理。
++4. “寄存仓 / 寄存合计”按同一寄存库存时点指标处理。
++5. “截至 N 月 / 截止 N 月 / 前 N 个月 / 累计到 N 月”按年初至 N 月已发布月份累计处理。
++6. “N 月至 M 月 / N 月到 M 月”等任意月份区间当前暂不开放，必须业务化阻断，不能误答成年初累计。
++7. “Q1 / 一季度 / 第 1 季度”等季度问法应等价。
++8. 同比、环比、库存周转率等当前缺少完整业务口径的问题必须先业务化澄清或暂不支持，不能误答或编造。
++
+
++
+
++
+
++/opt/anaconda3/bin/python -m pytest \
++  tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py \
++  -q
++```
++
+
++
+
++/opt/anaconda3/bin/python -m pytest \
++  tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py \
++  tests/frontend/test_business_chat_business_analysis_domain.py \
++  tests/business_acceptance/test_inventory_sales_production_m2_fact_import.py \
++  tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py \
++  tests/unit/business_analysis/test_inventory_sales_production_m4_qa_service.py \
++  tests/unit/business_analysis/test_inventory_sales_production_m4_api_registration.py \
++  -q
++```
++
+
++
+
++2. 本轮不让模型直接计算业务事实，所有业务结果由后端确定性链路产生。
++3. 本轮不修改物流、计划 BOM、功率预测主链路。
++

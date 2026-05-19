@@ -37,7 +37,10 @@ class InventorySalesProductionNlQueryPlanner:
 
     _YEAR_PATTERN = re.compile(r"(?<!\d)(20\d{2}|2[3-9])\s*年?")
     _MONTH_PATTERN = re.compile(r"(?<!\d)(1[0-2]|[1-9])\s*月")
+    _MONTH_RANGE_PATTERN = re.compile(r"(?<!\d)(1[0-2]|[1-9])\s*月?\s*(?:-|—|~|至|到)\s*(1[0-2]|[1-9])\s*月")
+    _YTD_END_MONTH_PATTERN = re.compile(r"(?:截至|截止|前)\s*(1[0-2]|[1-9])\s*(?:个)?月")
     _QUARTER_PATTERN = re.compile(r"(?:Q|q|第)\s*([1-4])\s*(?:季度|季)?")
+    _CHINESE_QUARTER_PATTERN = re.compile(r"([一二三四])\s*(?:季度|季)")
 
     def build_plan(self, question: str) -> InventorySalesProductionQueryPlan:
         """将用户问题转换为产销存受控 QueryPlan。
@@ -95,17 +98,50 @@ class InventorySalesProductionNlQueryPlanner:
         return int(raw_year)
 
     def _extract_period(self, text: str, year: int) -> InventorySalesProductionPeriodSpec:
-        """提取月度、季度、年度或当前累计期间。"""
+        """提取月度、季度、年度或当前累计期间。
+
+        业务逻辑：
+            1. “截至/截止/前 N 个月/累计到 N 月”优先识别为年初至指定月份累计；
+            2. 中文“一季度/二季度”等真实问法需要等价于 Q1/Q2；
+            3. 普通“4 月库存”仍保持月度时点查询，不误扩成累计。
+        """
+
+        ytd_end_month = self._extract_ytd_end_month(text)
+        if ytd_end_month is not None:
+            return InventorySalesProductionPeriodSpec(period_type="ytd", year=year, start_month=1, end_month=ytd_end_month)
+
+        quarter = self._extract_quarter(text)
+        if quarter is not None:
+            return InventorySalesProductionPeriodSpec(period_type="quarter", year=year, quarter=quarter)
 
         month_match = self._MONTH_PATTERN.search(text)
         if month_match:
             return InventorySalesProductionPeriodSpec(period_type="month", year=year, month=int(month_match.group(1)))
-        quarter_match = self._QUARTER_PATTERN.search(text)
-        if quarter_match:
-            return InventorySalesProductionPeriodSpec(period_type="quarter", year=year, quarter=int(quarter_match.group(1)))
-        if "累计" in text or "截至" in text or "到现在" in text:
+        if "累计" in text or "截至" in text or "截止" in text or "到现在" in text:
             return InventorySalesProductionPeriodSpec(period_type="ytd", year=year)
         return InventorySalesProductionPeriodSpec(period_type="year", year=year)
+
+    def _extract_ytd_end_month(self, text: str) -> int | None:
+        """识别年初至指定月份累计的截止月份。"""
+
+        match = self._YTD_END_MONTH_PATTERN.search(text)
+        if match:
+            return int(match.group(1))
+        month_match = self._MONTH_PATTERN.search(text)
+        if month_match and "累计" in text:
+            return int(month_match.group(1))
+        return None
+
+    def _extract_quarter(self, text: str) -> int | None:
+        """识别阿拉伯数字和中文数字季度。"""
+
+        quarter_match = self._QUARTER_PATTERN.search(text)
+        if quarter_match:
+            return int(quarter_match.group(1))
+        chinese_quarter_match = self._CHINESE_QUARTER_PATTERN.search(text)
+        if chinese_quarter_match:
+            return {"一": 1, "二": 2, "三": 3, "四": 4}[chinese_quarter_match.group(1)]
+        return None
 
     def _resolve_metric_and_query_key(self, text: str) -> tuple[str, str, dict[str, object]]:
         """识别主指标和查询能力。"""
@@ -136,7 +172,7 @@ class InventorySalesProductionNlQueryPlanner:
         dimensions: list[str] = []
         if "各基地" in text or "按基地" in text or "分基地" in text:
             dimensions.append("base_name")
-        if "按版型" in text or "各版型" in text:
+        if "按版型" in text or "各版型" in text or "分版型" in text:
             dimensions.append("model_type")
         return dimensions
 
@@ -148,15 +184,20 @@ class InventorySalesProductionNlQueryPlanner:
         不拼接字段名、不生成 SQL。
         """
 
-        if "base_name" not in dimensions:
-            return metric_code
-        mapping = {
-            "shipment_volume": "shipment_by_base",
-            "production_actual_including_oem": "production_by_base",
-            "ending_inventory_volume": "ending_inventory_by_base",
-            "consigned_inventory_volume": "consigned_inventory_by_base",
-        }
-        return mapping.get(metric_code, metric_code)
+        if "base_name" in dimensions:
+            mapping = {
+                "shipment_volume": "shipment_by_base",
+                "production_actual_including_oem": "production_by_base",
+                "ending_inventory_volume": "ending_inventory_by_base",
+                "consigned_inventory_volume": "consigned_inventory_by_base",
+            }
+            return mapping.get(metric_code, metric_code)
+        if "model_type" in dimensions:
+            mapping = {
+                "production_actual_including_oem": "production_by_model_type",
+            }
+            return mapping.get(metric_code, metric_code)
+        return metric_code
 
     @staticmethod
     def _resolve_intent(query_key: str) -> str:
@@ -175,6 +216,21 @@ class InventorySalesProductionNlQueryPlanner:
     def _reject_known_unsupported(text: str) -> None:
         """阻断当前 Excel 数据不足的问题，避免系统编造公式结果。"""
 
+        if InventorySalesProductionNlQueryPlanner._MONTH_RANGE_PATTERN.search(text):
+            raise InventorySalesProductionPlanningError(
+                "unsupported",
+                "当前产销存版本暂不支持任意月份区间查询，请改问全年、季度、单月或截至某月累计。",
+            )
+        if "同比" in text:
+            raise InventorySalesProductionPlanningError(
+                "unsupported",
+                "同比增长率需要可比期间和业务确认的同比口径，当前产销存版本暂不支持同比类问题。",
+            )
+        if "环比" in text:
+            raise InventorySalesProductionPlanningError(
+                "unsupported",
+                "环比变化需要相邻期间和业务确认的环比口径，当前产销存版本暂不支持环比类问题。",
+            )
         if "库存周转" in text or "周转率" in text or "平均库存" in text:
             raise InventorySalesProductionPlanningError(
                 "clarification",
