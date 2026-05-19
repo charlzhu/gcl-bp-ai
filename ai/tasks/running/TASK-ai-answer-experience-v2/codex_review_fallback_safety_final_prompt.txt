@@ -1,0 +1,8 @@
+You are an independent code reviewer. Read only:
+1) ai/tasks/running/TASK-ai-answer-experience-v2/review_bundle_fallback_safety_final.md
+2) ai/tasks/running/TASK-ai-answer-experience-v2/diff-fallback-safety-final.patch
+
+Return ONLY valid JSON:
+{"passed": true/false, "security_concerns": [], "logic_errors": [], "suggestions": [], "summary": "..."}
+
+Focus: deterministic fallback text with visible technical leaks cannot be streamed or merged into presentation.answer; safe fallback uses status.message when available; stream/merge only affect narrative answer, not status/table/cards/chart; removing unused _has_ambiguous_multi_row_binding_clause does not weaken active row/entity validation; no user-facing SQL/query_key/planner/guardrail leak or real secret introduced.

@@ -1,0 +1,62 @@
+{
+  "task_id": "t_96b0f436",
+  "branch": "feature/nl2sql-m4-renderer-safety-explain",
+  "generated_at": "2026-05-17T17:03:38.444693",
+  "scoped_files": [
+    "backend/app/domains/logistics/services/nl2sql/__init__.py",
+    "backend/app/domains/logistics/services/nl2sql/sql_renderer.py",
+    "backend/app/domains/logistics/services/nl2sql/sql_safety.py",
+    "backend/app/domains/logistics/services/nl2sql/sql_execution.py",
+    "tests/unit/logistics/nl2sql/test_sql_renderer.py",
+    "tests/unit/logistics/nl2sql/test_sql_safety.py",
+    "tests/unit/logistics/nl2sql/test_sql_execution.py",
+    "docs/NL2SQL_LOGISTICS_M4_SQL_RENDERER_MVP_PLAN.md"
+  ],
+  "checks": {
+    "no_env_files_in_scope": true,
+    "data_qa_planner_not_modified": true,
+    "no_blocking_secret_like_literals": true
+  },
+  "raw_finding_count": 5,
+  "allowed_false_positive_count": 5,
+  "finding_count": 0,
+  "allowed_false_positives": [
+    {
+      "file": "backend/app/domains/logistics/services/nl2sql/sql_execution.py",
+      "line": 17,
+      "type": "dsn_password",
+      "snippet": "re.compile(r\"([REDACTED]\\s]+)(@)\"),",
+      "allow_reason": "sanitization_regex_or_masking_test_fixture"
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_sql_execution.py",
+      "line": 109,
+      "type": "bearer",
+      "snippet": "raise_message=\"mysql://user:secretpass@localhost/db password=abc123 token=tok_abcdef api_key=key_123 [REDACTED] sk-abcdef123456\"",
+      "allow_reason": "sanitization_regex_or_masking_test_fixture"
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_sql_execution.py",
+      "line": 109,
+      "type": "dsn_password",
+      "snippet": "raise_message=\"mysql[REDACTED]localhost/db password=abc123 token=tok_abcdef api_key=key_123 Bearer bearer_secret sk-abcdef123456\"",
+      "allow_reason": "sanitization_regex_or_masking_test_fixture"
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_sql_execution.py",
+      "line": 109,
+      "type": "password_assignment",
+      "snippet": "raise_message=\"mysql://user:secretpass@localhost/db [REDACTED] token=tok_abcdef api_key=key_123 Bearer bearer_secret sk-abcdef123456\"",
+      "allow_reason": "sanitization_regex_or_masking_test_fixture"
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_sql_execution.py",
+      "line": 109,
+      "type": "api_key_assignment",
+      "snippet": "raise_message=\"mysql://user:secretpass@localhost/db password=abc123 token=tok_abcdef [REDACTED] Bearer bearer_secret sk-abcdef123456\"",
+      "allow_reason": "sanitization_regex_or_masking_test_fixture"
+    }
+  ],
+  "findings": [],
+  "passed": true
+}

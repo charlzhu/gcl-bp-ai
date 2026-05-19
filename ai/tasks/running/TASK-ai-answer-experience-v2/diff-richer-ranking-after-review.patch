@@ -1,0 +1,1159 @@
+### HEAD committed logistics ranking narrative changes (already present on branch)
+diff --git a/backend/app/domains/logistics/api/endpoints/data_qa.py b/backend/app/domains/logistics/api/endpoints/data_qa.py
+index 1b3a013..719ebd1 100644
+--- a/backend/app/domains/logistics/api/endpoints/data_qa.py
++++ b/backend/app/domains/logistics/api/endpoints/data_qa.py
+@@ -61,11 +61,16 @@ def logistics_data_qa_query_stream(
+                 },
+             )
+             chunks: list[str] = []
++            fallback_answer = result_payload.get("answer_summary")
++            presentation = result_payload.get("presentation")
++            if isinstance(presentation, dict) and presentation.get("answer"):
++                # 流式表达的降级文本优先使用展示层已增强的 narrative，避免 LLM 不可用时退回潦草摘要。
++                fallback_answer = presentation.get("answer")
+             for chunk in stream_service.stream_answer(
+                 domain="logistics",
+                 question=payload.question,
+                 deterministic_payload=result_payload,
+-                fallback_answer=result_payload.get("answer_summary"),
++                fallback_answer=fallback_answer,
+             ):
+                 chunks.append(chunk)
+                 yield build_json_line_event("delta", {"text": chunk})
+diff --git a/backend/app/domains/logistics/services/llm_answer_presentation_service.py b/backend/app/domains/logistics/services/llm_answer_presentation_service.py
+index a88fbef..df5bac6 100644
+--- a/backend/app/domains/logistics/services/llm_answer_presentation_service.py
++++ b/backend/app/domains/logistics/services/llm_answer_presentation_service.py
+@@ -617,6 +617,127 @@ class LogisticsLlmAnswerPresentationService:
+         metric_label = self._label(result.query_plan.metrics[0]) if result.query_plan.metrics else ""
+         return f"{metric_label}分析结果" if metric_label else "物流数据分析结果"
+ 
++    def _build_deterministic_answer(
++        self,
++        *,
++        question: str,
++        result: LogisticsDataQaResult,
++        status_code: str,
++    ) -> str:
++        """构建确定性自然语言主回答。
++
++        参数：
++            question: 用户原始问题，用于识别是否为排名/TopN 等需要逐项表达的问法。
++            result: 后端确定性查询结果，所有事实和数字只能从这里读取。
++            status_code: 当前查询状态。
++
++        返回：
++            面向业务用户的自然语言回答。该回答不重新计算指标，只复述 answer_summary
++            和 result_table 中已经存在的行值，作为 LLM 不可用或被安全降级时的高质量兜底。
++        """
++
++        fallback = result.answer_summary or (result.status.message if result.status else "")
++        if status_code != "OK":
++            return fallback or "当前查询已完成，请查看结构化结果。"
++        ranking_answer = self._build_ranking_narrative_answer(question=question, result=result, fallback=fallback)
++        if ranking_answer:
++            return ranking_answer
++        return fallback or "当前查询已完成，请查看结构化结果。"
++
++    def _build_ranking_narrative_answer(
++        self,
++        *,
++        question: str,
++        result: LogisticsDataQaResult,
++        fallback: str,
++    ) -> str | None:
++        """为排名/TopN 小表结果生成更丰富的确定性叙事。
++
++        业务逻辑：
++            排名类问题如果只返回一句总计，会显得潦草；这里在不改变事实的前提下，
++            直接按后端已经排序好的 result_table.rows 逐项复述维度和值，让回答更像专业助手。
++            不做占比、差额、平均等任何派生计算。
++        """
++
++        rows = list(result.result_table.rows)
++        if len(rows) < 2 or not self._is_ranking_question_or_plan(question=question, result=result):
++            return None
++        dimension_column = self._choose_narrative_dimension_column(result.result_table.columns, rows=rows)
++        metric_column = self._choose_narrative_metric_column(result=result, dimension_column=dimension_column)
++        if not dimension_column or not metric_column:
++            return None
++        detail_lines: list[str] = []
++        for index, row in enumerate(rows[:8]):
++            dimension_value = row.get(dimension_column)
++            metric_value = row.get(metric_column)
++            if dimension_value is None or metric_value is None or not self._is_number(metric_value):
++                continue
++            ordinal = self._chinese_ordinal(index)
++            value_text = self._format_metric_value(metric_column, metric_value)
++            detail_lines.append(f"- {ordinal}：{dimension_value}，{self._label(metric_column)}{value_text}。")
++        if not detail_lines:
++            return None
++        first_dimension = rows[0].get(dimension_column)
++        opening = f"查到了。{fallback}" if fallback else "查到了。"
++        body = "\n".join(detail_lines)
++        closing = ""
++        if first_dimension:
++            closing = f"\n\n从当前返回的排序看，{first_dimension}位列首位；下方明细保留了完整依据，方便你继续展开查看或导出。"
++        return f"{opening}\n\n按当前返回的排序，结果依次是：\n{body}{closing}"
++
++    def _is_ranking_question_or_plan(self, *, question: str, result: LogisticsDataQaResult) -> bool:
++        """判断当前问题或查询计划是否属于排名/TopN 场景。"""
++
++        if re.search(r"排名|排行|前[一二三四五六七八九十\d]+|后[一二三四五六七八九十\d]+|top\s*\d*|Top\s*\d*|最高|最低|最大|最小", question or "", flags=re.I):
++            return True
++        return bool(result.query_plan.limit and result.query_plan.sort)
++
++    def _choose_narrative_dimension_column(self, columns: list[str], *, rows: list[dict[str, Any]]) -> str:
++        """选择排名叙事里的维度字段，如城市、客户、承运商等。"""
++
++        preferred = ["城市", "city", "province", "省份", "region_name", "区域", "customer_name", "客户", "carrier_name", "承运商", "company_name", "公司"]
++        for column in preferred:
++            if column in columns:
++                return column
++        for column in columns:
++            if any(row.get(column) is not None and not self._is_number(row.get(column)) for row in rows):
++                return column
++        return columns[0] if columns else ""
++
++    def _choose_narrative_metric_column(self, *, result: LogisticsDataQaResult, dimension_column: str) -> str:
++        """选择排名叙事里的主指标字段。"""
++
++        columns = list(result.result_table.columns)
++        rows = list(result.result_table.rows)
++        numeric_columns = [
++            column
++            for column in columns
++            if column != dimension_column and any(self._is_number(row.get(column)) for row in rows)
++        ]
++        for metric in result.query_plan.metrics:
++            if metric in numeric_columns:
++                return metric
++        preferred = ["总运费", "总费用", "total_fee", "shipment_mw", "发运量", "shipment_watt", "车次", "trip_count", "shipment_trip_count"]
++        for column in preferred:
++            if column in numeric_columns:
++                return column
++        return numeric_columns[0] if numeric_columns else ""
++
++    def _format_metric_value(self, column: str, value: Any) -> str:
++        """把 result_table 中的指标值转换为业务可读格式，不改变数值。"""
++
++        value_text = str(value).strip()
++        unit = self._infer_unit(column)
++        if unit and self._is_number(value) and not value_text.endswith(unit):
++            return f"{value_text}{unit}"
++        return value_text
++
++    def _chinese_ordinal(self, index: int) -> str:
++        """把列表序号转换成中文名次，避免主文案出现额外阿拉伯数字。"""
++
++        names = ["第一名", "第二名", "第三名", "第四名", "第五名", "第六名", "第七名", "第八名"]
++        return names[index] if 0 <= index < len(names) else "后续"
++
+     def _build_highlights(
+         self,
+         *,
+@@ -1473,15 +1594,15 @@ class LogisticsLlmAnswerPresentationService:
+     def _infer_unit(self, column: str) -> str | None:
+         """按字段名推断单位。"""
+ 
+-        if "mw" in column:
++        if "mw" in column.lower() or "兆瓦" in column:
+             return "MW"
+-        if "watt" in column and "per" not in column:
++        if ("watt" in column.lower() or "瓦" in column) and "per" not in column.lower() and "每" not in column:
+             return "W"
+-        if "fee" in column and "per_watt" not in column:
++        if ("fee" in column.lower() and "per_watt" not in column.lower()) or "运费" in column or "费用" in column or "金额" in column:
+             return "元"
+-        if "rate" in column or "ratio" in column or "share" in column:
++        if "rate" in column.lower() or "ratio" in column.lower() or "share" in column.lower() or "率" in column or "比例" in column or "占比" in column:
+             return "%"
+-        if "count" in column or "trip" in column:
++        if "count" in column.lower() or "trip" in column.lower() or "车次" in column or "次数" in column:
+             return "次"
+         return None
+ 
+
+### Current working-tree untracked/dirty stream and regression files
+diff --git a/backend/app/services/business_answer_stream_service.py b/backend/app/services/business_answer_stream_service.py
+new file mode 100644
+index 0000000..6628fd2
+--- /dev/null
++++ b/backend/app/services/business_answer_stream_service.py
+@@ -0,0 +1,529 @@
++from __future__ import annotations
++
++import json
++import re
++from copy import deepcopy
++from decimal import Decimal
++from typing import Any, Iterable
++
++from openai import OpenAI
++
++from backend.app.core.config import settings
++
++
++JSONLineEvent = dict[str, Any]
++
++
++def build_json_line_event(event: str, data: dict[str, Any]) -> str:
++    """构造前端可增量解析的一行 JSON 流事件。
++
++    参数：
++        event: 事件名，常用值包括 meta、delta、done、error。
++        data: 当前事件的数据体，必须可 JSON 序列化。
++
++    返回：
++        以换行符结尾的 JSON 字符串。
++    """
++
++    return json.dumps({"event": event, "data": data}, ensure_ascii=False, default=str) + "\n"
++
++
++class BusinessAnswerStreamService:
++    """业务智能问答的流式答案表达服务。
++
++    说明：
++        1. 后端先完成确定性查询、计算和表格生成；
++        2. 本服务只把“用户原问题 + 确定性结果快照”交给 LLM 做答案表达；
++        3. LLM 流式输出只替换 presentation.answer，不允许改表格、状态、查询结果和数值事实；
++        4. 未配置 LLM 或调用失败时，将确定性答案切块流式返回，保证前端体验不退化。
++    """
++
++    MAX_PROMPT_ROWS = 30
++    MAX_PROMPT_CHARS = 12000
++    FALLBACK_CHUNK_SIZE = 18
++    TECHNICAL_VISIBLE_PATTERNS = (
++        r"\bSQL\b",
++        r"\bsql\b",
++        r"\bquery_key\b",
++        r"\bplanner\b",
++        r"\bguardrail\b",
++        r"\bdebug\b",
++        r"\btrace_id\b",
++        r"\binternal\b",
++        r"\bods_[a-z0-9_]*",
++        r"\bdwd_[a-z0-9_]*",
++        r"\bdws_[a-z0-9_]*",
++        r"\b[a-z]+_[a-z0-9_]+\b",
++    )
++    NUMBER_PATTERN = re.compile(r"(?<![A-Za-z0-9_])-?\d+(?:,\d{3})*(?:\.\d+)?")
++
++    def __init__(
++        self,
++        *,
++        enabled: bool | None = None,
++        base_url: str | None = None,
++        api_key: str | None = None,
++        model: str | None = None,
++        client: Any | None = None,
++        timeout: float | None = None,
++    ) -> None:
++        """初始化流式答案表达服务。
++
++        参数：
++            enabled: 是否启用 LLM 表达，默认跟随全局答案表达开关。
++            base_url: OpenAI 兼容接口地址。
++            api_key: OpenAI 兼容接口密钥。
++            model: 使用的表达模型名。
++            client: 测试注入的 OpenAI 兼容客户端。
++            timeout: 单次 LLM 调用超时时间。
++
++        返回：
++            无返回值。
++        """
++
++        self.enabled = settings.llm_answer_presentation_enabled if enabled is None else enabled
++        self.base_url = base_url if base_url is not None else settings.llm_base_url
++        self.api_key = api_key if api_key is not None else settings.llm_api_key
++        self.model = model if model is not None else (settings.llm_answer_presentation_model or settings.llm_model)
++        self.timeout = timeout if timeout is not None else settings.llm_answer_presentation_timeout
++        self._client = client
++        self._last_stream_source = "deterministic_fallback"
++        self._last_fallback_reason = "not_started"
++
++    def stream_answer(
++        self,
++        *,
++        domain: str,
++        question: str,
++        deterministic_payload: dict[str, Any],
++        fallback_answer: str | None = None,
++    ) -> Iterable[str]:
++        """流式生成业务答案文本。
++
++        参数：
++            domain: 业务域标识，例如 logistics 或 plan_bom。
++            question: 用户原始问题，必须进入 LLM 上下文。
++            deterministic_payload: 后端确定性结果快照。
++            fallback_answer: LLM 不可用时的确定性答案。
++
++        返回：
++            文本 chunk 迭代器；每个 chunk 都可直接追加到前端气泡中。
++        """
++
++        fallback = self._resolve_fallback_answer(deterministic_payload, fallback_answer)
++        if not self._is_llm_available():
++            self._last_stream_source = "deterministic_fallback"
++            self._last_fallback_reason = "llm_not_configured"
++            yield from self._chunk_text(fallback)
++            return
++        try:
++            self._last_stream_source = "llm"
++            self._last_fallback_reason = ""
++            stream = self._create_llm_stream(domain=domain, question=question, deterministic_payload=deterministic_payload)
++            chunks: list[str] = []
++            for event in stream:
++                chunk = self._extract_delta_text(event)
++                if not chunk:
++                    continue
++                chunks.append(chunk)
++            streamed_answer = "".join(chunks).strip()
++            if not streamed_answer:
++                self._last_stream_source = "deterministic_fallback"
++                self._last_fallback_reason = "llm_empty_stream"
++                yield from self._chunk_text(fallback)
++                return
++            validation_error = self._validate_streamed_answer(streamed_answer, deterministic_payload=deterministic_payload)
++            if validation_error:
++                self._last_stream_source = "deterministic_fallback"
++                self._last_fallback_reason = validation_error
++                yield from self._chunk_text(fallback)
++                return
++            for chunk in chunks:
++                yield chunk
++        except Exception as exc:  # noqa: BLE001
++            # LLM 只负责表达增强，失败不能影响确定性查询结果可用性。
++            self._last_stream_source = "deterministic_fallback"
++            self._last_fallback_reason = f"llm_stream_error:{type(exc).__name__}"
++            yield from self._chunk_text(fallback)
++
++    def apply_streamed_answer(
++        self,
++        *,
++        domain: str,
++        deterministic_payload: dict[str, Any],
++        streamed_answer: str,
++    ) -> dict[str, Any]:
++        """把流式答案合并回响应 payload。
++
++        参数：
++            domain: 业务域标识，用于兜底 presentation 标题。
++            deterministic_payload: 原始确定性响应，不会被原地修改。
++            streamed_answer: LLM 或降级流式输出的完整答案。
++
++        返回：
++            已更新 presentation.answer 的响应 payload；表格和状态保持确定性原值。
++        """
++
++        payload = deepcopy(deterministic_payload)
++        fallback = self._resolve_fallback_answer(payload, None)
++        candidate_answer = streamed_answer.strip()
++        validation_error = (
++            self._validate_streamed_answer(candidate_answer, deterministic_payload=payload)
++            if candidate_answer
++            else "stream_empty_answer"
++        )
++        if validation_error and candidate_answer != fallback:
++            # 最终写回前再校验一次，防止调用方绕过 stream_answer 直接合并不安全文本。
++            self._last_stream_source = "deterministic_fallback"
++            self._last_fallback_reason = validation_error
++            final_answer = fallback
++        else:
++            final_answer = candidate_answer or fallback
++        presentation = payload.get("presentation")
++        if not isinstance(presentation, dict):
++            presentation = {
++                "display_type": "narrative",
++                "title": self._default_title(domain),
++                "answer": final_answer,
++                "highlights": [],
++                "table_spec": None,
++                "caveats": [],
++                "debug": {},
++            }
++            payload["presentation"] = presentation
++        presentation["answer"] = final_answer
++        debug = presentation.get("debug")
++        if not isinstance(debug, dict):
++            debug = {}
++            presentation["debug"] = debug
++        debug["stream_answer_source"] = self._last_stream_source
++        debug["stream_fallback_reason"] = self._last_fallback_reason or None
++        if self._last_stream_source == "llm":
++            debug["llm_model_name"] = self.model
++        debug["stream_answer_domain"] = domain
++        return payload
++
++    def _create_llm_stream(self, *, domain: str, question: str, deterministic_payload: dict[str, Any]):
++        """创建 OpenAI 兼容流式响应对象。
++
++        参数：
++            domain: 业务域标识。
++            question: 用户原始问题。
++            deterministic_payload: 确定性结果快照。
++
++        返回：
++            OpenAI 兼容流式事件迭代器。
++        """
++
++        client = self._client or OpenAI(
++            base_url=self.base_url,
++            api_key=self.api_key,
++            timeout=self.timeout,
++            max_retries=settings.llm_answer_presentation_max_retries,
++        )
++        return client.chat.completions.create(
++            model=self.model,
++            temperature=0.2,
++            stream=True,
++            messages=[
++                {"role": "system", "content": self._build_system_prompt(domain)},
++                {"role": "user", "content": self._build_user_prompt(question, deterministic_payload)},
++            ],
++        )
++
++    def _is_llm_available(self) -> bool:
++        """判断 LLM 流式表达是否可用。"""
++
++        return bool(self.enabled and self.base_url and self.api_key and self.model)
++
++    @classmethod
++    def _build_system_prompt(cls, domain: str) -> str:
++        """构造约束 LLM 只做表达的系统提示词。"""
++
++        domain_label = "计划 BOM" if domain == "plan_bom" else "物流经营"
++        return (
++            f"你是{domain_label}智能问答的答案表达层。"
++            "你会收到用户原问题和后端确定性查询结果。"
++            "你的任务是用中文业务口吻流式输出更自然、更有 AI 感的答案。"
++            "严禁新增、猜测或改写订单、客户、供应商、金额、数量、比例、日期、规格、功率、CTM 等事实。"
++            "表格、状态和数值以系统给出的确定性结果为准；如果明细很多，只概括结论并提示用户查看下方表格。"
++            "对排名、排行、TopN、前几名这类问题，如果确定性结果表是五行以内的小表，请逐项复述每个名称和对应数值；超过五行时只概括前几项并提示查看明细。"
++            "逐项表达时优先使用中文序号或项目符号，不要使用 1./2. 这类阿拉伯数字序号，避免被误认为业务指标。"
++            "不要输出 JSON、Markdown 表格或代码块；不要暴露字段名、SQL、内部状态码、debug 信息。"
++            "如果结果要求澄清或暂不支持，要温和说明原因并给出可执行的补充问法。"
++        )
++
++    def _build_user_prompt(self, question: str, deterministic_payload: dict[str, Any]) -> str:
++        """把用户原问题和确定性结果压缩为 LLM 上下文。"""
++
++        prompt_payload = {
++            "用户原问题": question,
++            "确定性结果": self._compact_payload(deterministic_payload),
++            "表达要求": [
++                "先直接回答业务员最关心的结论，再说明依据。",
++                "只引用确定性结果中出现的事实；不要补充外部知识。",
++                "如果是排名/排行/TopN/前几名问题，且结构化结果在五行以内，请在正文里逐项写出每个名称和对应数值，让回答更完整。",
++                "如果结构化结果超过五行，可以只概括关键结论并提示用户查看下方表格，不要把大表全文搬进正文。",
++                "语气专业、清楚、有温度，但不要夸张营销。",
++            ],
++        }
++        text = json.dumps(prompt_payload, ensure_ascii=False, default=str)
++        if len(text) <= self.MAX_PROMPT_CHARS:
++            return text
++        return text[: self.MAX_PROMPT_CHARS] + "\n【上下文因过长已截断，请只基于已给出的确定性事实表达。】"
++
++    def _compact_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
++        """压缩确定性响应，避免把大表完整塞入 LLM 上下文。"""
++
++        compact = deepcopy(payload)
++        self._truncate_table(compact.get("result_table"))
++        presentation = compact.get("presentation")
++        if isinstance(presentation, dict):
++            self._truncate_table(presentation.get("table_spec"))
++            presentation.pop("debug", None)
++        compact.pop("trace_events", None)
++        compact.pop("raw_result", None)
++        self._remove_internal_prompt_fields(compact)
++        return compact
++
++    def _remove_internal_prompt_fields(self, value: Any) -> None:
++        """从发给 LLM 的表达上下文中移除内部排查字段。"""
++
++        if isinstance(value, dict):
++            for key in list(value.keys()):
++                normalized_key = str(key).lower()
++                if any(marker in normalized_key for marker in ("query_key", "debug", "trace", "raw_result", "planner", "guardrail")):
++                    value.pop(key, None)
++                    continue
++                self._remove_internal_prompt_fields(value[key])
++            return
++        if isinstance(value, list):
++            for item in value:
++                self._remove_internal_prompt_fields(item)
++
++    def _validate_streamed_answer(self, answer: str, *, deterministic_payload: dict[str, Any]) -> str | None:
++        """校验流式答案是否可作为最终业务叙事。
++
++        参数：
++            answer: LLM 已完整输出的主回答文本。
++            deterministic_payload: 后端确定性结果快照。
++
++        返回：
++            None 表示可采用；非空错误码表示必须回落到确定性答案。
++        """
++
++        if not answer.strip():
++            return "stream_empty_answer"
++        if self._visible_text_has_technical_leak(answer):
++            return "stream_technical_visible_leak"
++        if not self._answer_numbers_are_safe(answer, deterministic_payload=deterministic_payload):
++            return "stream_text_number_hallucination"
++        if not self._answer_row_bindings_are_safe(answer, deterministic_payload=deterministic_payload):
++            return "stream_structured_fact_mismatch"
++        return None
++
++    def _visible_text_has_technical_leak(self, answer: str) -> bool:
++        """判断流式主回答是否泄露 SQL、表名、字段名或内部编排信息。"""
++
++        return any(re.search(pattern, answer or "", flags=re.I) for pattern in self.TECHNICAL_VISIBLE_PATTERNS)
++
++    def _answer_numbers_are_safe(self, answer: str, *, deterministic_payload: dict[str, Any]) -> bool:
++        """判断流式主回答中的数字是否全部来自确定性上下文。"""
++
++        answer_tokens = self._extract_number_tokens(answer)
++        if not answer_tokens:
++            return True
++        allowed_tokens = self._collect_allowed_number_tokens(deterministic_payload)
++        return answer_tokens.issubset(allowed_tokens)
++
++    def _answer_row_bindings_are_safe(self, answer: str, *, deterministic_payload: dict[str, Any]) -> bool:
++        """校验结构化行中的“名称-数值”绑定没有被 LLM 错配。
++
++        业务逻辑：
++            数字白名单只能保证 LLM 没有新增数字，但不能防止把“华东 120.5MW”说成
++            “华北 120.5MW”。因此只要主回答复述了某一行的指标数字，就要求同一语句
++            中同时出现该行的非数字维度值。若 LLM 错配名称和值，则降级到确定性答案。
++        """
++
++        segments = [segment.strip() for segment in re.split(r"[\n。；;！？!?]+", answer or "") if segment.strip()]
++        if not segments:
++            return True
++        for table in self._iter_structured_tables(deterministic_payload):
++            rows = table.get("rows") if isinstance(table, dict) else None
++            if not isinstance(rows, list):
++                continue
++            for row in rows:
++                if not isinstance(row, dict):
++                    continue
++                entity_values = self._collect_row_entity_values(row)
++                metric_tokens = self._collect_row_metric_number_tokens(row)
++                if not entity_values or not metric_tokens:
++                    continue
++                for token in metric_tokens:
++                    matched_segments = [segment for segment in segments if token in self._extract_number_tokens(segment)]
++                    for segment in matched_segments:
++                        if not any(entity in segment for entity in entity_values):
++                            return False
++        return True
++
++    def _iter_structured_tables(self, payload: dict[str, Any]) -> Iterable[dict[str, Any]]:
++        """遍历可用于答案事实绑定校验的结构化表格。"""
++
++        result_table = payload.get("result_table")
++        if isinstance(result_table, dict):
++            yield result_table
++        presentation = payload.get("presentation")
++        if isinstance(presentation, dict):
++            table_spec = presentation.get("table_spec")
++            if isinstance(table_spec, dict):
++                yield table_spec
++
++    def _collect_row_entity_values(self, row: dict[str, Any]) -> list[str]:
++        """提取一行中的非数字维度值，如城市、客户、供应商等。"""
++
++        entities: list[str] = []
++        for value in row.values():
++            if value is None:
++                continue
++            text = str(value).strip()
++            if not text or self._extract_number_tokens(text):
++                continue
++            if len(text) >= 2:
++                entities.append(text)
++        return entities
++
++    def _collect_row_metric_number_tokens(self, row: dict[str, Any]) -> set[str]:
++        """提取一行中的指标数字 token。"""
++
++        tokens: set[str] = set()
++        for column, value in row.items():
++            if value is None:
++                continue
++            # 年月日等时间字段常作为筛选口径出现在每一行，不作为“名称-指标值”绑定校验对象。
++            if any(marker in str(column).lower() for marker in ("year", "month", "date", "time", "年份", "年度", "年月", "月份", "日期", "时间")):
++                continue
++            text = str(value).strip()
++            if not text:
++                continue
++            value_tokens = self._extract_number_tokens(text)
++            if value_tokens:
++                tokens.update(value_tokens)
++        return tokens
++
++    def _collect_allowed_number_tokens(self, payload: Any) -> set[str]:
++        """从确定性响应中收集允许被 LLM 复述的数字。"""
++
++        tokens: set[str] = set()
++        self._collect_number_tokens_from_value(payload, tokens=tokens, parent_key="")
++        return tokens
++
++    def _collect_number_tokens_from_value(self, value: Any, *, tokens: set[str], parent_key: str) -> None:
++        """递归读取确定性上下文里的数字，跳过 debug 和 trace 等内部排查字段。"""
++
++        key = parent_key.lower()
++        if any(marker in key for marker in ("debug", "trace_events", "raw_result")):
++            return
++        if isinstance(value, dict):
++            for child_key, child_value in value.items():
++                next_key = f"{parent_key}.{child_key}" if parent_key else str(child_key)
++                self._collect_number_tokens_from_value(child_value, tokens=tokens, parent_key=next_key)
++            return
++        if isinstance(value, list):
++            for item in value:
++                self._collect_number_tokens_from_value(item, tokens=tokens, parent_key=parent_key)
++            return
++        if value is None:
++            return
++        tokens.update(self._extract_number_tokens(str(value)))
++
++    def _extract_number_tokens(self, text: str) -> set[str]:
++        """抽取并归一化文本中的数字 token。"""
++
++        tokens: set[str] = set()
++        for match in re.finditer(r"(20\d{2})[-/年](\d{1,2})(?:[-/月](\d{1,2}))?", text or ""):
++            tokens.add(self._normalize_number_token(match.group(1)))
++            tokens.add(self._normalize_number_token(match.group(2)))
++            if match.group(3):
++                tokens.add(self._normalize_number_token(match.group(3)))
++        for raw in self.NUMBER_PATTERN.findall(text or ""):
++            try:
++                tokens.add(self._normalize_number_token(raw))
++            except Exception:  # noqa: BLE001
++                continue
++        return tokens
++
++    @staticmethod
++    def _normalize_number_token(value: Any) -> str:
++        """把数字统一为可比较 token，避免 120.50 与 120.5 被误判不同。"""
++
++        number = Decimal(str(value).replace(",", ""))
++        normalized = number.normalize()
++        return format(normalized, "f").rstrip("0").rstrip(".") or "0"
++
++    def _truncate_table(self, table: Any) -> None:
++        """把表格行数限制到 prompt 可控范围，同时保留总行数提示。"""
++
++        if not isinstance(table, dict):
++            return
++        rows = table.get("rows")
++        if not isinstance(rows, list):
++            return
++        original_count = len(rows)
++        if original_count > self.MAX_PROMPT_ROWS:
++            table["rows"] = rows[: self.MAX_PROMPT_ROWS]
++            table["truncated_for_llm"] = True
++            table["total_rows"] = original_count
++
++    @staticmethod
++    def _extract_delta_text(event: Any) -> str:
++        """从 OpenAI 兼容 chunk 中提取增量文本。"""
++
++        try:
++            if isinstance(event, dict):
++                choice = (event.get("choices") or [{}])[0]
++                delta = choice.get("delta") or {}
++                return str(delta.get("content") or "")
++            choices = getattr(event, "choices", None) or []
++            if not choices:
++                return ""
++            delta = getattr(choices[0], "delta", None)
++            return str(getattr(delta, "content", "") or "")
++        except Exception:  # noqa: BLE001
++            return ""
++
++    @classmethod
++    def _chunk_text(cls, text: str) -> Iterable[str]:
++        """把降级答案切成小块，模拟流式输出体验。"""
++
++        value = text or "当前没有可展示的答案。"
++        for index in range(0, len(value), cls.FALLBACK_CHUNK_SIZE):
++            yield value[index : index + cls.FALLBACK_CHUNK_SIZE]
++
++    @staticmethod
++    def _resolve_fallback_answer(payload: dict[str, Any], fallback_answer: str | None) -> str:
++        """从响应快照中提取降级答案。"""
++
++        if fallback_answer:
++            return fallback_answer
++        presentation = payload.get("presentation")
++        if isinstance(presentation, dict) and presentation.get("answer"):
++            return str(presentation["answer"])
++        if payload.get("answer_summary"):
++            return str(payload["answer_summary"])
++        status = payload.get("status")
++        if isinstance(status, dict) and status.get("message"):
++            return str(status["message"])
++        return "当前查询已完成，请查看下方结构化结果。"
++
++    @staticmethod
++    def _default_title(domain: str) -> str:
++        """生成缺省展示标题。"""
++
++        if domain == "plan_bom":
++            return "计划 BOM 智能回答"
++        if domain == "logistics":
++            return "物流经营智能回答"
++        return "智能回答"
++
++
++__all__ = ["BusinessAnswerStreamService", "build_json_line_event"]
+diff --git a/tests/business_acceptance/test_business_chat_answer_format_preference.py b/tests/business_acceptance/test_business_chat_answer_format_preference.py
+new file mode 100644
+index 0000000..3bab80c
+--- /dev/null
++++ b/tests/business_acceptance/test_business_chat_answer_format_preference.py
+@@ -0,0 +1,440 @@
++from __future__ import annotations
++
++from backend.app.domains.logistics.schemas.data_qa import (
++    LogisticsDataQaPlan,
++    LogisticsDataQaResult,
++    LogisticsDataQaStatus,
++    LogisticsDataQaTable,
++)
++from backend.app.domains.logistics.services.llm_answer_presentation_service import LogisticsLlmAnswerPresentationService
++from backend.app.domains.plan_bom.schemas.qa import (
++    PlanBomNluCandidate,
++    PlanBomQaResponse,
++    PlanBomQaStatus,
++    PlanBomTableSpec,
++)
++from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
++from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService
++
++
++class _FakeStreamClient:
++    """构造 OpenAI 兼容的测试流式客户端。"""
++
++    def __init__(self, chunks: list[str]) -> None:
++        self.chat = _FakeChat(chunks)
++
++
++class _FakeChat:
++    """承载 completions 入口，避免测试访问真实 LLM。"""
++
++    def __init__(self, chunks: list[str]) -> None:
++        self.completions = _FakeCompletions(chunks)
++
++
++class _FakeCompletions:
++    """返回固定 chunk 的流式 completion。"""
++
++    def __init__(self, chunks: list[str]) -> None:
++        self._chunks = chunks
++
++    def create(self, **_kwargs: object) -> list[dict[str, object]]:
++        """返回 OpenAI chat.completions.create 兼容事件。"""
++
++        return [{"choices": [{"delta": {"content": chunk}}]} for chunk in self._chunks]
++
++
++def _logistics_result(*, rows: list[dict[str, object]] | None = None) -> LogisticsDataQaResult:
++    """构造可复用的物流确定性结果。
++
++    参数：
++        rows: 后端查询返回的结构化行。
++    返回值：
++        一个 OK 状态的 LogisticsDataQaResult。
++    业务逻辑：
++        测试只关注展示编排，不依赖真实数据库。
++    """
++
++    result_rows = rows or [
++        {"region_name": "华东", "shipment_mw": 120.5},
++        {"region_name": "华南", "shipment_mw": 88.2},
++    ]
++    return LogisticsDataQaResult(
++        answer_summary="2026年发运量统计已完成，华东 120.5MW，华南 88.2MW。",
++        result_table=LogisticsDataQaTable(columns=["region_name", "shipment_mw"], rows=result_rows),
++        calculation_logic=["发运量按 MW 口径汇总。"],
++        data_scope={"year": 2026},
++        query_plan=LogisticsDataQaPlan(
++            intent="shipment_summary",
++            query_key="sys_region_mw",
++            metrics=["shipment_mw"],
++            dimensions=["region_name"],
++            filters={"year": 2026},
++            group_by=["region_name"],
++        ),
++        status=LogisticsDataQaStatus(code="OK", message="查询成功", success=True),
++    )
++
++
++def _stream_payload() -> dict[str, object]:
++    """构造流式答案安全测试使用的确定性 payload。"""
++
++    result = _logistics_result()
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    presentation = service.build_presentation(question="统计2026年各区域发运量", result=result)
++    assert presentation is not None
++    result.presentation = presentation
++    return result.model_dump(mode="json")
++
++
++def _plan_bom_response(question: str) -> PlanBomQaResponse:
++    """构造计划 BOM 确定性结果。
++
++    参数：
++        question: 用户原始问题，用于测试展示意图识别。
++    返回值：
++        一个 A 类 OK 的 PlanBomQaResponse。
++    业务逻辑：
++        计划 BOM 表格事实仍保留在 result_table，presentation 是否展示由问题意图决定。
++    """
++
++    return PlanBomQaResponse(
++        question=question,
++        classification="A",
++        status=PlanBomQaStatus(code="OK", message="查询成功"),
++        nlu=PlanBomNluCandidate(question=question, intent="plan_power_prediction", slots={"order_tail_no": ["00104"]}),
++        answer_summary="订单00104功率预测已完成，中心功率为620W。",
++        result_table=PlanBomTableSpec(
++            columns=["功率档", "预测比例"],
++            rows=[{"功率档": "620W", "预测比例": "50%"}, {"功率档": "625W", "预测比例": "50%"}],
++        ),
++        raw_result={"power_prediction": {"center_power": 620}},
++    )
++
++
++def test_logistics_answer_defaults_to_text_only_when_no_visual_request() -> None:
++    """未明确要求图表/表格/指标卡时，物流智能回答只给 Markdown 文字，不固定渲染数据组件。"""
++
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    presentation = service.build_presentation(question="统计2026年各区域发运量", result=_logistics_result())
++
++    assert presentation is not None
++    assert presentation.display_type == "narrative"
++    assert presentation.table_spec is None
++    assert presentation.chart_spec is None
++    assert presentation.cards == []
++    assert presentation.title != "查询结果"
++    assert not any("本次返回" in item for item in presentation.highlights)
++    assert presentation.caveat_items
++    assert presentation.debug["presentation_source"] == "deterministic"
++    assert "requested_display" in presentation.debug
++    assert presentation.debug["final_display_type"] == presentation.display_type
++    assert "fallback_reason" in presentation.debug
++
++
++def test_logistics_ranking_narrative_describes_top_rows_with_values() -> None:
++    """排名类叙事回答不能只给一句总计，应基于后端 rows 复述前五城市和值。"""
++
++    rows = [
++        {"城市": "徐州", "总运费": 1526425},
++        {"城市": "太仓", "总运费": 236305},
++        {"城市": "扬州", "总运费": 229064},
++        {"城市": "淮安", "总运费": 201100},
++        {"城市": "无锡", "总运费": 191499},
++    ]
++    result = LogisticsDataQaResult(
++        answer_summary="2024年江苏总运费为3462229元。",
++        result_table=LogisticsDataQaTable(columns=["城市", "总运费"], rows=rows),
++        calculation_logic=["按城市维度汇总总运费，并按总运费降序返回前五。"],
++        data_scope={"year": 2024, "province": "江苏省"},
++        query_plan=LogisticsDataQaPlan(
++            intent="fee_ranking",
++            query_key="city_fee_topn",
++            metrics=["总运费"],
++            dimensions=["城市"],
++            filters={"year": 2024, "province": "江苏省"},
++            group_by=["城市"],
++            sort=[{"field": "总运费", "direction": "desc"}],
++            limit=5,
++        ),
++        status=LogisticsDataQaStatus(code="OK", message="查询成功", success=True),
++    )
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++
++    presentation = service.build_presentation(question="2024年江苏省各城市总费用排名前五？", result=result)
++
++    assert presentation is not None
++    assert presentation.display_type == "narrative"
++    assert presentation.table_spec is None
++    assert presentation.cards == []
++    answer = presentation.answer
++    compact_answer = answer.replace(",", "").replace(" ", "")
++    assert len(answer) > len(result.answer_summary) + 80
++    assert "按当前返回的排序" in answer or "依次" in answer
++    for row in rows:
++        assert f"{row['城市']}" in answer
++        assert f"{row['总运费']}元" in compact_answer
++    assert "query_key" not in answer and "SQL" not in answer and "planner" not in answer
++
++
++def test_stream_prompt_encourages_rich_small_ranking_narrative() -> None:
++    """流式表达提示词应允许排名/小表结果复述关键行，避免一句话潦草返回。"""
++
++    system_prompt = BusinessAnswerStreamService._build_system_prompt("logistics")
++    user_prompt = BusinessAnswerStreamService(enabled=True, base_url=None, api_key=None, model="")._build_user_prompt(
++        "2024年江苏省各城市总费用排名前五？",
++        {
++            "answer_summary": "2024年江苏总运费为3462229元。",
++            "result_table": {"columns": ["城市", "总运费"], "rows": [{"城市": "徐州", "总运费": 1526425}]},
++        },
++    )
++
++    assert "排名" in system_prompt
++    assert "逐项" in system_prompt
++    assert "五行以内" in user_prompt
++    assert "不要重复铺满所有行" not in user_prompt
++
++
++def test_logistics_caveat_levels_do_not_treat_generic_other_bucket_text_as_danger() -> None:
++    """普通区域兜底口径不应因“异常值归入其他”几个字被渲染为危险大块风险。"""
++
++    result = _logistics_result()
++    result.warnings = ["区域口径优先使用 delivery_area；为空时用 delivery_province 映射七大区域，异常值归入“其他”。"]
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++
++    presentation = service.build_presentation(question="统计2026年各区域发运量", result=result)
++
++    assert presentation is not None
++    levels_by_text = {item.text: item.level for item in presentation.caveat_items}
++    assert levels_by_text[result.warnings[0]] == "warning"
++
++
++def test_logistics_answer_respects_explicit_visual_requests() -> None:
++    """只有用户明确要求展示形式时，才返回对应的表格、图表或指标卡组件。"""
++
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++
++    table = service.build_presentation(question="请用表格展示2026年各区域发运量", result=_logistics_result())
++    chart = service.build_presentation(question="请用柱状图展示2026年各区域发运量", result=_logistics_result())
++    cards = service.build_presentation(question="请用指标卡展示2026年发运量概览", result=_logistics_result(rows=[{"scope_label": "2026年", "shipment_mw": 208.7}]))
++
++    assert table is not None and table.display_type == "table" and table.table_spec is not None
++    assert table.chart_spec is None and table.cards == []
++    assert chart is not None and chart.display_type == "bar_chart" and chart.chart_spec is not None
++    assert chart.table_spec is None and chart.cards == []
++    assert cards is not None and cards.display_type == "summary_cards" and cards.cards
++    assert cards.table_spec is None and cards.chart_spec is None
++
++
++def test_plan_bom_answer_defaults_to_text_only_but_keeps_raw_result_table() -> None:
++    """计划 BOM 未明确要求表格时，presentation 只做文字回答，原始 result_table 仍保留给后续导出/追溯。"""
++
++    service = PlanBomAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    response = _plan_bom_response("订单00104做功率预测")
++
++    presentation = service.build_presentation(response)
++
++    assert response.result_table.rows
++    assert presentation.display_type == "narrative"
++    assert presentation.table_spec is None
++
++
++def test_plan_bom_answer_uses_table_only_when_user_requests_table() -> None:
++    """计划 BOM 明确要求表格时，presentation 才携带 table_spec。"""
++
++    service = PlanBomAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    response = _plan_bom_response("请用表格展示订单00104功率预测")
++
++    presentation = service.build_presentation(response)
++
++    assert presentation.display_type == "table"
++    assert presentation.table_spec is not None
++    assert presentation.table_spec.rows == response.result_table.rows
++
++
++def test_business_chat_frontend_does_not_fallback_to_raw_tables_for_narrative_presentation() -> None:
++    """前端已有 presentation 时应尊重展示编排，不能因 raw result_table 存在而固定显示“明细数据”。"""
++
++    page = "frontend/src/views/business-chat/BusinessChatPage.vue"
++    with open(page, encoding="utf-8") as file:
++        chat = file.read()
++
++    assert "function resolvePresentationTable" in chat
++    assert "function shouldShowPresentationChart" in chat
++    assert "presentation?.table_spec || data.result_table || null" not in chat
++    assert "v-if=\"shouldShowPresentationChart(message)\"" in chat
++    assert "tableDisplayTypes.has(presentation.displayType)" in chat
++    assert "cardDisplayTypes.has(presentation.displayType)" in chat
++
++
++def test_streamed_answer_rejects_new_numbers_and_keeps_structured_fields() -> None:
++    """LLM 流式表达新增确定性上下文外数值时，必须降级且不改结构化事实。"""
++
++    payload = _stream_payload()
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["华东 120.5MW，华南 88.2MW，另有华北 999MW。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++    final_payload = service.apply_streamed_answer(
++        domain="logistics",
++        deterministic_payload=payload,
++        streamed_answer=streamed_answer,
++    )
++
++    assert streamed_answer == fallback_answer
++    assert final_payload["presentation"]["answer"] == fallback_answer
++    assert final_payload["result_table"] == payload["result_table"]
++    assert final_payload["presentation"]["table_spec"] == payload["presentation"]["table_spec"]
++    assert final_payload["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert final_payload["presentation"]["debug"]["stream_fallback_reason"] == "stream_text_number_hallucination"
++
++
++def test_stream_prompt_compact_payload_removes_internal_query_key() -> None:
++    """给 LLM 的表达上下文应剔除 query_key/debug 等内部排查字段，降低泄露概率。"""
++
++    payload = _stream_payload()
++    service = BusinessAnswerStreamService(enabled=True, base_url=None, api_key=None, model="")
++
++    prompt = service._build_user_prompt("统计2026年各区域发运量", payload)
++
++    assert "query_key" not in prompt
++    assert "sys_region_mw" not in prompt
++    assert "debug" not in prompt
++    assert "trace_events" not in prompt
++    assert "raw_result" not in prompt
++
++
++
++def test_streamed_answer_rejects_structured_row_fact_mismatch() -> None:
++    """LLM 把结构化行里的名称和值错配时，即使数字合法，也必须降级。"""
++
++    payload = _stream_payload()
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["华北 120.5MW，华南 88.2MW。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++    final_payload = service.apply_streamed_answer(
++        domain="logistics",
++        deterministic_payload=payload,
++        streamed_answer=streamed_answer,
++    )
++
++    assert streamed_answer == fallback_answer
++    assert final_payload["presentation"]["answer"] == fallback_answer
++    assert final_payload["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert final_payload["presentation"]["debug"]["stream_fallback_reason"] == "stream_structured_fact_mismatch"
++
++
++
++def test_streamed_answer_rejects_visible_technical_leaks() -> None:
++    """LLM 流式表达暴露 SQL、query_key、planner 或数仓表名时，必须降级到确定性答案。"""
++
++    payload = _stream_payload()
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["planner 命中 query_key=sys_region_mw，SQL 来自 dws_logistics_detail_union。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++    final_payload = service.apply_streamed_answer(
++        domain="logistics",
++        deterministic_payload=payload,
++        streamed_answer=streamed_answer,
++    )
++
++    assert streamed_answer == fallback_answer
++    assert final_payload["presentation"]["answer"] == fallback_answer
++    assert final_payload["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert final_payload["presentation"]["debug"]["stream_fallback_reason"] == "stream_technical_visible_leak"
++
++
++def test_business_chat_frontend_uses_caveat_levels_secondary_actions_and_stream_stages() -> None:
++    """前端主回答应以 answer 为主，并把口径、明细和导出放到二级动作中。"""
++
++    page = "frontend/src/views/business-chat/BusinessChatPage.vue"
++    with open(page, encoding="utf-8") as file:
++        chat = file.read()
++    template = chat.split("<script setup", 1)[0]
++
++    assert "caveatItems" in chat
++    assert "data-testid=\"answer-secondary-actions\"" in template
++    assert "查看数据依据" in template
++    assert "展开明细" in template
++    assert "getAssistantAuditTable" in chat
++    assert "result-caveats--info" in chat
++    assert "result-caveats--warning" in chat
++    assert "result-caveats--danger" in chat
++    assert "function resolveLoadingText" in chat
++    assert "function updateAssistantStreamMeta" in chat
++    assert "正在理解问题" in chat
++    assert "正在查询数据" in chat
++    assert "正在组织回答" in chat
++    assert "正在生成回答" in chat
++    assert "onMeta:" in chat
++    assert "rawResponse?.query_plan" not in chat
++    assert "rawResponse?.presentation?.debug" not in chat
++
++
++def test_business_chat_session_keeps_only_safe_audit_table_for_secondary_actions() -> None:
++    """会话持久化不能丢失明细依据，但只能白名单保留 result_table，避免暴露 query_key/debug。"""
++
++    page = "frontend/src/utils/businessChatSessions.ts"
++    with open(page, encoding="utf-8") as file:
++        sessions = file.read()
++
++    assert "rawResponse: normalizeMessageRawResponse(raw.rawResponse)" in sessions
++    assert "presentation: normalizeMessagePresentation(raw.presentation)" in sessions
++    assert "function normalizeMessagePresentation" in sessions
++    assert "function normalizeMessageRawResponse" in sessions
++    assert "result_table: safeResultTable" in sessions
++    assert "query_plan" not in sessions
++    assert "presentation?.debug" not in sessions
++    assert "presentation: raw.presentation &&" not in sessions
++    assert "rawResponse: null" not in sessions
++
++
++def test_business_chat_frontend_caveat_items_guard_old_payloads() -> None:
++    """旧会话或旧服务端 payload 没有 caveatItems 时，前端应回落到 caveats 而不是读取 undefined.length。"""
++
++    page = "frontend/src/views/business-chat/BusinessChatPage.vue"
++    with open(page, encoding="utf-8") as file:
++        chat = file.read()
++
++    assert "Array.isArray(presentation.caveatItems)" in chat
++    assert "presentation.caveatItems.length ? presentation.caveatItems" not in chat

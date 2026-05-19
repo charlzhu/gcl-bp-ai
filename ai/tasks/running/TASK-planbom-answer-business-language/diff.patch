@@ -1,0 +1,2624 @@
+diff --git a/backend/app/domains/plan_bom/api/endpoints/qa.py b/backend/app/domains/plan_bom/api/endpoints/qa.py
+index 3b5e0d1..1ed9e57 100644
+--- a/backend/app/domains/plan_bom/api/endpoints/qa.py
++++ b/backend/app/domains/plan_bom/api/endpoints/qa.py
+@@ -1,17 +1,72 @@
+ from __future__ import annotations
+ 
++import re
++
+ from fastapi import APIRouter, Depends, Request
+ from fastapi.responses import StreamingResponse
+ 
+ from backend.app.api.deps import get_plan_bom_qa_service
+ from backend.app.domains.plan_bom.schemas.qa import PlanBomQaRequest
+ from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
++from backend.app.domains.query_planning.services.response_meta_exposure_service import QueryPlanningV2ResponseMetaExposureService
+ from backend.app.schemas.common import ApiResponse
+ from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService, build_json_line_event
+ 
+ router = APIRouter()
+ 
+ 
++def _plan_bom_fallback_has_technical_leak(answer: str) -> bool:
++    """检查计划 BOM 流式兜底候选是否包含前端不可见的技术痕迹。"""
++
++    patterns = (
++        r"槽位",
++        r"字段",
++        r"表定义",
++        r"库定义",
++        r"数据库",
++        r"\bSQL\b",
++        r"\bquery(?:[-_ ]?(?:plan|key)|_key)?\b",
++        r"\bqueryKey\b",
++        r"\bplanner\b",
++        r"\bguard\s*rail\b",
++        r"\bguardrail\b",
++        r"\braw_result\b",
++        r"\bschema\b",
++        r"\bLLM\b",
++        r"\b[a-z]+_[a-z0-9_]+\b",
++    )
++    return any(re.search(pattern, answer or "", flags=re.I) for pattern in patterns)
++
++
++def _resolve_plan_bom_stream_fallback_answer(result_payload: dict) -> str:
++    """解析 Plan BOM 流式回答的确定性兜底文案。
++
++    参数：
++        result_payload: `PlanBomQaResponse.model_dump` 后的确定性响应快照。
++
++    返回：
++        可直接流式输出给业务员的安全兜底文本。
++
++    业务逻辑：
++        Plan BOM 的 `answer_summary` 可能携带槽位名等内部口径；若展示层已经生成
++        `presentation.answer`，流式降级应优先使用业务化表达，避免前端看到内部术语。
++    """
++
++    presentation = result_payload.get("presentation") if isinstance(result_payload, dict) else None
++    candidates: list[str] = []
++    if isinstance(presentation, dict) and presentation.get("answer"):
++        candidates.append(str(presentation["answer"]))
++    if isinstance(result_payload, dict) and result_payload.get("answer_summary"):
++        candidates.append(str(result_payload["answer_summary"]))
++    status = result_payload.get("status") if isinstance(result_payload, dict) else None
++    if isinstance(status, dict) and status.get("message"):
++        candidates.append(str(status["message"]))
++    for candidate in candidates:
++        if candidate and not _plan_bom_fallback_has_technical_leak(candidate):
++            return candidate
++    return "当前计划 BOM 查询已完成，我会基于已导入的数据整理结论；请查看下方数据依据。"
++
++
+ @router.post("/ask", response_model=ApiResponse)
+ def ask_plan_bom(
+     payload: PlanBomQaRequest,
+@@ -30,7 +85,16 @@ def ask_plan_bom(
+     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", payload.trace_id or ""))
+     try:
+         result = service.ask(payload.question, use_llm=True, trace_id=trace_id)
+-        return ApiResponse.success(result.model_dump(mode="json"), trace_id=trace_id)
++        result_payload = result.model_dump(mode="json")
++        query_plan_v2_meta = QueryPlanningV2ResponseMetaExposureService().build_plan_bom_meta(
++            requested=payload.include_query_plan_v2_meta,
++            question=payload.question,
++            response=result,
++            trace_id=trace_id,
++        )
++        if query_plan_v2_meta:
++            result_payload["query_plan_v2_meta"] = query_plan_v2_meta
++        return ApiResponse.success(result_payload, trace_id=trace_id)
+     except Exception as exc:  # noqa: BLE001
+         # 计划 BOM 问答与物流问答使用同一张 sys_query_log；异常也要留存，便于业务回看失败问题。
+         service.write_error_log(question=payload.question, trace_id=trace_id, message=str(exc))
+@@ -71,11 +135,12 @@ def ask_plan_bom_stream(
+                 },
+             )
+             chunks: list[str] = []
++            fallback_answer = _resolve_plan_bom_stream_fallback_answer(result_payload)
+             for chunk in stream_service.stream_answer(
+                 domain="plan_bom",
+                 question=payload.question,
+                 deterministic_payload=result_payload,
+-                fallback_answer=result_payload.get("answer_summary"),
++                fallback_answer=fallback_answer,
+             ):
+                 chunks.append(chunk)
+                 yield build_json_line_event("delta", {"text": chunk})
+@@ -85,6 +150,14 @@ def ask_plan_bom_stream(
+                 deterministic_payload=result_payload,
+                 streamed_answer=final_answer,
+             )
++            query_plan_v2_meta = QueryPlanningV2ResponseMetaExposureService().build_plan_bom_meta(
++                requested=payload.include_query_plan_v2_meta,
++                question=payload.question,
++                response=result,
++                trace_id=trace_id,
++            )
++            if query_plan_v2_meta:
++                final_payload["query_plan_v2_meta"] = query_plan_v2_meta
+             yield build_json_line_event(
+                 "done",
+                 {"trace_id": trace_id, "domain": "plan_bom", "answer": final_answer, "data": final_payload},
+@@ -107,4 +180,4 @@ def ask_plan_bom_stream(
+     )
+ 
+ 
+-__all__ = ["router"]
++__all__ = ["router", "_resolve_plan_bom_stream_fallback_answer"]
+diff --git a/backend/app/domains/plan_bom/services/answer_presentation_service.py b/backend/app/domains/plan_bom/services/answer_presentation_service.py
+index 8114aa9..5710eee 100644
+--- a/backend/app/domains/plan_bom/services/answer_presentation_service.py
++++ b/backend/app/domains/plan_bom/services/answer_presentation_service.py
+@@ -7,6 +7,7 @@ from typing import Any
+ from openai import OpenAI
+ 
+ from backend.app.core.config import settings
++from backend.app.domains.plan_bom.constants import MATERIAL_CATEGORY_LABELS
+ from backend.app.domains.plan_bom.schemas.qa import PlanBomPresentation, PlanBomQaResponse, PlanBomTableSpec
+ 
+ 
+@@ -32,6 +33,50 @@ class PlanBomAnswerPresentationService:
+         "error",
+     }
+     POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation"}
++    TECHNICAL_VISIBLE_PATTERNS = (
++        r"槽位",
++        r"字段",
++        r"表定义",
++        r"库定义",
++        r"数据库",
++        r"\bSQL\b",
++        r"\bsql\b",
++        r"\bquery(?:[-_ ]?plan|_key)?\b",
++        r"\bqueryKey\b",
++        r"\bplanner\b",
++        r"\bguard\s*rail\b",
++        r"\bguardrail\b",
++        r"\bdebug\b",
++        r"\braw_result\b",
++        r"\bschema\b",
++        r"\bLLM\b",
++        r"\b[a-z]+_[a-z0-9_]+\b",
++    )
++    FOLLOW_UP_TEXT_MAP = {
++        "order_id": "请补充要查询或对比的订单号、订单尾号，或明确订单范围。",
++        "order_tail_no": "请补充订单尾号或更完整的订单号。",
++        "material_category": "请确认要看的材料范围，例如玻璃、焊带、汇流条或接线盒。",
++        "compare_orders": "请补充需要放在一起比较的订单。",
++        "candidate": "当前条件命中多个订单实例，请补充更完整订单号或确认具体文件实例。",
++        "order_identity": "当前条件命中多个订单实例，请补充项目名、客户或文件名来缩小范围。",
++        "bom_version": "请确认要查看或对比的 BOM 版本。",
++        "target_power_ratio": "请补充目标功率档比例，例如 620W 50%、625W 50%。",
++        "power_configuration": "请补充功率预测所需配置，例如玻璃、线缆、标板或供应商。",
++        "supported_material_category": "请确认是否改查玻璃、间隙贴膜、焊带、汇流条或接线盒。",
++    }
++    INTENT_LABELS = {
++        "single_order_material_specs": "单订单材料规格查询",
++        "specific_material_query": "指定材料规格查询",
++        "multi_order_material_table": "多订单材料清单查询",
++        "scope_material_list": "范围材料清单查询",
++        "batch_export_table": "批量清单查询",
++        "cross_order_material_compare": "跨订单材料差异对比",
++        "bom_version_compare": "BOM 版本差异对比",
++        "material_consistency_check": "材料一致性核查",
++        "material_presence_check": "物料存在性检查",
++        "plan_power_prediction": "计划 BOM 功率预测",
++        "plan_power_supplier_recommendation": "供应商功率匹配推荐",
++    }
+ 
+     def __init__(
+         self,
+@@ -106,15 +151,15 @@ class PlanBomAnswerPresentationService:
+ 
+         display_type = self._resolve_display_type(response)
+         caveats = [
+-            "所有订单、物料、版本和规格均来自已导入的计划 BOM 结构化数据。",
+-            "LLM 只允许优化表达，不作为查数或改写结果来源。",
++            "回答依据为当前系统已导入的计划 BOM 数据；未导入或未匹配到的订单版本不会参与本次结论。",
++            "规格、供应商、用量等信息按源 BOM 记录原样展示；如需核对，可展开数据依据查看明细。",
+         ]
+         if response.nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
+-            caveats.append("功率预测数值来自后端确定性功率模型；LLM、前端和 Excel 宏均不参与计算。")
++            caveats.append("功率预测结果按已生效的功率模型版本计算，前端展示不会重新计算。")
+         presentation = PlanBomPresentation(
+             display_type=display_type,
+             title=self._build_title(response),
+-            answer=response.answer_summary,
++            answer=self._build_deterministic_answer(response),
+             highlights=self._build_highlights(response),
+             table_spec=response.result_table if display_type in {"table", "comparison_table", "mixed"} and response.result_table.rows else None,
+             caveats=caveats,
+@@ -122,16 +167,201 @@ class PlanBomAnswerPresentationService:
+         )
+         if response.classification == "B":
+             presentation.follow_up = {
+-                "questions": response.nlu.missing_slots,
++                "questions": self._build_follow_up_questions(response),
+                 "examples": self._build_follow_up_examples(response),
+             }
+         if response.classification == "C":
+             presentation.unsupported_explanation = {
+-                "reason": response.answer_summary,
+-                "suggestions": ["请补充可定位的订单、BOM 版本、材料类别，或提供功率倒推规则后再问。"],
++                "reason": presentation.answer,
++                "suggestions": ["请补充可定位的订单、BOM 版本、材料类别，或提供业务规则后再问。"],
+             }
+         return presentation
+ 
++    def _build_deterministic_answer(self, response: PlanBomQaResponse) -> str:
++        """生成不依赖 LLM 的业务化主回答。
++
++        参数：
++            response: 确定性 BOM QA 响应。
++
++        返回：
++            面向业务员的自然语言答案，不暴露槽位名、字段名、表名或内部实现词。
++        """
++
++        if response.classification == "B" or response.status.code == "CLARIFICATION_REQUIRED":
++            return self._build_clarification_answer(response)
++        if response.classification == "A" and response.status.code == "OK":
++            return self._build_success_answer(response)
++        if response.status.code == "EMPTY_RESULT":
++            return self._build_empty_answer(response)
++        if response.status.code == "UNSUPPORTED_QUESTION" or response.classification == "C":
++            return self._build_unsupported_answer(response)
++        return self._safe_business_text(response.answer_summary) or "我已完成本次计划 BOM 查询，请查看下方结果和数据依据。"
++
++    def _build_clarification_answer(self, response: PlanBomQaResponse) -> str:
++        """生成业务化追问说明。"""
++
++        intent_label = self.INTENT_LABELS.get(response.nlu.intent, "计划 BOM 查询")
++        missing_labels = self._missing_slot_labels(response)
++        missing_text = "、".join(missing_labels) if missing_labels else "订单、版本或材料范围"
++        return (
++            f"我先判断了一下，你是在问“{intent_label}”。这类问题需要先明确要查询或对比的范围，"
++            "再到已导入的计划 BOM 数据里定位对应订单和版本，最后才能逐项整理规格差异或材料明细。\n\n"
++            f"目前还不能直接给出完整结果，主要是缺少：{missing_text}。"
++            "请补充这些业务条件后继续提问，我会按订单维度把结论和明细依据一起整理出来。"
++        )
++
++    def _build_success_answer(self, response: PlanBomQaResponse) -> str:
++        """生成已答结果的完整业务叙事。"""
++
++        safe_summary = self._safe_business_text(response.answer_summary)
++        intro = f"查到了。{safe_summary}" if safe_summary else "查到了。我已根据当前计划 BOM 数据完成这次查询。"
++        process = (
++            "我先根据你的问题定位订单、版本和材料范围，再从当前已导入的计划 BOM 数据中提取匹配记录，"
++            "最后只基于这些记录整理结论，不对未出现的规格、供应商或用量做推测。"
++        )
++        rows = response.result_table.rows or []
++        if not rows:
++            return f"{intro}\n\n{process}\n\n本次没有需要展开的明细记录。"
++
++        if len(rows) <= 5:
++            row_lines = self._format_small_result_rows(rows)
++            if row_lines:
++                return (
++                    f"{intro}\n\n{process}\n\n本次结果共涉及 {len(rows)} 条记录，关键内容如下：\n"
++                    + "\n".join(f"- {line}" for line in row_lines)
++                    + "\n\n如需进一步核对来源，可展开数据依据或导出明细。"
++                )
++        return (
++            f"{intro}\n\n{process}\n\n本次结果共涉及 {len(rows)} 条记录。为避免正文过长，我先保留核心结论；"
++            "你可以点击展开明细查看每条订单、材料和规格。"
++        )
++
++    def _build_empty_answer(self, response: PlanBomQaResponse) -> str:
++        """生成空结果业务说明。"""
++
++        reason = self._safe_business_text(response.status.message) or self._safe_business_text(response.answer_summary)
++        reason_text = f"原因是：{reason}" if reason else "当前条件下没有命中可用记录。"
++        return (
++            "我先按你的问题定位了订单、版本和材料范围，再在当前已导入的计划 BOM 数据中核对匹配记录。"
++            f"最后没有找到可以支撑结论的结果，{reason_text}。"
++            "你可以换一个订单号、补充更明确的版本，或扩大材料范围后再查。"
++        )
++
++    def _build_unsupported_answer(self, response: PlanBomQaResponse) -> str:
++        """生成暂不支持问题的业务说明。"""
++
++        safe_summary = self._safe_business_text(response.answer_summary)
++        detail = safe_summary or "当前问题需要额外业务规则或尚未导入的数据支持，不能只凭现有计划 BOM 数据直接判断。"
++        return (
++            f"这个问题暂时不能直接给出可靠结论。{detail}\n\n"
++            "我先确认了当前问题需要的判断依据，再核对系统里已有的计划 BOM 信息；目前缺少可用于判断的业务规则或数据来源，"
++            "所以不会强行生成答案。你可以补充规则、订单版本或材料范围后继续。"
++        )
++
++    def _format_small_result_rows(self, rows: list[dict[str, Any]]) -> list[str]:
++        """把五行以内的小结果转成业务化短句。"""
++
++        lines: list[str] = []
++        for row in rows:
++            parts: list[str] = []
++            for key, value in row.items():
++                if value is None or value == "":
++                    continue
++                label = self._business_column_label(str(key))
++                if not label:
++                    continue
++                text_value = self._business_value(value)
++                if not text_value or self._visible_text_has_technical_leak(text_value):
++                    continue
++                parts.append(f"{label}：{text_value}")
++                if len(parts) >= 4:
++                    break
++            if parts:
++                lines.append("；".join(parts))
++        return lines
++
++    def _missing_slot_labels(self, response: PlanBomQaResponse) -> list[str]:
++        """把内部缺失项转换成业务可读名称。"""
++
++        labels: list[str] = []
++        for slot in response.nlu.missing_slots or ["order_id", "material_category"]:
++            text = self.FOLLOW_UP_TEXT_MAP.get(slot, "请补充更明确的查询条件。")
++            label = re.sub(r"^请补充|^请确认", "", text).strip("。")
++            if label and label not in labels:
++                labels.append(label)
++        return labels
++
++    def _build_follow_up_questions(self, response: PlanBomQaResponse) -> list[str]:
++        """生成业务化追问按钮文案。"""
++
++        questions: list[str] = []
++        for slot in response.nlu.missing_slots or ["order_id", "material_category"]:
++            text = self.FOLLOW_UP_TEXT_MAP.get(slot, "请补充更明确的查询条件后继续。")
++            if text not in questions:
++                questions.append(text)
++        return questions
++
++    @classmethod
++    def _business_column_label(cls, key: str) -> str:
++        """把结果列名转换成业务展示名，未知内部列不展示。"""
++
++        raw = (key or "").strip()
++        lowered = raw.lower()
++        mapping = {
++            "order_id": "订单",
++            "order_no": "订单",
++            "order_tail_no": "订单尾号",
++            "order": "订单",
++            "order_name": "项目",
++            "material_category": "材料",
++            "material_name": "物料名称",
++            "material_spec": "规格",
++            "spec": "规格",
++            "specification": "规格",
++            "description": "规格描述",
++            "supplier_name": "供应商",
++            "version_no": "版本",
++            "bom_version": "版本",
++            "revision_version": "版本",
++            "quantity": "数量",
++            "qty": "数量",
++            "unit": "单位",
++            "compare_pair": "对比项",
++            "left_instance": "左侧订单",
++            "right_instance": "右侧订单",
++            "left_description": "左侧规格",
++            "right_description": "右侧规格",
++            "compare_status": "对比结果",
++            "diff_summary": "差异说明",
++        }
++        if lowered in mapping:
++            return mapping[lowered]
++        if cls._visible_text_has_technical_leak(raw):
++            return ""
++        return raw
++
++    @staticmethod
++    def _business_value(value: Any) -> str:
++        """把内部枚举值转换成业务可读值。"""
++
++        text = str(value).strip()
++        return MATERIAL_CATEGORY_LABELS.get(text, text)
++
++    @classmethod
++    def _safe_business_text(cls, text: str | None) -> str:
++        """返回不含技术痕迹的业务文本；不安全则置空。"""
++
++        value = str(text or "").strip()
++        if not value or cls._visible_text_has_technical_leak(value):
++            return ""
++        return value
++
++    @classmethod
++    def _visible_text_has_technical_leak(cls, text: str) -> bool:
++        """判断可见文案是否包含技术字段、表名、内部编排信息或英文蛇形字段名。"""
++
++        return any(re.search(pattern, text or "", flags=re.I) for pattern in cls.TECHNICAL_VISIBLE_PATTERNS)
++
+     def _resolve_display_type(self, response: PlanBomQaResponse) -> str:
+         """根据状态解析展示类型。
+ 
+@@ -196,8 +426,7 @@ class PlanBomAnswerPresentationService:
+             return "当前 BOM 数据暂不能直接回答"
+         return "计划 BOM 问题待确认"
+ 
+-    @staticmethod
+-    def _build_highlights(response: PlanBomQaResponse) -> list[str]:
++    def _build_highlights(self, response: PlanBomQaResponse) -> list[str]:
+         """生成关键结论。
+ 
+         参数：
+@@ -207,20 +436,25 @@ class PlanBomAnswerPresentationService:
+             关键结论列表。
+         """
+ 
+-        highlights = [response.status.message]
++        highlights = []
++        status_message = self._safe_business_text(response.status.message)
++        if status_message:
++            highlights.append(status_message)
+         if response.result_table.rows:
+-            highlights.append(f"返回 {len(response.result_table.rows)} 条结构化记录。")
+-        if response.nlu.slots.get("material_category"):
+-            highlights.append(f"材料范围：{', '.join(response.nlu.slots['material_category'])}")
++            highlights.append(f"命中 {len(response.result_table.rows)} 条 BOM 记录。")
++        material_values = response.nlu.slots.get("material_category")
++        if material_values:
++            material_labels = [self._business_value(item) for item in material_values]
++            highlights.append(f"材料范围：{', '.join(material_labels)}")
+         if response.nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
+             model_code = response.raw_result.get("bom_config_resolution", {}).get("model_code")
+             if model_code:
+-                highlights.append(f"功率模型版型：{model_code}")
++                highlights.append(f"功率版型：{model_code}")
+             if response.raw_result.get("power_prediction", {}).get("supplier_name"):
+                 highlights.append(f"供应商：{response.raw_result['power_prediction']['supplier_name']}")
+             if response.raw_result.get("power_recommendation", {}).get("recommendations"):
+                 highlights.append(f"推荐供应商数：{len(response.raw_result['power_recommendation']['recommendations'])}")
+-        return highlights
++        return [item for item in highlights if not self._visible_text_has_technical_leak(item)]
+ 
+     @staticmethod
+     def _build_follow_up_examples(response: PlanBomQaResponse) -> list[str]:
+@@ -307,16 +541,22 @@ class PlanBomAnswerPresentationService:
+                 return None, "llm_table_changed"
+             table_spec = candidate
+         answer = str(payload.get("answer") or fallback.answer)
++        title = str(payload.get("title") or fallback.title)
++        highlights = [str(item) for item in payload.get("highlights") or fallback.highlights]
++        caveats = [str(item) for item in payload.get("caveats") or fallback.caveats]
++        visible_text = "\n".join([title, answer, *highlights, *caveats])
++        if self._visible_text_has_technical_leak(visible_text):
++            return None, "llm_visible_technical_leak"
+         if not self._answer_mentions_only_existing_values(answer, response):
+             return None, "llm_answer_contains_unverified_value"
+         return (
+             PlanBomPresentation(
+                 display_type=display_type,
+-                title=str(payload.get("title") or fallback.title),
++                title=title,
+                 answer=answer,
+-                highlights=[str(item) for item in payload.get("highlights") or fallback.highlights],
++                highlights=highlights,
+                 table_spec=table_spec,
+-                caveats=[str(item) for item in payload.get("caveats") or fallback.caveats],
++                caveats=caveats,
+                 follow_up=fallback.follow_up,
+                 unsupported_explanation=fallback.unsupported_explanation,
+                 debug=dict(fallback.debug),
+@@ -381,13 +621,13 @@ class PlanBomAnswerPresentationService:
+         return (
+             "你是计划 BOM 问答的答案表达层，只能优化文字和展示编排。\n"
+             "不能新增订单、物料、版本、规格、用量或供应商；不能把追问/拒答包装成可答。\n"
++            "面向业务员的可见回答中，禁止出现槽位、字段、表名、库名、SQL、query、schema、guardrail、debug、LLM 或英文蛇形命名等技术词。\n"
+             "未明确要求表格/明细/清单/导出时，display_type 必须保持 narrative，table_spec 必须为空；不要固定展示明细数据。\n"
+-            "answer 可以使用清晰 Markdown 段落、加粗和列表，语气要专业、温馨、清晰，先给结论再说明依据。\n"
++            "answer 可以使用清晰 Markdown 段落、加粗和列表，语气要专业、温馨、清晰，先给结论，再说明查询思路和依据。\n"
+             "输出单个 JSON，字段可包含 display_type,title,answer,highlights,table_spec,caveats。"
+         )
+ 
+-    @staticmethod
+-    def _build_user_prompt(response: PlanBomQaResponse, fallback: PlanBomPresentation) -> str:
++    def _build_user_prompt(self, response: PlanBomQaResponse, fallback: PlanBomPresentation) -> str:
+         """构造表达层用户提示词。
+ 
+         参数：
+@@ -398,13 +638,32 @@ class PlanBomAnswerPresentationService:
+             JSON 上下文文本。
+         """
+ 
+-        return json.dumps(
+-            {
+-                "deterministic_response": response.model_dump(mode="json", exclude={"presentation"}),
+-                "allowed_table_spec": fallback.table_spec.model_dump(mode="json") if fallback.table_spec else None,
++        public_context = {
++            "用户原问题": response.question,
++            "状态": response.status.message,
++            "业务结论草稿": fallback.answer,
++            "展示形式": fallback.display_type,
++            "关键结论": fallback.highlights,
++            "数据口径": fallback.caveats,
++            "结果表": {
++                "columns": [self._business_column_label(column) for column in response.result_table.columns],
++                "rows": [
++                    {
++                        self._business_column_label(str(key)): self._business_value(value)
++                        for key, value in row.items()
++                        if self._business_column_label(str(key)) and value is not None and value != ""
++                    }
++                    for row in response.result_table.rows[:30]
++                ],
++                "total_rows": len(response.result_table.rows),
+             },
+-            ensure_ascii=False,
+-        )
++            "表达要求": [
++                "先给结论，再说明你按什么业务顺序核对。",
++                "只能使用这里给出的事实，不补充外部信息。",
++                "不要出现槽位、字段、表名、库名或英文蛇形命名。",
++            ],
++        }
++        return json.dumps(public_context, ensure_ascii=False, default=str)
+ 
+ 
+ __all__ = ["PlanBomAnswerPresentationService"]
+diff --git a/backend/app/domains/plan_bom/services/qa_service.py b/backend/app/domains/plan_bom/services/qa_service.py
+index cfe95d7..2fc0bc8 100644
+--- a/backend/app/domains/plan_bom/services/qa_service.py
++++ b/backend/app/domains/plan_bom/services/qa_service.py
+@@ -6,12 +6,15 @@ import re
+ from typing import Any
+ 
+ from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
+-from backend.app.domains.plan_bom.constants import CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
++from backend.app.domains.plan_bom.constants import CANDIDATE_SCOPE_ORDER_IDENTITY, CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
+ from backend.app.domains.plan_bom.models import PlanBomHeader, PlanBomMaterialLine
+ from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
+ from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate, PlanBomQaResponse, PlanBomQaStatus, PlanBomTableSpec
+ from backend.app.domains.plan_bom.schemas.query import (
++    PlanBomCandidate,
+     PlanBomCompareQueryRequest,
++    PlanBomCompareResponse,
++    PlanBomCompareSideContext,
+     PlanBomCompareSideRequest,
+     PlanBomDetailQueryRequest,
+ )
+@@ -291,13 +294,23 @@ class PlanBomQaService:
+             right = PlanBomCompareSideRequest(order_no=tails[1])
+         else:
+             return self._clarification_response(question=question, nlu=nlu)
+-        result = self.query_service.compare(
+-            PlanBomCompareQueryRequest(left=left, right=right, material_categories=categories, candidate_limit=20)
+-        )
++        compare_payload = PlanBomCompareQueryRequest(left=left, right=right, material_categories=categories, candidate_limit=20)
++        result = self.query_service.compare(compare_payload)
+         if result.status.code != "OK" or not result.compare_ready:
++            expanded_response = self._expanded_candidate_compare_response(
++                question=question,
++                nlu=nlu,
++                payload=compare_payload,
++                candidate_result=result,
++            )
++            if expanded_response:
++                return expanded_response
+             return self._non_ok_query_response(question=question, nlu=nlu, raw=result.model_dump(mode="json"))
+         rows: list[dict[str, Any]] = []
++        description_only = self._is_description_compare_question(question)
+         for item in result.changed:
++            if description_only and "description" not in item.changed_fields:
++                continue
+             rows.append(self._compare_changed_row(item.model_dump(mode="json")))
+         for item in result.only_left:
+             rows.append(self._compare_single_side_row(item.model_dump(mode="json"), side="仅左侧"))
+@@ -316,6 +329,307 @@ class PlanBomQaService:
+             )
+         )
+ 
++    def _expanded_candidate_compare_response(
++        self,
++        *,
++        question: str,
++        nlu: PlanBomNluCandidate,
++        payload: PlanBomCompareQueryRequest,
++        candidate_result: PlanBomCompareResponse,
++    ) -> PlanBomQaResponse | None:
++        """把跨订单 compare 的单侧多业务实例候选展开为多组确定性对比。
++
++        参数：
++            question: 原始问题；
++            nlu: 已完成槽位抽取的 NLU 候选；
++            payload: 初次 compare 请求；
++            candidate_result: 初次 compare 返回的候选态结果。
++
++        返回：
++            若可安全展开，则返回 A 类对比表；否则返回 None，继续沿用候选追问兜底。
++
++        业务逻辑：
++            用户明确要求“订单 A 和订单 B 的规格描述有什么不一样，并用表格统计”时，短订单号 B
++            可能对应多个真实业务实例。此时不能随机选择其中一个，也不应把内部 `order_identity`
++            暴露成泛化追问；安全做法是把多业务实例逐个与已确定的另一侧做确定性 compare，
++            在表格中保留左右实例名称和版本，业务员可直接看到每个候选实例的差异。
++        """
++
++        candidates = list(candidate_result.candidates or [])
++        if not self._can_expand_compare_candidates(nlu=nlu, candidate_result=candidate_result, candidates=candidates):
++            return None
++
++        pair_rows: list[dict[str, Any]] = []
++        compared_pairs: list[dict[str, Any]] = []
++        pair_summaries: list[dict[str, Any]] = []
++        warnings: list[str] = []
++        ambiguous_side = candidate_result.candidate_side
++        assert ambiguous_side in {"left", "right"}
++        description_only = self._is_description_compare_question(question)
++
++        for candidate in candidates:
++            expanded_payload = self._expanded_compare_payload_for_candidate(
++                original_payload=payload,
++                candidate_result=candidate_result,
++                candidate=candidate,
++            )
++            if expanded_payload is None:
++                return None
++            pair_result = self.query_service.compare(expanded_payload)
++            pair_summary = self._expanded_pair_summary(pair_result)
++            pair_summaries.append(pair_summary)
++            if pair_result.status.code != "OK" or not pair_result.compare_ready or not pair_result.left or not pair_result.right:
++                warnings.append(
++                    f"候选 {self._compare_side_label(candidate)} 未能完成对比：{pair_result.status.message}"
++                )
++                continue
++
++            left_label = self._compare_side_label(pair_result.left)
++            right_label = self._compare_side_label(pair_result.right)
++            pair_label = f"{left_label} ↔ {right_label}"
++            compared_pairs.append(
++                {
++                    "compare_pair": pair_label,
++                    "left_order_identity_key": pair_result.left.order_identity_key,
++                    "left_file_instance_key": pair_result.left.file_instance_key,
++                    "left_order_no": pair_result.left.order_no,
++                    "left_version_no": pair_result.left.version_no,
++                    "right_order_identity_key": pair_result.right.order_identity_key,
++                    "right_file_instance_key": pair_result.right.file_instance_key,
++                    "right_order_no": pair_result.right.order_no,
++                    "right_version_no": pair_result.right.version_no,
++                }
++            )
++            pair_rows.extend(
++                self._compare_rows_for_pair(
++                    pair_result=pair_result,
++                    pair_label=pair_label,
++                    left_label=left_label,
++                    right_label=right_label,
++                    description_only=description_only,
++                )
++            )
++
++        if not compared_pairs:
++            return None
++
++        left_count = len(candidates) if ambiguous_side == "left" else 1
++        right_count = len(candidates) if ambiguous_side == "right" else 1
++        answer = (
++            f"已展开{self._compare_side_name(ambiguous_side)}侧 {len(candidates)} 个业务实例并完成 "
++            f"{len(compared_pairs)} 组 BOM 核心材料规格差异对比，生成 {len(pair_rows)} 条差异记录。"
++        )
++        if warnings:
++            answer += f"其中 {len(warnings)} 个候选未完成对比，已在风险提示中列出。"
++        return self._with_presentation(
++            PlanBomQaResponse(
++                question=question,
++                classification="A",
++                status=PlanBomQaStatus(code="OK", message="对比成功"),
++                nlu=nlu,
++                answer_summary=answer,
++                result_table=PlanBomTableSpec(columns=self._expanded_compare_columns(), rows=pair_rows),
++                raw_result={
++                    "expanded_compare": True,
++                    "expanded_side": ambiguous_side,
++                    "left_candidate_count": left_count,
++                    "right_candidate_count": right_count,
++                    "compared_pairs": compared_pairs,
++                    "pair_summaries": pair_summaries,
++                    "source_candidate_result": candidate_result.model_dump(mode="json"),
++                },
++                warnings=warnings,
++            )
++        )
++
++    @staticmethod
++    def _can_expand_compare_candidates(
++        *,
++        nlu: PlanBomNluCandidate,
++        candidate_result: PlanBomCompareResponse,
++        candidates: list[PlanBomCandidate],
++    ) -> bool:
++        """判断 compare 候选态是否允许自动展开为多组对比。
++
++        只有跨订单材料对比、单侧业务实例候选且候选数受控时才展开；版本、文件实例或单订单查询
++        仍 fail closed，避免替业务员选择比较基线。
++        """
++
++        if nlu.intent != "cross_order_material_compare":
++            return False
++        if candidate_result.status.code != "CANDIDATE_REQUIRED":
++            return False
++        if candidate_result.candidate_scope != CANDIDATE_SCOPE_ORDER_IDENTITY:
++            return False
++        if candidate_result.candidate_side not in {"left", "right"}:
++            return False
++        candidate_truncated = bool(candidate_result.status.extras.get("candidate_truncated")) or bool(
++            (candidate_result.response_meta or {}).get("candidate_truncated")
++        )
++        if candidate_truncated or int(candidate_result.candidate_total_hint or 0) > len(candidates):
++            return False
++        if not candidates or len(candidates) > 20:
++            return False
++        return True
++
++    def _expanded_compare_payload_for_candidate(
++        self,
++        *,
++        original_payload: PlanBomCompareQueryRequest,
++        candidate_result: PlanBomCompareResponse,
++        candidate: PlanBomCandidate,
++    ) -> PlanBomCompareQueryRequest | None:
++        """构造单个候选实例对应的精确 compare 请求。"""
++
++        candidate_side = self._compare_side_request_from_candidate(candidate)
++        if candidate_result.candidate_side == "right":
++            if not candidate_result.left:
++                return None
++            left_side = self._compare_side_request_from_context(candidate_result.left)
++            right_side = candidate_side
++        else:
++            left_side = candidate_side
++            right_side = original_payload.right
++        return PlanBomCompareQueryRequest(
++            left=left_side,
++            right=right_side,
++            material_categories=original_payload.material_categories,
++            candidate_limit=original_payload.candidate_limit,
++        )
++
++    @staticmethod
++    def _compare_side_request_from_candidate(candidate: PlanBomCandidate) -> PlanBomCompareSideRequest:
++        """从候选列表项生成精确 compare 单侧请求。"""
++
++        return PlanBomCompareSideRequest(
++            order_identity_key=candidate.order_identity_key,
++            file_instance_key=candidate.file_instance_key,
++            version_no=candidate.version_no,
++        )
++
++    @staticmethod
++    def _compare_side_request_from_context(context: PlanBomCompareSideContext) -> PlanBomCompareSideRequest:
++        """从已解析 compare 上下文生成精确 compare 单侧请求。"""
++
++        return PlanBomCompareSideRequest(
++            order_identity_key=context.order_identity_key,
++            file_instance_key=context.file_instance_key,
++            version_no=context.version_no,
++        )
++
++    @staticmethod
++    def _compare_side_label(side: PlanBomCandidate | PlanBomCompareSideContext) -> str:
++        """生成业务可读的 compare 单侧实例标签。"""
++
++        display = side.order_display_label or side.order_name or side.order_no
++        if side.version_no:
++            return f"{display}（版本 {side.version_no}）"
++        return display
++
++    @staticmethod
++    def _compare_side_name(side: str) -> str:
++        """把 compare 内部侧别转换为中文说明。"""
++
++        return "左" if side == "left" else "右"
++
++    @staticmethod
++    def _is_description_compare_question(question: str) -> bool:
++        """判断用户是否明确只关注规格描述差异。
++
++        参数：
++            question: 原始问题文本。
++
++        返回：
++            命中“规格描述/描述”时返回 True，用于避免把用量、备注等非描述字段变化混入描述差异表。
++        """
++
++        text = question or ""
++        return "规格描述" in text or "描述" in text
++
++    def _compare_rows_for_pair(
++        self,
++        *,
++        pair_result: PlanBomCompareResponse,
++        pair_label: str,
++        left_label: str,
++        right_label: str,
++        description_only: bool = False,
++    ) -> list[dict[str, Any]]:
++        """把单组 compare 结果转换为带实例信息的表格行。"""
++
++        rows: list[dict[str, Any]] = []
++        for item in pair_result.changed:
++            if description_only and "description" not in item.changed_fields:
++                continue
++            rows.append(
++                self._compare_pair_row(
++                    self._compare_changed_row(item.model_dump(mode="json")),
++                    pair_label=pair_label,
++                    left_label=left_label,
++                    right_label=right_label,
++                )
++            )
++        for item in pair_result.only_left:
++            rows.append(
++                self._compare_pair_row(
++                    self._compare_single_side_row(item.model_dump(mode="json"), side="仅左侧"),
++                    pair_label=pair_label,
++                    left_label=left_label,
++                    right_label=right_label,
++                )
++            )
++        for item in pair_result.only_right:
++            rows.append(
++                self._compare_pair_row(
++                    self._compare_single_side_row(item.model_dump(mode="json"), side="仅右侧"),
++                    pair_label=pair_label,
++                    left_label=left_label,
++                    right_label=right_label,
++                )
++            )
++        return rows
++
++    @staticmethod
++    def _compare_pair_row(
++        row: dict[str, Any],
++        *,
++        pair_label: str,
++        left_label: str,
++        right_label: str,
++    ) -> dict[str, Any]:
++        """为差异行补充比较组和左右业务实例信息。"""
++
++        return {
++            "compare_pair": pair_label,
++            "diff_type": row.get("diff_type"),
++            "material_category": row.get("material_category"),
++            "left_instance": left_label,
++            "left_order": row.get("left_order"),
++            "left_description": row.get("left_description"),
++            "right_instance": right_label,
++            "right_order": row.get("right_order"),
++            "right_description": row.get("right_description"),
++            "changed_fields": row.get("changed_fields"),
++        }
++
++    @staticmethod
++    def _expanded_pair_summary(pair_result: PlanBomCompareResponse) -> dict[str, Any]:
++        """生成单组 compare 的轻量追溯摘要，避免 raw_result 写入过大的明细快照。"""
++
++        return {
++            "status_code": pair_result.status.code,
++            "status_message": pair_result.status.message,
++            "compare_ready": pair_result.compare_ready,
++            "left_order_no": pair_result.left.order_no if pair_result.left else None,
++            "left_version_no": pair_result.left.version_no if pair_result.left else None,
++            "right_order_no": pair_result.right.order_no if pair_result.right else None,
++            "right_version_no": pair_result.right.version_no if pair_result.right else None,
++            "changed_count": len(pair_result.changed),
++            "only_left_count": len(pair_result.only_left),
++            "only_right_count": len(pair_result.only_right),
++            "same_count": len(pair_result.same),
++        }
++
+     def _presence_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:
+         """处理某类物料是否存在或缺失查询。
+ 
+@@ -957,10 +1271,10 @@ class PlanBomQaService:
+                 nlu=nlu,
+                 answer_summary=(
+                     "已识别到非核心材料："
+-                    f"{'、'.join(labels)}。当前计划 BOM QA detail/compare 主链路支持玻璃、间隙贴膜、焊带/互联条、汇流条、接线盒五类材料；"
+-                    "请确认是否改问核心五类材料，或需要后续扩展非核心材料查询口径。"
++                    f"{'、'.join(labels)}。当前计划 BOM 智能问答优先支持玻璃、间隙贴膜、焊带/互联条、汇流条、接线盒五类材料；"
++                    "请确认是否改问这些核心材料，或说明你希望扩展到哪类非核心材料。"
+                 ),
+-                warnings=["非核心材料已被 Guardrail 拦截，未进入核心五类查询 schema。"],
++                warnings=["当前材料不在已支持的核心材料范围内，暂不进入明细查询。"],
+                 raw_result={"non_core_material_category": categories, "supported_categories": list(CORE_MATERIAL_CATEGORIES)},
+             )
+         )
+@@ -1038,17 +1352,39 @@ class PlanBomQaService:
+         """
+ 
+         missing = nlu.missing_slots or ["order_id", "material_category"]
++        missing_text = "、".join(self._business_missing_slot_label(slot) for slot in missing)
+         return self._with_presentation(
+             PlanBomQaResponse(
+                 question=question,
+                 classification="B",
+                 status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="需要补充关键信息后继续查询", severity="warning"),
+                 nlu=nlu,
+-                answer_summary=f"当前问题缺少或存在歧义的槽位：{', '.join(missing)}。请补充订单、版本、材料或查询范围。",
++                answer_summary=(
++                    "我理解你想查询计划 BOM 信息，但当前还缺少足够的业务条件。"
++                    f"请补充：{missing_text}。补充后我会继续按订单、版本和材料范围整理结果。"
++                ),
+                 raw_result=raw or {},
+             )
+         )
+ 
++    @staticmethod
++    def _business_missing_slot_label(slot: str) -> str:
++        """把内部缺失项名称转换为业务可读说明。"""
++
++        mapping = {
++            "order_id": "订单号、订单尾号或订单范围",
++            "order_tail_no": "订单尾号或更完整的订单号",
++            "material_category": "材料范围，例如玻璃、焊带、汇流条或接线盒",
++            "compare_orders": "需要对比的订单",
++            "candidate": "更完整订单号或具体文件实例",
++            "order_identity": "项目名、客户或文件名等订单识别信息",
++            "bom_version": "BOM 版本",
++            "target_power_ratio": "目标功率档比例",
++            "power_configuration": "功率预测所需配置",
++            "supported_material_category": "当前要查询的核心材料范围",
++        }
++        return mapping.get(slot, "更明确的查询条件")
++
+     def _empty_response(self, *, question: str, nlu: PlanBomNluCandidate, reason: str, raw: dict[str, Any] | None = None) -> PlanBomQaResponse:
+         """构造空结果响应。
+ 
+@@ -1339,6 +1675,27 @@ class PlanBomQaService:
+ 
+         return ["diff_type", "material_category", "left_order", "left_description", "right_order", "right_description", "changed_fields"]
+ 
++    @staticmethod
++    def _expanded_compare_columns() -> list[str]:
++        """返回多候选展开对比表列。
++
++        返回：
++            列名列表；相比普通 compare 多出比较组和左右业务实例，避免短订单号多实例时丢失上下文。
++        """
++
++        return [
++            "compare_pair",
++            "diff_type",
++            "material_category",
++            "left_instance",
++            "left_order",
++            "left_description",
++            "right_instance",
++            "right_order",
++            "right_description",
++            "changed_fields",
++        ]
++
+     @staticmethod
+     def _item_row(item: dict[str, Any]) -> dict[str, Any]:
+         """转换 detail item 为表格行。
+diff --git a/backend/app/services/business_answer_stream_service.py b/backend/app/services/business_answer_stream_service.py
+new file mode 100644
+index 0000000..bb68ab0
+--- /dev/null
++++ b/backend/app/services/business_answer_stream_service.py
+@@ -0,0 +1,719 @@
++from __future__ import annotations
++
++import json
++import re
++from copy import deepcopy
++from decimal import Decimal
++from typing import Any, Iterable
++
++from openai import OpenAI
++
++from backend.app.core.config import settings
++
++
++JSONLineEvent = dict[str, Any]
++
++
++def build_json_line_event(event: str, data: dict[str, Any]) -> str:
++    """构造前端可增量解析的一行 JSON 流事件。
++
++    参数：
++        event: 事件名，常用值包括 meta、delta、done、error。
++        data: 当前事件的数据体，必须可 JSON 序列化。
++
++    返回：
++        以换行符结尾的 JSON 字符串。
++    """
++
++    return json.dumps({"event": event, "data": data}, ensure_ascii=False, default=str) + "\n"
++
++
++class BusinessAnswerStreamService:
++    """业务智能问答的流式答案表达服务。
++
++    说明：
++        1. 后端先完成确定性查询、计算和表格生成；
++        2. 本服务只把“用户原问题 + 确定性结果快照”交给 LLM 做答案表达；
++        3. LLM 流式输出只替换 presentation.answer，不允许改表格、状态、查询结果和数值事实；
++        4. 未配置 LLM 或调用失败时，将确定性答案切块流式返回，保证前端体验不退化。
++    """
++
++    MAX_PROMPT_ROWS = 30
++    MAX_PROMPT_CHARS = 12000
++    FALLBACK_CHUNK_SIZE = 18
++    TECHNICAL_VISIBLE_PATTERNS = (
++        r"槽位",
++        r"字段",
++        r"表定义",
++        r"库定义",
++        r"数据库",
++        r"\bSQL\b",
++        r"\bsql\b",
++        r"\bquery(?:[-_ ]?plan|_key)?\b",
++        r"\bqueryKey\b",
++        r"\bplanner\b",
++        r"\bguard\s*rail\b",
++        r"\bguardrail\b",
++        r"\bdebug\b",
++        r"\btrace_id\b",
++        r"\binternal\b",
++        r"\braw_result\b",
++        r"\bschema\b",
++        r"\bLLM\b",
++        r"\bods_[a-z0-9_]*",
++        r"\bdwd_[a-z0-9_]*",
++        r"\bdws_[a-z0-9_]*",
++        r"\b[a-z]+_[a-z0-9_]+\b",
++    )
++    NUMBER_PATTERN = re.compile(r"(?<![A-Za-z0-9_])-?\d+(?:,\d{3})*(?:\.\d+)?")
++
++    def __init__(
++        self,
++        *,
++        enabled: bool | None = None,
++        base_url: str | None = None,
++        api_key: str | None = None,
++        model: str | None = None,
++        client: Any | None = None,
++        timeout: float | None = None,
++    ) -> None:
++        """初始化流式答案表达服务。
++
++        参数：
++            enabled: 是否启用 LLM 表达，默认跟随全局答案表达开关。
++            base_url: OpenAI 兼容接口地址。
++            api_key: OpenAI 兼容接口密钥。
++            model: 使用的表达模型名。
++            client: 测试注入的 OpenAI 兼容客户端。
++            timeout: 单次 LLM 调用超时时间。
++
++        返回：
++            无返回值。
++        """
++
++        self.enabled = settings.llm_answer_presentation_enabled if enabled is None else enabled
++        self.base_url = base_url if base_url is not None else settings.llm_base_url
++        self.api_key = api_key if api_key is not None else settings.llm_api_key
++        self.model = model if model is not None else (settings.llm_answer_presentation_model or settings.llm_model)
++        self.timeout = timeout if timeout is not None else settings.llm_answer_presentation_timeout
++        self._client = client
++        self._last_stream_source = "deterministic_fallback"
++        self._last_fallback_reason = "not_started"
++
++    def stream_answer(
++        self,
++        *,
++        domain: str,
++        question: str,
++        deterministic_payload: dict[str, Any],
++        fallback_answer: str | None = None,
++    ) -> Iterable[str]:
++        """流式生成业务答案文本。
++
++        参数：
++            domain: 业务域标识，例如 logistics 或 plan_bom。
++            question: 用户原始问题，必须进入 LLM 上下文。
++            deterministic_payload: 后端确定性结果快照。
++            fallback_answer: LLM 不可用时的确定性答案。
++
++        返回：
++            文本 chunk 迭代器；每个 chunk 都可直接追加到前端气泡中。
++        """
++
++        fallback = self._resolve_fallback_answer(deterministic_payload, fallback_answer)
++        if not self._is_llm_available():
++            self._last_stream_source = "deterministic_fallback"
++            self._last_fallback_reason = "llm_not_configured"
++            yield from self._chunk_text(fallback)
++            return
++        try:
++            self._last_stream_source = "llm"
++            self._last_fallback_reason = ""
++            stream = self._create_llm_stream(domain=domain, question=question, deterministic_payload=deterministic_payload)
++            chunks: list[str] = []
++            for event in stream:
++                chunk = self._extract_delta_text(event)
++                if not chunk:
++                    continue
++                chunks.append(chunk)
++            streamed_answer = "".join(chunks).strip()
++            if not streamed_answer:
++                self._last_stream_source = "deterministic_fallback"
++                self._last_fallback_reason = "llm_empty_stream"
++                yield from self._chunk_text(fallback)
++                return
++            validation_error = self._validate_streamed_answer(streamed_answer, deterministic_payload=deterministic_payload)
++            if validation_error:
++                self._last_stream_source = "deterministic_fallback"
++                self._last_fallback_reason = validation_error
++                yield from self._chunk_text(fallback)
++                return
++            for chunk in chunks:
++                yield chunk
++        except Exception as exc:  # noqa: BLE001
++            # LLM 只负责表达增强，失败不能影响确定性查询结果可用性。
++            self._last_stream_source = "deterministic_fallback"
++            self._last_fallback_reason = f"llm_stream_error:{type(exc).__name__}"
++            yield from self._chunk_text(fallback)
++
++    def apply_streamed_answer(
++        self,
++        *,
++        domain: str,
++        deterministic_payload: dict[str, Any],
++        streamed_answer: str,
++    ) -> dict[str, Any]:
++        """把流式答案合并回响应 payload。
++
++        参数：
++            domain: 业务域标识，用于兜底 presentation 标题。
++            deterministic_payload: 原始确定性响应，不会被原地修改。
++            streamed_answer: LLM 或降级流式输出的完整答案。
++
++        返回：
++            已更新 presentation.answer 的响应 payload；表格和状态保持确定性原值。
++        """
++
++        payload = deepcopy(deterministic_payload)
++        fallback = self._resolve_fallback_answer(payload, None)
++        candidate_answer = streamed_answer.strip()
++        validation_error = (
++            self._validate_streamed_answer(candidate_answer, deterministic_payload=payload)
++            if candidate_answer
++            else "stream_empty_answer"
++        )
++        if validation_error and candidate_answer != fallback:
++            # 最终写回前再校验一次，防止调用方绕过 stream_answer 直接合并不安全文本。
++            self._last_stream_source = "deterministic_fallback"
++            self._last_fallback_reason = validation_error
++            final_answer = fallback
++        else:
++            final_answer = candidate_answer or fallback
++        presentation = payload.get("presentation")
++        if not isinstance(presentation, dict):
++            presentation = {
++                "display_type": "narrative",
++                "title": self._default_title(domain),
++                "answer": final_answer,
++                "highlights": [],
++                "table_spec": None,
++                "caveats": [],
++                "debug": {},
++            }
++            payload["presentation"] = presentation
++        presentation["answer"] = final_answer
++        debug = presentation.get("debug")
++        if not isinstance(debug, dict):
++            debug = {}
++            presentation["debug"] = debug
++        debug["stream_answer_source"] = self._last_stream_source
++        debug["stream_fallback_reason"] = self._last_fallback_reason or None
++        if self._last_stream_source == "llm":
++            debug["llm_model_name"] = self.model
++        debug["stream_answer_domain"] = domain
++        return payload
++
++    def _create_llm_stream(self, *, domain: str, question: str, deterministic_payload: dict[str, Any]):
++        """创建 OpenAI 兼容流式响应对象。
++
++        参数：
++            domain: 业务域标识。
++            question: 用户原始问题。
++            deterministic_payload: 确定性结果快照。
++
++        返回：
++            OpenAI 兼容流式事件迭代器。
++        """
++
++        client = self._client or OpenAI(
++            base_url=self.base_url,
++            api_key=self.api_key,
++            timeout=self.timeout,
++            max_retries=settings.llm_answer_presentation_max_retries,
++        )
++        return client.chat.completions.create(
++            model=self.model,
++            temperature=0.2,
++            stream=True,
++            messages=[
++                {"role": "system", "content": self._build_system_prompt(domain)},
++                {"role": "user", "content": self._build_user_prompt(question, deterministic_payload)},
++            ],
++        )
++
++    def _is_llm_available(self) -> bool:
++        """判断 LLM 流式表达是否可用。"""
++
++        return bool(self.enabled and self.base_url and self.api_key and self.model)
++
++    @classmethod
++    def _build_system_prompt(cls, domain: str) -> str:
++        """构造约束 LLM 只做表达的系统提示词。"""
++
++        domain_label = "计划 BOM" if domain == "plan_bom" else "物流经营"
++        return (
++            f"你是{domain_label}智能问答的答案表达层。"
++            "你会收到用户原问题和后端确定性查询结果。"
++            "你的任务是用中文业务口吻流式输出更自然、更有 AI 感的答案。"
++            "严禁新增、猜测或改写订单、客户、供应商、金额、数量、比例、日期、规格、功率、CTM 等事实。"
++            "表格、状态和数值以系统给出的确定性结果为准；如果明细很多，只概括结论并提示用户查看下方表格。"
++            "对排名、排行、TopN、前几名这类问题，如果确定性结果表是五行以内的小表，请逐项复述每个名称和对应数值；超过五行时只概括前几项并提示查看明细。"
++            "逐项表达时优先使用中文序号或项目符号，不要使用 1./2. 这类阿拉伯数字序号，避免被误认为业务指标。"
++            "不要输出 JSON、Markdown 表格或代码块；不要暴露字段名、SQL、内部状态码、debug 信息。"
++            "如果结果要求澄清或暂不支持，要温和说明原因并给出可执行的补充问法。"
++        )
++
++    def _build_user_prompt(self, question: str, deterministic_payload: dict[str, Any]) -> str:
++        """把用户原问题和确定性结果压缩为 LLM 上下文。"""
++
++        prompt_payload = {
++            "用户原问题": question,
++            "确定性结果": self._compact_payload(deterministic_payload),
++            "表达要求": [
++                "先直接回答业务员最关心的结论，再说明依据。",
++                "只引用确定性结果中出现的事实；不要补充外部知识。",
++                "如果是排名/排行/TopN/前几名问题，且结构化结果在五行以内，请在正文里逐项写出每个名称和对应数值，让回答更完整。",
++                "如果结构化结果超过五行，可以只概括关键结论并提示用户查看下方表格，不要把大表全文搬进正文。",
++                "语气专业、清楚、有温度，但不要夸张营销。",
++            ],
++        }
++        text = json.dumps(prompt_payload, ensure_ascii=False, default=str)
++        if len(text) <= self.MAX_PROMPT_CHARS:
++            return text
++        return text[: self.MAX_PROMPT_CHARS] + "\n【上下文因过长已截断，请只基于已给出的确定性事实表达。】"
++
++    def _compact_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
++        """压缩确定性响应，白名单保留 LLM 表达所需事实。
++
++        业务逻辑：
++            LLM 只做答案表达，不需要 query_plan、debug、planner、guardrail 等内部编排信息。
++            这里改为白名单构造 prompt 上下文，只保留摘要、状态消息、结构化结果、展示答案
++            和口径提示，降低内部字段泄露和被 LLM 误引用的风险。
++        """
++
++        compact: dict[str, Any] = {}
++        if payload.get("answer_summary") is not None:
++            compact["answer_summary"] = payload.get("answer_summary")
++        status = payload.get("status")
++        if isinstance(status, dict):
++            compact["status"] = {
++                key: status.get(key)
++                for key in ("code", "message", "success")
++                if status.get(key) is not None
++            }
++        result_table = payload.get("result_table")
++        if isinstance(result_table, dict):
++            compact["result_table"] = {
++                key: deepcopy(result_table.get(key))
++                for key in ("columns", "rows")
++                if key in result_table
++            }
++            self._truncate_table(compact["result_table"])
++        presentation = payload.get("presentation")
++        if isinstance(presentation, dict):
++            compact_presentation = {
++                key: deepcopy(presentation.get(key))
++                for key in ("display_type", "title", "answer", "caveats", "caveat_items", "table_spec")
++                if key in presentation
++            }
++            self._truncate_table(compact_presentation.get("table_spec"))
++            compact["presentation"] = compact_presentation
++        for key in ("caveats", "caveat_items", "warnings"):
++            if payload.get(key) is not None:
++                compact[key] = deepcopy(payload.get(key))
++        self._remove_internal_prompt_fields(compact)
++        return compact
++
++    def _remove_internal_prompt_fields(self, value: Any) -> None:
++        """从发给 LLM 的表达上下文中移除内部排查字段。"""
++
++        sanitized = self._sanitize_prompt_value(value)
++        if isinstance(value, dict):
++            value.clear()
++            if isinstance(sanitized, dict):
++                value.update(sanitized)
++            return
++        if isinstance(value, list):
++            value.clear()
++            if isinstance(sanitized, list):
++                value.extend(sanitized)
++
++    def _sanitize_prompt_value(self, value: Any) -> Any | None:
++        """递归清理 prompt 上下文中的内部键和值。
++
++        返回：
++            清理后的值；None 表示该字段/列表项应被删除。
++        """
++
++        if isinstance(value, dict):
++            sanitized: dict[Any, Any] = {}
++            for key, child_value in value.items():
++                if self._is_internal_prompt_text(str(key)):
++                    continue
++                child = self._sanitize_prompt_value(child_value)
++                if child is not None:
++                    sanitized[key] = child
++            return sanitized
++        if isinstance(value, list):
++            sanitized_items: list[Any] = []
++            for item in value:
++                child = self._sanitize_prompt_value(item)
++                if child is not None:
++                    sanitized_items.append(child)
++            return sanitized_items
++        if isinstance(value, str) and self._is_internal_prompt_text(value):
++            return None
++        return value
++
++    @staticmethod
++    def _is_internal_prompt_text(text: str) -> bool:
++        """判断 prompt 键或文本值是否包含不应给 LLM 的内部字段/技术痕迹。"""
++
++        lowered = (text or "").lower()
++        internal_markers = (
++            "槽位", "字段", "表定义", "库定义", "数据库", "query_key", "query_plan", "query-plan", "query plan",
++            "group_by", "debug", "trace", "raw_result", "schema", "planner", "guardrail", "guard rail", "sql", "internal",
++            "ods_", "dwd_", "dws_", "llm",
++        )
++        return any(marker in lowered for marker in internal_markers)
++
++    def _validate_streamed_answer(self, answer: str, *, deterministic_payload: dict[str, Any]) -> str | None:
++        """校验流式答案是否可作为最终业务叙事。
++
++        参数：
++            answer: LLM 已完整输出的主回答文本。
++            deterministic_payload: 后端确定性结果快照。
++
++        返回：
++            None 表示可采用；非空错误码表示必须回落到确定性答案。
++        """
++
++        if not answer.strip():
++            return "stream_empty_answer"
++        if self._visible_text_has_technical_leak(answer):
++            return "stream_technical_visible_leak"
++        if not self._answer_numbers_are_safe(answer, deterministic_payload=deterministic_payload):
++            return "stream_text_number_hallucination"
++        if not self._answer_row_bindings_are_safe(answer, deterministic_payload=deterministic_payload):
++            return "stream_structured_fact_mismatch"
++        return None
++
++    @classmethod
++    def _visible_text_has_technical_leak(cls, answer: str) -> bool:
++        """判断流式主回答或兜底文本是否泄露 SQL、表名、字段名或内部编排信息。"""
++
++        return any(re.search(pattern, answer or "", flags=re.I) for pattern in cls.TECHNICAL_VISIBLE_PATTERNS)
++
++    def _answer_numbers_are_safe(self, answer: str, *, deterministic_payload: dict[str, Any]) -> bool:
++        """判断流式主回答中的数字是否全部来自确定性上下文。"""
++
++        answer_tokens = self._extract_number_tokens(answer)
++        if not answer_tokens:
++            return True
++        allowed_context = self._compact_payload(deterministic_payload)
++        allowed_tokens = self._collect_allowed_number_tokens(allowed_context)
++        return answer_tokens.issubset(allowed_tokens)
++
++    def _answer_row_bindings_are_safe(self, answer: str, *, deterministic_payload: dict[str, Any]) -> bool:
++        """校验结构化行中的“名称-数值”绑定没有被 LLM 错配。
++
++        业务逻辑：
++            数字白名单只能保证 LLM 没有新增数字，但不能防止把“华东 120.5MW”说成
++            “华北 120.5MW”。因此只要主回答复述了某一行的指标数字，就要求同一语句
++            中同时出现该行的非数字维度值。若 LLM 错配名称和值，则降级到确定性答案。
++        """
++
++        clauses = self._split_answer_fact_clauses(answer)
++        if not clauses:
++            return True
++        for table in self._iter_structured_tables(deterministic_payload):
++            rows = table.get("rows") if isinstance(table, dict) else None
++            if not isinstance(rows, list):
++                continue
++            row_bindings: list[tuple[list[str], set[str]]] = []
++            for row in rows:
++                if not isinstance(row, dict):
++                    continue
++                entity_values = self._collect_row_entity_values(row)
++                metric_tokens = self._collect_row_metric_number_tokens(row)
++                if entity_values and metric_tokens:
++                    row_bindings.append((entity_values, metric_tokens))
++            if not row_bindings:
++                continue
++            for clause in clauses:
++                clause_tokens = self._extract_number_tokens(clause)
++                if not clause_tokens:
++                    continue
++                mentioned_entities = [
++                    entity
++                    for entity_values, _metric_tokens in row_bindings
++                    for entity in entity_values
++                    if entity in clause
++                ]
++                for token in clause_tokens:
++                    allowed_entities_for_token = [
++                        entity
++                        for entity_values, metric_tokens in row_bindings
++                        if token in metric_tokens
++                        for entity in entity_values
++                    ]
++                    if not allowed_entities_for_token:
++                        continue
++                    if not mentioned_entities:
++                        return False
++                    if not any(entity in allowed_entities_for_token for entity in mentioned_entities):
++                        return False
++                    if any(entity not in allowed_entities_for_token for entity in mentioned_entities):
++                        return False
++        return True
++
++    def _split_answer_fact_clauses(self, answer: str) -> list[str]:
++        """把答案切成适合校验名称-数值绑定的短分句。"""
++
++        return [clause.strip() for clause in re.split(r"[\n。；;！？!?，,、]+", answer or "") if clause.strip()]
++
++    def _iter_structured_tables(self, payload: dict[str, Any]) -> Iterable[dict[str, Any]]:
++        """遍历可用于答案事实绑定校验的结构化表格。"""
++
++        result_table = payload.get("result_table")
++        if isinstance(result_table, dict):
++            yield result_table
++        presentation = payload.get("presentation")
++        if isinstance(presentation, dict):
++            table_spec = presentation.get("table_spec")
++            if isinstance(table_spec, dict):
++                yield table_spec
++
++    def _collect_row_entity_values(self, row: dict[str, Any]) -> list[str]:
++        """提取一行中的维度实体值，如城市、订单号、功率档等。
++
++        业务逻辑：
++            维度实体不一定是纯文本，BOM 单号、功率档 620W、型号等都可能带数字。
++            因此不能简单因为值里有数字就排除；应优先按字段角色判断，只有指标/时间
++            字段才不作为绑定实体。
++        """
++
++        entities: list[str] = []
++        for column, value in row.items():
++            if value is None:
++                continue
++            text = str(value).strip()
++            if not text or len(text) < 2:
++                continue
++            entity_like = self._is_entity_like_column(column)
++            metric_like = self._is_metric_like_column(column)
++            if self._is_time_like_column(column) or (metric_like and (not entity_like or self._is_plain_numeric_text(text))):
++                continue
++            if entity_like or not self._is_plain_numeric_text(text):
++                entities.append(text)
++        return entities
++
++    def _collect_row_metric_number_tokens(self, row: dict[str, Any]) -> set[str]:
++        """提取一行中的指标数字 token。"""
++
++        tokens: set[str] = set()
++        for column, value in row.items():
++            if value is None:
++                continue
++            # 年月日常作为筛选或分组口径，不作为“名称-指标值”绑定校验对象。
++            # 指标字段优先于实体字段判断，避免 paid_amount 这类字段因包含 id 子串被误跳过。
++            if self._is_time_like_column(column):
++                continue
++            if self._is_entity_like_column(column) and not self._is_metric_like_column(column):
++                continue
++            text = str(value).strip()
++            if not text:
++                continue
++            value_tokens = self._extract_number_tokens(text)
++            if value_tokens:
++                tokens.update(value_tokens)
++        return tokens
++
++    @staticmethod
++    def _is_time_like_column(column: Any) -> bool:
++        """判断字段是否为时间口径字段。"""
++
++        key = str(column).lower()
++        return any(marker in key for marker in ("year", "month", "date", "time", "年份", "年度", "年月", "月份", "日期", "时间"))
++
++    @staticmethod
++    def _is_entity_like_column(column: Any) -> bool:
++        """判断字段是否为维度实体字段，允许实体值包含数字。"""
++
++        key = str(column).lower()
++        tokens = [token for token in re.split(r"[^a-z0-9]+", key.replace("_", " ")) if token]
++        english_markers = {
++            "name", "city", "province", "region", "customer", "supplier", "vendor", "carrier", "company",
++            "order", "bom", "model", "type", "code", "no", "id", "category", "dimension", "bin", "level",
++        }
++        chinese_markers = (
++            "名称", "城市", "省份", "区域", "客户", "供应商", "厂家", "承运商", "公司", "订单", "单号", "编号",
++            "型号", "版型", "档", "类别", "分类", "维度", "项目", "产品", "物料", "组件",
++        )
++        return any(token in english_markers for token in tokens) or any(marker in key for marker in chinese_markers)
++
++    @staticmethod
++    def _is_strong_entity_like_column(column: Any) -> bool:
++        """判断字段是否明显表示编号、型号、档位等实体，避免被功率/预测等词误判为指标。"""
++
++        key = str(column).lower()
++        tokens = [token for token in re.split(r"[^a-z0-9]+", key.replace("_", " ")) if token]
++        strong_english_markers = {"order", "bom", "model", "type", "code", "no", "id", "category", "dimension", "bin", "level"}
++        strong_chinese_markers = ("订单", "单号", "编号", "型号", "版型", "档", "类别", "分类", "维度", "项目", "产品", "物料", "组件")
++        return any(token in strong_english_markers for token in tokens) or any(marker in key for marker in strong_chinese_markers)
++
++    def _is_metric_like_column(self, column: Any) -> bool:
++        """判断字段是否为数值指标字段。"""
++
++        if self._is_strong_entity_like_column(column):
++            return False
++        key = str(column).lower()
++        metric_markers = (
++            "amount", "fee", "cost", "price", "total", "sum", "avg", "average", "mw", "watt", "power", "rate", "ratio", "share",
++            "count", "trip", "weight", "qty", "quantity", "percent", "score", "value", "metric",
++            "金额", "费用", "运费", "成本", "价格", "总", "合计", "平均", "发运量", "比例", "占比", "比率",
++            "数量", "次数", "车次", "重量", "分数", "指标", "数值", "预测",
++        )
++        return any(marker in key for marker in metric_markers)
++
++    def _is_plain_numeric_text(self, text: str) -> bool:
++        """判断文本是否基本只是数字/单位/符号，避免把未知金额字段误当实体。"""
++
++        stripped = text.strip()
++        if not stripped:
++            return False
++        if not self._extract_number_tokens(stripped):
++            return False
++        return bool(re.fullmatch(r"[\d\s,，.。+\-/%％元万亿元MWmwWwKGkg吨次台个件]+", stripped))
++
++    def _collect_allowed_number_tokens(self, payload: Any) -> set[str]:
++        """从确定性响应中收集允许被 LLM 复述的数字。"""
++
++        tokens: set[str] = set()
++        self._collect_number_tokens_from_value(payload, tokens=tokens, parent_key="")
++        return tokens
++
++    def _collect_number_tokens_from_value(self, value: Any, *, tokens: set[str], parent_key: str) -> None:
++        """递归读取确定性上下文里的数字，跳过 debug 和 trace 等内部排查字段。"""
++
++        key = parent_key.lower()
++        if any(marker in key for marker in ("debug", "trace_events", "raw_result")):
++            return
++        if isinstance(value, dict):
++            for child_key, child_value in value.items():
++                next_key = f"{parent_key}.{child_key}" if parent_key else str(child_key)
++                self._collect_number_tokens_from_value(child_value, tokens=tokens, parent_key=next_key)
++            return
++        if isinstance(value, list):
++            for item in value:
++                self._collect_number_tokens_from_value(item, tokens=tokens, parent_key=parent_key)
++            return
++        if value is None:
++            return
++        tokens.update(self._extract_number_tokens(str(value)))
++
++    def _extract_number_tokens(self, text: str) -> set[str]:
++        """抽取并归一化文本中的数字 token。"""
++
++        tokens: set[str] = set()
++        for match in re.finditer(r"(20\d{2})[-/年](\d{1,2})(?:[-/月](\d{1,2}))?", text or ""):
++            tokens.add(self._normalize_number_token(match.group(1)))
++            tokens.add(self._normalize_number_token(match.group(2)))
++            if match.group(3):
++                tokens.add(self._normalize_number_token(match.group(3)))
++        for raw in self.NUMBER_PATTERN.findall(text or ""):
++            try:
++                tokens.add(self._normalize_number_token(raw))
++            except Exception:  # noqa: BLE001
++                continue
++        return tokens
++
++    @staticmethod
++    def _normalize_number_token(value: Any) -> str:
++        """把数字统一为可比较 token，避免 120.50 与 120.5 被误判不同。"""
++
++        number = Decimal(str(value).replace(",", ""))
++        normalized = number.normalize()
++        return format(normalized, "f").rstrip("0").rstrip(".") or "0"
++
++    def _truncate_table(self, table: Any) -> None:
++        """把表格行数限制到 prompt 可控范围，同时保留总行数提示。"""
++
++        if not isinstance(table, dict):
++            return
++        rows = table.get("rows")
++        if not isinstance(rows, list):
++            return
++        original_count = len(rows)
++        if original_count > self.MAX_PROMPT_ROWS:
++            table["rows"] = rows[: self.MAX_PROMPT_ROWS]
++            table["truncated_for_llm"] = True
++            table["total_rows"] = original_count
++
++    @staticmethod
++    def _extract_delta_text(event: Any) -> str:
++        """从 OpenAI 兼容 chunk 中提取增量文本。"""
++
++        try:
++            if isinstance(event, dict):
++                choice = (event.get("choices") or [{}])[0]
++                delta = choice.get("delta") or {}
++                return str(delta.get("content") or "")
++            choices = getattr(event, "choices", None) or []
++            if not choices:
++                return ""
++            delta = getattr(choices[0], "delta", None)
++            return str(getattr(delta, "content", "") or "")
++        except Exception:  # noqa: BLE001
++            return ""
++
++    @classmethod
++    def _chunk_text(cls, text: str) -> Iterable[str]:
++        """把降级答案切成小块，模拟流式输出体验。"""
++
++        value = text or "当前没有可展示的答案。"
++        for index in range(0, len(value), cls.FALLBACK_CHUNK_SIZE):
++            yield value[index : index + cls.FALLBACK_CHUNK_SIZE]
++
++    @classmethod
++    def _resolve_fallback_answer(cls, payload: dict[str, Any], fallback_answer: str | None) -> str:
++        """从响应快照中提取安全降级答案。
++
++        业务逻辑：
++            正常情况下 deterministic presentation 已经过业务层控制，不应包含内部字段。
++            但如果异常数据把 SQL、query_key、planner 等技术痕迹带入兜底文本，
++            兜底路径也不能把它原样流给前端；此时跳过该候选，选择安全的状态消息
++            或通用完成提示，确保“无 LLM/LLM 失败”路径同样不泄露内部实现。
++        """
++
++        candidates: list[Any] = []
++        if fallback_answer:
++            candidates.append(fallback_answer)
++        presentation = payload.get("presentation")
++        if isinstance(presentation, dict) and presentation.get("answer"):
++            candidates.append(presentation.get("answer"))
++        if payload.get("answer_summary"):
++            candidates.append(payload.get("answer_summary"))
++        status = payload.get("status")
++        if isinstance(status, dict) and status.get("message"):
++            candidates.append(status.get("message"))
++        candidates.append("当前查询已完成，请查看下方结构化结果。")
++
++        for candidate in candidates:
++            text = str(candidate or "").strip()
++            if text and not cls._visible_text_has_technical_leak(text):
++                return text
++        return "当前查询已完成，请查看下方结构化结果。"
++
++    @staticmethod
++    def _default_title(domain: str) -> str:
++        """生成缺省展示标题。"""
++
++        if domain == "plan_bom":
++            return "计划 BOM 智能回答"
++        if domain == "logistics":
++            return "物流经营智能回答"
++        return "智能回答"
++
++
++__all__ = ["BusinessAnswerStreamService", "build_json_line_event"]
+diff --git a/tests/business_acceptance/test_business_chat_answer_format_preference.py b/tests/business_acceptance/test_business_chat_answer_format_preference.py
+new file mode 100644
+index 0000000..6e4277e
+--- /dev/null
++++ b/tests/business_acceptance/test_business_chat_answer_format_preference.py
+@@ -0,0 +1,912 @@
++from __future__ import annotations
++
++from backend.app.domains.logistics.schemas.data_qa import (
++    LogisticsDataQaPlan,
++    LogisticsDataQaResult,
++    LogisticsDataQaStatus,
++    LogisticsDataQaTable,
++)
++from backend.app.domains.logistics.services.llm_answer_presentation_service import LogisticsLlmAnswerPresentationService
++from backend.app.domains.plan_bom.schemas.qa import (
++    PlanBomNluCandidate,
++    PlanBomQaResponse,
++    PlanBomQaStatus,
++    PlanBomTableSpec,
++)
++from backend.app.domains.plan_bom.api.endpoints.qa import _resolve_plan_bom_stream_fallback_answer
++from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
++from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService
++
++
++class _FakeStreamClient:
++    """构造 OpenAI 兼容的测试流式客户端。"""
++
++    def __init__(self, chunks: list[str]) -> None:
++        self.chat = _FakeChat(chunks)
++
++
++class _FakeChat:
++    """承载 completions 入口，避免测试访问真实 LLM。"""
++
++    def __init__(self, chunks: list[str]) -> None:
++        self.completions = _FakeCompletions(chunks)
++
++
++class _FakeCompletions:
++    """返回固定 chunk 的流式 completion。"""
++
++    def __init__(self, chunks: list[str]) -> None:
++        self._chunks = chunks
++
++    def create(self, **_kwargs: object) -> list[dict[str, object]]:
++        """返回 OpenAI chat.completions.create 兼容事件。"""
++
++        return [{"choices": [{"delta": {"content": chunk}}]} for chunk in self._chunks]
++
++
++def _logistics_result(*, rows: list[dict[str, object]] | None = None) -> LogisticsDataQaResult:
++    """构造可复用的物流确定性结果。
++
++    参数：
++        rows: 后端查询返回的结构化行。
++    返回值：
++        一个 OK 状态的 LogisticsDataQaResult。
++    业务逻辑：
++        测试只关注展示编排，不依赖真实数据库。
++    """
++
++    result_rows = rows or [
++        {"region_name": "华东", "shipment_mw": 120.5},
++        {"region_name": "华南", "shipment_mw": 88.2},
++    ]
++    return LogisticsDataQaResult(
++        answer_summary="2026年发运量统计已完成，华东 120.5MW，华南 88.2MW。",
++        result_table=LogisticsDataQaTable(columns=["region_name", "shipment_mw"], rows=result_rows),
++        calculation_logic=["发运量按 MW 口径汇总。"],
++        data_scope={"year": 2026},
++        query_plan=LogisticsDataQaPlan(
++            intent="shipment_summary",
++            query_key="sys_region_mw",
++            metrics=["shipment_mw"],
++            dimensions=["region_name"],
++            filters={"year": 2026},
++            group_by=["region_name"],
++        ),
++        status=LogisticsDataQaStatus(code="OK", message="查询成功", success=True),
++    )
++
++
++def _stream_payload() -> dict[str, object]:
++    """构造流式答案安全测试使用的确定性 payload。"""
++
++    result = _logistics_result()
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    presentation = service.build_presentation(question="统计2026年各区域发运量", result=result)
++    assert presentation is not None
++    result.presentation = presentation
++    return result.model_dump(mode="json")
++
++
++def _plan_bom_response(question: str) -> PlanBomQaResponse:
++    """构造计划 BOM 确定性结果。
++
++    参数：
++        question: 用户原始问题，用于测试展示意图识别。
++    返回值：
++        一个 A 类 OK 的 PlanBomQaResponse。
++    业务逻辑：
++        计划 BOM 表格事实仍保留在 result_table，presentation 是否展示由问题意图决定。
++    """
++
++    return PlanBomQaResponse(
++        question=question,
++        classification="A",
++        status=PlanBomQaStatus(code="OK", message="查询成功"),
++        nlu=PlanBomNluCandidate(question=question, intent="plan_power_prediction", slots={"order_tail_no": ["00104"]}),
++        answer_summary="订单00104功率预测已完成，中心功率为620W。",
++        result_table=PlanBomTableSpec(
++            columns=["功率档", "预测比例"],
++            rows=[{"功率档": "620W", "预测比例": "50%"}, {"功率档": "625W", "预测比例": "50%"}],
++        ),
++        raw_result={"power_prediction": {"center_power": 620}},
++    )
++
++
++def test_logistics_answer_defaults_to_text_only_when_no_visual_request() -> None:
++    """未明确要求图表/表格/指标卡时，物流智能回答只给 Markdown 文字，不固定渲染数据组件。"""
++
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    presentation = service.build_presentation(question="统计2026年各区域发运量", result=_logistics_result())
++
++    assert presentation is not None
++    assert presentation.display_type == "narrative"
++    assert presentation.table_spec is None
++    assert presentation.chart_spec is None
++    assert presentation.cards == []
++    assert presentation.title != "查询结果"
++    assert not any("本次返回" in item for item in presentation.highlights)
++    assert presentation.caveat_items
++    assert presentation.debug["presentation_source"] == "deterministic"
++    assert "requested_display" in presentation.debug
++    assert presentation.debug["final_display_type"] == presentation.display_type
++    assert "fallback_reason" in presentation.debug
++
++
++def test_logistics_ranking_narrative_describes_top_rows_with_values() -> None:
++    """排名类叙事回答不能只给一句总计，应基于后端 rows 复述前五城市和值。"""
++
++    rows = [
++        {"城市": "徐州", "总运费": 1526425},
++        {"城市": "太仓", "总运费": 236305},
++        {"城市": "扬州", "总运费": 229064},
++        {"城市": "淮安", "总运费": 201100},
++        {"城市": "无锡", "总运费": 191499},
++    ]
++    result = LogisticsDataQaResult(
++        answer_summary="2024年江苏总运费为3462229元。",
++        result_table=LogisticsDataQaTable(columns=["城市", "总运费"], rows=rows),
++        calculation_logic=["按城市维度汇总总运费，并按总运费降序返回前五。"],
++        data_scope={"year": 2024, "province": "江苏省"},
++        query_plan=LogisticsDataQaPlan(
++            intent="fee_ranking",
++            query_key="city_fee_topn",
++            metrics=["总运费"],
++            dimensions=["城市"],
++            filters={"year": 2024, "province": "江苏省"},
++            group_by=["城市"],
++            sort=[{"field": "总运费", "direction": "desc"}],
++            limit=5,
++        ),
++        status=LogisticsDataQaStatus(code="OK", message="查询成功", success=True),
++    )
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++
++    presentation = service.build_presentation(question="2024年江苏省各城市总费用排名前五？", result=result)
++
++    assert presentation is not None
++    assert presentation.display_type == "narrative"
++    assert presentation.table_spec is None
++    assert presentation.cards == []
++    answer = presentation.answer
++    compact_answer = answer.replace(",", "").replace(" ", "")
++    assert len(answer) > len(result.answer_summary) + 80
++    assert "按当前返回的排序" in answer or "依次" in answer
++    for row in rows:
++        assert f"{row['城市']}" in answer
++        assert f"{row['总运费']}元" in compact_answer
++    assert "query_key" not in answer and "SQL" not in answer and "planner" not in answer
++
++
++def test_stream_prompt_encourages_rich_small_ranking_narrative() -> None:
++    """流式表达提示词应允许排名/小表结果复述关键行，避免一句话潦草返回。"""
++
++    system_prompt = BusinessAnswerStreamService._build_system_prompt("logistics")
++    user_prompt = BusinessAnswerStreamService(enabled=True, base_url=None, api_key=None, model="")._build_user_prompt(
++        "2024年江苏省各城市总费用排名前五？",
++        {
++            "answer_summary": "2024年江苏总运费为3462229元。",
++            "result_table": {"columns": ["城市", "总运费"], "rows": [{"城市": "徐州", "总运费": 1526425}]},
++        },
++    )
++
++    assert "排名" in system_prompt
++    assert "逐项" in system_prompt
++    assert "五行以内" in user_prompt
++    assert "不要重复铺满所有行" not in user_prompt
++
++
++def test_logistics_caveat_levels_do_not_treat_generic_other_bucket_text_as_danger() -> None:
++    """普通区域兜底口径不应因“异常值归入其他”几个字被渲染为危险大块风险。"""
++
++    result = _logistics_result()
++    result.warnings = ["区域口径优先使用 delivery_area；为空时用 delivery_province 映射七大区域，异常值归入“其他”。"]
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++
++    presentation = service.build_presentation(question="统计2026年各区域发运量", result=result)
++
++    assert presentation is not None
++    levels_by_text = {item.text: item.level for item in presentation.caveat_items}
++    assert levels_by_text[result.warnings[0]] == "warning"
++
++
++def test_logistics_answer_respects_explicit_visual_requests() -> None:
++    """只有用户明确要求展示形式时，才返回对应的表格、图表或指标卡组件。"""
++
++    service = LogisticsLlmAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++
++    table = service.build_presentation(question="请用表格展示2026年各区域发运量", result=_logistics_result())
++    chart = service.build_presentation(question="请用柱状图展示2026年各区域发运量", result=_logistics_result())
++    cards = service.build_presentation(question="请用指标卡展示2026年发运量概览", result=_logistics_result(rows=[{"scope_label": "2026年", "shipment_mw": 208.7}]))
++
++    assert table is not None and table.display_type == "table" and table.table_spec is not None
++    assert table.chart_spec is None and table.cards == []
++    assert chart is not None and chart.display_type == "bar_chart" and chart.chart_spec is not None
++    assert chart.table_spec is None and chart.cards == []
++    assert cards is not None and cards.display_type == "summary_cards" and cards.cards
++    assert cards.table_spec is None and cards.chart_spec is None
++
++
++def test_plan_bom_answer_defaults_to_text_only_but_keeps_raw_result_table() -> None:
++    """计划 BOM 未明确要求表格时，presentation 只做文字回答，原始 result_table 仍保留给后续导出/追溯。"""
++
++    service = PlanBomAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    response = _plan_bom_response("订单00104做功率预测")
++
++    presentation = service.build_presentation(response)
++
++    assert response.result_table.rows
++    assert presentation.display_type == "narrative"
++    assert presentation.table_spec is None
++
++
++def test_plan_bom_answer_uses_table_only_when_user_requests_table() -> None:
++    """计划 BOM 明确要求表格时，presentation 才携带 table_spec。"""
++
++    service = PlanBomAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    response = _plan_bom_response("请用表格展示订单00104功率预测")
++
++    presentation = service.build_presentation(response)
++
++    assert presentation.display_type == "table"
++    assert presentation.table_spec is not None
++    assert presentation.table_spec.rows == response.result_table.rows
++
++
++def _assert_no_plan_bom_visible_technical_terms(text: str) -> None:
++    """断言计划 BOM 面向业务员的可见文案不暴露技术实现词。"""
++
++    forbidden_terms = (
++        "槽位",
++        "字段",
++        "order_id",
++        "material_category",
++        "raw_result",
++        "query_key",
++        "schema",
++        "Guardrail",
++        "guardrail",
++        "LLM",
++        "SQL",
++        "planner",
++    )
++    assert not any(term in text for term in forbidden_terms), text
++
++
++def test_plan_bom_clarification_presentation_uses_business_language_without_slot_fields() -> None:
++    """计划 BOM 追问不能把槽位名、字段名或内部术语直接展示给业务员。"""
++
++    service = PlanBomAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    response = PlanBomQaResponse(
++        question="哪些订单的接线盒规格不一样，按订单列出来。",
++        classification="B",
++        status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="需要补充关键信息后继续查询", severity="warning"),
++        nlu=PlanBomNluCandidate(
++            question="哪些订单的接线盒规格不一样，按订单列出来。",
++            intent="cross_order_material_compare",
++            slots={},
++            missing_slots=["order_id", "material_category"],
++        ),
++        answer_summary="当前问题缺少或存在歧义的槽位：order_id, material_category。请补充订单、版本、材料或查询范围。",
++    )
++
++    presentation = service.build_presentation(response)
++    follow_up_questions = presentation.follow_up.get("questions", []) if presentation.follow_up else []
++    visible_text = "\n".join([presentation.title, presentation.answer, *presentation.highlights, *presentation.caveats, *follow_up_questions])
++
++    _assert_no_plan_bom_visible_technical_terms(visible_text)
++    assert len(presentation.answer) >= 100
++    assert "我先" in presentation.answer
++    assert "再" in presentation.answer
++    assert "最后" in presentation.answer
++    assert "订单" in presentation.answer
++    assert "材料" in presentation.answer or "接线盒" in presentation.answer
++
++
++def test_plan_bom_success_presentation_contains_analysis_process_and_complete_small_result() -> None:
++    """计划 BOM 已答结果不能只有一句话；小结果应说明查询过程并完整复述关键记录。"""
++
++    service = PlanBomAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    response = PlanBomQaResponse(
++        question="订单00104的玻璃和接线盒规格是什么？",
++        classification="A",
++        status=PlanBomQaStatus(code="OK", message="查询成功"),
++        nlu=PlanBomNluCandidate(
++            question="订单00104的玻璃和接线盒规格是什么？",
++            intent="single_order_material_specs",
++            slots={"order_tail_no": ["00104"], "material_category": ["玻璃", "接线盒"]},
++        ),
++        answer_summary="已查询订单00104的2条BOM材料规格。",
++        result_table=PlanBomTableSpec(
++            columns=["订单", "材料类别", "规格描述"],
++            rows=[
++                {"订单": "00104", "材料类别": "玻璃", "规格描述": "双玻 2.0mm"},
++                {"订单": "00104", "材料类别": "接线盒", "规格描述": "三分体 线长 1200mm"},
++            ],
++        ),
++    )
++
++    presentation = service.build_presentation(response)
++
++    _assert_no_plan_bom_visible_technical_terms("\n".join([presentation.answer, *presentation.caveats, *presentation.highlights]))
++    assert len(presentation.answer) >= 120
++    assert "我先" in presentation.answer
++    assert "再" in presentation.answer
++    assert "最后" in presentation.answer
++    assert "玻璃" in presentation.answer and "双玻 2.0mm" in presentation.answer
++    assert "接线盒" in presentation.answer and "三分体 线长 1200mm" in presentation.answer
++    assert presentation.table_spec is None
++
++
++def test_plan_bom_stream_fallback_uses_business_presentation_answer_and_chunks_it() -> None:
++    """计划 BOM 流式兜底应输出业务化 presentation.answer，并按 chunk 动态返回。"""
++
++    presentation_service = PlanBomAnswerPresentationService(enabled=True, base_url=None, api_key=None, model="")
++    response = PlanBomQaResponse(
++        question="哪些订单的接线盒规格不一样，按订单列出来。",
++        classification="B",
++        status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="需要补充关键信息后继续查询", severity="warning"),
++        nlu=PlanBomNluCandidate(
++            question="哪些订单的接线盒规格不一样，按订单列出来。",
++            intent="cross_order_material_compare",
++            slots={},
++            missing_slots=["order_id", "material_category"],
++        ),
++        answer_summary="当前问题缺少或存在歧义的槽位：order_id, material_category。请补充订单、版本、材料或查询范围。",
++    )
++    response.presentation = presentation_service.build_presentation(response)
++    payload = response.model_dump(mode="json")
++    fallback = _resolve_plan_bom_stream_fallback_answer(payload)
++    stream_service = BusinessAnswerStreamService(enabled=False, base_url=None, api_key=None, model="")
++
++    chunks = list(
++        stream_service.stream_answer(
++            domain="plan_bom",
++            question=response.question,
++            deterministic_payload=payload,
++            fallback_answer=fallback,
++        )
++    )
++    streamed_answer = "".join(chunks)
++
++    assert len(chunks) > 1
++    assert streamed_answer == response.presentation.answer
++    _assert_no_plan_bom_visible_technical_terms(streamed_answer)
++
++
++def test_plan_bom_stream_fallback_rejects_raw_answer_summary_when_presentation_missing() -> None:
++    """即使 presentation 缺失，计划 BOM 流式兜底也不能返回含槽位/字段的原始摘要。"""
++
++    fallback = _resolve_plan_bom_stream_fallback_answer(
++        {
++            "answer_summary": "当前问题缺少或存在歧义的槽位：order_id, material_category。",
++            "status": {"message": "需要补充关键信息后继续查询"},
++        }
++    )
++
++    _assert_no_plan_bom_visible_technical_terms(fallback)
++    assert fallback == "需要补充关键信息后继续查询"
++
++
++def test_business_chat_frontend_does_not_fallback_to_raw_tables_for_narrative_presentation() -> None:
++    """前端已有 presentation 时应尊重展示编排，不能因 raw result_table 存在而固定显示“明细数据”。"""
++
++    page = "frontend/src/views/business-chat/BusinessChatPage.vue"
++    with open(page, encoding="utf-8") as file:
++        chat = file.read()
++
++    assert "function resolvePresentationTable" in chat
++    assert "function shouldShowPresentationChart" in chat
++    assert "presentation?.table_spec || data.result_table || null" not in chat
++    assert "v-if=\"shouldShowPresentationChart(message)\"" in chat
++    assert "tableDisplayTypes.has(presentation.displayType)" in chat
++    assert "cardDisplayTypes.has(presentation.displayType)" in chat
++
++
++def test_streamed_answer_rejects_new_numbers_and_keeps_structured_fields() -> None:
++    """LLM 流式表达新增确定性上下文外数值时，必须降级且不改结构化事实。"""
++
++    payload = _stream_payload()
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["华东 120.5MW，华南 88.2MW，另有华北 999MW。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++    final_payload = service.apply_streamed_answer(
++        domain="logistics",
++        deterministic_payload=payload,
++        streamed_answer=streamed_answer,
++    )
++
++    assert streamed_answer == fallback_answer
++    assert final_payload["presentation"]["answer"] == fallback_answer
++    assert final_payload["result_table"] == payload["result_table"]
++    assert final_payload["presentation"]["table_spec"] == payload["presentation"]["table_spec"]
++    assert final_payload["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert final_payload["presentation"]["debug"]["stream_fallback_reason"] == "stream_text_number_hallucination"
++
++
++def test_stream_prompt_compact_payload_removes_internal_query_key() -> None:
++    """给 LLM 的表达上下文应剔除 query_key/debug 等内部排查字段，降低泄露概率。"""
++
++    payload = _stream_payload()
++    service = BusinessAnswerStreamService(enabled=True, base_url=None, api_key=None, model="")
++
++    prompt = service._build_user_prompt("统计2026年各区域发运量", payload)
++
++    assert "query_key" not in prompt
++    assert "query_plan" not in prompt
++    assert "sys_region_mw" not in prompt
++    assert "group_by" not in prompt
++    assert "debug" not in prompt
++    assert "trace_events" not in prompt
++    assert "raw_result" not in prompt
++
++
++
++def test_stream_prompt_compact_payload_removes_internal_table_and_caveat_strings() -> None:
++    """即使内部字段混入表头/行值/口径文本，也不能进入 LLM prompt。"""
++
++    payload = {
++        "answer_summary": "查询完成。",
++        "result_table": {
++            "columns": ["region_name", "query_key", "group_by"],
++            "rows": [{"region_name": "华东", "query_key": "sys_region_mw", "group_by": "region_name"}],
++        },
++        "warnings": ["planner 使用 query_plan group_by 调试信息", "正常业务口径"],
++        "presentation": {
++            "answer": "查询完成。",
++            "caveats": ["SQL 调试字段不应发送给 LLM", "可展示口径"],
++        },
++    }
++    service = BusinessAnswerStreamService(enabled=True, base_url=None, api_key=None, model="")
++
++    prompt = service._build_user_prompt("统计各区域发运量", payload)
++
++    assert "query_key" not in prompt
++    assert "sys_region_mw" not in prompt
++    assert "group_by" not in prompt
++    assert "query_plan" not in prompt
++    assert "planner" not in prompt
++    assert "SQL" not in prompt
++    assert "正常业务口径" in prompt
++    assert "可展示口径" in prompt
++
++
++
++def test_streamed_answer_rejects_numbers_only_present_in_query_plan() -> None:
++    """流式数字白名单不能从 query_plan 等内部字段放行数字。"""
++
++    payload = _stream_payload()
++    payload["query_plan"] = {"filters": {"internal_limit": 999}}
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["华东 999MW。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++
++    assert streamed_answer == fallback_answer
++    assert service._last_fallback_reason == "stream_text_number_hallucination"
++
++
++
++def test_streamed_answer_rejects_multi_entity_single_value_claim() -> None:
++    """一个分句把多个实体都绑定到同一个行值时，应保守降级。"""
++
++    payload = _stream_payload()
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["华东和华南均为120.5MW。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++
++    assert streamed_answer == fallback_answer
++    assert service._last_fallback_reason == "stream_structured_fact_mismatch"
++
++
++
++def test_streamed_answer_rejects_numeric_entity_multi_entity_single_value_claim() -> None:
++    """带数字实体的“均为同一比例”错配也要降级。"""
++
++    payload = {
++        "answer_summary": "功率档预测比例已完成，620W 为60%，625W 为40%。",
++        "result_table": {
++            "columns": ["功率档", "预测比例"],
++            "rows": [
++                {"功率档": "620W", "预测比例": "60%"},
++                {"功率档": "625W", "预测比例": "40%"},
++            ],
++        },
++        "presentation": {"answer": "功率档预测比例已完成，620W 为60%，625W 为40%。"},
++    }
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["620W和625W均为40%。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="plan_bom",
++            question="功率档预测比例",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++
++    assert streamed_answer == fallback_answer
++    assert service._last_fallback_reason == "stream_structured_fact_mismatch"
++
++
++
++def test_streamed_answer_rejects_structured_row_fact_mismatch() -> None:
++    """LLM 把结构化行里的名称和值错配时，即使数字合法，也必须降级。"""
++
++    payload = _stream_payload()
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["华北 120.5MW，华南 88.2MW。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++    final_payload = service.apply_streamed_answer(
++        domain="logistics",
++        deterministic_payload=payload,
++        streamed_answer=streamed_answer,
++    )
++
++    assert streamed_answer == fallback_answer
++    assert final_payload["presentation"]["answer"] == fallback_answer
++    assert final_payload["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert final_payload["presentation"]["debug"]["stream_fallback_reason"] == "stream_structured_fact_mismatch"
++
++
++
++def test_streamed_answer_rejects_swapped_row_values_in_same_sentence() -> None:
++    """LLM 在同一句里把两个已有行的名称和值互换时，也必须降级。"""
++
++    payload = _stream_payload()
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["华南 120.5MW，华东 88.2MW。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++
++    assert streamed_answer == fallback_answer
++    assert service._last_fallback_reason == "stream_structured_fact_mismatch"
++
++
++
++def test_streamed_answer_rejects_numeric_entity_value_swap() -> None:
++    """功率档/订单号这类带数字的实体也要参与绑定校验，不能被 LLM 对调。"""
++
++    payload = {
++        "answer_summary": "功率档预测比例已完成，620W 为60%，625W 为40%。",
++        "result_table": {
++            "columns": ["功率档", "预测比例"],
++            "rows": [
++                {"功率档": "620W", "预测比例": "60%"},
++                {"功率档": "625W", "预测比例": "40%"},
++            ],
++        },
++        "presentation": {"answer": "功率档预测比例已完成，620W 为60%，625W 为40%。"},
++    }
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["620W 为40%，625W 为60%。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="plan_bom",
++            question="功率档预测比例",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++
++    assert streamed_answer == fallback_answer
++    assert service._last_fallback_reason == "stream_structured_fact_mismatch"
++
++
++
++def test_streamed_answer_rejects_respectively_style_row_swap() -> None:
++    """LLM 用“分别”把多个实体和值放同一句时，无法安全证明绑定关系，应降级。"""
++
++    payload = _stream_payload()
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["华南和华东分别为120.5MW和88.2MW。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++
++    assert streamed_answer == fallback_answer
++    assert service._last_fallback_reason == "stream_structured_fact_mismatch"
++
++
++
++def test_streamed_answer_rejects_numeric_entity_respectively_style_swap() -> None:
++    """带数字实体也不能用“分别”句式绕过行绑定校验。"""
++
++    payload = {
++        "answer_summary": "功率档预测比例已完成，620W 为60%，625W 为40%。",
++        "result_table": {
++            "columns": ["功率档", "预测比例"],
++            "rows": [
++                {"功率档": "620W", "预测比例": "60%"},
++                {"功率档": "625W", "预测比例": "40%"},
++            ],
++        },
++        "presentation": {"answer": "功率档预测比例已完成，620W 为60%，625W 为40%。"},
++    }
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["620W和625W分别为40%和60%。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="plan_bom",
++            question="功率档预测比例",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++
++    assert streamed_answer == fallback_answer
++    assert service._last_fallback_reason == "stream_structured_fact_mismatch"
++
++
++
++def test_streamed_answer_rejects_metric_column_with_incidental_id_substring_swap() -> None:
++    """paid_amount 这类指标字段不能因包含 id 子串被误判成实体字段。"""
++
++    payload = {
++        "answer_summary": "区域金额统计已完成，华东 120.5元，华南 88.2元。",
++        "result_table": {
++            "columns": ["region_name", "paid_amount"],
++            "rows": [
++                {"region_name": "华东", "paid_amount": 120.5},
++                {"region_name": "华南", "paid_amount": 88.2},
++            ],
++        },
++        "presentation": {"answer": "区域金额统计已完成，华东 120.5元，华南 88.2元。"},
++    }
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["华南 120.5元，华东 88.2元。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计各区域金额",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++
++    assert streamed_answer == fallback_answer
++    assert service._last_fallback_reason == "stream_structured_fact_mismatch"
++
++
++
++def test_deterministic_fallback_text_with_technical_leak_is_sanitized_before_streaming() -> None:
++    """即使确定性兜底文本异常携带内部字段，也不能原样流给前端。"""
++
++    payload = _stream_payload()
++    leaky_answer = "planner 命中 query_key=sys_region_mw，SQL 来自 dws_logistics_detail_union。"
++    payload["answer_summary"] = leaky_answer
++    payload["presentation"]["answer"] = leaky_answer
++    service = BusinessAnswerStreamService(enabled=False, base_url=None, api_key=None, model="")
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=leaky_answer,
++        )
++    )
++
++    assert streamed_answer == "查询成功"
++    assert "query_key" not in streamed_answer
++    assert "SQL" not in streamed_answer
++    assert "planner" not in streamed_answer
++
++
++
++def test_apply_streamed_answer_does_not_bypass_validation_for_leaky_fallback_text() -> None:
++    """候选文本等于原始 leaky fallback 时，也必须写回安全兜底。"""
++
++    payload = _stream_payload()
++    leaky_answer = "planner 命中 query_key=sys_region_mw，SQL 来自 dws_logistics_detail_union。"
++    payload["answer_summary"] = leaky_answer
++    payload["presentation"]["answer"] = leaky_answer
++    service = BusinessAnswerStreamService(enabled=True, base_url=None, api_key=None, model="")
++
++    final_payload = service.apply_streamed_answer(
++        domain="logistics",
++        deterministic_payload=payload,
++        streamed_answer=leaky_answer,
++    )
++
++    assert final_payload["presentation"]["answer"] == "查询成功"
++    assert "query_key" not in final_payload["presentation"]["answer"]
++    assert final_payload["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert final_payload["presentation"]["debug"]["stream_fallback_reason"] == "stream_technical_visible_leak"
++
++
++
++def test_streamed_answer_rejects_visible_technical_leaks() -> None:
++    """LLM 流式表达暴露 SQL、query_key、planner 或数仓表名时，必须降级到确定性答案。"""
++
++    payload = _stream_payload()
++    fallback_answer = str(payload["answer_summary"])
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local",
++        api_key="test-key",
++        model="test-model",
++        client=_FakeStreamClient(["planner 命中 query_key=sys_region_mw，SQL 来自 dws_logistics_detail_union。"]),
++    )
++
++    streamed_answer = "".join(
++        service.stream_answer(
++            domain="logistics",
++            question="统计2026年各区域发运量",
++            deterministic_payload=payload,
++            fallback_answer=fallback_answer,
++        )
++    )
++    final_payload = service.apply_streamed_answer(
++        domain="logistics",
++        deterministic_payload=payload,
++        streamed_answer=streamed_answer,
++    )
++
++    assert streamed_answer == fallback_answer
++    assert final_payload["presentation"]["answer"] == fallback_answer
++    assert final_payload["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert final_payload["presentation"]["debug"]["stream_fallback_reason"] == "stream_technical_visible_leak"
++
++
++def test_business_chat_frontend_uses_caveat_levels_secondary_actions_and_stream_stages() -> None:
++    """前端主回答应以 answer 为主，并把口径、明细和导出放到二级动作中。"""
++
++    page = "frontend/src/views/business-chat/BusinessChatPage.vue"
++    with open(page, encoding="utf-8") as file:
++        chat = file.read()
++    template = chat.split("<script setup", 1)[0]
++
++    assert "caveatItems" in chat
++    assert "data-testid=\"answer-secondary-actions\"" in template
++    assert "查看数据依据" in template
++    assert "展开明细" in template
++    assert "getAssistantAuditTable" in chat
++    assert "result-caveats--info" in chat
++    assert "result-caveats--warning" in chat
++    assert "result-caveats--danger" in chat
++    assert "function resolveLoadingText" in chat
++    assert "function updateAssistantStreamMeta" in chat
++    assert "正在理解问题" in chat
++    assert "正在查询数据" in chat
++    assert "正在组织回答" in chat
++    assert "正在生成回答" in chat
++    assert "onMeta:" in chat
++    assert "rawResponse?.query_plan" not in chat
++    assert "rawResponse?.presentation?.debug" not in chat
++
++
++def test_business_chat_session_keeps_only_safe_audit_table_for_secondary_actions() -> None:
++    """会话持久化不能丢失明细依据，但只能白名单保留 result_table，避免暴露 query_key/debug。"""
++
++    page = "frontend/src/utils/businessChatSessions.ts"
++    with open(page, encoding="utf-8") as file:
++        sessions = file.read()
++
++    assert "rawResponse: normalizeMessageRawResponse(raw.rawResponse)" in sessions
++    assert "presentation: normalizeMessagePresentation(raw.presentation)" in sessions
++    assert "function normalizeMessagePresentation" in sessions
++    assert "function normalizeMessageRawResponse" in sessions
++    assert "result_table: safeResultTable" in sessions
++    assert "query_plan" not in sessions
++    assert "presentation?.debug" not in sessions
++    assert "presentation: raw.presentation &&" not in sessions
++    assert "rawResponse: null" not in sessions
++
++
++def test_business_chat_frontend_caveat_items_guard_old_payloads() -> None:
++    """旧会话或旧服务端 payload 没有 caveatItems 时，前端应回落到 caveats 而不是读取 undefined.length。"""
++
++    page = "frontend/src/views/business-chat/BusinessChatPage.vue"
++    with open(page, encoding="utf-8") as file:
++        chat = file.read()
++
++    assert "Array.isArray(presentation.caveatItems)" in chat
++    assert "presentation.caveatItems.length ? presentation.caveatItems" not in chat

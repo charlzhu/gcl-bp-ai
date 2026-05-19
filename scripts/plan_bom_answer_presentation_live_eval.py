@@ -15,7 +15,7 @@ def parse_args() -> argparse.Namespace:
         argparse.Namespace，目前保留给后续扩展。
     """
 
-    parser = argparse.ArgumentParser(description="计划 BOM qwen-plus 答案表达层 live 验收")
+    parser = argparse.ArgumentParser(description="计划 BOM deepseek-v4-flash 答案表达层 live 验收")
     parser.add_argument("--limit", type=int, default=30, help="最多验收的问题数量")
     return parser.parse_args()
 
@@ -45,7 +45,7 @@ def build_live_questions(limit: int) -> list[str]:
 
 
 def main() -> None:
-    """基于真实 BOM QA 结果执行 qwen-plus 表达层 live 验收。
+    """基于真实 BOM QA 结果执行 deepseek-v4-flash 表达层 live 验收。
 
     返回：
         无返回值；脚本输出 JSON 与 Markdown 报告。

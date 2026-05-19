@@ -1,0 +1,161 @@
+diff --git a/backend/app/domains/logistics/services/data_qa_planner.py b/backend/app/domains/logistics/services/data_qa_planner.py
+--- a/backend/app/domains/logistics/services/data_qa_planner.py
++++ b/backend/app/domains/logistics/services/data_qa_planner.py
+@@ -3143,14 +3143,20 @@ class LogisticsDataQaPlanner:
+             可交给历史明细表 logistics_company_name 做模糊匹配的承运商简称。
+ 
+         说明：
+-            该方法只承接样例题和现有台账中可验证的“晶茂物流/苏州晶茂物流/英赋嘉”简称，
+-            不把所有带“物流”的短语都强行解释成承运商，避免扩大 A 类边界。
++            该方法只承接样例题、现有台账中可验证的承运商简称，以及业务反馈中明确点名的高置信承运商别名，
++            不把所有带“物流”的短语都强行解释成承运商，避免把“历史物流/区域物流”等泛词误当承运商。
+         """
+ 
+-        if "晶茂" in question:
+-            return "晶茂"
+-        if "英赋嘉" in question:
+-            return "英赋嘉"
++        # 仅维护窄口径白名单：返回简称交给仓储层 LIKE 匹配，兼容“京东物流/京东快运”等存储差异。
++        carrier_aliases = {
++            "晶茂": "晶茂",
++            "英赋嘉": "英赋嘉",
++            "京东物流": "京东",
++            "京东": "京东",
++        }
++        for alias, normalized_name in carrier_aliases.items():
++            if alias in question:
++                return normalized_name
+         return None
+ 
+     def _extract_province_list(self, question: str) -> list[str]:
+diff --git a/backend/app/domains/logistics/services/data_qa_service.py b/backend/app/domains/logistics/services/data_qa_service.py
+--- a/backend/app/domains/logistics/services/data_qa_service.py
++++ b/backend/app/domains/logistics/services/data_qa_service.py
+@@ -1215,6 +1215,20 @@ class LogisticsDataQaService:
+                 scope_parts.append("、".join(str(item) for item in filters["regions"]))
+             else:
+                 scope_parts.append("各区域")
++            if not data and filters.get("carrier_name"):
++                # 用户明确指定承运商时，空结果必须解释为“该承运商未命中”，不能降级展示全承运商汇总。
++                carrier_label = str(filters["carrier_name"])
++                region_label = "、".join(str(item) for item in filters.get("regions") or ["各区域"])
++                summary = f"{filters['year']}年未找到承运商“{carrier_label}”在{region_label}的发运量记录，未返回全承运商汇总。"
++                return self._build_result(
++                    answer_summary=summary,
++                    plan=plan,
++                    table_columns=["region_name", "shipment_mw"],
++                    table_rows=[],
++                    calculation_logic=["历史发运量按已入库的实际发运瓦数汇总后折算为 MW，并按区域分组。"],
++                    data_scope={"business_scope": "历史物流发运量", **filters},
++                    warnings=warnings + [f"未在历史物流台账中找到承运商“{carrier_label}”匹配记录。"],
++                )
+             summary = f"{''.join(scope_parts)}发运量汇总已按区域拆分返回。"
+             return self._build_result(
+                 answer_summary=summary,
+diff --git a/tests/business_acceptance/test_logistics_carrier_filter_scope.py b/tests/business_acceptance/test_logistics_carrier_filter_scope.py
+new file mode 100644
+--- /dev/null
++++ b/tests/business_acceptance/test_logistics_carrier_filter_scope.py
+@@ -0,0 +1,102 @@
++"""物流承运商过滤口径回归测试。
++
++本文件覆盖“用户显式点名承运商时不能退回全承运商汇总”的问题：
++1. Planner 必须把已校验承运商简称下推到 filters.carrier_name；
++2. 服务层在该承运商无数据时应返回空结果提示，而不是返回所有承运商的区域汇总。
++"""
++
++from __future__ import annotations
++
++from typing import Any
++
++from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
++from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
++
++
++class _CarrierAwareFakeRepository:
++    """只模拟本用例需要的历史区域发运量查询。
++
++    说明：
++        1. 如果服务层没有传入 carrier_name，就返回一条“全承运商汇总”假数据，用于暴露误回退问题；
++        2. 如果服务层传入了 carrier_name，则模拟该承运商无记录，返回空列表；
++        3. 这样测试不依赖本地数据库数据，也能验证过滤条件是否真实下推。
++    """
++
++    def __init__(self) -> None:
++        self.observed_carrier_name: str | None = None
++
++    def hist_mw_by_all_regions(
++        self,
++        *,
++        year: int,
++        carrier_name: str | None = None,
++        regions: list[str] | None = None,
++    ) -> list[dict[str, Any]]:
++        """记录服务层传入的过滤条件并返回受控假数据。
++
++        参数：
++            year: 查询年份。
++            carrier_name: 服务层下推的承运商过滤条件。
++            regions: 服务层下推的区域过滤条件。
++        返回：
++            当 carrier_name 缺失时返回假汇总行；当 carrier_name 存在时返回空结果。
++        """
++
++        self.observed_carrier_name = carrier_name
++        if carrier_name:
++            return []
++        return [{"region_name": "西北", "shipment_mw": 4942.238}]
++
++
++class _FakeDb:
++    """占位数据库对象。
++
++    说明：
++        当前测试直接调用 _execute_plan，不写查询历史，不需要真实数据库连接。
++    """
++
++
++QUESTION = "24 年 京东物流 在各区域的承运量分别是多少"
++
++
++def test_planner_keeps_explicit_jd_carrier_filter_for_region_mw_breakdown() -> None:
++    """验证点名“京东物流”时，区域发运量查询必须保留承运商过滤。"""
++
++    plan = LogisticsDataQaPlanner().build_plan(QUESTION)
++
++    assert plan.query_key == "hist_mw_by_all_regions"
++    assert plan.filters["year"] == 2024
++    assert plan.filters["carrier_name"] == "京东"
++    assert plan.dimensions == ["region_name"]
++    assert plan.group_by == ["region_name"]
++
++
++def test_planner_does_not_treat_generic_history_logistics_as_carrier() -> None:
++    """验证“历史物流”等泛词不会被误抽成承运商。"""
++
++    plan = LogisticsDataQaPlanner().build_plan("2024年历史物流在各区域的发运量分别是多少")
++
++    assert plan.query_key == "hist_mw_by_all_regions"
++    assert plan.filters["year"] == 2024
++    assert "carrier_name" not in plan.filters
++
++
++def test_service_does_not_fallback_to_all_carriers_when_jd_has_no_rows() -> None:
++    """验证承运商无记录时返回空结果提示，不能返回全承运商区域汇总。"""
++
++    planner = LogisticsDataQaPlanner()
++    fake_repository = _CarrierAwareFakeRepository()
++    service = LogisticsDataQaService(db=_FakeDb(), repository=fake_repository, planner=planner)  # type: ignore[arg-type]
++
++    plan = planner.build_plan(QUESTION)
++    result = service._execute_plan(QUESTION, plan)  # noqa: SLF001 - 回归测试直接验证受控执行分支
++    status = service._resolve_status(result)  # noqa: SLF001 - 验证空结果状态文案与业务摘要保持一致
++
++    assert fake_repository.observed_carrier_name == "京东"
++    assert result.result_table.rows == []
++    assert "京东" in result.answer_summary
++    assert "未找到" in result.answer_summary or "未查到" in result.answer_summary
++    assert "未返回全承运商汇总" in result.answer_summary
++    assert result.warnings == ["未在历史物流台账中找到承运商“京东”匹配记录。"]
++    assert status.code == "EMPTY_RESULT"
++    assert status.severity == "warning"

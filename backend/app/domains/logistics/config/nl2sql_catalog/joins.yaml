@@ -1,0 +1,24 @@
+catalog_version: logistics_nl2sql_catalog.v1
+domain: logistics
+joins:
+  - join_id: system_task_assign
+    left_table: dwd_logistics_ship_task
+    right_table: dwd_logistics_assign_task
+    join_type: left
+    "on":
+      - dwd_logistics_assign_task.ship_task_id = dwd_logistics_ship_task.task_id
+    business_note: 2026 系统侧任务与委派任务关联，用于补充承运商、仓库和车牌信息。
+  - join_id: system_assign_detail
+    left_table: dwd_logistics_assign_task
+    right_table: dwd_logistics_assign_detail
+    join_type: left
+    "on":
+      - dwd_logistics_assign_detail.assign_task_id = dwd_logistics_assign_task.task_id
+    business_note: 2026 系统侧委派任务与价格/数量明细关联。
+  - join_id: system_detail_product
+    left_table: dwd_logistics_assign_detail
+    right_table: dwd_logistics_ship_product
+    join_type: left
+    "on":
+      - dwd_logistics_ship_product.source_id = dwd_logistics_assign_detail.product_source_id
+    business_note: 2026 系统侧价格/数量明细与产品功率关联，用于确定发运瓦数。

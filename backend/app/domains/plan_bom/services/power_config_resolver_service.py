@@ -689,7 +689,13 @@ class PlanBomPowerConfigResolverService:
         )
 
     def _resolve_cable(self, sheet: PlanPowerModelSheet, grouped: Mapping[str, list[PlanBomMaterialLine]]) -> PowerBomResolvedItem | None:
-        """解析接线盒线缆长度/线径并映射到 cable option。"""
+        """解析接线盒线缆长度/线径并映射到 cable option。
+
+        业务逻辑：
+            1. BOM 接线盒描述中若同时存在长度和线径，优先按 BOM 原文映射；
+            2. 若只写了线长但未写线径，则不直接追问，而是复用当前功率模型默认接线盒 option 的线径，
+               再拼出同线长的真实 option；只有拼出的 option 存在时才采纳，避免凭空猜测。
+        """
         lines = grouped.get("junction_box", [])
         if not lines:
             return None
@@ -699,20 +705,36 @@ class PlanBomPowerConfigResolverService:
         source_line_ids: list[int] = []
         for line in lines:
             text = self._line_text(line)
-            for pattern_cfg in cfg.get("length_patterns") or []:
-                if re.search(str(pattern_cfg.get("pattern")), text, flags=re.IGNORECASE):
-                    length_value = str(pattern_cfg.get("normalized"))
-                    source_line_ids.append(line.id)
-                    break
+            if length_value is None:
+                for pattern_cfg in cfg.get("length_patterns") or []:
+                    if re.search(str(pattern_cfg.get("pattern")), text, flags=re.IGNORECASE):
+                        length_value = str(pattern_cfg.get("normalized"))
+                        source_line_ids.append(line.id)
+                        break
             for pattern_cfg in cfg.get("wire_size_patterns") or []:
                 if re.search(str(pattern_cfg.get("pattern")), text, flags=re.IGNORECASE):
                     wire_size = str(pattern_cfg.get("normalized"))
+                    if line.id not in source_line_ids:
+                        source_line_ids.append(line.id)
                     break
-            if length_value:
+            if length_value and wire_size:
                 break
-        if not length_value or not wire_size:
+        if not length_value:
             return None
         template = str(cfg.get("option_template") or "{length}（{wire_size}）")
+        source = "bom_material_line.junction_box"
+        confidence = float(cfg.get("confidence") or 0.9)
+        rule_id = "cable.length_and_wire_size"
+        if not wire_size:
+            # 当前真实 BOM 存在“+400/-200mm”这类只写线长的接线盒。
+            # 这里仅借用 active 模型默认 option 中的线径标签，并继续校验“该线长+默认线径”是否为真实 option；
+            # 若模型不存在该组合，仍返回 None，由上层保持追问，避免把未知线长硬塞进模型。
+            wire_size = self._default_cable_wire_size(self._default_option(sheet.id, "cable"))
+            if not wire_size:
+                return None
+            source = "bom_material_line.junction_box+model_default_wire_size"
+            confidence = float(cfg.get("confidence_default_wire_size") or 0.78)
+            rule_id = "cable.length_with_default_wire_size"
         candidate_value = template.format(length=length_value, wire_size=wire_size)
         option = self._coerce_to_valid_option(sheet.id, "cable", candidate_value)
         if option is None:
@@ -720,11 +742,11 @@ class PlanBomPowerConfigResolverService:
         return PowerBomResolvedItem(
             factor_key="cable",
             value=option.option_label,
-            source="bom_material_line.junction_box",
-            confidence=float(cfg.get("confidence") or 0.9),
+            source=source,
+            confidence=confidence,
             source_line_ids=source_line_ids or [line.id for line in lines],
             source_description=self._source_description(lines),
-            rule_id="cable.length_and_wire_size",
+            rule_id=rule_id,
         )
 
     def _resolve_default_option(
@@ -880,7 +902,7 @@ class PlanBomPowerConfigResolverService:
         if factor_key == "cable":
             # 显式接线盒可能写“300/200线长”，也可能在无 BOM 方案评估中写“+400/-200mm（4mm²）”。
             # 长度和线径都只用于拼当前模型真实 option；若拼不出有效 option，仍 fail-closed 追问。
-            length_match = re.search(r"(\d{2,4})\s*/\s*-?(\d{2,4})", normalized)
+            length_match = re.search(r"(\d{2,4})\s*(?:/|、|，|,)\s*-?(\d{2,4})", normalized)
             default_option = self._default_option(sheet.id, factor_key)
             if length_match:
                 explicit_wire_match = re.search(r"(?P<size>\d+(?:\.\d+)?)\s*mm\s*(?:²|2)", value, flags=re.IGNORECASE)

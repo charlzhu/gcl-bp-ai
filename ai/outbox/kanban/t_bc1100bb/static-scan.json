@@ -1,0 +1,10 @@
+{
+  "finding_count": 0,
+  "findings": [],
+  "pattern_count": 5,
+  "scan_scope": [
+    "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+    "scripts/dev/run_logistics_nl2sql_m9_shadow_sqlplan_generation.py",
+    "tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py"
+  ]
+}

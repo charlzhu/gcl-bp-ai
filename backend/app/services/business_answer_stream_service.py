@@ -131,11 +131,21 @@ class BusinessAnswerStreamService:
             self._last_fallback_reason = ""
             stream = self._create_llm_stream(domain=domain, question=question, deterministic_payload=deterministic_payload)
             chunks: list[str] = []
+            buffered_chunks: list[str] = []
             for event in stream:
                 chunk = self._extract_delta_text(event)
                 if not chunk:
                     continue
                 chunks.append(chunk)
+                if not buffered_chunks and self._can_yield_chunk_before_full_validation(
+                    chunk,
+                    deterministic_payload=deterministic_payload,
+                ):
+                    # 首段如果不含数字、技术词或英文内部标识，可以先给前端，避免流式体验退化为“等完整输出”。
+                    # 含业务数值的片段仍要等整段校验通过后再输出，防止 LLM 新增或错配事实。
+                    yield chunk
+                    continue
+                buffered_chunks.append(chunk)
             streamed_answer = "".join(chunks).strip()
             if not streamed_answer:
                 self._last_stream_source = "deterministic_fallback"
@@ -148,7 +158,7 @@ class BusinessAnswerStreamService:
                 self._last_fallback_reason = validation_error
                 yield from self._chunk_text(fallback)
                 return
-            for chunk in chunks:
+            for chunk in buffered_chunks:
                 yield chunk
         except Exception as exc:  # noqa: BLE001
             # LLM 只负责表达增强，失败不能影响确定性查询结果可用性。
@@ -250,7 +260,12 @@ class BusinessAnswerStreamService:
     def _build_system_prompt(cls, domain: str) -> str:
         """构造约束 LLM 只做表达的系统提示词。"""
 
-        domain_label = "计划 BOM" if domain == "plan_bom" else "物流经营"
+        domain_labels = {
+            "plan_bom": "计划 BOM",
+            "logistics": "物流经营",
+            "business_analysis": "经营分析产销存",
+        }
+        domain_label = domain_labels.get(domain, "业务")
         return (
             f"你是{domain_label}智能问答的答案表达层。"
             "你会收到用户原问题和后端确定性查询结果。"
@@ -287,42 +302,72 @@ class BusinessAnswerStreamService:
 
         业务逻辑：
             LLM 只做答案表达，不需要 query_plan、debug、planner、guardrail 等内部编排信息。
-            这里改为白名单构造 prompt 上下文，只保留摘要、状态消息、结构化结果、展示答案
-            和口径提示，降低内部字段泄露和被 LLM 误引用的风险。
+            这里改为白名单构造 prompt 上下文，并把内部实现键转换成业务可读键，只保留
+            业务结论、查询状态、结构化结果、展示建议和口径提示，降低内部字段泄露风险。
         """
 
         compact: dict[str, Any] = {}
         if payload.get("answer_summary") is not None:
-            compact["answer_summary"] = payload.get("answer_summary")
+            compact["业务结论"] = payload.get("answer_summary")
         status = payload.get("status")
         if isinstance(status, dict):
-            compact["status"] = {
+            compact["查询状态"] = {
                 key: status.get(key)
-                for key in ("code", "message", "success")
+                for key in ("message", "success")
                 if status.get(key) is not None
             }
         result_table = payload.get("result_table")
         if isinstance(result_table, dict):
-            compact["result_table"] = {
+            compact["结构化结果"] = {
                 key: deepcopy(result_table.get(key))
                 for key in ("columns", "rows")
                 if key in result_table
             }
-            self._truncate_table(compact["result_table"])
+            self._truncate_table(compact["结构化结果"])
         presentation = payload.get("presentation")
         if isinstance(presentation, dict):
-            compact_presentation = {
-                key: deepcopy(presentation.get(key))
-                for key in ("display_type", "title", "answer", "caveats", "caveat_items", "table_spec")
-                if key in presentation
-            }
-            self._truncate_table(compact_presentation.get("table_spec"))
-            compact["presentation"] = compact_presentation
-        for key in ("caveats", "caveat_items", "warnings"):
+            compact_presentation: dict[str, Any] = {}
+            if presentation.get("title") is not None:
+                compact_presentation["标题"] = deepcopy(presentation.get("title"))
+            if presentation.get("answer") is not None:
+                compact_presentation["业务回答草稿"] = deepcopy(presentation.get("answer"))
+            if presentation.get("caveats") is not None:
+                compact_presentation["数据口径"] = deepcopy(presentation.get("caveats"))
+            if presentation.get("caveat_items") is not None:
+                compact_presentation["口径提示"] = deepcopy(presentation.get("caveat_items"))
+            if presentation.get("table_spec") is not None:
+                compact_presentation["展示明细"] = deepcopy(presentation.get("table_spec"))
+                self._truncate_table(compact_presentation.get("展示明细"))
+            if compact_presentation:
+                compact["展示建议"] = compact_presentation
+        for key, label in (("caveats", "数据口径"), ("caveat_items", "口径提示"), ("warnings", "风险提示")):
             if payload.get(key) is not None:
-                compact[key] = deepcopy(payload.get(key))
+                compact[label] = deepcopy(payload.get(key))
         self._remove_internal_prompt_fields(compact)
         return compact
+
+    def _can_yield_chunk_before_full_validation(self, chunk: str, *, deterministic_payload: dict[str, Any]) -> bool:
+        """判断一个流式片段是否可在完整答案校验前先发给前端。
+
+        参数：
+            chunk: LLM 当前增量片段。
+            deterministic_payload: 后端确定性结果快照；保留参数便于后续扩展更细粒度安全判断。
+
+        返回：
+            True 表示片段不包含数字、英文内部标识或技术词，可先输出；False 表示必须等完整校验。
+        """
+
+        _ = deterministic_payload
+        text = str(chunk or "")
+        if not text:
+            return False
+        if len(text) > 30:
+            return False
+        if self._extract_number_tokens(text):
+            return False
+        if self._visible_text_has_technical_leak(text):
+            return False
+        return not re.search(r"[A-Za-z_]", text)
 
     def _remove_internal_prompt_fields(self, value: Any) -> None:
         """从发给 LLM 的表达上下文中移除内部排查字段。"""
@@ -713,6 +758,8 @@ class BusinessAnswerStreamService:
             return "计划 BOM 智能回答"
         if domain == "logistics":
             return "物流经营智能回答"
+        if domain == "business_analysis":
+            return "产销存经营分析"
         return "智能回答"
 
 

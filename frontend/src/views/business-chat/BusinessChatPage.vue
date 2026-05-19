@@ -106,28 +106,28 @@
                 />
                 <div v-if="shouldShowSecondaryActions(message)" class="answer-secondary-actions" data-testid="answer-secondary-actions">
                   <el-button
+                    v-if="hasAssistantBasis(message)"
                     size="small"
                     round
                     plain
-                    :disabled="!hasAssistantBasis(message)"
                     @click="toggleAssistantBasisDetails(message)"
                   >
                     查看数据依据
                   </el-button>
                   <el-button
+                    v-if="hasAssistantAuditRows(message)"
                     size="small"
                     round
                     plain
-                    :disabled="!getAssistantAuditTable(message)?.rows.length"
                     @click="toggleAssistantTable(message)"
                   >
                     {{ isAssistantTableExpanded(message) ? '收起明细' : '展开明细' }}
                   </el-button>
                   <el-button
+                    v-if="hasAssistantAuditRows(message)"
                     size="small"
                     round
                     plain
-                    :disabled="!getAssistantAuditTable(message)?.rows.length"
                     @click="exportAssistantTableToExcel(message)"
                   >
                     导出 Excel
@@ -1845,12 +1845,17 @@ function shouldShowPresentationChart(message: BusinessChatMessage): boolean {
  * 返回：存在数据口径或审计明细时返回 true，把结构化结果放到主回答下方的次级入口。
  */
 function shouldShowSecondaryActions(message: BusinessChatMessage): boolean {
-  return Boolean(message.presentation && (hasAssistantBasis(message) || getAssistantAuditTable(message)?.rows.length))
+  return Boolean(message.presentation && (hasAssistantBasis(message) || hasAssistantAuditRows(message)))
 }
 
 /** 判断当前回答是否有可展开的数据口径。 */
 function hasAssistantBasis(message: BusinessChatMessage): boolean {
   return getCaveatItemsByLevel(message, 'info').length > 0
+}
+
+/** 判断当前回答是否有可展开/可导出的明细行；没有行时隐藏对应按钮，避免展示点不开的操作。 */
+function hasAssistantAuditRows(message: BusinessChatMessage): boolean {
+  return Boolean(getAssistantAuditTable(message)?.rows.length)
 }
 
 /** 判断“数据口径”折叠区是否由二级按钮展开。 */

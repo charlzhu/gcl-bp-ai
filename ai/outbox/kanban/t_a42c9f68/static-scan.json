@@ -1,0 +1,19 @@
+{
+  "status": "passed",
+  "scope": "added lines in ai/outbox/kanban/t_a42c9f68/diff.patch",
+  "checks": [
+    "hardcoded_key_value_secret",
+    "bearer_literal",
+    "openai_key_literal",
+    "shell_injection",
+    "dangerous_eval_exec",
+    "pickle_load",
+    "sql_string_format_execute"
+  ],
+  "findings": [],
+  "blocking_findings": [],
+  "notes": [
+    "M6 is offline shadow-only; scan scope is the task diff patch, not repository history.",
+    "Synthetic secret/DSN/SQL-like strings are allowed only as redaction fixtures and must not appear in final report output."
+  ]
+}

@@ -1,0 +1,21 @@
+task scope diff lines:
+    3243 /tmp/t_c4b6cc09_task.diff
+tracked diff stat:
+ backend/app/core/config.py                         | 39 ++++++++++++++++++++++
+ .../query_planning/schemas/query_plan_v2.py        |  8 +++++
+ .../query_planning/services/logistics_adapter.py   | 26 ++++++++++++++-
+ .../query_planning/test_query_plan_v2_schema.py    | 17 ++++++++++
+ 4 files changed, 89 insertions(+), 1 deletion(-)
+untracked task files:
+      33 backend/app/domains/logistics/services/query_planner_v2/__init__.py
+     179 backend/app/domains/logistics/services/query_planner_v2/capability_registry.py
+     135 backend/app/domains/logistics/services/query_planner_v2/fallback.py
+     144 backend/app/domains/logistics/services/query_planner_v2/legacy_adapter.py
+     274 backend/app/domains/logistics/services/query_planner_v2/llm_parser.py
+     358 backend/app/domains/logistics/services/query_planner_v2/normalizer.py
+     139 backend/app/domains/logistics/services/query_planner_v2/planner.py
+      74 backend/app/domains/logistics/services/query_planner_v2/prompt_builder.py
+     280 backend/app/domains/logistics/services/query_planner_v2/validator.py
+     880 docs/LOGISTICS_QA_QUERY_PLANNING_V2_MVP_DESIGN.md
+     104 tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py
+     378 tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py

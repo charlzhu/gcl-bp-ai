@@ -1,0 +1,1260 @@
+diff --git a/backend/app/domains/plan_bom/services/qa_service.py b/backend/app/domains/plan_bom/services/qa_service.py
+index f7a28a6..34a8e64 100644
+--- a/backend/app/domains/plan_bom/services/qa_service.py
++++ b/backend/app/domains/plan_bom/services/qa_service.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ import logging
++import re
+ from typing import Any
+ 
+ from backend.app.domains.plan_bom.constants import CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
+@@ -367,6 +368,8 @@ class PlanBomQaService:
+         """
+ 
+         tail = (nlu.slots.get("order_tail_no") or [None])[0]
++        bom_version = (nlu.slots.get("bom_version") or [None])[0]
++        order_name_hint = nlu.slots.get("order_name_hint")
+         benchmark = nlu.slots.get("benchmark")
+         explicit_configuration = dict(nlu.slots.get("explicit_power_configuration") or {})
+         if benchmark and "benchmark" not in explicit_configuration:
+@@ -374,7 +377,13 @@ class PlanBomQaService:
+         if nlu.slots.get("supplier_name") and "supplier" not in explicit_configuration:
+             explicit_configuration["supplier"] = nlu.slots.get("supplier_name")
+         if tail:
+-            resolution = self.power_config_resolver.resolve(order_no=tail, benchmark=benchmark)
++            resolution = self.power_config_resolver.resolve(
++                order_no=tail,
++                order_name=order_name_hint,
++                version_no=bom_version,
++                benchmark=benchmark,
++                explicit_configuration=explicit_configuration,
++            )
+         else:
+             resolution = self.power_config_resolver.resolve_explicit_configuration(
+                 model_code=nlu.slots.get("model"),
+@@ -394,7 +403,10 @@ class PlanBomQaService:
+                         severity="warning",
+                     ),
+                     nlu=nlu,
+-                    answer_summary=self._power_resolution_clarification_summary(resolution_payload),
++                    answer_summary=self._power_resolution_clarification_summary(
++                        resolution_payload,
++                        question=question,
++                    ),
+                     raw_result={"bom_config_resolution": resolution_payload},
+                     warnings=["M4 配置解析未完全 resolved，已停止调用 M3 计算，避免编造功率预测。"],
+                 )
+@@ -531,7 +543,7 @@ class PlanBomQaService:
+                 nlu=nlu,
+                 answer_summary=answer,
+                 result_table=PlanBomTableSpec(
+-                    columns=["供应商", "匹配度", "目标功率档", "目标比例", "预测比例", "差异", "中心功率", "建议效率段"],
++                    columns=["供应商", "目标功率档", "目标比例", "预测比例", "CTM 值", "中心功率", "建议效率段", "落档比例预估"],
+                     rows=rows,
+                 ),
+                 raw_result={
+@@ -566,17 +578,21 @@ class PlanBomQaService:
+         rows: list[dict[str, Any]] = []
+         for item in recommendation.recommendations:
+             efficiency_label = PlanBomQaService._format_suggested_efficiency_segments(item.suggested_efficiency_segments)
++            bin_probability_label = PlanBomQaService._format_efficiency_bin_probability_estimate(
++                item=item,
++                target_bins=list(recommendation.target_power_ratio.keys()),
++            )
+             for power_bin, target_ratio in recommendation.target_power_ratio.items():
+                 rows.append(
+                     {
+                         "供应商": item.supplier_name,
+-                        "匹配度": round(item.score, 4),
+                         "目标功率档": f"{power_bin}W",
+                         "目标比例": round(float(target_ratio) * 100.0, 4),
+                         "预测比例": round(float(item.predicted_target_ratio.get(power_bin, 0.0)) * 100.0, 4),
+-                        "差异": round(float(item.target_diff.get(power_bin, 0.0)) * 100.0, 4),
++                        "CTM 值": PlanBomQaService._format_ctm_value(item.prediction),
+                         "中心功率": round(item.prediction.center_power, 4),
+                         "建议效率段": efficiency_label,
++                        "落档比例预估": bin_probability_label,
+                     }
+                 )
+         return rows
+@@ -592,13 +608,170 @@ class PlanBomQaService:
+             用于 QA 表格展示的效率段文本；无建议时返回空字符串。
+         """
+         labels: list[str] = []
+-        for segment in segments[:3]:
++        sorted_segments = sorted(
++            segments,
++            key=lambda item: float(item.get("efficiency_value") or item.get("efficiency_percent") or 0.0),
++        )
++        for segment in sorted_segments[:2]:
+             percent = segment.get("efficiency_percent")
+             if percent is None:
+                 continue
+-            labels.append(f"{round(float(percent), 3)}%")
++            labels.append(f"{PlanBomQaService._format_percent_number(float(percent), digits=3)}%")
+         return "、".join(labels)
+ 
++    @staticmethod
++    def _format_ctm_value(prediction: PowerPredictionResult) -> str:
++        """按业务口径格式化 CTM 值。
++
++        参数：
++            prediction: M3 确定性功率预测结果，包含中心功率、中心效率、面积和电池片数。
++
++        返回：
++            百分比展示文本；关键字段缺失或分母非法时返回空字符串，避免编造结果。
++        """
++        denominator = float(prediction.center_efficiency) * float(prediction.area) * float(prediction.cell_count) / 1000.0
++        if denominator <= 0:
++            return ""
++        ctm_value = float(prediction.center_power) / denominator * 100.0
++        return f"{ctm_value:.2f}%"
++
++    @staticmethod
++    def _format_efficiency_bin_probability_estimate(*, item: Any, target_bins: list[str]) -> str:
++        """格式化建议效率段的落档比例预估。
++
++        参数：
++            item: `PowerRecommendationItem`，其中 `prediction.efficiency_rows[*].bin_probabilities`
++                是唯一数据来源。
++            target_bins: 用户关注的目标功率档列表。
++
++        返回：
++            形如 `25.5%→615W 12.98%\n25.6%→615W 82.08%` 的展示文本；没有可追溯效率行时返回空字符串。
++        """
++        segments = PlanBomQaService._select_display_efficiency_segments(item.suggested_efficiency_segments)
++        if not segments:
++            return ""
++
++        labels: list[str] = []
++        for segment in segments:
++            row = PlanBomQaService._find_efficiency_row(item.prediction.efficiency_rows, segment)
++            if row is None:
++                continue
++            bin_labels = PlanBomQaService._format_probability_bins(row.bin_probabilities, target_bins=target_bins)
++            if not bin_labels:
++                continue
++            percent = segment.get("efficiency_percent")
++            if percent is None:
++                percent = float(row.efficiency_value) * 100.0
++            labels.append(f"{PlanBomQaService._format_percent_number(float(percent), digits=3)}%→{'、'.join(bin_labels)}")
++        return "\n".join(labels)
++
++    @staticmethod
++    def _select_display_efficiency_segments(segments: list[dict[str, Any]]) -> list[dict[str, Any]]:
++        """选择表格中展示的建议效率段。
++
++        参数：
++            segments: 推荐服务输出的候选效率段。
++
++        返回：
++            按效率从低到高排序后的前 2 个效率段，满足业务员“从最低效率开始展示”的要求。
++        """
++        return sorted(
++            segments,
++            key=lambda item: float(item.get("efficiency_value") or item.get("efficiency_percent") or 0.0),
++        )[:2]
++
++    @staticmethod
++    def _find_efficiency_row(efficiency_rows: list[Any], segment: dict[str, Any]) -> Any | None:
++        """从预测结果中查找建议效率段对应的效率行。
++
++        参数：
++            efficiency_rows: `PowerPredictionResult.efficiency_rows`。
++            segment: 推荐服务输出的单个建议效率段。
++
++        返回：
++            匹配的效率行；找不到时返回 None，避免脱离模型明细编造落档比例。
++        """
++        raw_efficiency = segment.get("efficiency_value")
++        if raw_efficiency is None and segment.get("efficiency_percent") is not None:
++            raw_efficiency = float(segment["efficiency_percent"]) / 100.0
++        if raw_efficiency is None:
++            return None
++        target_efficiency = float(raw_efficiency)
++        for row in efficiency_rows:
++            if abs(float(row.efficiency_value) - target_efficiency) <= 0.0000001:
++                return row
++        return None
++
++    @staticmethod
++    def _format_probability_bins(bin_probabilities: dict[str, float], *, target_bins: list[str]) -> list[str]:
++        """格式化目标档和一个相邻档的落档概率。
++
++        参数：
++            bin_probabilities: 单个效率段的功率档概率，来源于后端正态落档计算。
++            target_bins: 用户关注的目标功率档。
++
++        返回：
++            至少包含目标功率档的展示片段；若存在相邻档，则追加概率最高的相邻档。
++        """
++        ordered_keys = sorted(bin_probabilities.keys(), key=lambda value: float(value))
++        selected_keys: list[str] = []
++        for power_bin in target_bins:
++            if power_bin in bin_probabilities and power_bin not in selected_keys:
++                selected_keys.append(power_bin)
++
++        adjacent_key = PlanBomQaService._highest_probability_adjacent_bin(
++            ordered_keys=ordered_keys,
++            target_bins=target_bins,
++            bin_probabilities=bin_probabilities,
++        )
++        if adjacent_key and adjacent_key not in selected_keys:
++            selected_keys.append(adjacent_key)
++
++        return [f"{key}W {float(bin_probabilities.get(key, 0.0)) * 100.0:.2f}%" for key in selected_keys]
++
++    @staticmethod
++    def _highest_probability_adjacent_bin(
++        *,
++        ordered_keys: list[str],
++        target_bins: list[str],
++        bin_probabilities: dict[str, float],
++    ) -> str | None:
++        """选择目标档旁边概率最高的相邻功率档。
++
++        参数：
++            ordered_keys: 按功率升序排列的模型输出档位。
++            target_bins: 用户关注的目标功率档。
++            bin_probabilities: 单个效率段的功率档概率。
++
++        返回：
++            相邻档 key；没有可用相邻档时返回 None。
++        """
++        adjacent: set[str] = set()
++        for target_bin in target_bins:
++            if target_bin not in ordered_keys:
++                continue
++            index = ordered_keys.index(target_bin)
++            if index > 0:
++                adjacent.add(ordered_keys[index - 1])
++            if index + 1 < len(ordered_keys):
++                adjacent.add(ordered_keys[index + 1])
++        if not adjacent:
++            return None
++        return max(adjacent, key=lambda key: float(bin_probabilities.get(key, 0.0)))
++
++    @staticmethod
++    def _format_percent_number(value: float, *, digits: int) -> str:
++        """格式化百分比数字，去掉无意义的尾随 0。
++
++        参数：
++            value: 百分比数值。
++            digits: 最多保留的小数位数。
++
++        返回：
++            去尾零后的数字文本。
++        """
++        return f"{value:.{digits}f}".rstrip("0").rstrip(".")
++
+     @staticmethod
+     def _power_configuration_text(resolution_payload: dict[str, Any]) -> str:
+         """汇总 M4 已解析配置，供 answer_summary 使用。"""
+@@ -611,15 +784,52 @@ class PlanBomQaService:
+         return "；".join(pairs) if pairs else "无可展示配置"
+ 
+     @staticmethod
+-    def _power_resolution_clarification_summary(resolution_payload: dict[str, Any]) -> str:
+-        """为 M4 candidate / partial 状态生成追问摘要。"""
++    def _power_resolution_clarification_summary(resolution_payload: dict[str, Any], *, question: str = "") -> str:
++        """为 M4 candidate / partial 状态生成追问摘要。
++
++        参数：
++            resolution_payload: M4 配置解析追溯。
++            question: 用户原始问题；用于提示候选名称与用户输入项目/客户名不一致。
++
++        返回：
++            面向业务用户的追问摘要，候选态会列出受控候选名称。
++        """
+         if resolution_payload.get("status") == CANDIDATE_REQUIRED_STATUS:
+-            count = resolution_payload.get("candidate_total_count") or len(resolution_payload.get("candidates") or [])
+-            return f"当前订单条件命中 {count} 个 BOM 候选，请先确认订单或文件实例后再做功率预测。"
++            candidates = resolution_payload.get("candidates") or []
++            count = resolution_payload.get("candidate_total_count") or len(candidates)
++            candidate_labels = []
++            for index, candidate in enumerate(candidates[:5], start=1):
++                order_name = candidate.get("order_name") or "未命名 BOM"
++                order_no = candidate.get("order_no") or "未知订单号"
++                version_no = candidate.get("version_no") or "未知版本"
++                candidate_labels.append(f"{index}. {order_name}（{order_no}，版本 {version_no}）")
++            candidate_text = "；".join(candidate_labels) if candidate_labels else "暂无可展示候选"
++            mismatch_text = PlanBomQaService._candidate_name_mismatch_text(question, candidates)
++            return (
++                f"当前订单条件命中 {count} 个 BOM 候选，请先确认订单或文件实例后再做功率预测。"
++                f"候选包括：{candidate_text}。{mismatch_text}"
++            )
+         unresolved = resolution_payload.get("unresolved_items") or []
+         labels = [str(item.get("factor_key")) for item in unresolved if item.get("factor_key")]
+         return f"当前 BOM 配置仍有未确认项：{', '.join(labels) if labels else '未知配置'}。请确认后再执行功率预测。"
+ 
++    @staticmethod
++    def _candidate_name_mismatch_text(question: str, candidates: list[dict[str, Any]]) -> str:
++        """识别用户输入的订单前缀是否未出现在候选 BOM 名称中。"""
++        if not question or not candidates:
++            return ""
++        # 业务常写“客户/项目—00106”；尾号候选过多时，将破折号前的项目词与候选名做只读比对。
++        match = re.search(r"(?P<token>[\u4e00-\u9fa5A-Za-z0-9/\-]+)\s*[—-]\s*\d{5}", question)
++        if not match:
++            return ""
++        token = match.group("token").strip()
++        if not token or token.upper().startswith("GCL"):
++            return ""
++        candidate_text = " ".join(str(candidate.get("order_name") or "") + " " + str(candidate.get("order_no") or "") for candidate in candidates)
++        if token in candidate_text:
++            return ""
++        return f"你输入的“{token}”未匹配当前候选名称，请确认是否为同一订单/项目。"
++
+     def _resolve_core_material_categories(
+         self,
+         *,
+diff --git a/frontend/src/views/business-chat/BusinessChatPage.vue b/frontend/src/views/business-chat/BusinessChatPage.vue
+index 3475e1b..58efc05 100644
+--- a/frontend/src/views/business-chat/BusinessChatPage.vue
++++ b/frontend/src/views/business-chat/BusinessChatPage.vue
+@@ -68,7 +68,7 @@
+ 
+             <div
+               v-if="message.presentation"
+-              :class="['result', `result--${resolveResultTone(message.status)}`]"
++              :class="['result', `result--${resolveResultTone(message.status)}`, resolveAssistantResultLayout(message)]"
+               data-testid="assistant-result"
+             >
+               <div class="result-hero">
+@@ -82,9 +82,12 @@
+                   <span v-if="message.presentation.displayType" class="display-badge">
+                     {{ formatDisplayTypeLabel(message.presentation.displayType) }}
+                   </span>
++                  <span class="display-badge display-badge--layout">
++                    {{ resolveAssistantReplyKicker(message) }}
++                  </span>
+                 </div>
+                 <div v-if="message.presentation.title" class="result-title" data-testid="result-title">{{ message.presentation.title }}</div>
+-                <p v-if="message.presentation.answer" class="result-answer" data-testid="result-answer">{{ message.presentation.answer }}</p>
++                <p v-if="message.presentation.answer" class="result-answer assistant-prose" data-testid="result-answer">{{ message.presentation.answer }}</p>
+                 <div v-if="buildResultSummaryItems(message).length" class="result-summary-strip">
+                   <span
+                     v-for="item in buildResultSummaryItems(message)"
+@@ -204,7 +207,7 @@
+                 </svg>
+               </div>
+ 
+-              <div v-if="message.presentation.cards.length" class="metric-grid" data-testid="result-cards">
++              <div v-if="shouldShowMetricCards(message)" class="metric-grid" data-testid="result-cards">
+                 <div v-for="card in message.presentation.cards" :key="card.label" class="metric-card">
+                   <div class="metric-accent" />
+                   <div class="metric-body">
+@@ -215,13 +218,26 @@
+                 </div>
+               </div>
+ 
+-              <div v-if="message.presentation.table" class="result-table-card">
++              <div v-if="shouldShowResultTable(message)" class="result-table-card">
+                 <div class="result-table-card__head">
+-                  <span>明细数据</span>
+-                  <em>{{ message.presentation.table.rows.length }} 行</em>
++                  <div class="result-table-card__title">
++                    <span>明细数据</span>
++                    <em>{{ message.presentation.table?.rows.length || 0 }} 行</em>
++                  </div>
++                  <el-button
++                    type="primary"
++                    plain
++                    size="small"
++                    class="result-table-card__export"
++                    data-testid="export-result-table-excel"
++                    :disabled="!message.presentation.table?.rows.length"
++                    @click="exportAssistantTableToExcel(message)"
++                  >
++                    导出 Excel
++                  </el-button>
+                 </div>
+                 <el-table
+-                  :data="message.presentation.table.rows"
++                  :data="message.presentation.table?.rows || []"
+                   size="small"
+                   border
+                   class="result-table"
+@@ -230,13 +246,21 @@
+                   empty-text="暂无明细数据"
+                 >
+                   <el-table-column
+-                    v-for="column in message.presentation.table.columns"
++                    v-for="column in message.presentation.table?.columns || []"
+                     :key="column"
+                     :prop="column"
+                     :label="column"
+                     min-width="130"
+-                    show-overflow-tooltip
+-                  />
++                    :show-overflow-tooltip="!isMultiLineTableColumn(column)"
++                  >
++                    <template #default="scope">
++                      <span
++                        :class="['result-table__cell', { 'result-table__cell--multi-line': isMultiLineTableColumn(column) }]"
++                      >
++                        {{ formatTableCell(scope.row[column]) }}
++                      </span>
++                    </template>
++                  </el-table-column>
+                 </el-table>
+               </div>
+ 
+@@ -300,6 +324,8 @@
+ 
+ <script setup lang="ts">
+ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
++import { ElMessage } from 'element-plus'
++import * as XLSX from 'xlsx'
+ import { fetchLogisticsDataQaQuery, type LogisticsDataQaResult } from '@/api/logistics'
+ import { askPlanBomQuestion, type PlanBomQaResponse } from '@/api/planBom'
+ import {
+@@ -385,6 +411,8 @@ interface ResultSummaryItem {
+   value: string
+ }
+ 
++type AssistantResultLayoutClass = 'ai-response-card--narrative' | 'ai-response-card--data' | 'ai-response-card--chart'
++
+ const pieChartColors = ['#2f7a4a', '#60a5fa', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b']
+ 
+ const question = ref('')
+@@ -831,6 +859,28 @@ function normalizeTable(table: UnifiedTable | null): UnifiedTable | null {
+   return { columns, rows }
+ }
+ 
++/**
++ * 判断明细表列是否需要按多行文本展示。
++ * 参数：column 当前可见列名。
++ * 返回值：需要保留换行时返回 true。
++ */
++function isMultiLineTableColumn(column: string) {
++  return localizeColumnName(column) === '落档比例预估'
++}
++
++/**
++ * 格式化明细表单元格展示值，只做显示层归一化，不改变后端业务事实。
++ * 参数：value 后端返回的单元格原值。
++ * 返回值：可直接展示的字符串或数值。
++ */
++function formatTableCell(value: unknown): string | number | boolean {
++  if (value === null || value === undefined) return ''
++  if (typeof value === 'number' || typeof value === 'boolean') return value
++  if (Array.isArray(value)) return value.map((item) => formatTableCell(item)).join('、')
++  if (typeof value === 'object') return JSON.stringify(value)
++  return String(value)
++}
++
+ /** 构造图表标题。 */
+ function buildChartTitle(chart: UnifiedChart) {
+   if (chart.title) return chart.title
+@@ -1122,6 +1172,10 @@ const columnNameMap: Record<string, string> = {
+   changed_fields: '变化字段',
+   status: '状态',
+   row_count: '记录数',
++  ctm值: 'CTM 值',
++  ctm_值: 'CTM 值',
++  ctm_value: 'CTM 值',
++  落档比例预估: '落档比例预估',
+ }
+ 
+ function localizeColumnName(column: string, index = 0) {
+@@ -1334,6 +1388,128 @@ function buildResultSummaryItems(message: BusinessChatMessage): ResultSummaryIte
+   return items
+ }
+ 
++/** 判断助手回复应采用叙事、数据还是图表布局；只控制 UI 层，不改变后端业务结果。 */
++function resolveAssistantResultLayout(message: BusinessChatMessage): AssistantResultLayoutClass {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  if (presentation?.chart) return 'ai-response-card--chart'
++  if (presentation?.table?.rows.length || presentation?.cards.length) return 'ai-response-card--data'
++  return 'ai-response-card--narrative'
++}
++
++/** 指标卡只在后端返回卡片且当前布局需要数据摘要时展示。 */
++function shouldShowMetricCards(message: BusinessChatMessage): boolean {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return Boolean(presentation?.cards.length)
++}
++
++/** 表格只在后端返回有效列和行时展示，避免空表占据叙事型回答空间。 */
++function shouldShowResultTable(message: BusinessChatMessage): boolean {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return Boolean(presentation?.table?.columns.length && presentation.table.rows.length)
++}
++
++/**
++ * 将当前助手回复中的明细表导出为 Excel。
++ *
++ * 参数：
++ *   message: 当前助手消息，导出其中 presentation.table 的已展示明细。
++ *
++ * 返回：
++ *   无返回值；浏览器侧触发 xlsx 文件下载。
++ */
++function exportAssistantTableToExcel(message: BusinessChatMessage) {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  const table = presentation?.table
++  if (!table?.columns.length || !table.rows.length) {
++    ElMessage.warning('当前回答没有可导出的明细数据')
++    return
++  }
++
++  const exportRows = buildAssistantTableExportRows(table)
++  const worksheet = XLSX.utils.json_to_sheet(exportRows, { header: table.columns })
++  // 按中文列名和单元格内容给出保守列宽，避免导出后业务用户第一眼只能看到截断内容。
++  worksheet['!cols'] = table.columns.map((column) => ({
++    wch: Math.max(12, Math.min(36, String(column).length + 8)),
++  }))
++  const workbook = XLSX.utils.book_new()
++  XLSX.utils.book_append_sheet(workbook, worksheet, '明细数据')
++  XLSX.writeFile(workbook, buildAssistantTableExportFileName(message))
++  ElMessage.success(`已导出 ${table.rows.length} 行明细数据`)
++}
++
++/**
++ * 构造 Excel 导出行，保持列顺序与页面表格一致。
++ *
++ * 参数：
++ *   table: 已归一化的页面展示表格。
++ *
++ * 返回：
++ *   适合 XLSX.utils.json_to_sheet 的对象数组。
++ */
++function buildAssistantTableExportRows(table: UnifiedTable): Array<Record<string, string | number | boolean>> {
++  return table.rows.map((row) => {
++    const next: Record<string, string | number | boolean> = {}
++    table.columns.forEach((column) => {
++      next[column] = normalizeAssistantTableExportCell(row[column])
++    })
++    return next
++  })
++}
++
++/** 归一化 Excel 单元格值，避免对象/数组导出成 [object Object]。 */
++function normalizeAssistantTableExportCell(value: unknown): string | number | boolean {
++  if (value === null || value === undefined) return ''
++  if (typeof value === 'number' || typeof value === 'boolean') return value
++  if (value instanceof Date) return value.toISOString()
++  if (Array.isArray(value)) return value.map((item) => normalizeAssistantTableExportCell(item)).join('、')
++  if (typeof value === 'object') {
++    try {
++      return JSON.stringify(value)
++    } catch (_error) {
++      return String(value)
++    }
++  }
++  return String(value)
++}
++
++/** 根据回答标题和时间生成安全 Excel 文件名。 */
++function buildAssistantTableExportFileName(message: BusinessChatMessage) {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  const fallbackTitle = domainLabelMap[message.domain] || '智能助手明细数据'
++  const safeTitle = sanitizeAssistantTableExportFileName(presentation?.title || fallbackTitle) || '智能助手明细数据'
++  return `${safeTitle.slice(0, 36)}_${formatAssistantTableExportTimestamp(new Date())}.xlsx`
++}
++
++/** 清理文件名中的系统保留字符。 */
++function sanitizeAssistantTableExportFileName(value: string) {
++  return String(value || '')
++    .replace(/[\\/:*?"<>|\r\n\t]+/g, '_')
++    .replace(/\s+/g, ' ')
++    .trim()
++}
++
++/** 构造导出时间戳，便于同一回答多次导出时区分文件。 */
++function formatAssistantTableExportTimestamp(date: Date) {
++  const pad = (value: number) => String(value).padStart(2, '0')
++  return [
++    date.getFullYear(),
++    pad(date.getMonth() + 1),
++    pad(date.getDate()),
++    '_',
++    pad(date.getHours()),
++    pad(date.getMinutes()),
++    pad(date.getSeconds()),
++  ].join('')
++}
++
++/** 根据回答布局生成轻量提示词，不参与业务判断。 */
++function resolveAssistantReplyKicker(message: BusinessChatMessage): string {
++  const layout = resolveAssistantResultLayout(message)
++  if (layout === 'ai-response-card--chart') return '图表视图'
++  if (layout === 'ai-response-card--data') return '数据视图'
++  return '文字说明'
++}
++
+ /** 展示类型中文化，便于把后端 display_type 作为轻量徽标呈现。 */
+ function formatDisplayTypeLabel(displayType?: string) {
+   const mapping: Record<string, string> = {
+@@ -1646,6 +1822,15 @@ onBeforeUnmount(() => {
+   animation: fadeIn 0.3s ease-out;
+ }
+ 
++.ai-response-card--narrative {
++  max-width: 780px;
++}
++
++.ai-response-card--data,
++.ai-response-card--chart {
++  max-width: 100%;
++}
++
+ .result-hero {
+   display: grid;
+   gap: 8px;
+@@ -1715,6 +1900,10 @@ onBeforeUnmount(() => {
+   word-break: break-word;
+ }
+ 
++.assistant-prose {
++  white-space: pre-wrap;
++}
++
+ .result-summary-strip {
+   display: flex;
+   flex-wrap: wrap;
+@@ -1965,6 +2154,13 @@ onBeforeUnmount(() => {
+   font-weight: 700;
+ }
+ 
++.result-table-card__title {
++  display: inline-flex;
++  align-items: center;
++  gap: 8px;
++  min-width: 0;
++}
++
+ .result-table-card__head em {
+   flex: none;
+   font-style: normal;
+@@ -1973,6 +2169,17 @@ onBeforeUnmount(() => {
+   font-weight: 500;
+ }
+ 
++.result-table-card__export {
++  flex: none;
++  border-color: var(--brand-green-border);
++}
++
++.result-table-card__export:not(.is-disabled):hover {
++  border-color: var(--brand-green);
++  background: var(--brand-green-bg);
++  color: var(--brand-green);
++}
++
+ :deep(.result-table .el-table__header-wrapper th) {
+   background: #f8fafb;
+   color: #374151;
+@@ -1993,6 +2200,17 @@ onBeforeUnmount(() => {
+   transition: background 0.15s ease;
+ }
+ 
++.result-table__cell {
++  display: inline-block;
++  max-width: 100%;
++  line-height: 1.55;
++  word-break: break-word;
++}
++
++.result-table__cell--multi-line {
++  white-space: pre-line;
++}
++
+ /* ======== 追问区域 ======== */
+ .follow-up {
+   display: grid;
+diff --git a/tests/business_acceptance/test_plan_power_docx_question_regression.py b/tests/business_acceptance/test_plan_power_docx_question_regression.py
+index c644c71..5dfbb62 100644
+--- a/tests/business_acceptance/test_plan_power_docx_question_regression.py
++++ b/tests/business_acceptance/test_plan_power_docx_question_regression.py
+@@ -119,7 +119,20 @@ def _assert_power_recommendation_response(
+     assert set(response.raw_result["power_recommendation"]["target_power_ratio"]) == expected_bins
+     assert response.raw_result["power_recommendation"]["recommendations"]
+     assert response.result_table.rows
+-    assert {"供应商", "匹配度", "目标功率档", "建议效率段"}.issubset(set(response.result_table.columns))
++    expected_columns = {"供应商", "目标功率档", "预测比例", "CTM 值", "建议效率段", "落档比例预估"}
++    assert expected_columns.issubset(set(response.result_table.columns))
++    assert "匹配度" not in response.result_table.columns
++    assert "差异" not in response.result_table.columns
++    for row in response.result_table.rows:
++        assert "匹配度" not in row
++        assert "差异" not in row
++        assert str(row.get("CTM 值", "")).endswith("%")
++        efficiency_segments = [segment for segment in str(row.get("建议效率段", "")).split("、") if segment]
++        assert 1 <= len(efficiency_segments) <= 2
++        assert [float(segment.rstrip("%")) for segment in efficiency_segments] == sorted(
++            float(segment.rstrip("%")) for segment in efficiency_segments
++        )
++        assert str(row.get("落档比例预估", ""))
+     if expected_supplier:
+         assert response.nlu.slots["supplier_name"] == expected_supplier
+         assert {row["供应商"] for row in response.result_table.rows} == {expected_supplier}
+diff --git a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+index 4c11a7a..e6b7f3b 100644
+--- a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
++++ b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+@@ -12,7 +12,7 @@ def test_bom_data_management_exposes_separate_power_model_upload_entry_without_t
+     """BOM 数据管理页必须保留独立功率模型上传入口，并移除临时管理 token 输入。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+ 
+-    assert "上传 BOM Excel" in page
++    assert "BOM 文件上传" in page
+     assert "上传功率模型" in page
+     assert "请选择功率模型 xlsm 文件" in page
+     assert "uploadPowerModelFile" in page
+@@ -31,6 +31,35 @@ def test_bom_data_management_exposes_separate_power_model_upload_entry_without_t
+     assert "上传失败" in page
+ 
+ 
++def test_bom_excel_upload_supports_batch_files_end_to_end_contract() -> None:
++    """BOM Excel 上传应支持一次选择多个文件，并由后端返回批量汇总与逐文件结果。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++    query_page = (FRONTEND / "views" / "plan-bom" / "PlanBomDetailQueryPage.vue").read_text(encoding="utf-8")
++    api = (FRONTEND / "api" / "planBom.ts").read_text(encoding="utf-8")
++    endpoint = (BACKEND / "domains" / "plan_bom" / "api" / "endpoints" / "import_excel.py").read_text(encoding="utf-8")
++
++    assert "type=\"file\"" in page
++    assert "multiple" in page
++    assert "selectedFiles" in page
++    assert "请选择 1 个或多个 BOM Excel 文件" in page
++    assert "uploadPlanBomExcelBatch" in page
++    assert "uploadBatchResult" in page
++    assert "批量上传" in page
++    assert "逐文件结果" in page
++    assert "BOM Excel 批量上传导入" in query_page
++    assert "multiple @change=\"handleUploadInputChange\"" in query_page
++    assert "uploadPlanBomExcelBatch(files)" in query_page
++    assert "files.forEach" in api
++    assert "formData.append('files', file)" in api
++    assert "uploadPlanBomExcelBatch(files: File[]" in api
++    assert "total_files" in endpoint
++    assert "success_count" in endpoint
++    assert "failed_count" in endpoint
++    assert "items" in endpoint
++    assert "files: list[UploadFile] | None = File(default=None)" in endpoint
++    assert "file: UploadFile | None = File(default=None)" in endpoint
++
++
+ def test_bom_data_management_progress_and_status_are_isolated_per_upload_type() -> None:
+     """BOM 和功率模型上传必须分别维护进度与提示，避免两个入口状态串扰。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+@@ -112,7 +141,10 @@ def test_bom_data_management_page_defines_own_vertical_scroll_container() -> Non
+     assert "height: calc(100vh - 64px);" in page
+     assert "overflow-y: auto;" in page
+     assert "overflow-x: hidden;" in page
+-    assert "padding: 32px" in page
++    assert "display: grid;" in page
++    assert "grid-auto-rows: max-content;" in page
++    assert "gap: 20px;" in page
++    assert "padding: 24px 28px 36px;" in page
+     assert "margin: 0 auto;" in page
+ 
+ 
+@@ -122,6 +154,8 @@ def test_bom_data_management_history_uses_tabs_and_pagination_for_dense_tables()
+ 
+     assert "<el-tabs" in page
+     assert "historyActiveTab" in page
++    assert "label=\"上传数据\"" in page
++    assert "label=\"查看历史\"" in page
+     assert "name=\"bom_upload_history\"" in page
+     assert "name=\"power_model_versions\"" in page
+     assert "pagedBomUploadHistory" in page
+@@ -131,39 +165,100 @@ def test_bom_data_management_history_uses_tabs_and_pagination_for_dense_tables()
+     assert "handlePowerHistoryPageChange" in page
+ 
+ 
+-def test_bom_data_management_page_focuses_on_two_primary_metrics_and_status_chips() -> None:
+-    """BOM 数据管理页不应堆叠过多指标卡，应只保留少量主指标和轻量状态。"""
++def test_bom_data_management_page_uses_clean_workspace_without_duplicate_chips() -> None:
++    """BOM 数据管理首屏应去掉重复标签和英文装饰，用紧凑状态条与统一上传卡片突出操作。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+     template = page.split("<script setup", 1)[0]
+ 
++    assert "bom-page bom-page--clean" in template
+     assert "primaryOverviewCards" in page
+-    assert "secondary-status-strip" in page
+-    assert "upload-zone-card" in page
+-    assert "BOM 数据导入" in page
+-    assert "功率模型版本" in page
++    assert "compact-status-row" in template
++    assert "upload-dropzone" in template
++    assert "upload-action-button" in template
++    assert "BOM 文件上传" in page
++    assert "功率模型上传" in page
+     assert "BOM 上传批次" in page
+     assert "当前生效模型" in page
+     assert "v-for=\"item in primaryOverviewCards\"" in template
+-    assert "hero-metric-strip" not in template
+-    assert "ops-overview-grid" not in template
+-    assert "文件隔离" in page
+-    assert "温和校验" in page
+-    assert "版本追溯" in page
++    assert "hero-tags" not in template
++    assert "secondary-status-strip" not in template
++    assert "DATA WORKSPACE" not in template
++    assert "POWER" not in template
++    assert template.count("文件隔离") <= 1
++
++
++def test_bom_data_management_visual_layout_uses_separate_cards_and_refined_tabs() -> None:
++    """BOM 页面首屏应把概览区和操作区拉开，指标卡与 tab 应采用统一的企业级组件样式。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++    template = page.split("<script setup", 1)[0]
+ 
++    assert "bom-hero-card" in template
++    assert "bom-workspace-card" in template
++    assert template.index("bom-hero-card") < template.index("bom-workspace-card")
++    assert "management-tabs management-tabs--segmented" in template
++    assert "overview-card__top" in template
++    assert "overview-card__badge" in template
++    assert "overview-card__value" in template
++    assert "workspace-card-head" in template
++    assert "workspace-tab-label" in template
++    assert ".bom-page--clean" in page
++    assert ".bom-hero-card" in page
++    assert ".bom-workspace-card" in page
++    assert "gap: 20px" in page
++    assert "box-shadow: 0 10px 28px" in page
++
++
++def test_bom_data_management_typography_is_restrained_and_business_readable() -> None:
++    """BOM 页面应收敛字号和装饰，避免超大标题、强渐变和过重阴影造成花哨感。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+ 
+-def test_bom_data_management_copy_stays_minimal_and_hierarchy_first() -> None:
+-    """BOM 数据管理页应减少说明文字，用指标、短标签和视觉层次突出重点。"""
++    assert "font-size: clamp(34px, 4vw, 52px);" not in page
++    assert "font-size: clamp(28px, 2.6vw, 38px);" not in page
++    assert "font-size: 24px;" not in page
++    assert "font-size: 17px;" not in page
++    assert "font-size: 18px;" not in page
++    assert "radial-gradient" not in page
++    assert ".overview-card::after" not in page
++    assert "width: 320px;" not in page
++    assert "box-shadow: 0 18px 50px" not in page
++    assert "box-shadow: 0 16px 42px" not in page
++    assert "font-size: clamp(26px, 2.4vw, 34px);" in page
++    assert "font-size: clamp(22px, 2vw, 30px);" in page
++    assert "font-size: 20px;" in page
++    assert "font-size: 14px;" in page
++
++
++def test_bom_data_management_copy_stays_minimal_business_friendly_and_hierarchy_first() -> None:
++    """BOM 数据管理页应减少说明文字和英文技术词，用业务动作、短标签和视觉层次突出重点。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+     template = page.split("<script setup", 1)[0]
+ 
+     assert "primaryOverviewCards" in page
+-    assert "secondary-status-strip" in page
++    assert "compact-status-row" in page
+     assert "<ol>" not in template
+     assert "统一管理计划 BOM 数据导入与功率模型版本" not in template
+     assert "普通 BOM Excel 用于明细查询和智能问答。" not in template
+     assert "BOM 上传历史与功率模型版本历史采用 tab 页分区展示" not in template
+     assert "当前表格按上传时间倒序展示" not in template
+-    assert template.count("。") <= 8
++    assert 'label="Warning"' not in template
++    assert 'label="Error"' not in template
++    assert "Issue 数" not in template
++    assert "文件 Hash" not in template
++    assert "版本 ID" not in template
++    assert "{{ row.status }}" not in template
++    assert 'prop="source_tag" label="来源" min-width="120" show-overflow-tooltip />' not in template
++    assert "formatStatusLabel(row.status)" in template
++    assert "formatSourceTagLabel(row.source_tag)" in template
++    assert "formatStatusLabel(row.parse_status)" in template
++    assert "formatStatusLabel(uploadPowerModelResult.version?.parse_status)" in template
++    assert "uploadPowerModelResult.version?.parse_status || '-'" not in template
++    assert "问题数" in page
++    assert "文件指纹" in page
++    assert "版本编号" in page
++    assert "手动上传" in page
++    assert "选择文件后可上传" in page
++    assert "选择模型后可上传" in page
++    assert template.count("。") <= 6
+ 
+ 
+ def test_app_layout_uses_chatgpt_like_neutral_shell_and_richer_palette() -> None:
+@@ -203,6 +298,36 @@ def test_business_chat_assistant_response_layout_is_adaptive_not_fixed_template(
+     assert "v-if=\"message.presentation.table\" class=\"result-table-card\"" not in template
+ 
+ 
++def test_business_chat_detail_table_can_export_excel_when_rows_exist() -> None:
++    """智能助手回复中存在明细表格时，业务用户应能直接导出 Excel 文件。"""
++    chat = (FRONTEND / "views" / "business-chat" / "BusinessChatPage.vue").read_text(encoding="utf-8")
++    template = chat.split("<script setup", 1)[0]
++
++    assert "import * as XLSX from 'xlsx'" in chat
++    assert "import { ElMessage } from 'element-plus'" in chat
++    assert "data-testid=\"export-result-table-excel\"" in template
++    assert "导出 Excel" in template
++    assert "@click=\"exportAssistantTableToExcel(message)\"" in template
++    assert "shouldShowResultTable(message)" in template
++    assert "function exportAssistantTableToExcel" in chat
++    assert "function buildAssistantTableExportRows" in chat
++    assert "function buildAssistantTableExportFileName" in chat
++    assert "XLSX.utils.json_to_sheet" in chat
++    assert "XLSX.utils.book_append_sheet" in chat
++    assert "XLSX.writeFile" in chat
++    assert "ctm值: 'CTM 值'" in chat
++    assert "ctm_值: 'CTM 值'" in chat
++    assert "落档比例预估: '落档比例预估'" in chat
++    assert "function isMultiLineTableColumn" in chat
++    assert ":show-overflow-tooltip=\"!isMultiLineTableColumn(column)\"" in template
++    assert "result-table__cell--multi-line" in chat
++    assert "white-space: pre-line" in chat
++    assert "ElMessage.warning('当前回答没有可导出的明细数据')" in chat
++    assert "ElMessage.success(`已导出 ${table.rows.length} 行明细数据`)" in chat
++    assert "智能助手明细数据" in chat
++    assert "xlsx" in chat
++
++
+ def test_power_model_token_dependency_removed_from_current_backend_sources() -> None:
+     """临时功率模型 token 功能应从当前后端源码移除，后续改由用户权限模块接管。"""
+     deps = (BACKEND / "api" / "deps.py").read_text(encoding="utf-8")
+diff --git a/tests/business_acceptance/test_plan_power_m5_qa_integration.py b/tests/business_acceptance/test_plan_power_m5_qa_integration.py
+index 3dad6db..dc399fa 100644
+--- a/tests/business_acceptance/test_plan_power_m5_qa_integration.py
++++ b/tests/business_acceptance/test_plan_power_m5_qa_integration.py
+@@ -107,7 +107,7 @@ def test_plan_bom_qa_answers_power_prediction_for_real_order(live_db_session, qa
+ 
+ 
+ def test_plan_bom_qa_recommends_suppliers_by_target_ratio(live_db_session, qa_service) -> None:
+-    """用户给出目标功率比例时，QA 应调用 M3 推荐服务并返回供应商匹配度。"""
++    """用户给出目标功率比例时，QA 应调用 M3 推荐服务并返回业务可读的供应商推荐表。"""
+     tail, _, resolved = _resolved_order_tail(live_db_session)
+     prediction = PowerPredictionEngine(live_db_session).predict(
+         model_code=resolved.model_code,
+@@ -125,7 +125,11 @@ def test_plan_bom_qa_recommends_suppliers_by_target_ratio(live_db_session, qa_se
+     recommendation = response.raw_result["power_recommendation"]
+     assert recommendation["recommendations"]
+     assert response.result_table.rows
+-    assert {"供应商", "匹配度"}.issubset(set(response.result_table.columns))
++    assert {"供应商", "目标功率档", "预测比例", "CTM 值", "建议效率段", "落档比例预估"}.issubset(
++        set(response.result_table.columns)
++    )
++    assert "匹配度" not in response.result_table.columns
++    assert "差异" not in response.result_table.columns
+ 
+ 
+ def test_plan_bom_qa_accepts_explicit_supplier_for_power_prediction(live_db_session, qa_service) -> None:
+diff --git a/tests/business_acceptance/test_plan_power_real_business_qa_regression.py b/tests/business_acceptance/test_plan_power_real_business_qa_regression.py
+new file mode 100644
+index 0000000..08843c9
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_power_real_business_qa_regression.py
+@@ -0,0 +1,312 @@
++from __future__ import annotations
++
++from types import SimpleNamespace
++
++import pytest
++
++from backend.app.db.session import SessionLocal
++from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
++from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
++from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
++from backend.app.domains.plan_bom.services.power_config_resolver_service import PlanBomPowerConfigResolverService
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
++from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
++from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
++
++
++@pytest.fixture()
++def live_plan_bom_qa_service():
++    """连接当前真实库并构造与 API 依赖一致的计划 BOM QA 服务。"""
++
++    session = SessionLocal()
++    try:
++        repository = PlanBomQueryRepository(session)
++        engine = PowerPredictionEngine(session)
++        yield PlanBomQaService(
++            repository=repository,
++            query_service=PlanBomQueryService(repository=repository),
++            nlu_service=PlanBomNluCenterService(repository=repository),
++            presentation_service=PlanBomAnswerPresentationService(),
++            power_config_resolver=PlanBomPowerConfigResolverService(session, repository=repository),
++            power_prediction_engine=engine,
++            power_recommendation_service=PowerRecommendationService(session, engine=engine),
++        )
++    finally:
++        session.close()
++
++
++def _row_categories(response) -> set[str]:
++    """返回 QA 表格中的材料类别集合，用于断言真实业务材料覆盖。"""
++
++    return {str(row.get("material_category") or "") for row in response.result_table.rows}
++
++
++def test_order_name_hint_extraction_is_generic_not_case_hardcoded():
++    """订单名称消歧应识别任意客户实例片段，而不是写死某个客户名。"""
++
++    assert PlanBomNluCenterService._extract_order_name_hint(
++        "请问华东新能源-2027-12345，版本 A1，0.24焊带，做功率预测"
++    ) == "华东新能源-2027-12345"
++    assert PlanBomNluCenterService._extract_order_name_hint(
++        "请问一下华东新能源-2027-12345，版本 A1，0.24焊带，做功率预测"
++    ) == "华东新能源-2027-12345"
++    assert PlanBomNluCenterService._extract_order_name_hint(
++        "麻烦看一下华东新能源-2027-12345，版本 A1，0.24焊带，做功率预测"
++    ) == "华东新能源-2027-12345"
++    assert PlanBomNluCenterService._extract_order_name_hint(
++        "帮我看下 NT15/72GDF(西南客户-2028-54321)Bill of materials（GCL-TEST-2028-54321，版本 B2）"
++    ) == "NT15/72GDF(西南客户-2028-54321)Bill of materials"
++    assert PlanBomPowerConfigResolverService._normalize_order_name_hint(
++        "NT15/72GDF（西南客户-2028-54321）"
++    ) == PlanBomPowerConfigResolverService._normalize_order_name_hint(
++        "NT15-72GDF(西南客户_2028_54321)"
++    )
++
++
++def test_order_name_hint_filters_arbitrary_candidate_instances_without_customer_hardcode():
++    """消歧过滤应基于候选内容通用匹配，不依赖真实库里的某个客户名。"""
++
++    resolver = object.__new__(PlanBomPowerConfigResolverService)
++    headers = [
++        SimpleNamespace(order_name="NT15/72GDF(华东新能源-2027-12345)Bill of materials", raw_file_name="华东新能源.xlsx", order_no="GCL-TEST-2027-12345", file_no="A"),
++        SimpleNamespace(order_name="NT15/72GDF(西南客户-2027-12345)Bill of materials", raw_file_name="西南客户.xlsx", order_no="GCL-TEST-2027-12345", file_no="B"),
++    ]
++
++    matched = resolver._filter_headers_by_order_name_hint(headers, "华东新能源-2027-12345")
++
++    assert [header.order_name for header in matched] == ["NT15/72GDF(华东新能源-2027-12345)Bill of materials"]
++
++
++def test_business_power_question_extracts_spoken_configuration_single_target_and_all_suppliers(live_plan_bom_qa_service):
++    """真实业务问法给出 300/200 线长和单一 615 功率时，应直接给出各供应商效率推荐。"""
++
++    question = "NT12R/66GDF（深圳建融-2025-01073）0.24焊带+双镀玻璃+300/200线长，北德基准，615功率，各个供应商厂家从什么电池效率可以满足"
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q2")
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.nlu.slots["target_power_ratio"] == {"615": 1.0}
++    assert response.nlu.slots["explicit_power_configuration"]["ribbon"] == "0.24"
++    assert response.nlu.slots["explicit_power_configuration"]["glass"] == "双镀"
++    assert response.nlu.slots["explicit_power_configuration"]["cable"] == "300/200线长"
++
++    resolution = response.raw_result["bom_config_resolution"]
++    assert resolution["status"] == "resolved"
++    assert resolution["resolved_config"]["cable"]["value"] == "+300/-200mm（4mm²）"
++    assert resolution["unresolved_items"] == []
++    assert response.result_table.rows
++    assert {row["目标功率档"] for row in response.result_table.rows} == {"615W"}
++    assert len({row["供应商"] for row in response.result_table.rows}) >= 2
++    assert all(row["建议效率段"] for row in response.result_table.rows)
++
++
++
++def test_business_power_recommendation_table_matches_sales_excel_export_columns(live_plan_bom_qa_service):
++    """供应商推荐明细表应按业务员 Excel 下载意见展示，隐藏匹配度并补 CTM/落档预估。
++
++    参数：
++        live_plan_bom_qa_service: 真实库 QA 服务 fixture。
++    返回值：
++        无；通过断言验证后端 table columns/rows，即前端下载 Excel 的真实数据源。
++    业务逻辑：智能助手 Excel 下载只导出 `presentation.table` 的可见列，因此此处直接
++        验证 QA 表头、建议效率段、CTM 值、落档比例预估和解释文案。
++    """
++
++    question = "NT12R/66GDF（深圳建融-2025-01073）0.24焊带+双镀玻璃+300/200线长，北德基准，615功率，各个供应商厂家从什么电池效率可以满足"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-export-columns")
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.result_table.columns == [
++        "供应商",
++        "目标功率档",
++        "目标比例",
++        "预测比例",
++        "CTM 值",
++        "中心功率",
++        "建议效率段",
++        "落档比例预估",
++    ]
++    assert response.result_table.rows
++    assert "匹配度" not in response.result_table.columns
++    assert "差异" not in response.result_table.columns
++    assert "指标5" not in response.result_table.columns
++    assert "预测比例表示" not in response.answer_summary
++    assert "中心功率来自" not in response.answer_summary
++    assert "基准功率" not in response.answer_summary
++
++    first_raw_recommendation = response.raw_result["power_recommendation"]["recommendations"][0]
++    assert "score" in first_raw_recommendation
++    assert "target_diff" in first_raw_recommendation
++
++    for row in response.result_table.rows:
++        assert "匹配度" not in row
++        assert "差异" not in row
++        assert "指标5" not in row
++        assert isinstance(row["CTM 值"], str)
++        assert row["CTM 值"].endswith("%")
++        assert 90 < float(row["CTM 值"].rstrip("%")) < 110
++
++        segments = [item for item in str(row["建议效率段"]).split("、") if item]
++        assert len(segments) == 2
++        numeric_segments = [float(item.rstrip("%")) for item in segments]
++        assert numeric_segments == sorted(numeric_segments)
++
++        estimate = str(row["落档比例预估"])
++        assert estimate
++        assert "；" not in estimate
++        estimate_lines = [line for line in estimate.splitlines() if line.strip()]
++        assert len(estimate_lines) == len(segments)
++        assert all("→" in line and "615W" in line for line in estimate_lines)
++        assert all(segment.rstrip("%") in line for segment, line in zip(segments, estimate_lines))
++
++
++
++def test_business_power_question_extracts_single_supplier_efficiency_requirement(live_plan_bom_qa_service):
++    """真实业务问法指定芜湖供应时，应只返回芜湖的 615W 满足效率段，不应追问线缆长度。"""
++
++    question = "NT12R/66GDF（深圳建融-2025-01073）0.24焊带+双镀玻璃+300/200线长，北德基准，615功率，芜湖供应需要从什么电池效率可以满足"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q3")
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.nlu.slots["supplier_name"] == "芜湖"
++    assert response.nlu.slots["target_power_ratio"] == {"615": 1.0}
++    assert response.raw_result["bom_config_resolution"]["resolved_config"]["cable"]["value"] == "+300/-200mm（4mm²）"
++    assert {row["供应商"] for row in response.result_table.rows} == {"芜湖"}
++    assert {row["目标功率档"] for row in response.result_table.rows} == {"615W"}
++    assert all(row["建议效率段"] for row in response.result_table.rows)
++
++
++@pytest.mark.parametrize(
++    "question",
++    [
++        "NT10/78GDF(江苏汉腾-2026-00106)Bill of materials（GCL-XXJC-JSPS-2026-00106，版本 A0），0.24+0.26焊带+高透玻璃+间隙铝膜+300/200线长，计量院基准，单一需求720功率，各个供应商厂家从什么电池效率可以满足",
++        "NT10/78GDF(江苏汉腾-2026-00106)，0.24+0.26焊带+高透玻璃+间隙铝膜+300/200线长，计量院基准，单一需求720功率，各个供应商厂家从什么电池效率可以满足",
++        "江苏汉腾-2026-00106，版本 A0，0.24+0.26焊带+高透玻璃+间隙铝膜+300/200线长，计量院基准，单一需求720功率，各个供应商厂家从什么电池效率可以满足",
++    ],
++)
++def test_exact_bom_name_disambiguates_same_review_number_candidates(live_plan_bom_qa_service, question: str):
++    """用户已经给出完整 BOM 名称或客户实例时，应确定性命中江苏汉腾，不应继续混入石家庄科林候选。"""
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-exact-00106")
++
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.nlu.slots["bom_version"] == ["A0"] or question.startswith("NT10/78GDF(江苏汉腾-2026-00106)，")
++    assert response.nlu.slots["order_name_hint"]
++    resolution = response.raw_result["bom_config_resolution"]
++    assert resolution["status"] != "candidate_required"
++    assert resolution["order_name"] == "NT10/78GDF(江苏汉腾-2026-00106)Bill of materials"
++    assert resolution.get("candidates") == []
++    assert "石家庄科林" not in response.answer_summary
++    assert "命中 2 个 BOM 候选" not in response.answer_summary
++
++
++def test_business_power_candidate_clarification_lists_candidates_and_name_mismatch(live_plan_bom_qa_service):
++    """订单尾号命中多个 BOM 且用户给出的项目名不匹配候选时，仍应澄清并列出候选。"""
++
++    question = "创维210N—00106，0.24+0.26焊带+高透玻璃+间隙铝膜+300/200线长，计量院基准，单一需求720功率，各个供应商厂家从什么电池效率可以满足"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q1")
++
++    assert response.classification == "B"
++    assert response.status.code == "CLARIFICATION_REQUIRED"
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.nlu.slots["target_power_ratio"] == {"720": 1.0}
++    assert response.nlu.slots["explicit_power_configuration"]["ribbon"] == "0.24+0.26"
++    assert response.nlu.slots["explicit_power_configuration"]["glass"] == "高透+间隙铝膜"
++    assert response.nlu.slots["explicit_power_configuration"]["cable"] == "300/200线长"
++
++    answer_text = f"{response.answer_summary}\n{response.presentation.answer if response.presentation else ''}"
++    assert "江苏汉腾" in answer_text
++    assert "石家庄科林" in answer_text
++    assert "创维210N" in answer_text
++    assert "未匹配" in answer_text or "不一致" in answer_text
++
++
++@pytest.mark.parametrize(
++    "question",
++    [
++        "订单00104功率预测，给出功率档分布。",
++        "订单2025-01073功率预测",
++    ],
++)
++def test_order_identifier_power_prediction_does_not_extract_target_power_ratio(live_plan_bom_qa_service, question: str):
++    """订单号/评审号中的数字不能被误当成单一目标功率。
++
++    参数：
++        live_plan_bom_qa_service: 真实库 QA 服务 fixture。
++        question: 仅要求功率预测的订单类问题。
++    返回值：
++        无；通过断言验证 NLU 不抽目标功率比例，也不把预测问题误路由到供应商推荐。
++    业务逻辑：`615功率` 是目标档，但 `订单00104功率预测` 里的 `00104` 是订单尾号；
++        抽错会触发 M3 推荐并返回“104W 不在模型输出范围内”的误导结果。
++    """
++
++    nlu = live_plan_bom_qa_service.nlu_service.understand(question, use_llm=False)
++
++    assert nlu.intent == "plan_power_prediction"
++    assert nlu.slots["target_power_ratio"] == {}
++
++
++@pytest.mark.parametrize(
++    "question",
++    [
++        "深圳建融-2025-00615功率预测，各个供应商厂家从什么电池效率可以满足",
++        "项目-00615功率预测，各个供应商厂家从什么电池效率可以满足",
++        "NT720功率预测，供应商推荐",
++    ],
++)
++def test_identifier_digits_in_target_power_range_do_not_become_single_target(live_plan_bom_qa_service, question: str):
++    """300-900 范围内的订单尾号/型号数字也不能被误抽为目标功率。
++
++    参数：
++        live_plan_bom_qa_service: 真实库 QA 服务 fixture。
++        question: 包含 `00615`、`NT720` 等容易被误当目标功率的识别符问题。
++    返回值：
++        无；通过断言验证识别符数字不会填充 target_power_ratio。
++    业务逻辑：真实业务项目名和订单尾号可能刚好落在 615/720 等功率范围，
++        只有与识别符脱离、或有“目标/需求/单一”明确修饰的数字才可作为目标功率。
++    """
++
++    nlu = live_plan_bom_qa_service.nlu_service.understand(question, use_llm=False)
++
++    assert nlu.slots["target_power_ratio"] == {}
++    assert "target_power_ratio" in nlu.missing_slots
++
++
++def test_line_length_material_query_includes_junction_box_in_narrative_answer(live_plan_bom_qa_service):
++    """业务问“线长”时应把它映射到接线盒/线缆材料，不能只返回玻璃、焊带、汇流条。"""
++
++    question = "NT12R/66GDF（深圳建融-2025-01073）玻璃焊带线长汇流条是什么搭配并描述"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q4")
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert "junction_box" in response.nlu.slots["material_category"]
++    assert len(response.result_table.rows) >= 11
++    assert {"玻璃", "互联条", "汇流条", "接线盒"}.issubset(_row_categories(response))
++    assert any("+300/-200mm" in str(row.get("description")) for row in response.result_table.rows)
++
++
++def test_line_length_material_query_includes_junction_box_in_export_table(live_plan_bom_qa_service):
++    """业务要求生成表格/导出版本时，“线长”同样必须包含接线盒行。"""
++
++    question = "NT12R/66GDF（深圳建融-2025-01073）玻璃焊带线长汇流条是什么搭配并生成表格可导出版本"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q5")
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.slots["need_table"] is True
++    assert response.nlu.slots["need_excel"] is True
++    assert "junction_box" in response.nlu.slots["material_category"]
++    assert len(response.result_table.rows) >= 11
++    assert {"玻璃", "互联条", "汇流条", "接线盒"}.issubset(_row_categories(response))
++    assert any("+300/-200mm" in str(row.get("description")) for row in response.result_table.rows)

@@ -19,7 +19,7 @@ npm run dev
 
 - `LLM_BASE_URL`
 - `LLM_API_KEY`
-- `LLM_MODEL=qwen-plus`
+- `LLM_MODEL=deepseek-v4-flash`
 - `LLM_ANSWER_PRESENTATION_ENABLED=true`
 - `LLM_ANSWER_PRESENTATION_MODEL` 可选；未配置时按当前策略使用通用 `LLM_MODEL`。
 

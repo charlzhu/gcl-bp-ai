@@ -283,6 +283,80 @@ def test_explicit_config_all_battery_supplier_synonyms_ignore_example_supplier_n
     assert len({row["供应商"] for row in response.result_table.rows}) >= 3
 
 
+def test_explicit_nt12_wuhu_single_720_colloquial_config_answers_without_clarification(qa_service) -> None:
+    """截图复现：显式配置、北德基准、芜湖和单一 720W 已闭合时，不能再要求补充配置。"""
+    question = (
+        "NT12-66GDF，焊带0.26+0.24+高透玻璃+间隙贴膜+300、200线长+"
+        "6*0.35+4*0.35反光+北德基准，单一功率720W，需要从芜湖的什么效率段投产"
+    )
+
+    response = qa_service.ask(question, use_llm=False)
+
+    _assert_power_recommendation_response(response, expected_bins={"720"}, expected_supplier="芜湖", explicit_config=True)
+    assert response.nlu.missing_slots == []
+    resolution = response.raw_result["bom_config_resolution"]["resolved_config"]
+    assert resolution["ribbon"]["value"] == "0.26"
+    assert resolution["glass"]["value"] == "超高透+间隙铝膜"
+    assert resolution["cable"]["value"] == "+300/-200mm（4mm²）"
+    assert resolution["busbar"]["value"] == "6*0.35+4*0.35反光"
+    assert resolution["benchmark"]["value"] == "北德基准"
+
+
+def test_explicit_nt12_wuhu_single_720_adjacent_invalid_glass_still_clarifies(qa_service) -> None:
+    """相邻无效玻璃配置仍必须 fail-closed 追问，避免为减少澄清而瞎猜。"""
+    question = (
+        "NT12-66GDF，焊带0.26+0.24+透明玻璃+间隙贴膜+300、200线长+"
+        "6*0.35+4*0.35反光+北德基准，单一功率720W，需要从芜湖的什么效率段投产"
+    )
+
+    response = qa_service.ask(question, use_llm=False)
+
+    assert response.classification == "B", response.model_dump(mode="json")
+    assert response.status.code == "CLARIFICATION_REQUIRED", response.model_dump(mode="json")
+    assert "power_configuration" in response.nlu.missing_slots
+    resolution = response.raw_result["bom_config_resolution"]
+    assert resolution["status"] == "partial"
+    assert any(item["factor_key"] == "glass" for item in resolution["unresolved_items"])
+    assert "power_recommendation" not in response.raw_result
+
+
+def test_nt12_busbar_power_factor_difference_uses_model_options_without_order(qa_service) -> None:
+    """截图回归：版型+两个汇流条配置问差值时，应查功率模型选项影响值，不应追问订单号。"""
+    question = "NT12-66GDF，汇流条6*0.3+4*0.3反光和4 *0.4+4*0.3反光相差多少"
+
+    response = qa_service.ask(question, use_llm=False)
+
+    assert response.classification == "A", response.model_dump(mode="json")
+    assert response.status.code == "OK", response.model_dump(mode="json")
+    assert response.nlu.intent == "plan_power_factor_effect_compare"
+    assert response.nlu.missing_slots == []
+    assert response.raw_result["power_factor_effect_compare"]["model_code"] == "NT12-66GDF"
+    assert response.raw_result["power_factor_effect_compare"]["factor_key"] == "busbar"
+    assert response.raw_result["power_factor_effect_compare"]["left"]["effect_value"] == pytest.approx(0.6)
+    assert response.raw_result["power_factor_effect_compare"]["right"]["effect_value"] == pytest.approx(0.3)
+    assert response.raw_result["power_factor_effect_compare"]["absolute_difference"] == pytest.approx(0.3)
+    assert "6*0.3+4*0.3反光" in response.answer_summary
+    assert "4*0.4+4*0.3反光" in response.answer_summary
+    assert "0.3" in response.answer_summary
+
+
+def test_nt12_busbar_power_factor_unknown_option_still_clarifies(qa_service) -> None:
+    """影响值对比中任一配置不在 active 模型 option 内时，必须追问而不是编造差值。"""
+    question = "NT12-66GDF，汇流条6*9.9+4*9.9反光和4*0.4+4*0.3反光相差多少"
+
+    response = qa_service.ask(question, use_llm=False)
+
+    assert response.classification == "B", response.model_dump(mode="json")
+    assert response.status.code == "CLARIFICATION_REQUIRED", response.model_dump(mode="json")
+    assert response.nlu.intent == "plan_power_factor_effect_compare"
+    assert "power_factor_options" in response.nlu.missing_slots
+    payload = response.raw_result["power_factor_effect_compare"]
+    assert payload["model_code"] == "NT12-66GDF"
+    assert payload["factor_key"] == "busbar"
+    assert "absolute_difference" not in payload
+    assert any(option == "4*0.4+4*0.3反光" for option in payload["candidate_options"])
+
+
 EXPLICIT_WUHU_CASES = [
     pytest.param("docx_q9", "0.24+0.26", "6*0.4+4*0.35反光", id="q9-mixed-ribbon-busbar-040-035"),
     pytest.param("docx_q10", "0.24+0.26", "6*0.3+4*0.3反光", id="q10-mixed-ribbon-busbar-030-030"),

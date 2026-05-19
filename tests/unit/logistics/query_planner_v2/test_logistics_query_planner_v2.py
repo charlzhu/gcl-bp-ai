@@ -253,6 +253,63 @@ def test_normalizer_and_validator_accept_route_pricing_semantic_variants() -> No
         assert legacy_plan.metrics == ["avg_fee", "row_count"]
 
 
+def test_normalizer_treats_route_yunjia_quote_and_unit_price_as_unit_price() -> None:
+    """线路“运价/报价/单价”都必须归一到单价/车字段。
+
+    参数：无。
+    返回值：无；通过断言验证 V2 归一化遵循 Semantic Catalog 的报价口径。
+    业务逻辑：用户已确认“报价/单价/运价”走 unit_price_per_vehicle，并与均价 SUM(total_fee)/SUM(shipment_trip_count) 严格区分。
+    """
+
+    normalizer = LogisticsQueryPlannerV2Normalizer()
+    validator = LogisticsQueryPlannerV2Validator(registry=LogisticsQueryPlannerV2CapabilityRegistry())
+    legacy_adapter = LogisticsQueryPlannerV2LegacyAdapter()
+
+    yunjia_question = "2025年合肥发广州市17.5车运价是多少？"
+    yunjia_candidate = normalizer.normalize(
+        _route_payload(yunjia_question, filters={"city": "广州市", "price_metric": "运价"}),
+        question=yunjia_question,
+    )
+    yunjia_validation = validator.validate(yunjia_candidate, original_question=yunjia_question)
+    yunjia_plan = legacy_adapter.to_logistics_plan(yunjia_validation.candidate)
+
+    assert yunjia_validation.accepted, yunjia_validation.errors
+    assert yunjia_plan.filters["city"] == "广州"
+    assert yunjia_plan.filters["price_metric"] == "unit_price_per_vehicle"
+
+    quote_question = "2025年合肥发广州17.5车报价是多少？"
+    quote_candidate = normalizer.normalize(
+        _route_payload(quote_question, filters={"city": "广州", "price_metric": "报价"}),
+        question=quote_question,
+    )
+    quote_validation = validator.validate(quote_candidate, original_question=quote_question)
+    quote_plan = legacy_adapter.to_logistics_plan(quote_validation.candidate)
+
+    assert quote_validation.accepted, quote_validation.errors
+    assert quote_plan.filters["price_metric"] == "unit_price_per_vehicle"
+
+    avg_question = "2025年合肥发广州17.5车均价是多少？"
+    avg_candidate = normalizer.normalize(
+        _route_payload(avg_question, filters={"city": "广州", "price_metric": "均价"}),
+        question=avg_question,
+    )
+    avg_validation = validator.validate(avg_candidate, original_question=avg_question)
+    avg_plan = legacy_adapter.to_logistics_plan(avg_validation.candidate)
+
+    assert avg_validation.accepted, avg_validation.errors
+    assert avg_plan.filters["price_metric"] == "total_fee"
+
+    unknown_question = "2025年合肥发广州17.5车随机口径是多少？"
+    unknown_candidate = normalizer.normalize(
+        _route_payload(unknown_question, filters={"city": "广州", "price_metric": "随机口径"}),
+        question=unknown_question,
+    )
+    unknown_validation = validator.validate(unknown_candidate, original_question=unknown_question)
+
+    assert not unknown_validation.accepted
+    assert "price_metric_not_allowed::随机口径" in unknown_validation.errors
+
+
 def test_validator_rejects_invalid_query_key_filter_low_confidence_2026_and_bc_boundary() -> None:
     """Validator 必须拦截非法 query_key/filter、低置信、历史/系统年份混用和 B/C 越界。"""
     normalizer = LogisticsQueryPlannerV2Normalizer()

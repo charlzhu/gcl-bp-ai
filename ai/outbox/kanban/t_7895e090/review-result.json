@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "可考虑让 M8 CLI 在 expected_status_mismatch_count 非零时返回非 0，以便脱离 pytest 单独运行时也能更强地暴露回归。"
+  ],
+  "summary": "限定 patch 审查通过：M8 保持 shadow-only/fake executor 离线闭环，safety 负例未触达 executor，报告与产物未发现 SQL 原文、参数值或连接密钥泄露，M7 标题与 live smoke 未被破坏。"
+}

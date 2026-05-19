@@ -305,15 +305,22 @@ class LogisticsQueryPlannerV2Normalizer:
 
     @staticmethod
     def _normalize_price_metric(value: Any, *, question: str) -> str:
-        """归一化价格口径。"""
+        """归一化价格口径。
+
+        业务口径：
+            1. “报价 / 单价 / 运价”指源表 `unit_price_per_vehicle`，不等同于均价；
+            2. “均价 / 平均运费”才走总费用除以车次的后续计算口径；
+            3. 仅用户明确说“总费用/总运费/运费”时按 `total_fee` 处理。
+        """
 
         text = str(value).strip() if value is not None else ""
-        if text in {"total_fee", "总费用", "总运费", "运费"}:
+        compact_question = "".join(question.split())
+        if text in {"unit_price_per_vehicle", "单价/车", "报价", "单价", "运价"}:
+            return "unit_price_per_vehicle"
+        if any(keyword in compact_question for keyword in ("报价", "单价", "运价")):
+            return "unit_price_per_vehicle"
+        if text in {"total_fee", "总费用", "总运费", "运费", "avg_fee_per_trip", "avg_fee", "均价", "平均运费", "平均每车费用", "单车均费"}:
             return "total_fee"
-        if text in {"unit_price_per_vehicle", "单价/车", "报价", "运价"}:
-            return "unit_price_per_vehicle"
-        if "报价" in question or "单价" in question:
-            return "unit_price_per_vehicle"
         return text or "total_fee"
 
     @staticmethod

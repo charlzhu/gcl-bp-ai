@@ -1,0 +1,245 @@
+diff --git a/backend/app/domains/logistics/repositories/data_qa_repository.py b/backend/app/domains/logistics/repositories/data_qa_repository.py
+index 423a559..6690775 100644
+--- a/backend/app/domains/logistics/repositories/data_qa_repository.py
++++ b/backend/app/domains/logistics/repositories/data_qa_repository.py
+@@ -2506,6 +2506,8 @@ class LogisticsDataQaRepository:
+         special_scope: str | None = None,
+         base_code: str | None = None,
+         procurement_type: str | None = None,
++        expand_dept: str | None = None,
++        entrusted_person: str | None = None,
+         monthly_breakdown: bool = False,
+     ) -> dict[str, Any]:
+         """2026 系统按过滤条件统计总运费。
+@@ -2517,7 +2519,8 @@ class LogisticsDataQaRepository:
+             4. 若题目限定基地，则统一按 dwd_logistics_ship_task.base_code 过滤。
+             5. transport_mode 仅用于用户明确说“公路运输/铁路运输”等运输方式时过滤。
+             6. procurement_type 仅用于用户明确说“招标/询比价”等系统侧采购方式时过滤。
+-            7. monthly_breakdown 只控制返回是否增加按月明细，不改变总费用计算口径。
++            7. expand_dept / entrusted_person 用于业务已确认的扩充部门、委托人字段过滤。
++            8. monthly_breakdown 只控制返回是否增加按月明细，不改变总费用计算口径。
+         """
+         filters = ["st.biz_year = :year"]
+         params: dict[str, Any] = {"year": year}
+@@ -2543,6 +2546,14 @@ class LogisticsDataQaRepository:
+         if procurement_type:
+             filters.append("st.procurement_type = :procurement_type")
+             params["procurement_type"] = procurement_type
++        if expand_dept:
++            # 经营计划等业务范围词已在 planner 受控映射为扩充部门字段，这里只做参数绑定下推。
++            filters.append("st.expand_dept = :expand_dept")
++            params["expand_dept"] = expand_dept
++        if entrusted_person:
++            # 刘娟等已确认人名按委托人字段过滤，不再通过 special_scope 锁死单一口径。
++            filters.append("st.entrusted_person = :entrusted_person")
++            params["entrusted_person"] = entrusted_person
+         if base_code:
+             filters.append("st.base_code = :base_code")
+             params["base_code"] = base_code
+diff --git a/backend/app/domains/logistics/services/data_qa_planner.py b/backend/app/domains/logistics/services/data_qa_planner.py
+index 605c7b2..477d9fe 100644
+--- a/backend/app/domains/logistics/services/data_qa_planner.py
++++ b/backend/app/domains/logistics/services/data_qa_planner.py
+@@ -97,6 +97,13 @@ class LogisticsDataQaPlanner:
+         "运费多少",
+         "运输费用",
+     )
++    SYS_TOTAL_FEE_FIELD_FILTER_ALIASES = {
++        # 2026 系统总费用里，“经营计划”是扩充部门字段值，不是旧的锁定特殊口径。
++        "经营计划部": ("expand_dept", "经营计划部"),
++        "经营计划": ("expand_dept", "经营计划"),
++        # “刘娟”是委托人字段值，可与扩充部门等其他字段叠加过滤。
++        "刘娟": ("entrusted_person", "刘娟"),
++    }
+     REMARK_SUPPORTED_KEYWORDS = ("倒运", "中转", "换车", "压车", "放空")
+     REMARK_FEE_RATIO_KEYWORDS = ("倒运", "中转")
+     ASSIST_SUPPORTED_QUERY_KEYS = {
+@@ -389,6 +396,7 @@ class LogisticsDataQaPlanner:
+         company_name = self._extract_company_name(compact)
+         transport_mode = self._extract_transport_mode(compact)
+         procurement_type = self._extract_procurement_type(compact)
++        controlled_field_filters = self._extract_sys_total_fee_controlled_field_filters(compact)
+         if (
+             company_name
+             and (
+@@ -732,6 +740,40 @@ class LogisticsDataQaPlanner:
+                 filters={"year": year, "region_name": region},
+             )
+ 
++        unknown_field_scope_terms = self._extract_unknown_sys_total_fee_field_scope_terms(
++            compact,
++            controlled_field_filters=controlled_field_filters,
++        )
++        if year == 2026 and self._is_total_fee_question(compact) and unknown_field_scope_terms:
++            unknown_text = "、".join(unknown_field_scope_terms)
++            return LogisticsDataQaPlan(
++                intent="clarification",
++                needs_clarification=True,
++                clarification_category="field_scope_mapping",
++                clarification_questions=[
++                    f"请确认“{unknown_text}”对应哪个字段口径：扩充部门、委托人、客户、承运商、项目还是其他字段？",
++                    "字段口径确认后，系统会按该字段与已给出的时间范围叠加过滤统计用车总费用。",
++                ],
++                clarification_missing_slots=["字段口径"],
++                clarification_reason=f"问题中的“{unknown_text}”没有受控字段映射，不能默认查全量或套用其他特殊口径。",
++                clarification_template="field_scope_mapping",
++            )
++
++        if year == 2026 and self._is_total_fee_question(compact) and controlled_field_filters:
++            # 受控业务词优先解释为真实字段过滤；若同句仍残留未知范围词，上方已转澄清，避免静默丢条件。
++            filters: dict[str, Any] = {"year": year, "months": months, **controlled_field_filters}
++            if monthly_breakdown:
++                filters["monthly_breakdown"] = True
++            return LogisticsDataQaPlan(
++                intent="aggregate",
++                query_key="sys_total_fee_by_filters",
++                metrics=["total_fee"],
++                dimensions=["biz_month"] if monthly_breakdown else [],
++                filters=filters,
++                group_by=["biz_month"] if monthly_breakdown else [],
++                sort=[{"field": "biz_month", "direction": "asc"}] if monthly_breakdown else [],
++            )
++
+         if year == 2026 and procurement_type and self._is_total_fee_question(compact):
+             return LogisticsDataQaPlan(
+                 intent="aggregate",
+@@ -2647,6 +2689,62 @@ class LogisticsDataQaPlanner:
+         # 这里只裁剪常见尾部助词，不改变中间包含“的”的真实名称。
+         return customer_name.strip().rstrip("的")
+ 
++    def _extract_sys_total_fee_controlled_field_filters(self, question: str) -> dict[str, str]:
++        """提取 2026 系统总费用题的受控字段过滤。
++
++        参数：
++            question: 已压缩空白的用户问题。
++
++        返回值：
++            可直接写入 plan.filters 的字段过滤条件。当前只放行已经由业务确认的
++            expand_dept / entrusted_person，避免把开放词随意下推为字段。
++        """
++
++        filters: dict[str, str] = {}
++        for alias, (field_name, field_value) in self.SYS_TOTAL_FEE_FIELD_FILTER_ALIASES.items():
++            if alias in question:
++                filters[field_name] = field_value
++        return filters
++
++    def _extract_unknown_sys_total_fee_field_scope_terms(
++        self,
++        question: str,
++        *,
++        controlled_field_filters: dict[str, str],
++    ) -> list[str]:
++        """识别缺少字段口径的 2026 系统用车总费用范围词。
++
++        参数：
++            question: 已压缩空白的用户问题。
++            controlled_field_filters: 已识别出的受控字段过滤，命中时不再把同一词当未知项。
++
++        返回值：
++            需要用户确认字段归属的词列表；为空表示无需触发字段口径澄清。
++
++        业务说明：
++            “张三用车总费用”这类问法只给了人名/业务词，没有说明它属于委托人、
++            客户、承运商还是其他字段。系统不能猜测字段，也不能套用经营计划等旧
++            special_scope，所以这里保守返回澄清。
++        """
++
++        if "用车" not in question:
++            return []
++        metric_positions = [question.find(keyword) for keyword in self.TOTAL_FEE_KEYWORDS if keyword in question]
++        if not metric_positions:
++            return []
++        scope_text = question[: min(position for position in metric_positions if position >= 0)]
++        scope_text = re.sub(r"\d{2,4}年", "", scope_text)
++        scope_text = re.sub(r"\d{1,2}月份?", "", scope_text)
++        scope_text = scope_text.replace("用车", "")
++        for alias in self.SYS_TOTAL_FEE_FIELD_FILTER_ALIASES:
++            scope_text = scope_text.replace(alias, "")
++        for token in ("请问", "帮我", "查一下", "查询", "统计", "一下", "的", "按", "和", "及", "与"):
++            scope_text = scope_text.replace(token, "")
++        scope_text = scope_text.strip(" ：:，,。？！?")
++        if not scope_text:
++            return []
++        return [scope_text]
++
+     def _extract_company_name(self, question: str) -> str | None:
+         """提取 2026 系统口径下的承运商公司名。
+ 
+diff --git a/backend/app/domains/logistics/services/data_qa_service.py b/backend/app/domains/logistics/services/data_qa_service.py
+index 1e5de38..0424e79 100644
+--- a/backend/app/domains/logistics/services/data_qa_service.py
++++ b/backend/app/domains/logistics/services/data_qa_service.py
+@@ -2126,6 +2126,8 @@ class LogisticsDataQaService:
+                 special_scope=filters.get("special_scope"),
+                 base_code=filters.get("base_code"),
+                 procurement_type=filters.get("procurement_type"),
++                expand_dept=filters.get("expand_dept"),
++                entrusted_person=filters.get("entrusted_person"),
+                 monthly_breakdown=bool(filters.get("monthly_breakdown")),
+             )
+             if data.get("parse_fail_count"):
+@@ -2141,6 +2143,10 @@ class LogisticsDataQaService:
+                 scope_parts.append("、".join(f"{month}月" for month in filters["months"]))
+             if filters.get("base_name"):
+                 scope_parts.append(filters["base_name"])
++            if filters.get("expand_dept"):
++                scope_parts.append(f"扩充部门={filters['expand_dept']}")
++            if filters.get("entrusted_person"):
++                scope_parts.append(f"委托人={filters['entrusted_person']}")
+             if filters.get("customer_name"):
+                 scope_parts.append(f"客户{filters['customer_name']}")
+             if filters.get("company_name"):
+@@ -2151,6 +2157,13 @@ class LogisticsDataQaService:
+                 scope_parts.append(f"{filters['procurement_type']}采购方式")
+             scope_text = "".join(scope_parts)
+             if filters.get("monthly_breakdown") and data.get("monthly_rows"):
++                calculation_logic = [
++                    "系统总运费口径沿用当前正式系统计算方式：ship_product.price × project_name 解析总车数。",
++                    "按月拆分使用 pickup_date；pickup_date 缺失时按 biz_date 归属月份。",
++                    "按月返回只改变展示颗粒度，不改变总费用计算口径。",
++                ]
++                if filters.get("expand_dept") or filters.get("entrusted_person"):
++                    calculation_logic.append("业务范围词已按受控字段下推过滤：扩充部门使用 expand_dept，委托人使用 entrusted_person。")
+                 monthly_rows = list(data["monthly_rows"])
+                 summary = (
+                     f"{scope_text}总运费已按月返回，"
+@@ -2161,27 +2174,26 @@ class LogisticsDataQaService:
+                     plan=plan,
+                     table_columns=["biz_month", "total_fee", "task_count", "parse_fail_count", "price_missing_count"],
+                     table_rows=monthly_rows,
+-                    calculation_logic=[
+-                        "系统总运费口径沿用当前正式系统计算方式：ship_product.price × project_name 解析总车数。",
+-                        "按月拆分使用 pickup_date；pickup_date 缺失时按 biz_date 归属月份。",
+-                        "按月返回只改变展示颗粒度，不改变总费用计算口径。",
+-                    ],
++                    calculation_logic=calculation_logic,
+                     data_scope={"tables": ["dwd_logistics_ship_task", "dwd_logistics_ship_product"], **filters},
+                     warnings=warnings,
+                 )
+             summary = f"{scope_text}按当前系统口径统计的总运费为{float(data.get('total_fee') or 0):,.2f}元。"
++            calculation_logic = [
++                "系统总运费口径沿用当前正式系统计算方式：ship_product.price × project_name 解析总车数。",
++                "月份过滤优先使用 pickup_date，缺失时退回 biz_date。",
++                "客户过滤当前按 project_name 模糊命中，不额外承诺独立 customer 字段。",
++                "运输方式过滤仅在用户明确指定公路、铁路等运输方式时下推。",
++                "采购方式过滤仅在用户明确指定招标、询比价等系统字段时下推。",
++            ]
++            if filters.get("expand_dept") or filters.get("entrusted_person"):
++                calculation_logic.append("业务范围词已按受控字段下推过滤：扩充部门使用 expand_dept，委托人使用 entrusted_person。")
+             return self._build_result(
+                 answer_summary=summary,
+                 plan=plan,
+                 table_columns=["total_fee", "task_count", "parse_fail_count", "price_missing_count"],
+                 table_rows=[data],
+-                calculation_logic=[
+-                    "系统总运费口径沿用当前正式系统计算方式：ship_product.price × project_name 解析总车数。",
+-                    "月份过滤优先使用 pickup_date，缺失时退回 biz_date。",
+-                    "客户过滤当前按 project_name 模糊命中，不额外承诺独立 customer 字段。",
+-                    "运输方式过滤仅在用户明确指定公路、铁路等运输方式时下推。",
+-                    "采购方式过滤仅在用户明确指定招标、询比价等系统字段时下推。",
+-                ],
++                calculation_logic=calculation_logic,
+                 data_scope={"tables": ["dwd_logistics_ship_task", "dwd_logistics_ship_product"], **filters},
+                 warnings=warnings,
+             )

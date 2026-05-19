@@ -1,0 +1,776 @@
+diff --git a/frontend/src/views/business-chat/BusinessChatPage.vue b/frontend/src/views/business-chat/BusinessChatPage.vue
+index 3475e1b..01250ac 100644
+--- a/frontend/src/views/business-chat/BusinessChatPage.vue
++++ b/frontend/src/views/business-chat/BusinessChatPage.vue
+@@ -68,7 +68,7 @@
+ 
+             <div
+               v-if="message.presentation"
+-              :class="['result', `result--${resolveResultTone(message.status)}`]"
++              :class="['result', `result--${resolveResultTone(message.status)}`, resolveAssistantResultLayout(message)]"
+               data-testid="assistant-result"
+             >
+               <div class="result-hero">
+@@ -82,9 +82,12 @@
+                   <span v-if="message.presentation.displayType" class="display-badge">
+                     {{ formatDisplayTypeLabel(message.presentation.displayType) }}
+                   </span>
++                  <span class="display-badge display-badge--layout">
++                    {{ resolveAssistantReplyKicker(message) }}
++                  </span>
+                 </div>
+                 <div v-if="message.presentation.title" class="result-title" data-testid="result-title">{{ message.presentation.title }}</div>
+-                <p v-if="message.presentation.answer" class="result-answer" data-testid="result-answer">{{ message.presentation.answer }}</p>
++                <p v-if="message.presentation.answer" class="result-answer assistant-prose" data-testid="result-answer">{{ message.presentation.answer }}</p>
+                 <div v-if="buildResultSummaryItems(message).length" class="result-summary-strip">
+                   <span
+                     v-for="item in buildResultSummaryItems(message)"
+@@ -204,7 +207,7 @@
+                 </svg>
+               </div>
+ 
+-              <div v-if="message.presentation.cards.length" class="metric-grid" data-testid="result-cards">
++              <div v-if="shouldShowMetricCards(message)" class="metric-grid" data-testid="result-cards">
+                 <div v-for="card in message.presentation.cards" :key="card.label" class="metric-card">
+                   <div class="metric-accent" />
+                   <div class="metric-body">
+@@ -215,28 +218,57 @@
+                 </div>
+               </div>
+ 
+-              <div v-if="message.presentation.table" class="result-table-card">
++              <div v-if="shouldShowResultTable(message)" class="result-table-card">
+                 <div class="result-table-card__head">
+-                  <span>明细数据</span>
+-                  <em>{{ message.presentation.table.rows.length }} 行</em>
++                  <div class="result-table-card__title">
++                    <span>明细数据</span>
++                    <em>{{ message.presentation.table?.rows.length || 0 }} 行</em>
++                  </div>
++                  <el-button
++                    type="primary"
++                    plain
++                    size="small"
++                    class="result-table-card__export"
++                    data-testid="export-result-table-excel"
++                    :disabled="!message.presentation.table?.rows.length"
++                    @click="exportAssistantTableToExcel(message)"
++                  >
++                    导出 Excel
++                  </el-button>
+                 </div>
+                 <el-table
+-                  :data="message.presentation.table.rows"
++                  :data="message.presentation.table?.rows || []"
+                   size="small"
+                   border
+                   class="result-table"
+                   data-testid="result-table"
+                   max-height="360"
+                   empty-text="暂无明细数据"
++                  :span-method="getResultTableSpanMethod"
+                 >
+                   <el-table-column
+-                    v-for="column in message.presentation.table.columns"
++                    v-for="column in message.presentation.table?.columns || []"
+                     :key="column"
+                     :prop="column"
+                     :label="column"
+-                    min-width="130"
+-                    show-overflow-tooltip
+-                  />
++                    :min-width="getResultTableColumnMinWidth(column)"
++                    :class-name="getResultTableColumnClassName(column)"
++                    :show-overflow-tooltip="!isMultiLineTableColumn(column)"
++                  >
++                    <template #default="scope">
++                      <span
++                        :class="[
++                          'result-table__cell',
++                          {
++                            'result-table__cell--multi-line': isMultiLineTableColumn(column),
++                            'result-table__cell--fall-ratio': isFallRatioEstimateColumn(column),
++                          },
++                        ]"
++                      >
++                        {{ formatTableCell(scope.row[column]) }}
++                      </span>
++                    </template>
++                  </el-table-column>
+                 </el-table>
+               </div>
+ 
+@@ -300,6 +332,8 @@
+ 
+ <script setup lang="ts">
+ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
++import { ElMessage } from 'element-plus'
++import * as XLSX from 'xlsx'
+ import { fetchLogisticsDataQaQuery, type LogisticsDataQaResult } from '@/api/logistics'
+ import { askPlanBomQuestion, type PlanBomQaResponse } from '@/api/planBom'
+ import {
+@@ -320,6 +354,10 @@ interface UnifiedTable {
+   rows: Array<Record<string, any>>
+ }
+ 
++const resultTableRowSpanKey = '__resultTableRowSpan'
++const resultTableSubRowIndexKey = '__resultTableSubRowIndex'
++const resultTableSourceRowIndexKey = '__resultTableSourceRowIndex'
++
+ interface UnifiedResult {
+   displayType: string
+   title: string
+@@ -385,6 +423,8 @@ interface ResultSummaryItem {
+   value: string
+ }
+ 
++type AssistantResultLayoutClass = 'ai-response-card--narrative' | 'ai-response-card--data' | 'ai-response-card--chart'
++
+ const pieChartColors = ['#2f7a4a', '#60a5fa', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b']
+ 
+ const question = ref('')
+@@ -821,14 +861,161 @@ function normalizeTable(table: UnifiedTable | null): UnifiedTable | null {
+   if (!table?.rows?.length) return null
+   const sourceColumns = table.columns?.length ? table.columns : Object.keys(table.rows[0] || {})
+   const columns = sourceColumns.map((column, index) => localizeColumnName(column, index))
+-  const rows = table.rows.map((row) => {
++  const normalizedRows = table.rows.map((row) => {
+     const next: Record<string, any> = {}
+     sourceColumns.forEach((column, index) => {
+       next[columns[index]] = row[column]
+     })
+     return next
+   })
+-  return { columns, rows }
++  return { columns, rows: expandFallRatioEstimateRows(normalizedRows, columns) }
++}
++
++/**
++ * 把“落档比例预估”由单元格内多行拆成真实表格子行。
++ * 参数：rows 已完成列名归一化的表格行；columns 当前可见列名。
++ * 返回值：展开后的表格行，并携带 rowspan 元信息供 Element Plus 合并其它列。
++ */
++function expandFallRatioEstimateRows(rows: Array<Record<string, any>>, columns: string[]) {
++  const fallRatioColumn = columns.find((column) => isFallRatioEstimateColumn(column))
++  if (!fallRatioColumn) {
++    return rows.map((row, sourceRowIndex) => ({
++      ...row,
++      [resultTableRowSpanKey]: 1,
++      [resultTableSubRowIndexKey]: 0,
++      [resultTableSourceRowIndexKey]: sourceRowIndex,
++    }))
++  }
++
++  return rows.flatMap((row, sourceRowIndex) => {
++    const lines = splitFallRatioEstimateLines(row[fallRatioColumn])
++    const rowSpan = Math.max(lines.length, 1)
++    return lines.map((line, subRowIndex) => ({
++      ...row,
++      [fallRatioColumn]: line,
++      [resultTableRowSpanKey]: rowSpan,
++      [resultTableSubRowIndexKey]: subRowIndex,
++      [resultTableSourceRowIndexKey]: sourceRowIndex,
++    }))
++  })
++}
++
++/**
++ * 判断明细表列是否是“落档比例预估”。
++ * 参数：column 当前可见列名。
++ * 返回值：该列需要按“每个效率段一行”的异形表格结构展示时返回 true。
++ */
++function isFallRatioEstimateColumn(column: string) {
++  return localizeColumnName(column) === '落档比例预估'
++}
++
++/**
++ * 判断明细表列是否需要按多行文本展示。
++ * 参数：column 当前可见列名。
++ * 返回值：需要保留换行时返回 true。
++ */
++function isMultiLineTableColumn(column: string) {
++  return isFallRatioEstimateColumn(column)
++}
++
++/**
++ * 根据列类型给表格列设置最小宽度。
++ * 参数：column 当前可见列名。
++ * 返回值：Element Plus 表格列 min-width，落档比例列加宽以避免效率段被拆散。
++ */
++function getResultTableColumnMinWidth(column: string) {
++  return isFallRatioEstimateColumn(column) ? 420 : 130
++}
++
++/**
++ * 给特殊列添加单元格 class，便于只针对“落档比例预估”列开启横向滚动。
++ * 参数：column 当前可见列名。
++ * 返回值：Element Plus 表格列 class-name。
++ */
++function getResultTableColumnClassName(column: string) {
++  return isFallRatioEstimateColumn(column) ? 'result-table-column--fall-ratio' : ''
++}
++
++/**
++ * 读取展开行的合并行数。
++ * 参数：row 展示表格行。
++ * 返回值：大于等于 1 的 rowspan。
++ */
++function getResultTableRowSpan(row: Record<string, any>) {
++  const value = Number(row?.[resultTableRowSpanKey])
++  return Number.isFinite(value) && value > 1 ? Math.floor(value) : 1
++}
++
++/**
++ * 读取展开行在原业务行中的子行序号。
++ * 参数：row 展示表格行。
++ * 返回值：从 0 开始的子行序号。
++ */
++function getResultTableSubRowIndex(row: Record<string, any>) {
++  const value = Number(row?.[resultTableSubRowIndexKey])
++  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
++}
++
++/**
++ * Element Plus 表格合并策略：落档比例每段一行，其它列按原业务行纵向合并。
++ * 参数：row/column 为 Element Plus span-method 入参。
++ * 返回值：当前单元格的 rowspan/colspan。
++ */
++function getResultTableSpanMethod({ row, column }: { row: Record<string, any>; column: { property?: string } }) {
++  const property = String(column?.property || '')
++  if (isFallRatioEstimateColumn(property)) return { rowspan: 1, colspan: 1 }
++
++  const rowSpan = getResultTableRowSpan(row)
++  if (rowSpan <= 1) return { rowspan: 1, colspan: 1 }
++  return getResultTableSubRowIndex(row) === 0 ? { rowspan: rowSpan, colspan: 1 } : { rowspan: 0, colspan: 0 }
++}
++
++/**
++ * 构造导出 Excel 的合并单元格配置，使导出的异形表格与页面展示一致。
++ * 参数：table 已归一化且已展开的表格。
++ * 返回值：xlsx `!merges` 可识别的合并区域数组。
++ */
++function buildAssistantTableExportMerges(table: UnifiedTable) {
++  const merges: Array<{ s: { r: number; c: number }; e: { r: number; c: number } }> = []
++  table.rows.forEach((row, rowIndex) => {
++    const rowSpan = getResultTableRowSpan(row)
++    if (rowSpan <= 1 || getResultTableSubRowIndex(row) !== 0) return
++    table.columns.forEach((column, columnIndex) => {
++      if (isFallRatioEstimateColumn(column)) return
++      merges.push({
++        s: { r: rowIndex + 1, c: columnIndex },
++        e: { r: rowIndex + rowSpan, c: columnIndex },
++      })
++    })
++  })
++  return merges
++}
++
++/**
++ * 将“落档比例预估”拆成一个效率段一行的展示数组。
++ * 参数：value 后端返回的单元格原值，可能是换行分隔的新格式，也可能是历史分号分隔格式。
++ * 返回值：每个元素对应截图红框中的一个独立效率段。
++ */
++function splitFallRatioEstimateLines(value: unknown) {
++  const text = String(formatTableCell(value) || '')
++  if (!text.trim()) return ['']
++  return text
++    .split(/(?:\r?\n|[；;])+/)
++    .map((line) => line.trim())
++    .filter(Boolean)
++}
++
++/**
++ * 格式化明细表单元格展示值，只做显示层归一化，不改变后端业务事实。
++ * 参数：value 后端返回的单元格原值。
++ * 返回值：可直接展示的字符串或数值。
++ */
++function formatTableCell(value: unknown): string | number | boolean {
++  if (value === null || value === undefined) return ''
++  if (typeof value === 'number' || typeof value === 'boolean') return value
++  if (Array.isArray(value)) return value.map((item) => formatTableCell(item)).join('、')
++  if (typeof value === 'object') return JSON.stringify(value)
++  return String(value)
+ }
+ 
+ /** 构造图表标题。 */
+@@ -1122,6 +1309,10 @@ const columnNameMap: Record<string, string> = {
+   changed_fields: '变化字段',
+   status: '状态',
+   row_count: '记录数',
++  ctm值: 'CTM 值',
++  ctm_值: 'CTM 值',
++  ctm_value: 'CTM 值',
++  落档比例预估: '落档比例预估',
+ }
+ 
+ function localizeColumnName(column: string, index = 0) {
+@@ -1334,6 +1525,131 @@ function buildResultSummaryItems(message: BusinessChatMessage): ResultSummaryIte
+   return items
+ }
+ 
++/** 判断助手回复应采用叙事、数据还是图表布局；只控制 UI 层，不改变后端业务结果。 */
++function resolveAssistantResultLayout(message: BusinessChatMessage): AssistantResultLayoutClass {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  if (presentation?.chart) return 'ai-response-card--chart'
++  if (presentation?.table?.rows.length || presentation?.cards.length) return 'ai-response-card--data'
++  return 'ai-response-card--narrative'
++}
++
++/** 指标卡只在后端返回卡片且当前布局需要数据摘要时展示。 */
++function shouldShowMetricCards(message: BusinessChatMessage): boolean {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return Boolean(presentation?.cards.length)
++}
++
++/** 表格只在后端返回有效列和行时展示，避免空表占据叙事型回答空间。 */
++function shouldShowResultTable(message: BusinessChatMessage): boolean {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return Boolean(presentation?.table?.columns.length && presentation.table.rows.length)
++}
++
++/**
++ * 将当前助手回复中的明细表导出为 Excel。
++ *
++ * 参数：
++ *   message: 当前助手消息，导出其中 presentation.table 的已展示明细。
++ *
++ * 返回：
++ *   无返回值；浏览器侧触发 xlsx 文件下载。
++ */
++function exportAssistantTableToExcel(message: BusinessChatMessage) {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  const table = presentation?.table
++  if (!table?.columns.length || !table.rows.length) {
++    ElMessage.warning('当前回答没有可导出的明细数据')
++    return
++  }
++
++  const exportRows = buildAssistantTableExportRows(table)
++  const worksheet = XLSX.utils.json_to_sheet(exportRows, { header: table.columns })
++  const exportMerges = buildAssistantTableExportMerges(table)
++  if (exportMerges.length) worksheet['!merges'] = exportMerges
++  // 按中文列名和单元格内容给出保守列宽，避免导出后业务用户第一眼只能看到截断内容。
++  worksheet['!cols'] = table.columns.map((column) => ({
++    wch: Math.max(12, Math.min(36, String(column).length + 8)),
++  }))
++  const workbook = XLSX.utils.book_new()
++  XLSX.utils.book_append_sheet(workbook, worksheet, '明细数据')
++  XLSX.writeFile(workbook, buildAssistantTableExportFileName(message))
++  ElMessage.success(`已导出 ${table.rows.length} 行明细数据`)
++}
++
++/**
++ * 构造 Excel 导出行，保持列顺序与页面表格一致。
++ *
++ * 参数：
++ *   table: 已归一化的页面展示表格。
++ *
++ * 返回：
++ *   适合 XLSX.utils.json_to_sheet 的对象数组。
++ */
++function buildAssistantTableExportRows(table: UnifiedTable): Array<Record<string, string | number | boolean>> {
++  return table.rows.map((row) => {
++    const next: Record<string, string | number | boolean> = {}
++    const mergedSubRow = getResultTableSubRowIndex(row) > 0
++    table.columns.forEach((column) => {
++      next[column] = mergedSubRow && !isFallRatioEstimateColumn(column) ? '' : normalizeAssistantTableExportCell(row[column])
++    })
++    return next
++  })
++}
++
++/** 归一化 Excel 单元格值，避免对象/数组导出成 [object Object]。 */
++function normalizeAssistantTableExportCell(value: unknown): string | number | boolean {
++  if (value === null || value === undefined) return ''
++  if (typeof value === 'number' || typeof value === 'boolean') return value
++  if (value instanceof Date) return value.toISOString()
++  if (Array.isArray(value)) return value.map((item) => normalizeAssistantTableExportCell(item)).join('、')
++  if (typeof value === 'object') {
++    try {
++      return JSON.stringify(value)
++    } catch (_error) {
++      return String(value)
++    }
++  }
++  return String(value)
++}
++
++/** 根据回答标题和时间生成安全 Excel 文件名。 */
++function buildAssistantTableExportFileName(message: BusinessChatMessage) {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  const fallbackTitle = domainLabelMap[message.domain] || '智能助手明细数据'
++  const safeTitle = sanitizeAssistantTableExportFileName(presentation?.title || fallbackTitle) || '智能助手明细数据'
++  return `${safeTitle.slice(0, 36)}_${formatAssistantTableExportTimestamp(new Date())}.xlsx`
++}
++
++/** 清理文件名中的系统保留字符。 */
++function sanitizeAssistantTableExportFileName(value: string) {
++  return String(value || '')
++    .replace(/[\\/:*?"<>|\r\n\t]+/g, '_')
++    .replace(/\s+/g, ' ')
++    .trim()
++}
++
++/** 构造导出时间戳，便于同一回答多次导出时区分文件。 */
++function formatAssistantTableExportTimestamp(date: Date) {
++  const pad = (value: number) => String(value).padStart(2, '0')
++  return [
++    date.getFullYear(),
++    pad(date.getMonth() + 1),
++    pad(date.getDate()),
++    '_',
++    pad(date.getHours()),
++    pad(date.getMinutes()),
++    pad(date.getSeconds()),
++  ].join('')
++}
++
++/** 根据回答布局生成轻量提示词，不参与业务判断。 */
++function resolveAssistantReplyKicker(message: BusinessChatMessage): string {
++  const layout = resolveAssistantResultLayout(message)
++  if (layout === 'ai-response-card--chart') return '图表视图'
++  if (layout === 'ai-response-card--data') return '数据视图'
++  return '文字说明'
++}
++
+ /** 展示类型中文化，便于把后端 display_type 作为轻量徽标呈现。 */
+ function formatDisplayTypeLabel(displayType?: string) {
+   const mapping: Record<string, string> = {
+@@ -1646,6 +1962,15 @@ onBeforeUnmount(() => {
+   animation: fadeIn 0.3s ease-out;
+ }
+ 
++.ai-response-card--narrative {
++  max-width: 780px;
++}
++
++.ai-response-card--data,
++.ai-response-card--chart {
++  max-width: 100%;
++}
++
+ .result-hero {
+   display: grid;
+   gap: 8px;
+@@ -1715,6 +2040,10 @@ onBeforeUnmount(() => {
+   word-break: break-word;
+ }
+ 
++.assistant-prose {
++  white-space: pre-wrap;
++}
++
+ .result-summary-strip {
+   display: flex;
+   flex-wrap: wrap;
+@@ -1965,6 +2294,13 @@ onBeforeUnmount(() => {
+   font-weight: 700;
+ }
+ 
++.result-table-card__title {
++  display: inline-flex;
++  align-items: center;
++  gap: 8px;
++  min-width: 0;
++}
++
+ .result-table-card__head em {
+   flex: none;
+   font-style: normal;
+@@ -1973,6 +2309,17 @@ onBeforeUnmount(() => {
+   font-weight: 500;
+ }
+ 
++.result-table-card__export {
++  flex: none;
++  border-color: var(--brand-green-border);
++}
++
++.result-table-card__export:not(.is-disabled):hover {
++  border-color: var(--brand-green);
++  background: var(--brand-green-bg);
++  color: var(--brand-green);
++}
++
+ :deep(.result-table .el-table__header-wrapper th) {
+   background: #f8fafb;
+   color: #374151;
+@@ -1993,6 +2340,31 @@ onBeforeUnmount(() => {
+   transition: background 0.15s ease;
+ }
+ 
++.result-table__cell {
++  display: inline-block;
++  max-width: 100%;
++  line-height: 1.55;
++  word-break: break-word;
++}
++
++.result-table__cell--multi-line {
++  white-space: pre-line;
++}
++
++:deep(.result-table-column--fall-ratio .cell) {
++  overflow-x: auto;
++  white-space: nowrap;
++}
++
++.result-table__cell--fall-ratio {
++  display: block;
++  width: max-content;
++  max-width: none;
++  white-space: nowrap;
++  word-break: keep-all;
++  overflow-wrap: normal;
++}
++
+ /* ======== 追问区域 ======== */
+ .follow-up {
+   display: grid;
+diff --git a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+index 4c11a7a..f26655f 100644
+--- a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
++++ b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+@@ -12,7 +12,7 @@ def test_bom_data_management_exposes_separate_power_model_upload_entry_without_t
+     """BOM 数据管理页必须保留独立功率模型上传入口，并移除临时管理 token 输入。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+ 
+-    assert "上传 BOM Excel" in page
++    assert "BOM 文件上传" in page
+     assert "上传功率模型" in page
+     assert "请选择功率模型 xlsm 文件" in page
+     assert "uploadPowerModelFile" in page
+@@ -31,6 +31,35 @@ def test_bom_data_management_exposes_separate_power_model_upload_entry_without_t
+     assert "上传失败" in page
+ 
+ 
++def test_bom_excel_upload_supports_batch_files_end_to_end_contract() -> None:
++    """BOM Excel 上传应支持一次选择多个文件，并由后端返回批量汇总与逐文件结果。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++    query_page = (FRONTEND / "views" / "plan-bom" / "PlanBomDetailQueryPage.vue").read_text(encoding="utf-8")
++    api = (FRONTEND / "api" / "planBom.ts").read_text(encoding="utf-8")
++    endpoint = (BACKEND / "domains" / "plan_bom" / "api" / "endpoints" / "import_excel.py").read_text(encoding="utf-8")
++
++    assert "type=\"file\"" in page
++    assert "multiple" in page
++    assert "selectedFiles" in page
++    assert "请选择 1 个或多个 BOM Excel 文件" in page
++    assert "uploadPlanBomExcelBatch" in page
++    assert "uploadBatchResult" in page
++    assert "批量上传" in page
++    assert "逐文件结果" in page
++    assert "BOM Excel 批量上传导入" in query_page
++    assert "multiple @change=\"handleUploadInputChange\"" in query_page
++    assert "uploadPlanBomExcelBatch(files)" in query_page
++    assert "files.forEach" in api
++    assert "formData.append('files', file)" in api
++    assert "uploadPlanBomExcelBatch(files: File[]" in api
++    assert "total_files" in endpoint
++    assert "success_count" in endpoint
++    assert "failed_count" in endpoint
++    assert "items" in endpoint
++    assert "files: list[UploadFile] | None = File(default=None)" in endpoint
++    assert "file: UploadFile | None = File(default=None)" in endpoint
++
++
+ def test_bom_data_management_progress_and_status_are_isolated_per_upload_type() -> None:
+     """BOM 和功率模型上传必须分别维护进度与提示，避免两个入口状态串扰。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+@@ -112,7 +141,10 @@ def test_bom_data_management_page_defines_own_vertical_scroll_container() -> Non
+     assert "height: calc(100vh - 64px);" in page
+     assert "overflow-y: auto;" in page
+     assert "overflow-x: hidden;" in page
+-    assert "padding: 32px" in page
++    assert "display: grid;" in page
++    assert "grid-auto-rows: max-content;" in page
++    assert "gap: 20px;" in page
++    assert "padding: 24px 28px 36px;" in page
+     assert "margin: 0 auto;" in page
+ 
+ 
+@@ -122,6 +154,8 @@ def test_bom_data_management_history_uses_tabs_and_pagination_for_dense_tables()
+ 
+     assert "<el-tabs" in page
+     assert "historyActiveTab" in page
++    assert "label=\"上传数据\"" in page
++    assert "label=\"查看历史\"" in page
+     assert "name=\"bom_upload_history\"" in page
+     assert "name=\"power_model_versions\"" in page
+     assert "pagedBomUploadHistory" in page
+@@ -131,39 +165,100 @@ def test_bom_data_management_history_uses_tabs_and_pagination_for_dense_tables()
+     assert "handlePowerHistoryPageChange" in page
+ 
+ 
+-def test_bom_data_management_page_focuses_on_two_primary_metrics_and_status_chips() -> None:
+-    """BOM 数据管理页不应堆叠过多指标卡，应只保留少量主指标和轻量状态。"""
++def test_bom_data_management_page_uses_clean_workspace_without_duplicate_chips() -> None:
++    """BOM 数据管理首屏应去掉重复标签和英文装饰，用紧凑状态条与统一上传卡片突出操作。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+     template = page.split("<script setup", 1)[0]
+ 
++    assert "bom-page bom-page--clean" in template
+     assert "primaryOverviewCards" in page
+-    assert "secondary-status-strip" in page
+-    assert "upload-zone-card" in page
+-    assert "BOM 数据导入" in page
+-    assert "功率模型版本" in page
++    assert "compact-status-row" in template
++    assert "upload-dropzone" in template
++    assert "upload-action-button" in template
++    assert "BOM 文件上传" in page
++    assert "功率模型上传" in page
+     assert "BOM 上传批次" in page
+     assert "当前生效模型" in page
+     assert "v-for=\"item in primaryOverviewCards\"" in template
+-    assert "hero-metric-strip" not in template
+-    assert "ops-overview-grid" not in template
+-    assert "文件隔离" in page
+-    assert "温和校验" in page
+-    assert "版本追溯" in page
++    assert "hero-tags" not in template
++    assert "secondary-status-strip" not in template
++    assert "DATA WORKSPACE" not in template
++    assert "POWER" not in template
++    assert template.count("文件隔离") <= 1
++
+ 
++def test_bom_data_management_visual_layout_uses_separate_cards_and_refined_tabs() -> None:
++    """BOM 页面首屏应把概览区和操作区拉开，指标卡与 tab 应采用统一的企业级组件样式。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++    template = page.split("<script setup", 1)[0]
++
++    assert "bom-hero-card" in template
++    assert "bom-workspace-card" in template
++    assert template.index("bom-hero-card") < template.index("bom-workspace-card")
++    assert "management-tabs management-tabs--segmented" in template
++    assert "overview-card__top" in template
++    assert "overview-card__badge" in template
++    assert "overview-card__value" in template
++    assert "workspace-card-head" in template
++    assert "workspace-tab-label" in template
++    assert ".bom-page--clean" in page
++    assert ".bom-hero-card" in page
++    assert ".bom-workspace-card" in page
++    assert "gap: 20px" in page
++    assert "box-shadow: 0 10px 28px" in page
++
++
++def test_bom_data_management_typography_is_restrained_and_business_readable() -> None:
++    """BOM 页面应收敛字号和装饰，避免超大标题、强渐变和过重阴影造成花哨感。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+ 
+-def test_bom_data_management_copy_stays_minimal_and_hierarchy_first() -> None:
+-    """BOM 数据管理页应减少说明文字，用指标、短标签和视觉层次突出重点。"""
++    assert "font-size: clamp(34px, 4vw, 52px);" not in page
++    assert "font-size: clamp(28px, 2.6vw, 38px);" not in page
++    assert "font-size: 24px;" not in page
++    assert "font-size: 17px;" not in page
++    assert "font-size: 18px;" not in page
++    assert "radial-gradient" not in page
++    assert ".overview-card::after" not in page
++    assert "width: 320px;" not in page
++    assert "box-shadow: 0 18px 50px" not in page
++    assert "box-shadow: 0 16px 42px" not in page
++    assert "font-size: clamp(26px, 2.4vw, 34px);" in page
++    assert "font-size: clamp(22px, 2vw, 30px);" in page
++    assert "font-size: 20px;" in page
++    assert "font-size: 14px;" in page
++
++
++def test_bom_data_management_copy_stays_minimal_business_friendly_and_hierarchy_first() -> None:
++    """BOM 数据管理页应减少说明文字和英文技术词，用业务动作、短标签和视觉层次突出重点。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+     template = page.split("<script setup", 1)[0]
+ 
+     assert "primaryOverviewCards" in page
+-    assert "secondary-status-strip" in page
++    assert "compact-status-row" in page
+     assert "<ol>" not in template
+     assert "统一管理计划 BOM 数据导入与功率模型版本" not in template
+     assert "普通 BOM Excel 用于明细查询和智能问答。" not in template
+     assert "BOM 上传历史与功率模型版本历史采用 tab 页分区展示" not in template
+     assert "当前表格按上传时间倒序展示" not in template
+-    assert template.count("。") <= 8
++    assert 'label="Warning"' not in template
++    assert 'label="Error"' not in template
++    assert "Issue 数" not in template
++    assert "文件 Hash" not in template
++    assert "版本 ID" not in template
++    assert "{{ row.status }}" not in template
++    assert 'prop="source_tag" label="来源" min-width="120" show-overflow-tooltip />' not in template
++    assert "formatStatusLabel(row.status)" in template
++    assert "formatSourceTagLabel(row.source_tag)" in template
++    assert "formatStatusLabel(row.parse_status)" in template
++    assert "formatStatusLabel(uploadPowerModelResult.version?.parse_status)" in template
++    assert "uploadPowerModelResult.version?.parse_status || '-'" not in template
++    assert "问题数" in page
++    assert "文件指纹" in page
++    assert "版本编号" in page
++    assert "手动上传" in page
++    assert "选择文件后可上传" in page
++    assert "选择模型后可上传" in page
++    assert template.count("。") <= 6
+ 
+ 
+ def test_app_layout_uses_chatgpt_like_neutral_shell_and_richer_palette() -> None:
+@@ -203,6 +298,60 @@ def test_business_chat_assistant_response_layout_is_adaptive_not_fixed_template(
+     assert "v-if=\"message.presentation.table\" class=\"result-table-card\"" not in template
+ 
+ 
++def test_business_chat_detail_table_can_export_excel_when_rows_exist() -> None:
++    """智能助手回复中存在明细表格时，业务用户应能直接导出 Excel 文件。"""
++    chat = (FRONTEND / "views" / "business-chat" / "BusinessChatPage.vue").read_text(encoding="utf-8")
++    template = chat.split("<script setup", 1)[0]
++
++    assert "import * as XLSX from 'xlsx'" in chat
++    assert "import { ElMessage } from 'element-plus'" in chat
++    assert "data-testid=\"export-result-table-excel\"" in template
++    assert "导出 Excel" in template
++    assert "@click=\"exportAssistantTableToExcel(message)\"" in template
++    assert "shouldShowResultTable(message)" in template
++    assert "function exportAssistantTableToExcel" in chat
++    assert "function buildAssistantTableExportRows" in chat
++    assert "function buildAssistantTableExportMerges" in chat
++    assert "worksheet['!merges']" in chat
++    assert "mergedSubRow && !isFallRatioEstimateColumn(column) ? ''" in chat
++    assert "function buildAssistantTableExportFileName" in chat
++    assert "XLSX.utils.json_to_sheet" in chat
++    assert "XLSX.utils.book_append_sheet" in chat
++    assert "XLSX.writeFile" in chat
++    assert "ctm值: 'CTM 值'" in chat
++    assert "ctm_值: 'CTM 值'" in chat
++    assert "落档比例预估: '落档比例预估'" in chat
++    assert "function isMultiLineTableColumn" in chat
++    assert ":show-overflow-tooltip=\"!isMultiLineTableColumn(column)\"" in template
++    assert "result-table__cell--multi-line" in chat
++    assert "white-space: pre-line" in chat
++    assert "ElMessage.warning('当前回答没有可导出的明细数据')" in chat
++    assert "ElMessage.success(`已导出 ${table.rows.length} 行明细数据`)" in chat
++    assert "智能助手明细数据" in chat
++    assert "xlsx" in chat
++
++
++def test_business_chat_fall_ratio_estimate_uses_real_table_subrows_with_rowspan() -> None:
++    """落档比例预估不是单元格内换行，而应展开为真实表格子行并合并其它列。"""
++    chat = (FRONTEND / "views" / "business-chat" / "BusinessChatPage.vue").read_text(encoding="utf-8")
++    template = chat.split("<script setup", 1)[0]
++
++    assert "function isFallRatioEstimateColumn" in chat
++    assert "function splitFallRatioEstimateLines" in chat
++    assert "function expandFallRatioEstimateRows" in chat
++    assert "function getResultTableSpanMethod" in chat
++    assert "const resultTableRowSpanKey" in chat
++    assert "const resultTableSubRowIndexKey" in chat
++    assert ":span-method=\"getResultTableSpanMethod\"" in template
++    assert ":min-width=\"getResultTableColumnMinWidth(column)\"" in template
++    assert "v-for=\"(line, lineIndex) in splitFallRatioEstimateLines(scope.row[column])\"" not in template
++    assert "result-table__fall-ratio-line" not in template
++    assert "result-table__cell--fall-ratio" in chat
++    assert "white-space: nowrap" in chat
++    assert "overflow-x: auto" in chat
++
++
++
+ def test_power_model_token_dependency_removed_from_current_backend_sources() -> None:
+     """临时功率模型 token 功能应从当前后端源码移除，后续改由用户权限模块接管。"""
+     deps = (BACKEND / "api" / "deps.py").read_text(encoding="utf-8")

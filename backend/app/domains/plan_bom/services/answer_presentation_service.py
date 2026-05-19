@@ -32,7 +32,7 @@ class PlanBomAnswerPresentationService:
         "mixed",
         "error",
     }
-    POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation"}
+    POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation", "plan_power_factor_effect_compare"}
     TECHNICAL_VISIBLE_PATTERNS = (
         r"槽位",
         r"字段",
@@ -62,6 +62,7 @@ class PlanBomAnswerPresentationService:
         "bom_version": "请确认要查看或对比的 BOM 版本。",
         "target_power_ratio": "请补充目标功率档比例，例如 620W 50%、625W 50%。",
         "power_configuration": "请补充功率预测所需配置，例如玻璃、线缆、标板或供应商。",
+        "power_factor_options": "请确认需要对比的两个功率模型配置选项。",
         "supported_material_category": "请确认是否改查玻璃、间隙贴膜、焊带、汇流条或接线盒。",
     }
     INTENT_LABELS = {
@@ -76,6 +77,7 @@ class PlanBomAnswerPresentationService:
         "material_presence_check": "物料存在性检查",
         "plan_power_prediction": "计划 BOM 功率预测",
         "plan_power_supplier_recommendation": "供应商功率匹配推荐",
+        "plan_power_factor_effect_compare": "功率模型配置影响值对比",
     }
 
     def __init__(
@@ -119,7 +121,7 @@ class PlanBomAnswerPresentationService:
         fallback = self._build_deterministic_presentation(response)
         if response.nlu.intent in self.POWER_INTENTS:
             # 功率预测类答案包含中心功率、档位比例、供应商匹配度等数值结果。
-            # 这些结果只能来自 M3 确定性服务，表达层不再调用 LLM，避免改写或新增数值事实。
+            # 这些结果只能来自 M3 确定性服务，表达层不调用 LLM，避免改写或新增数值事实。
             fallback.debug["fallback_reason"] = "plan_power_deterministic_only"
             return fallback
         if not self.enabled:
@@ -150,12 +152,18 @@ class PlanBomAnswerPresentationService:
         """
 
         display_type = self._resolve_display_type(response)
-        caveats = [
-            "回答依据为当前系统已导入的计划 BOM 数据；未导入或未匹配到的订单版本不会参与本次结论。",
-            "规格、供应商、用量等信息按源 BOM 记录原样展示；如需核对，可展开数据依据查看明细。",
-        ]
-        if response.nlu.intent in {"plan_power_prediction", "plan_power_supplier_recommendation"}:
-            caveats.append("功率预测结果按已生效的功率模型版本计算，前端展示不会重新计算。")
+        if response.nlu.intent == "plan_power_factor_effect_compare":
+            caveats = [
+                "回答依据为当前已生效的功率测试基准模型；未在模型中命中的版型或配置不参与本次结论。",
+                "配置影响值按模型原始选项返回；如需核对，可展开数据依据查看明细。",
+            ]
+        else:
+            caveats = [
+                "回答依据为当前系统已导入的计划 BOM 数据；未导入或未匹配到的订单版本不会参与本次结论。",
+                "规格、供应商、用量等信息按源 BOM 记录原样展示；如需核对，可展开数据依据查看明细。",
+            ]
+        if response.nlu.intent in self.POWER_INTENTS:
+            caveats.append("功率相关结果按已生效的功率模型版本计算，前端展示不会重新计算。")
         presentation = PlanBomPresentation(
             display_type=display_type,
             title=self._build_title(response),
@@ -203,6 +211,13 @@ class PlanBomAnswerPresentationService:
         intent_label = self.INTENT_LABELS.get(response.nlu.intent, "计划 BOM 查询")
         missing_labels = self._missing_slot_labels(response)
         missing_text = "、".join(missing_labels) if missing_labels else "订单、版本或材料范围"
+        if response.nlu.intent == "plan_power_factor_effect_compare":
+            return (
+                f"我先判断了一下，你是在问“{intent_label}”。这类问题需要明确功率版型、配置项和两个要对比的配置选项，"
+                "再到已生效的功率测试基准模型中核对影响值，最后才能给出差值。\n\n"
+                f"目前还不能直接给出完整结果，主要是缺少：{missing_text}。"
+                "请补充后继续提问，我会按模型中的真实配置值计算差异。"
+            )
         return (
             f"我先判断了一下，你是在问“{intent_label}”。这类问题需要先明确要查询或对比的范围，"
             "再到已导入的计划 BOM 数据里定位对应订单和版本，最后才能逐项整理规格差异或材料明细。\n\n"
@@ -215,6 +230,15 @@ class PlanBomAnswerPresentationService:
 
         safe_summary = self._safe_business_text(response.answer_summary)
         intro = f"查到了。{safe_summary}" if safe_summary else "查到了。我已根据当前计划 BOM 数据完成这次查询。"
+        if response.nlu.intent == "plan_power_factor_effect_compare":
+            process = (
+                "我先识别功率版型、配置项和两个配置选项，再从当前已生效的功率测试基准模型中核对对应影响值，"
+                "最后只基于模型中的真实数值计算差异。"
+            )
+            rows = response.result_table.rows or []
+            row_lines = self._format_small_result_rows(rows)
+            detail = "\n".join(f"- {line}" for line in row_lines) if row_lines else "- 本次无额外明细。"
+            return f"{intro}\n\n{process}\n\n本次配置影响值明细如下：\n{detail}"
         process = (
             "我先根据你的问题定位订单、版本和材料范围，再从当前已导入的计划 BOM 数据中提取匹配记录，"
             "最后只基于这些记录整理结论，不对未出现的规格、供应商或用量做推测。"
@@ -241,6 +265,12 @@ class PlanBomAnswerPresentationService:
 
         reason = self._safe_business_text(response.status.message) or self._safe_business_text(response.answer_summary)
         reason_text = f"原因是：{reason}" if reason else "当前条件下没有命中可用记录。"
+        if response.nlu.intent == "plan_power_factor_effect_compare":
+            return (
+                "我先按你的问题定位了功率版型、配置项和配置选项，再在当前已生效的功率测试基准模型中核对。"
+                f"最后没有找到可以支撑结论的结果，{reason_text}。"
+                "你可以确认版型名称或配置选项写法后再查。"
+            )
         return (
             "我先按你的问题定位了订单、版本和材料范围，再在当前已导入的计划 BOM 数据中核对匹配记录。"
             f"最后没有找到可以支撑结论的结果，{reason_text}。"
@@ -419,6 +449,8 @@ class PlanBomAnswerPresentationService:
                 return "计划 BOM 功率预测结果"
             if response.nlu.intent == "plan_power_supplier_recommendation":
                 return "计划 BOM 供应商功率推荐结果"
+            if response.nlu.intent == "plan_power_factor_effect_compare":
+                return "功率模型配置影响值对比结果"
             return "计划 BOM 查询结果"
         if response.classification == "B":
             return "需要补充条件后继续查询"
@@ -441,7 +473,10 @@ class PlanBomAnswerPresentationService:
         if status_message:
             highlights.append(status_message)
         if response.result_table.rows:
-            highlights.append(f"命中 {len(response.result_table.rows)} 条 BOM 记录。")
+            if response.nlu.intent == "plan_power_factor_effect_compare":
+                highlights.append(f"生成 {len(response.result_table.rows)} 条配置影响值明细。")
+            else:
+                highlights.append(f"命中 {len(response.result_table.rows)} 条 BOM 记录。")
         material_values = response.nlu.slots.get("material_category")
         if material_values:
             material_labels = [self._business_value(item) for item in material_values]
@@ -454,6 +489,12 @@ class PlanBomAnswerPresentationService:
                 highlights.append(f"供应商：{response.raw_result['power_prediction']['supplier_name']}")
             if response.raw_result.get("power_recommendation", {}).get("recommendations"):
                 highlights.append(f"推荐供应商数：{len(response.raw_result['power_recommendation']['recommendations'])}")
+        if response.nlu.intent == "plan_power_factor_effect_compare":
+            compare_payload = response.raw_result.get("power_factor_effect_compare") or {}
+            if compare_payload.get("model_code"):
+                highlights.append(f"功率版型：{compare_payload['model_code']}")
+            if compare_payload.get("factor_label"):
+                highlights.append(f"配置项：{compare_payload['factor_label']}")
         return [item for item in highlights if not self._visible_text_has_technical_leak(item)]
 
     @staticmethod
@@ -475,6 +516,8 @@ class PlanBomAnswerPresentationService:
             return ["请补充目标功率比例，例如：订单00104目标620W 50%，625W 50%，推荐供应商。"]
         if "power_configuration" in response.nlu.missing_slots:
             return ["请确认未识别的功率配置，例如玻璃、接线盒线径、标板基准或供应商。"]
+        if "power_factor_options" in response.nlu.missing_slots:
+            return ["请补充同一版型下要对比的两个配置选项，例如：NT12-66GDF，汇流条A和汇流条B相差多少。"]
         if "compare_orders" in response.nlu.missing_slots:
             return ["请补充两个订单号，例如：订单00067和00106的接线盒有什么不一样？"]
         return ["请补充订单、版本、材料类别或查询范围后继续。"]
@@ -564,8 +607,8 @@ class PlanBomAnswerPresentationService:
             None,
         )
 
-    @staticmethod
-    def _answer_mentions_only_existing_values(answer: str, response: PlanBomQaResponse) -> bool:
+    @classmethod
+    def _answer_mentions_only_existing_values(cls, answer: str, response: PlanBomQaResponse) -> bool:
         """校验回答文本是否只引用可追溯事实。
 
         参数：
@@ -573,14 +616,57 @@ class PlanBomAnswerPresentationService:
             response: 确定性 QA 响应。
 
         返回：
-            当前采用保守策略：只要没有明显新增订单号格式即可通过。
+            回答里的订单号和数字都能在确定性响应中找到时返回 True。
         """
 
         known_text = json.dumps(response.model_dump(mode="json"), ensure_ascii=False)
         for order in re.findall(r"20\d{2}-\d{5}|\b\d{5}\b", answer):
             if order not in known_text:
                 return False
-        return True
+        answer_numbers = cls._extract_number_tokens(answer)
+        if not answer_numbers:
+            return True
+        allowed_numbers = cls._collect_allowed_number_tokens(response)
+        return answer_numbers.issubset(allowed_numbers)
+
+    @classmethod
+    def _collect_allowed_number_tokens(cls, response: PlanBomQaResponse) -> set[str]:
+        """收集计划 BOM 确定性结果中允许表达层复述的数字。
+
+        参数：
+            response: 确定性 QA 响应。
+
+        返回：
+            归一化后的数字 token 集合；额外包含结果行数，允许业务化表述“共 N 条记录”。
+        """
+
+        tokens = cls._extract_number_tokens(json.dumps(response.model_dump(mode="json"), ensure_ascii=False))
+        tokens.add(cls._normalize_number_token(len(response.result_table.rows or [])))
+        tokens.add(cls._normalize_number_token(len(response.result_table.columns or [])))
+        return tokens
+
+    @classmethod
+    def _extract_number_tokens(cls, text: str) -> set[str]:
+        """抽取并归一化可见文本里的数字，供事实白名单校验使用。"""
+
+        tokens: set[str] = set()
+        for raw in re.findall(r"(?<![A-Za-z0-9_])-?\d+(?:,\d{3})*(?:\.\d+)?", text or ""):
+            try:
+                tokens.add(cls._normalize_number_token(raw))
+            except Exception:  # noqa: BLE001
+                continue
+        return tokens
+
+    @staticmethod
+    def _normalize_number_token(value: Any) -> str:
+        """把数字文本统一为可比较 token，避免 50 与 50.0 被误判不同。"""
+
+        normalized = str(value).replace(",", "").strip()
+        if not normalized:
+            return "0"
+        if "." in normalized:
+            normalized = normalized.rstrip("0").rstrip(".")
+        return normalized or "0"
 
     def _is_llm_available(self) -> bool:
         """判断 LLM 是否可用。

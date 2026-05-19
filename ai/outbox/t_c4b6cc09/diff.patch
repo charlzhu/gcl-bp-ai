@@ -1,0 +1,2338 @@
+diff --git a/backend/app/core/config.py b/backend/app/core/config.py
+index 4270a0b..f1beb81 100644
+--- a/backend/app/core/config.py
++++ b/backend/app/core/config.py
+@@ -69,6 +69,10 @@ class Settings(BaseSettings):
+     llm_answer_presentation_timeout: float = 6.0
+     llm_answer_presentation_max_retries: int = 0
+     query_planning_v2_response_meta_enabled: bool = False
++    logistics_query_planner_v2_enabled: bool = False
++    logistics_query_planner_v2_mode: Literal["off", "shadow", "assist"] = "shadow"
++    logistics_query_planner_v2_min_confidence: float = 0.9
++    logistics_query_planner_v2_allowed_query_keys: list[str] = Field(default_factory=list)
+ 
+     model_config = SettingsConfigDict(
+         env_file=Path(__file__).resolve().parent.parent.parent / ".env",
+@@ -77,6 +81,41 @@ class Settings(BaseSettings):
+         extra="ignore",
+     )
+ 
++    @field_validator("logistics_query_planner_v2_mode", mode="before")
++    @classmethod
++    def _normalize_logistics_query_planner_v2_mode(cls, value: object) -> object:
++        """归一化物流 Query Planner V2 模式配置。"""
++        if value is None:
++            return "off"
++        if isinstance(value, str):
++            normalized = value.strip().lower()
++            if normalized in {"", "disabled"}:
++                return "off"
++            return normalized
++        return value
++
++    @field_validator("logistics_query_planner_v2_allowed_query_keys", mode="before")
++    @classmethod
++    def _parse_logistics_query_planner_v2_allowed_query_keys(cls, value: object) -> object:
++        """解析物流 Query Planner V2 query_key 白名单，兼容 JSON 数组和逗号分隔写法。"""
++        if value is None:
++            return []
++        if isinstance(value, list):
++            return [str(item).strip() for item in value if str(item).strip()]
++        if isinstance(value, str):
++            raw = value.strip()
++            if not raw:
++                return []
++            if raw.startswith("["):
++                try:
++                    parsed = json.loads(raw)
++                    if isinstance(parsed, list):
++                        return [str(item).strip() for item in parsed if str(item).strip()]
++                except Exception:  # noqa: BLE001
++                    pass
++            return [item.strip() for item in raw.split(",") if item.strip()]
++        return value
++
+     @field_validator("llm_guardrail_mode", mode="before")
+     @classmethod
+     def _normalize_llm_guardrail_mode(cls, value: object) -> object:
+diff --git a/backend/app/domains/query_planning/schemas/query_plan_v2.py b/backend/app/domains/query_planning/schemas/query_plan_v2.py
+index 0707ebf..8032221 100644
+--- a/backend/app/domains/query_planning/schemas/query_plan_v2.py
++++ b/backend/app/domains/query_planning/schemas/query_plan_v2.py
+@@ -22,7 +22,10 @@ class QueryPlanningV2Slots(BaseModel):
+         metrics: 指标槽位，如 shipment_mw、total_fee。
+         dimensions: 维度槽位，如 carrier、year。
+         filters: 过滤条件，只承载受控字段和值，不承载 SQL。
++        time_range: 时间范围快照，保留 LLM 候选或后端归一后的年份/月度范围。
+         group_by: 分组字段。
++        aggregations: 聚合算子槽位，如 avg、sum、count。
++        compare_mode: 对比或趋势模式，如 year_compare、monthly_trend。
+         sort: 排序字段和方向。
+         limit: 结果条数限制。
+         entities: 领域实体槽位，供订单、客户、供应商等实体归一化使用。
+@@ -36,7 +39,10 @@ class QueryPlanningV2Slots(BaseModel):
+     metrics: list[str] = Field(default_factory=list)
+     dimensions: list[str] = Field(default_factory=list)
+     filters: dict[str, Any] = Field(default_factory=dict)
++    time_range: dict[str, Any] = Field(default_factory=dict)
+     group_by: list[str] = Field(default_factory=list)
++    aggregations: list[str] = Field(default_factory=list)
++    compare_mode: str | None = None
+     sort: list[dict[str, Any]] = Field(default_factory=list)
+     limit: int | None = None
+     entities: dict[str, Any] = Field(default_factory=dict)
+@@ -183,6 +189,7 @@ class QueryPlanningV2Plan(BaseModel):
+         unsupported_reason: 不支持原因。
+         guardrail_decision: Guardrail 决策。
+         execution_policy: 执行安全策略。
++        confidence: LLM QueryPlan 候选置信度；规则 planner 包装时可为空。
+         rule_plan: 原规则 planner / NLU 结果快照。
+         llm_result: LLM 候选快照。
+         audit: 审计信息。
+@@ -209,6 +216,7 @@ class QueryPlanningV2Plan(BaseModel):
+     unsupported_reason: str | None = None
+     guardrail_decision: QueryPlanningV2GuardrailDecision = Field(default_factory=QueryPlanningV2GuardrailDecision)
+     execution_policy: QueryPlanningV2ExecutionPolicy = Field(default_factory=QueryPlanningV2ExecutionPolicy)
++    confidence: float | None = None
+     rule_plan: dict[str, Any] = Field(default_factory=dict)
+     llm_result: dict[str, Any] = Field(default_factory=dict)
+     audit: QueryPlanningV2AuditInfo = Field(default_factory=QueryPlanningV2AuditInfo)
+diff --git a/backend/app/domains/query_planning/services/logistics_adapter.py b/backend/app/domains/query_planning/services/logistics_adapter.py
+index 7d0aefc..3e29dfd 100644
+--- a/backend/app/domains/query_planning/services/logistics_adapter.py
++++ b/backend/app/domains/query_planning/services/logistics_adapter.py
+@@ -4,6 +4,7 @@ from typing import Any
+ 
+ from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
+ from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
++from backend.app.domains.logistics.services.query_planner_v2 import LogisticsQueryPlannerV2, LogisticsQueryPlannerV2Fallback
+ from backend.app.domains.query_planning.schemas.query_plan_v2 import (
+     QueryPlanningV2GuardrailDecision,
+     QueryPlanningV2Plan,
+@@ -21,15 +22,23 @@ class LogisticsQueryPlanningAdapter:
+         3. 只把现有规则计划包装成统一 query_plan_v2，用于 Phase 3 shadow 诊断。
+     """
+ 
+-    def __init__(self, planner: LogisticsDataQaPlanner | Any | None = None) -> None:
++    def __init__(
++        self,
++        planner: LogisticsDataQaPlanner | Any | None = None,
++        planner_v2: LogisticsQueryPlannerV2 | Any | None = None,
++    ) -> None:
+         """初始化物流适配器。
+ 
+         参数：
+             planner: 可注入的物流规则 planner；测试场景可传 fake planner。
++            planner_v2: 可注入的新物流 Query Planner V2；默认随配置 shadow 开关启用。
+         返回：无返回值。
+         """
+ 
+         self.planner = planner or LogisticsDataQaPlanner()
++        self.planner_v2 = planner_v2 or LogisticsQueryPlannerV2(
++            fallback=LogisticsQueryPlannerV2Fallback(legacy_planner=self.planner)
++        )
+ 
+     def build_candidate(self, question: str, *, trace_id: str | None = None) -> QueryPlanningV2Plan:
+         """构建物流领域 query_plan_v2 候选。
+@@ -42,6 +51,9 @@ class LogisticsQueryPlanningAdapter:
+         业务逻辑：只复用 planner 的受控结果，不触发正式 Data QA 主链路执行。
+         """
+ 
++        if self._should_use_planner_v2():
++            return self.planner_v2.build_shadow_plan(question, trace_id=trace_id)
++
+         rule_plan: LogisticsDataQaPlan = self.planner.build_plan(question)
+         strategy = self._strategy_from_rule_plan(rule_plan)
+         sub_queries = self._sub_queries_from_rule_plan(rule_plan)
+@@ -79,6 +91,18 @@ class LogisticsQueryPlanningAdapter:
+         plan.audit.trace_id = trace_id
+         return plan
+ 
++    def _should_use_planner_v2(self) -> bool:
++        """判断是否启用新的物流 Query Planner V2 shadow 编排。
++
++        参数：无。
++        返回：
++            True 表示调用 LLM QueryPlan candidate + Validator；False 表示沿用旧规则 planner 包装。
++        业务逻辑：默认配置关闭，因此不会影响正式物流 QA 或既有诊断链路。
++        """
++
++        should_use = getattr(self.planner_v2, "should_use", None)
++        return bool(callable(should_use) and should_use())
++
+     @staticmethod
+     def _strategy_from_rule_plan(rule_plan: LogisticsDataQaPlan) -> str:
+         """根据物流规则计划推导初始策略。"""
+diff --git a/tests/unit/query_planning/test_query_plan_v2_schema.py b/tests/unit/query_planning/test_query_plan_v2_schema.py
+index 49b21f8..f0b605a 100644
+--- a/tests/unit/query_planning/test_query_plan_v2_schema.py
++++ b/tests/unit/query_planning/test_query_plan_v2_schema.py
+@@ -34,6 +34,23 @@ def test_query_plan_v2_direct_plan_is_stable_json_and_shadow_by_default() -> Non
+     assert payload["execution_policy"]["sql_generation_allowed"] is False
+ 
+ 
++def test_query_plan_v2_slots_preserve_llm_queryplan_time_range_and_compare_mode() -> None:
++    """统一槽位必须能承载 LLM QueryPlan 的时间范围、聚合和对比模式。"""
++    slots = QueryPlanningV2Slots(
++        metrics=["avg_fee"],
++        filters={"years": [2024, 2025], "origin_place": "合肥"},
++        aggregations=["avg"],
++        compare_mode="year_compare",
++        time_range={"years": [2024, 2025], "source_scope": "historical_2023_2025"},
++    )
++
++    payload = slots.model_dump(mode="json")
++
++    assert payload["time_range"] == {"years": [2024, 2025], "source_scope": "historical_2023_2025"}
++    assert payload["aggregations"] == ["avg"]
++    assert payload["compare_mode"] == "year_compare"
++
++
+ def test_query_plan_v2_rejects_unknown_strategy() -> None:
+     """strategy 只能取受控枚举值，避免调用方注入自由策略。"""
+     with pytest.raises(ValidationError):
+diff --git a/backend/app/domains/logistics/services/query_planner_v2/__init__.py b/backend/app/domains/logistics/services/query_planner_v2/__init__.py
+new file mode 100644
+index 0000000..8f37587
+--- /dev/null
++++ b/backend/app/domains/logistics/services/query_planner_v2/__init__.py
+@@ -0,0 +1,33 @@
++from __future__ import annotations
++
++from backend.app.domains.logistics.services.query_planner_v2.capability_registry import (
++    LogisticsQueryPlannerV2Capability,
++    LogisticsQueryPlannerV2CapabilityRegistry,
++)
++from backend.app.domains.logistics.services.query_planner_v2.fallback import LogisticsQueryPlannerV2Fallback
++from backend.app.domains.logistics.services.query_planner_v2.legacy_adapter import LogisticsQueryPlannerV2LegacyAdapter
++from backend.app.domains.logistics.services.query_planner_v2.llm_parser import (
++    LogisticsQueryPlannerV2Candidate,
++    LogisticsQueryPlannerV2LlmParser,
++)
++from backend.app.domains.logistics.services.query_planner_v2.normalizer import LogisticsQueryPlannerV2Normalizer
++from backend.app.domains.logistics.services.query_planner_v2.planner import LogisticsQueryPlannerV2
++from backend.app.domains.logistics.services.query_planner_v2.prompt_builder import LogisticsQueryPlannerV2PromptBuilder
++from backend.app.domains.logistics.services.query_planner_v2.validator import (
++    LogisticsQueryPlannerV2ValidationResult,
++    LogisticsQueryPlannerV2Validator,
++)
++
++__all__ = [
++    "LogisticsQueryPlannerV2",
++    "LogisticsQueryPlannerV2Candidate",
++    "LogisticsQueryPlannerV2Capability",
++    "LogisticsQueryPlannerV2CapabilityRegistry",
++    "LogisticsQueryPlannerV2Fallback",
++    "LogisticsQueryPlannerV2LegacyAdapter",
++    "LogisticsQueryPlannerV2LlmParser",
++    "LogisticsQueryPlannerV2Normalizer",
++    "LogisticsQueryPlannerV2ValidationResult",
++    "LogisticsQueryPlannerV2Validator",
++    "LogisticsQueryPlannerV2PromptBuilder",
++]
+diff --git a/backend/app/domains/logistics/services/query_planner_v2/capability_registry.py b/backend/app/domains/logistics/services/query_planner_v2/capability_registry.py
+new file mode 100644
+index 0000000..ec6a90d
+--- /dev/null
++++ b/backend/app/domains/logistics/services/query_planner_v2/capability_registry.py
+@@ -0,0 +1,179 @@
++from __future__ import annotations
++
++from dataclasses import dataclass, field
++from typing import Any
++
++
++@dataclass(frozen=True)
++class LogisticsQueryPlannerV2Capability:
++    """物流 Query Planner V2 的单个 query_key 能力声明。
++
++    参数：
++        query_key: 后端白名单查询键。
++        description: 面向 LLM prompt 和审计日志的能力说明。
++        allowed_filters: 允许出现的受控过滤字段。
++        required_filters: 必填过滤字段。
++        required_any_filters: 至少命中一个字段的组合，例如 city/province 二选一。
++        allowed_metrics: 允许输出的指标槽位。
++        allowed_dimensions: 允许输出的维度槽位。
++        allowed_group_by: 允许分组字段。
++        allowed_aggregations: 允许聚合算子。
++        allowed_compare_modes: 允许对比模式。
++        time_scope: 数据源时间边界。
++        executable_service: 后续可复用的确定性 service 名称。
++        allow_assist: 是否允许未来进入 assist 灰度。
++    返回：
++        不可变的能力声明对象。
++    """
++
++    query_key: str
++    description: str
++    allowed_filters: set[str] = field(default_factory=set)
++    required_filters: set[str] = field(default_factory=set)
++    required_any_filters: list[set[str]] = field(default_factory=list)
++    allowed_metrics: set[str] = field(default_factory=set)
++    allowed_dimensions: set[str] = field(default_factory=set)
++    allowed_group_by: set[str] = field(default_factory=set)
++    allowed_aggregations: set[str] = field(default_factory=set)
++    allowed_compare_modes: set[str] = field(default_factory=set)
++    time_scope: str = "historical_2023_2025"
++    executable_service: str = "LogisticsDataQaService"
++    allow_assist: bool = False
++
++    def to_prompt_dict(self) -> dict[str, Any]:
++        """转换为 prompt 中的精简 JSON 能力说明。"""
++
++        return {
++            "query_key": self.query_key,
++            "description": self.description,
++            "allowed_filters": sorted(self.allowed_filters),
++            "required_filters": sorted(self.required_filters),
++            "required_any_filters": [sorted(item) for item in self.required_any_filters],
++            "allowed_metrics": sorted(self.allowed_metrics),
++            "allowed_dimensions": sorted(self.allowed_dimensions),
++            "allowed_group_by": sorted(self.allowed_group_by),
++            "allowed_aggregations": sorted(self.allowed_aggregations),
++            "allowed_compare_modes": sorted(self.allowed_compare_modes),
++            "time_scope": self.time_scope,
++            "executable_service": self.executable_service,
++            "allow_assist": self.allow_assist,
++        }
++
++
++class LogisticsQueryPlannerV2CapabilityRegistry:
++    """物流 Query Planner V2 query_key 能力注册表。
++
++    业务逻辑：
++        1. 只声明后端已经审计过的白名单能力；
++        2. Validator 以本注册表为唯一放行依据；
++        3. LLM prompt 只能看到本注册表暴露的受控 query_key，不能自由发明查询。
++    """
++
++    def __init__(self, capabilities: dict[str, LogisticsQueryPlannerV2Capability] | None = None) -> None:
++        """初始化能力表；测试可以注入精简能力集合。"""
++
++        self._capabilities = capabilities or self._default_capabilities()
++
++    def get(self, query_key: str | None) -> LogisticsQueryPlannerV2Capability | None:
++        """按 query_key 获取能力声明；不存在返回 None。"""
++
++        if not query_key:
++            return None
++        return self._capabilities.get(query_key)
++
++    def allowed_query_keys(self) -> set[str]:
++        """返回当前允许候选的全部 query_key。"""
++
++        return set(self._capabilities.keys())
++
++    def prompt_payload(self, allowed_query_keys: list[str] | set[str] | None = None) -> list[dict[str, Any]]:
++        """返回给 prompt_builder 使用的能力 JSON 列表。
++
++        参数：
++            allowed_query_keys: 可选配置白名单；传入后只暴露这些能力，避免 prompt 诱导 LLM 选择未灰度 query_key。
++        返回：
++            可序列化的能力声明列表。
++        """
++
++        if allowed_query_keys:
++            keys = [key for key in sorted(set(allowed_query_keys)) if key in self._capabilities]
++        else:
++            keys = sorted(self._capabilities)
++        return [self._capabilities[key].to_prompt_dict() for key in keys]
++
++    @staticmethod
++    def _default_capabilities() -> dict[str, LogisticsQueryPlannerV2Capability]:
++        """构造 MVP 首批能力声明。"""
++
++        route_filters = {
++            "years",
++            "months",
++            "origin_place",
++            "city",
++            "province",
++            "vehicle_type",
++            "view_mode",
++            "price_metric",
++        }
++        return {
++            "hist_route_pricing_analysis": LogisticsQueryPlannerV2Capability(
++                query_key="hist_route_pricing_analysis",
++                description="历史台账中，按始发地、目的城市/省份、车型和年份分析线路平均运费、单车均费或月度趋势。",
++                allowed_filters=route_filters,
++                required_filters={"years", "origin_place", "vehicle_type", "view_mode", "price_metric"},
++                required_any_filters=[{"city", "province"}],
++                allowed_metrics={"avg_fee", "total_fee", "row_count"},
++                allowed_dimensions={"year", "month", "origin_place", "city", "province", "vehicle_type"},
++                allowed_group_by={"year", "month", "origin_place", "city", "province", "vehicle_type"},
++                allowed_aggregations={"avg", "sum", "count"},
++                allowed_compare_modes={"none", "year_compare", "month_over_month", "year_over_year", "monthly_trend"},
++                time_scope="historical_2023_2025",
++                executable_service="LogisticsDataQaService.hist_route_pricing_analysis",
++                allow_assist=True,
++            ),
++            "hist_total_fee_city_rank": LogisticsQueryPlannerV2Capability(
++                query_key="hist_total_fee_city_rank",
++                description="历史台账中，按年份、省份或区域统计城市总费用排名。",
++                allowed_filters={"years", "province", "region", "top_n", "sort_order"},
++                required_filters={"years"},
++                required_any_filters=[{"province", "region"}],
++                allowed_metrics={"total_fee", "row_count"},
++                allowed_dimensions={"city", "province", "region", "year"},
++                allowed_group_by={"city", "province", "region", "year"},
++                allowed_aggregations={"sum", "count"},
++                allowed_compare_modes={"none", "year_compare"},
++                executable_service="LogisticsDataQaService.hist_total_fee_city_rank",
++                allow_assist=False,
++            ),
++            "hist_avg_fee_by_month": LogisticsQueryPlannerV2Capability(
++                query_key="hist_avg_fee_by_month",
++                description="历史台账中，按月份统计平均运费走势。",
++                allowed_filters=route_filters,
++                required_filters={"years"},
++                required_any_filters=[],
++                allowed_metrics={"avg_fee", "total_fee", "row_count"},
++                allowed_dimensions={"month", "year", "origin_place", "city", "province", "vehicle_type"},
++                allowed_group_by={"month", "year"},
++                allowed_aggregations={"avg", "sum", "count"},
++                allowed_compare_modes={"none", "month_over_month", "year_over_year", "monthly_trend"},
++                executable_service="LogisticsDataQaService.hist_avg_fee_by_month",
++                allow_assist=False,
++            ),
++            "hist_carrier_kpi_by_year": LogisticsQueryPlannerV2Capability(
++                query_key="hist_carrier_kpi_by_year",
++                description="历史台账中，按年份和承运商统计运量、运费、车次等经营指标。",
++                allowed_filters={"years", "carrier", "region", "province", "city", "top_n", "sort_order"},
++                required_filters={"years"},
++                required_any_filters=[],
++                allowed_metrics={"shipment_mw", "total_fee", "trip_count", "row_count", "avg_fee"},
++                allowed_dimensions={"year", "carrier", "region", "province", "city"},
++                allowed_group_by={"year", "carrier", "region", "province", "city"},
++                allowed_aggregations={"sum", "avg", "count"},
++                allowed_compare_modes={"none", "year_compare"},
++                executable_service="LogisticsDataQaService.hist_carrier_kpi_by_year",
++                allow_assist=False,
++            ),
++        }
++
++
++__all__ = ["LogisticsQueryPlannerV2Capability", "LogisticsQueryPlannerV2CapabilityRegistry"]
+diff --git a/backend/app/domains/logistics/services/query_planner_v2/fallback.py b/backend/app/domains/logistics/services/query_planner_v2/fallback.py
+new file mode 100644
+index 0000000..a9d187b
+--- /dev/null
++++ b/backend/app/domains/logistics/services/query_planner_v2/fallback.py
+@@ -0,0 +1,135 @@
++from __future__ import annotations
++
++from typing import Any
++
++from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
++from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
++from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++    QueryPlanningV2GuardrailDecision,
++    QueryPlanningV2Plan,
++    QueryPlanningV2Slots,
++    QueryPlanningV2SubQuery,
++)
++
++
++class LogisticsQueryPlannerV2Fallback:
++    """物流 Query Planner V2 的旧 planner fallback。
++
++    业务逻辑：当 LLM 不可用、低置信或 Validator fail closed 时，保留旧规则 planner 的正式能力，
++    并把失败原因写入 shadow 审计，不改变正式物流 QA 答案。
++    """
++
++    def __init__(self, legacy_planner: LogisticsDataQaPlanner | Any | None = None) -> None:
++        """初始化 fallback。
++
++        参数：
++            legacy_planner: 旧 LogisticsDataQaPlanner 或测试 fake。
++        返回：无。
++        """
++
++        self.legacy_planner = legacy_planner or LogisticsDataQaPlanner()
++
++    def build_legacy_plan(self, question: str) -> LogisticsDataQaPlan:
++        """调用旧规则 planner 生成受控 plan；不执行 Data QA 查询。"""
++
++        return self.legacy_planner.build_plan(question)
++
++    def to_query_plan(self, *, question: str, trace_id: str | None = None, reason: str) -> QueryPlanningV2Plan:
++        """回退旧 planner 并包装成 QueryPlanningV2Plan。
++
++        参数：
++            question: 原始问题。
++            trace_id: 请求追踪号。
++            reason: 触发 fallback 的原因。
++        返回：
++            仅用于 shadow 诊断的 QueryPlanningV2Plan。
++        """
++
++        rule_plan = self.build_legacy_plan(question)
++        strategy = self._strategy_from_rule_plan(rule_plan)
++        plan = QueryPlanningV2Plan(
++            domain="logistics",
++            original_question=question,
++            strategy=strategy,
++            intent=rule_plan.intent,
++            query_key=rule_plan.query_key if strategy in {"DIRECT_RETRIEVAL", "QUERY_DECOMPOSITION"} else None,
++            slots=QueryPlanningV2Slots(
++                metrics=list(rule_plan.metrics or []),
++                dimensions=list(rule_plan.dimensions or []),
++                filters=dict(rule_plan.filters or {}),
++                group_by=list(rule_plan.group_by or []),
++                sort=list(rule_plan.sort or []),
++                limit=rule_plan.limit,
++            ),
++            sub_queries=self._sub_queries_from_rule_plan(rule_plan),
++            clarification_questions=list(rule_plan.clarification_questions or []) if strategy == "CLARIFY" else [],
++            unsupported_reason=rule_plan.unsupported_reason if strategy == "UNSUPPORTED" else None,
++            guardrail_decision=QueryPlanningV2GuardrailDecision(
++                guardrail_enabled=True,
++                guardrail_mode="llm_query_planner_v2_fallback",
++                final_source="legacy_rule_planner_fallback",
++                policy_locked=True,
++                accepted=False,
++                blocked_reason=reason,
++                notes=[
++                    "物流 Query Planner V2 未放行，已回退旧规则 planner。",
++                    "fallback 不执行 SQL，不替换正式 QA 主链路。",
++                ],
++            ),
++            rule_plan=rule_plan.model_dump(mode="json"),
++        )
++        plan.audit.trace_id = trace_id
++        return plan
++
++    @staticmethod
++    def _strategy_from_rule_plan(rule_plan: LogisticsDataQaPlan) -> str:
++        """根据旧 plan 推导 Query Planning V2 策略。"""
++
++        if rule_plan.intent == "unsupported" or rule_plan.unsupported_reason:
++            return "UNSUPPORTED"
++        if rule_plan.needs_clarification or rule_plan.intent == "clarification":
++            return "CLARIFY"
++        if rule_plan.query_key == "composite_decomposed":
++            return "QUERY_DECOMPOSITION"
++        if rule_plan.query_key:
++            return "DIRECT_RETRIEVAL"
++        return "CLARIFY"
++
++    @staticmethod
++    def _sub_queries_from_rule_plan(rule_plan: LogisticsDataQaPlan) -> list[QueryPlanningV2SubQuery]:
++        """从旧 composite_decomposed plan 提取子查询快照。"""
++
++        if rule_plan.query_key != "composite_decomposed":
++            return []
++        raw_sub_plans = (rule_plan.filters or {}).get("sub_plans")
++        if not isinstance(raw_sub_plans, list):
++            return []
++        sub_queries: list[QueryPlanningV2SubQuery] = []
++        for index, item in enumerate(raw_sub_plans, start=1):
++            if not isinstance(item, dict):
++                continue
++            filters = item.get("filters") if isinstance(item.get("filters"), dict) else {}
++            sub_queries.append(
++                QueryPlanningV2SubQuery(
++                    sub_query_id=f"logistics_sub_{index}",
++                    source_clause=str(item.get("source_clause") or item.get("section_label") or f"sub_{index}"),
++                    domain="logistics",
++                    intent=item.get("intent"),
++                    query_key=item.get("query_key"),
++                    slots=QueryPlanningV2Slots(
++                        metrics=list(item.get("metrics") or []),
++                        dimensions=list(item.get("dimensions") or []),
++                        filters=dict(filters),
++                        group_by=list(item.get("group_by") or []),
++                        sort=list(item.get("sort") or []),
++                        limit=item.get("limit"),
++                    ),
++                    executable=bool(item.get("query_key")),
++                    merge_policy="旧规则 planner fallback 子查询，仅用于 shadow 对比。",
++                    guardrail_notes=["子查询来自旧 composite_decomposed 受控计划。"],
++                )
++            )
++        return sub_queries
++
++
++__all__ = ["LogisticsQueryPlannerV2Fallback"]
+diff --git a/backend/app/domains/logistics/services/query_planner_v2/legacy_adapter.py b/backend/app/domains/logistics/services/query_planner_v2/legacy_adapter.py
+new file mode 100644
+index 0000000..9625517
+--- /dev/null
++++ b/backend/app/domains/logistics/services/query_planner_v2/legacy_adapter.py
+@@ -0,0 +1,144 @@
++from __future__ import annotations
++
++from typing import Any
++
++from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
++from backend.app.domains.logistics.services.query_planner_v2.llm_parser import LogisticsQueryPlannerV2Candidate
++from backend.app.domains.logistics.services.query_planner_v2.validator import LogisticsQueryPlannerV2ValidationResult
++from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++    QueryPlanningV2GuardrailDecision,
++    QueryPlanningV2Plan,
++    QueryPlanningV2Slots,
++)
++
++
++class LogisticsQueryPlannerV2LegacyAdapter:
++    """物流 Query Planner V2 与现有 LogisticsDataQaPlan 的适配器。
++
++    业务逻辑：
++        1. V2 校验通过后，只转换为既有白名单 plan 结构；
++        2. 不生成 SQL，不调用 Repository，不计算答案；
++        3. 当前阶段只用于 shadow/diagnose，不替换正式 QA 主链路。
++    """
++
++    def to_logistics_plan(self, candidate: LogisticsQueryPlannerV2Candidate) -> LogisticsDataQaPlan:
++        """把已校验候选转换成现有物流受控 plan。
++
++        参数：
++            candidate: Validator accepted 的候选。
++        返回：
++            可被既有 service/repository 理解的 LogisticsDataQaPlan。
++        """
++
++        if candidate.unsupported_reason:
++            return LogisticsDataQaPlan(
++                intent="unsupported",
++                unsupported_reason=candidate.unsupported_reason,
++                unsupported_category="query_planner_v2_unsupported",
++            )
++        if candidate.clarification_questions:
++            return LogisticsDataQaPlan(
++                intent="clarification",
++                needs_clarification=True,
++                clarification_questions=list(candidate.clarification_questions),
++                clarification_category="query_planner_v2_missing_slots",
++            )
++        return LogisticsDataQaPlan(
++            intent=candidate.intent or "aggregate",
++            query_key=candidate.query_key,
++            metrics=list(candidate.metrics),
++            dimensions=list(candidate.dimensions),
++            filters=dict(candidate.filters),
++            group_by=list(candidate.group_by),
++        )
++
++    def to_query_plan(
++        self,
++        *,
++        candidate: LogisticsQueryPlannerV2Candidate,
++        validation: LogisticsQueryPlannerV2ValidationResult,
++        original_question: str,
++        trace_id: str | None = None,
++        legacy_rule_plan: LogisticsDataQaPlan | None = None,
++        mode: str = "shadow",
++    ) -> QueryPlanningV2Plan:
++        """把 V2 候选转换成 QueryPlanningV2Plan shadow 快照。
++
++        参数：
++            candidate: 归一后的候选。
++            validation: Validator 校验结果。
++            original_question: 用户原始问题。
++            trace_id: 请求追踪号。
++            legacy_rule_plan: 旧规则 planner 快照，用于对比和 fallback 审计。
++            mode: 当前 V2 模式，默认 shadow。
++        返回：
++            统一 QueryPlanningV2Plan，不执行正式查询。
++        """
++
++        accepted = validation.accepted
++        strategy = "DIRECT_RETRIEVAL" if accepted and candidate.query_key else "CLARIFY"
++        clarification_questions = [] if accepted else self._clarification_from_errors(validation.errors)
++        plan = QueryPlanningV2Plan(
++            domain="logistics",
++            original_question=original_question,
++            strategy=strategy,
++            intent=candidate.intent if accepted else "clarification",
++            query_key=candidate.query_key if accepted else None,
++            slots=QueryPlanningV2Slots(
++                metrics=list(candidate.metrics),
++                dimensions=list(candidate.dimensions),
++                filters=dict(candidate.filters),
++                time_range=dict(candidate.time_range),
++                group_by=list(candidate.group_by),
++                aggregations=list(candidate.aggregations),
++                compare_mode=candidate.compare_mode,
++            ),
++            clarification_questions=clarification_questions,
++            guardrail_decision=QueryPlanningV2GuardrailDecision(
++                guardrail_enabled=True,
++                guardrail_mode="llm_query_planner_v2",
++                final_source=f"llm_query_planner_v2_{mode}",
++                policy_locked=True,
++                accepted=accepted,
++                blocked_reason=None if accepted else ";".join(validation.errors),
++                notes=[
++                    "LLM 只生成 QueryPlan 候选；后端 Validator 已完成白名单和业务边界校验。",
++                    "当前阶段保持 shadow，不替换正式物流 Data QA 主链路。",
++                ],
++                raw_decision={
++                    "validation_errors": list(validation.errors),
++                    "validation_warnings": list(validation.warnings),
++                    "provider_mode": candidate.provider_mode,
++                    "provider_error": candidate.provider_error,
++                    "time_range": dict(candidate.time_range),
++                },
++            ),
++            rule_plan=legacy_rule_plan.model_dump(mode="json") if legacy_rule_plan else {},
++            llm_result=self._candidate_dump(candidate),
++            confidence=candidate.confidence,
++        )
++        plan.audit.trace_id = trace_id
++        return plan
++
++    @staticmethod
++    def _candidate_dump(candidate: LogisticsQueryPlannerV2Candidate) -> dict[str, Any]:
++        """生成可序列化候选快照。"""
++
++        return candidate.model_dump(mode="json")
++
++    @staticmethod
++    def _clarification_from_errors(errors: list[str]) -> list[str]:
++        """把阻断原因转换成业务可理解的澄清问题。"""
++
++        if any(error.startswith("multi_hop_route") for error in errors):
++            return ["当前只支持单一始发地到单一目的地的线路运价，请明确要查询哪一段路线。"]
++        if any(error.startswith("origin_not_normalized") for error in errors):
++            return ["请确认始发地是否为当前历史台账支持的合肥或阜宁，或补充可匹配的始发地口径。"]
++        if any(error.startswith("time_scope_mismatch") for error in errors):
++            return ["当前历史线路运价只支持 2023-2025 历史台账；2026 系统数据请改问系统数据口径。"]
++        if any(error.startswith("low_confidence") for error in errors):
++            return ["当前问题语义识别置信度不足，请补充年份、始发地、目的地、车型和运费口径。"]
++        return ["当前 Query Planner V2 候选未通过后端安全校验，请补充明确的时间、线路、车型和指标口径。"]
++
++
++__all__ = ["LogisticsQueryPlannerV2LegacyAdapter"]
+diff --git a/backend/app/domains/logistics/services/query_planner_v2/llm_parser.py b/backend/app/domains/logistics/services/query_planner_v2/llm_parser.py
+new file mode 100644
+index 0000000..917f907
+--- /dev/null
++++ b/backend/app/domains/logistics/services/query_planner_v2/llm_parser.py
+@@ -0,0 +1,299 @@
++from __future__ import annotations
++
++import json
++from typing import Any
++
++from pydantic import BaseModel, ConfigDict, Field
++
++from backend.app.core.config import settings
++
++
++class LogisticsQueryPlannerV2Candidate(BaseModel):
++    """物流 Query Planner V2 的 LLM QueryPlan 候选。
++
++    参数：
++        normalized_question: LLM 或后端归一后的问题文本。
++        intent: 受控意图。
++        query_key: 白名单 query_key 候选。
++        filters: 受控过滤槽位。
++        metrics/dimensions/group_by/aggregations: 指标、维度、分组和聚合槽位。
++        compare_mode: 对比或趋势模式。
++        time_range: LLM 提供的时间范围快照。
++        confidence: LLM 对候选的置信度。
++        clarification_questions: 缺槽时的澄清问题。
++        unsupported_reason: 不支持原因。
++        provider_mode/provider_error: LLM 调用或解析状态。
++        raw_payload: 原始 JSON，用于 Validator 递归安全检查。
++    返回：
++        只描述候选计划、不执行查询的数据对象。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    normalized_question: str = ""
++    intent: str = "unknown"
++    query_key: str | None = None
++    filters: dict[str, Any] = Field(default_factory=dict)
++    metrics: list[str] = Field(default_factory=list)
++    dimensions: list[str] = Field(default_factory=list)
++    group_by: list[str] = Field(default_factory=list)
++    aggregations: list[str] = Field(default_factory=list)
++    compare_mode: str | None = None
++    time_range: dict[str, Any] = Field(default_factory=dict)
++    confidence: float = 0.0
++    clarification_questions: list[str] = Field(default_factory=list)
++    unsupported_reason: str | None = None
++    provider_mode: str = "live"
++    provider_error: str | None = None
++    llm_model_name: str | None = None
++    raw_payload: dict[str, Any] = Field(default_factory=dict)
++
++
++class LogisticsQueryPlannerV2LlmParser:
++    """物流 Query Planner V2 的 LLM 调用和 JSON 解析器。
++
++    业务逻辑：
++        1. 只允许 OpenAI 兼容模型返回 JSON 候选；
++        2. 解析器不执行 SQL、不查库、不计算业务数值；
++        3. 一旦发现危险字段，立即 fail closed 到 error 候选。
++    """
++
++    FORBIDDEN_FIELDS = {
++        "sql",
++        "where",
++        "where_clause",
++        "database",
++        "table_name",
++        "answer",
++        "computed_value",
++        "python_code",
++        "tool_call",
++    }
++    ALLOWED_TOP_LEVEL_FIELDS = {
++        "intent",
++        "query_key",
++        "candidate_query_keys",
++        "filters",
++        "metrics",
++        "dimensions",
++        "group_by",
++        "aggregations",
++        "compare_mode",
++        "time_range",
++        "confidence",
++        "clarification_questions",
++        "unsupported_reason",
++        "normalized_question",
++    }
++
++    def __init__(
++        self,
++        *,
++        enabled: bool | None = None,
++        base_url: str | None = None,
++        api_key: str | None = None,
++        model: str | None = None,
++        client: Any | None = None,
++        timeout_seconds: float = 15.0,
++    ) -> None:
++        """初始化解析器。
++
++        参数：
++            enabled: 是否允许真实 LLM 调用；默认读取 Query Planner V2 配置。
++            base_url/api_key/model: OpenAI 兼容配置。
++            client: 测试注入客户端。
++            timeout_seconds: 外部调用超时。
++        返回：无。
++        """
++
++        self.enabled = settings.logistics_query_planner_v2_enabled if enabled is None else enabled
++        self.base_url = base_url if base_url is not None else settings.llm_base_url
++        self.api_key = api_key if api_key is not None else settings.llm_api_key
++        self.model = model if model is not None else settings.llm_model
++        self._client = client
++        self.timeout_seconds = timeout_seconds
++
++    def is_available(self) -> bool:
++        """判断当前是否具备真实 LLM 调用条件。"""
++
++        return bool(self.enabled and (self._client or (self.base_url and self.api_key and self.model)))
++
++    def parse(
++        self,
++        *,
++        question: str,
++        system_prompt: str,
++        user_prompt: str,
++        allowed_query_keys: list[str],
++    ) -> LogisticsQueryPlannerV2Candidate:
++        """调用 LLM 并解析 QueryPlan JSON。
++
++        参数：
++            question: 原始问题。
++            system_prompt: 系统提示词。
++            user_prompt: 用户提示词。
++            allowed_query_keys: 白名单 query_key，供审计记录使用。
++        返回：
++            解析后的候选；不可用或失败时返回 provider_mode=disabled/error。
++        """
++
++        if not self.is_available():
++            return LogisticsQueryPlannerV2Candidate(
++                normalized_question=question.strip(),
++                provider_mode="disabled",
++                provider_error="当前环境未启用或未配置物流 Query Planner V2 LLM。",
++                raw_payload={"allowed_query_keys": allowed_query_keys},
++            )
++        try:
++            from openai import OpenAI
++
++            client = self._client or OpenAI(
++                base_url=self.base_url,
++                api_key=self.api_key,
++                timeout=self.timeout_seconds,
++                max_retries=0,
++            )
++            completion = client.chat.completions.create(
++                model=self.model,
++                temperature=0,
++                messages=[
++                    {"role": "system", "content": system_prompt},
++                    {"role": "user", "content": user_prompt},
++                ],
++            )
++            content = completion.choices[0].message.content or "{}"
++            candidate = self.parse_text(content, question=question)
++            candidate.llm_model_name = self.model or None
++            return candidate
++        except Exception as exc:  # noqa: BLE001
++            return LogisticsQueryPlannerV2Candidate(
++                normalized_question=question.strip(),
++                provider_mode="error",
++                provider_error=str(exc),
++                llm_model_name=self.model or None,
++            )
++
++    def parse_text(self, content: str, *, question: str) -> LogisticsQueryPlannerV2Candidate:
++        """解析 LLM 文本响应中的严格 JSON。
++
++        参数：
++            content: 模型返回文本。
++            question: 原始问题。
++        返回：
++            provider_mode=live 的候选，或 provider_mode=error 的 fail-closed 候选。
++        """
++
++        try:
++            payload = self._extract_json(content)
++            forbidden = self._find_forbidden_fields(payload)
++            if forbidden:
++                first = sorted(forbidden)[0]
++                return self._error_candidate(question, f"forbidden_field::{first}", raw_payload=payload)
++            unexpected = sorted(set(payload) - self.ALLOWED_TOP_LEVEL_FIELDS)
++            if unexpected:
++                return self._error_candidate(question, f"unexpected_field::{unexpected[0]}", raw_payload=payload)
++            return self._candidate_from_payload(payload, question=question)
++        except Exception as exc:  # noqa: BLE001
++            return self._error_candidate(question, f"json_parse_error::{exc}")
++
++    def _candidate_from_payload(self, payload: dict[str, Any], *, question: str) -> LogisticsQueryPlannerV2Candidate:
++        """把 JSON dict 转成候选对象。"""
++
++        query_key = payload.get("query_key")
++        if not query_key and isinstance(payload.get("candidate_query_keys"), list) and payload["candidate_query_keys"]:
++            query_key = payload["candidate_query_keys"][0]
++        raw_filters = payload.get("filters")
++        filters: dict[str, Any] = dict(raw_filters) if isinstance(raw_filters, dict) else {}
++        raw_time_range = payload.get("time_range")
++        time_range: dict[str, Any] = dict(raw_time_range) if isinstance(raw_time_range, dict) else {}
++        return LogisticsQueryPlannerV2Candidate(
++            normalized_question=str(payload.get("normalized_question") or question).strip(),
++            intent=str(payload.get("intent") or "unknown"),
++            query_key=str(query_key).strip() if query_key else None,
++            filters=dict(filters),
++            metrics=self._as_str_list(payload.get("metrics")),
++            dimensions=self._as_str_list(payload.get("dimensions")),
++            group_by=self._as_str_list(payload.get("group_by")),
++            aggregations=self._as_str_list(payload.get("aggregations")),
++            compare_mode=str(payload.get("compare_mode")).strip() if payload.get("compare_mode") else None,
++            time_range=dict(time_range),
++            confidence=self._as_float(payload.get("confidence")),
++            clarification_questions=self._as_str_list(payload.get("clarification_questions")),
++            unsupported_reason=str(payload.get("unsupported_reason")).strip() if payload.get("unsupported_reason") else None,
++            provider_mode="live",
++            raw_payload=dict(payload),
++        )
++
++    @classmethod
++    def _extract_json(cls, content: str) -> dict[str, Any]:
++        """解析严格 JSON 对象，拒绝 markdown 或解释性前后缀。"""
++
++        stripped = content.strip()
++        if not stripped.startswith("{") or not stripped.endswith("}"):
++            raise ValueError("LLM 输出必须是严格 JSON object，不能包含 markdown 或额外文本")
++        try:
++            def _reject_non_standard_constant(value: str) -> None:
++                """拒绝 NaN/Infinity 等 Python json 默认会放行的非标准 JSON 常量。"""
++                raise ValueError(f"LLM 输出包含非标准 JSON 常量：{value}")
++
++            parsed = json.loads(stripped, parse_constant=_reject_non_standard_constant)
++        except json.JSONDecodeError as exc:
++            raise ValueError(str(exc)) from exc
++        if not isinstance(parsed, dict):
++            raise ValueError("LLM 输出不是 JSON object")
++        return parsed
++
++    @classmethod
++    def _find_forbidden_fields(cls, value: Any) -> set[str]:
++        """递归扫描危险字段名。"""
++
++        found: set[str] = set()
++        if isinstance(value, dict):
++            for key, item in value.items():
++                normalized_key = str(key).strip().lower()
++                if normalized_key in cls.FORBIDDEN_FIELDS:
++                    found.add(normalized_key)
++                found.update(cls._find_forbidden_fields(item))
++        elif isinstance(value, list):
++            for item in value:
++                found.update(cls._find_forbidden_fields(item))
++        return found
++
++    @staticmethod
++    def _as_str_list(value: Any) -> list[str]:
++        """把 LLM 输出归一成字符串列表。"""
++
++        if value is None:
++            return []
++        if isinstance(value, list):
++            return [str(item).strip() for item in value if str(item).strip()]
++        text = str(value).strip()
++        return [text] if text else []
++
++    @staticmethod
++    def _as_float(value: Any) -> float:
++        """把置信度安全转换为 float。"""
++
++        try:
++            return float(value)
++        except (TypeError, ValueError):
++            return 0.0
++
++    @staticmethod
++    def _error_candidate(
++        question: str,
++        reason: str,
++        *,
++        raw_payload: dict[str, Any] | None = None,
++    ) -> LogisticsQueryPlannerV2Candidate:
++        """构造 fail-closed 候选。"""
++
++        return LogisticsQueryPlannerV2Candidate(
++            normalized_question=question.strip(),
++            provider_mode="error",
++            provider_error=reason,
++            raw_payload=raw_payload or {},
++        )
++
++
++__all__ = ["LogisticsQueryPlannerV2Candidate", "LogisticsQueryPlannerV2LlmParser"]
+diff --git a/backend/app/domains/logistics/services/query_planner_v2/normalizer.py b/backend/app/domains/logistics/services/query_planner_v2/normalizer.py
+new file mode 100644
+index 0000000..9892513
+--- /dev/null
++++ b/backend/app/domains/logistics/services/query_planner_v2/normalizer.py
+@@ -0,0 +1,358 @@
++from __future__ import annotations
++
++import re
++from typing import Any
++
++from backend.app.domains.logistics.services.query_planner_v2.llm_parser import LogisticsQueryPlannerV2Candidate
++
++
++class LogisticsQueryPlannerV2Normalizer:
++    """物流 Query Planner V2 槽位归一化器。
++
++    业务逻辑：
++        1. LLM 只负责语义理解，输出可能包含口语化槽位；
++        2. 后端归一化器把年份、车型、始发地、目的地、指标口径收敛到受控值；
++        3. 未识别实体不静默改写，保留原值交给 Validator fail closed。
++    """
++
++    ROUTE_DEFAULT_QUERY_KEYS = {"hist_route_pricing_analysis", "hist_avg_fee_by_month"}
++
++    ORIGIN_ALIASES = {
++        "合肥": "合肥",
++        "安徽合肥": "合肥",
++        "阜宁": "阜宁",
++        "安徽阜宁": "阜宁",
++    }
++    CITY_ALIASES = {
++        "马鞍山": "马鞍山",
++        "马鞍山市": "马鞍山",
++        "南京": "南京",
++        "南京市": "南京",
++        "广州": "广州",
++        "广州市": "广州",
++    }
++    VEHICLE_ALIASES = {
++        "17.5": "17.5",
++        "17.5米": "17.5",
++        "17.5米车": "17.5",
++        "17.5车": "17.5",
++        "17米五": "17.5",
++        "17米五车": "17.5",
++        "十七米五": "17.5",
++        "十七米五车": "17.5",
++    }
++    METRIC_ALIASES = {
++        "平均运费": "avg_fee",
++        "均费": "avg_fee",
++        "平均每车多少钱": "avg_fee",
++        "avg_fee": "avg_fee",
++        "总运费": "total_fee",
++        "总费用": "total_fee",
++        "total_fee": "total_fee",
++        "车次数": "row_count",
++        "记录数": "row_count",
++        "row_count": "row_count",
++    }
++
++    def normalize(self, candidate_or_payload: LogisticsQueryPlannerV2Candidate | dict[str, Any], *, question: str) -> LogisticsQueryPlannerV2Candidate:
++        """归一化 LLM QueryPlan 候选。
++
++        参数：
++            candidate_or_payload: Parser 输出候选或测试/上游传入的 dict。
++            question: 原始问题，用于补充年份和趋势/对比语义。
++        返回：
++            归一后的候选，仍不代表可执行，必须继续 Validator 校验。
++        """
++
++        candidate = self._ensure_candidate(candidate_or_payload, question=question)
++        filters = self._normalize_filters(
++            candidate.filters,
++            candidate.time_range,
++            question=question,
++            query_key=candidate.query_key,
++        )
++        metrics = self._normalize_metrics(candidate.metrics, question=question)
++        aggregations = self._normalize_aggregations(candidate.aggregations, metrics=metrics, question=question)
++        compare_mode = self._normalize_compare_mode(candidate.compare_mode, question=question)
++        group_by = self._normalize_str_list(candidate.group_by)
++        dimensions = self._normalize_str_list(candidate.dimensions)
++        if compare_mode == "monthly_trend" and "month" not in group_by:
++            group_by.append("month")
++        if compare_mode == "year_compare" and "year" not in group_by:
++            group_by.append("year")
++
++        return candidate.model_copy(
++            update={
++                "normalized_question": candidate.normalized_question or question.strip(),
++                "query_key": self._normalize_query_key(candidate.query_key),
++                "filters": filters,
++                "metrics": metrics,
++                "dimensions": dimensions,
++                "group_by": group_by,
++                "aggregations": aggregations,
++                "compare_mode": compare_mode,
++                "time_range": self._normalize_time_range(candidate.time_range, filters),
++            },
++            deep=True,
++        )
++
++    def _ensure_candidate(self, value: LogisticsQueryPlannerV2Candidate | dict[str, Any], *, question: str) -> LogisticsQueryPlannerV2Candidate:
++        """把 dict 或候选对象统一成 Candidate。"""
++
++        if isinstance(value, LogisticsQueryPlannerV2Candidate):
++            return value
++        query_key = value.get("query_key")
++        if not query_key and isinstance(value.get("candidate_query_keys"), list) and value["candidate_query_keys"]:
++            query_key = value["candidate_query_keys"][0]
++        filters = value.get("filters") if isinstance(value.get("filters"), dict) else {}
++        time_range = value.get("time_range") if isinstance(value.get("time_range"), dict) else {}
++        return LogisticsQueryPlannerV2Candidate(
++            normalized_question=str(value.get("normalized_question") or question).strip(),
++            intent=str(value.get("intent") or "unknown"),
++            query_key=str(query_key).strip() if query_key else None,
++            filters=dict(filters),
++            metrics=self._normalize_str_list(value.get("metrics")),
++            dimensions=self._normalize_str_list(value.get("dimensions")),
++            group_by=self._normalize_str_list(value.get("group_by")),
++            aggregations=self._normalize_str_list(value.get("aggregations")),
++            compare_mode=str(value.get("compare_mode")).strip() if value.get("compare_mode") else None,
++            time_range=dict(time_range),
++            confidence=self._as_float(value.get("confidence"), default=0.0),
++            clarification_questions=self._normalize_str_list(value.get("clarification_questions")),
++            unsupported_reason=str(value.get("unsupported_reason")).strip() if value.get("unsupported_reason") else None,
++            provider_mode=str(value.get("provider_mode") or "live"),
++            provider_error=str(value.get("provider_error")).strip() if value.get("provider_error") else None,
++            raw_payload=dict(value),
++        )
++
++    def _normalize_filters(
++        self,
++        filters: dict[str, Any],
++        time_range: dict[str, Any],
++        *,
++        question: str,
++        query_key: str | None,
++    ) -> dict[str, Any]:
++        """归一化过滤槽位。"""
++
++        normalized = dict(filters)
++        years = self._normalize_years(normalized.get("years") or normalized.get("year") or time_range.get("years"), question=question)
++        if years:
++            normalized["years"] = years
++            normalized.pop("year", None)
++        if "origin_place" in normalized:
++            normalized["origin_place"] = self._normalize_origin(normalized["origin_place"])
++        if "city" in normalized:
++            normalized["city"] = self._normalize_city(normalized["city"])
++        if "province" in normalized:
++            normalized["province"] = self._normalize_province(normalized["province"])
++        if "vehicle_type" in normalized:
++            normalized["vehicle_type"] = self._normalize_vehicle_type(normalized["vehicle_type"])
++        if query_key in self.ROUTE_DEFAULT_QUERY_KEYS:
++            normalized["view_mode"] = self._normalize_view_mode(normalized.get("view_mode"), question=question)
++            normalized["price_metric"] = self._normalize_price_metric(normalized.get("price_metric"), question=question)
++        return {key: value for key, value in normalized.items() if value not in (None, "", [])}
++
++    def _normalize_time_range(self, time_range: dict[str, Any], filters: dict[str, Any]) -> dict[str, Any]:
++        """把 filters 中的年份同步到 time_range，方便审计。"""
++
++        normalized = dict(time_range)
++        if filters.get("years"):
++            normalized["years"] = list(filters["years"])
++        return normalized
++
++    @classmethod
++    def _normalize_years(cls, value: Any, *, question: str) -> list[int]:
++        """归一化年份列表；问题中显式多个年份时优先保留全部年份。"""
++
++        extracted_from_question = cls._extract_years_from_text(question)
++        raw_values: list[Any] = []
++        if isinstance(value, list):
++            raw_values.extend(value)
++        elif value is not None:
++            raw_values.append(value)
++        years: list[int] = []
++        for item in raw_values:
++            if isinstance(item, int):
++                years.append(item)
++                continue
++            years.extend(cls._extract_years_from_text(str(item)))
++        if len(extracted_from_question) > len(set(years)):
++            years = extracted_from_question
++        elif not years:
++            years = extracted_from_question
++        return cls._dedupe_ints(years)
++
++    @staticmethod
++    def _extract_years_from_text(text: str) -> list[int]:
++        """从中文问题中抽取 2023-2026 或 23/24/25/26 年。"""
++
++        years: list[int] = []
++        for match in re.findall(r"20(?:2[3-6])", text):
++            years.append(int(match))
++        for match in re.findall(r"(?<!\d)(2[3-6])\s*年", text):
++            years.append(2000 + int(match))
++        return LogisticsQueryPlannerV2Normalizer._dedupe_ints(years)
++
++    @staticmethod
++    def _dedupe_ints(values: list[int]) -> list[int]:
++        """保持顺序去重整数列表。"""
++
++        result: list[int] = []
++        seen: set[int] = set()
++        for value in values:
++            if value not in seen:
++                seen.add(value)
++                result.append(value)
++        return result
++
++    @classmethod
++    def _normalize_origin(cls, value: Any) -> str:
++        """归一化受控始发地；未知值原样返回给 Validator。"""
++
++        text = str(value).strip().replace(" ", "")
++        return cls.ORIGIN_ALIASES.get(text, text)
++
++    @classmethod
++    def _normalize_city(cls, value: Any) -> str:
++        """归一化目的城市；未知城市只去掉末尾“市”，再交给 Validator。"""
++
++        text = str(value).strip().replace(" ", "")
++        if text in cls.CITY_ALIASES:
++            return cls.CITY_ALIASES[text]
++        return text[:-1] if text.endswith("市") else text
++
++    @staticmethod
++    def _normalize_province(value: Any) -> str:
++        """归一化省份名称。"""
++
++        text = str(value).strip().replace(" ", "")
++        return text[:-1] if text.endswith("省") else text
++
++    @classmethod
++    def _normalize_vehicle_type(cls, value: Any) -> str:
++        """归一化车型表达。"""
++
++        text = str(value).strip().replace(" ", "")
++        if text in cls.VEHICLE_ALIASES:
++            return cls.VEHICLE_ALIASES[text]
++        if re.search(r"17(?:\.5|米五|米5|\.5米|\.5米车|\.5车)", text):
++            return "17.5"
++        return text
++
++    @classmethod
++    def _normalize_metrics(cls, values: list[str], *, question: str) -> list[str]:
++        """归一化指标槽位。"""
++
++        normalized = [cls.METRIC_ALIASES.get(str(item).strip(), str(item).strip()) for item in values if str(item).strip()]
++        if not normalized:
++            compact = "".join(question.split())
++            if any(keyword in compact for keyword in ("平均运费", "均费", "平均多少钱", "平均每车")):
++                normalized.append("avg_fee")
++            if any(keyword in compact for keyword in ("总运费", "总费用")):
++                normalized.append("total_fee")
++        if "avg_fee" in normalized and "row_count" not in normalized:
++            normalized.append("row_count")
++        return cls._dedupe_strs(normalized)
++
++    @staticmethod
++    def _normalize_aggregations(values: list[str], *, metrics: list[str], question: str) -> list[str]:
++        """归一化聚合算子。"""
++
++        mapping = {"average": "avg", "mean": "avg", "avg": "avg", "sum": "sum", "count": "count"}
++        normalized = [mapping.get(str(item).strip().lower(), str(item).strip().lower()) for item in values if str(item).strip()]
++        compact = "".join(question.split())
++        if not normalized and ("avg_fee" in metrics or any(keyword in compact for keyword in ("平均", "均费"))):
++            normalized.append("avg")
++        return LogisticsQueryPlannerV2Normalizer._dedupe_strs(normalized)
++
++    @staticmethod
++    def _normalize_compare_mode(value: str | None, *, question: str) -> str | None:
++        """归一化对比/趋势模式。"""
++
++        compact = "".join(question.split())
++        if value:
++            raw = value.strip().lower()
++            mapping = {
++                "yearly_compare": "year_compare",
++                "year_compare": "year_compare",
++                "month_trend": "monthly_trend",
++                "monthly_trend": "monthly_trend",
++                "month_over_month": "month_over_month",
++                "year_over_year": "year_over_year",
++                "none": "none",
++            }
++            return mapping.get(raw, raw)
++        if "月度趋势" in compact or "按月" in compact:
++            return "monthly_trend"
++        if "对比" in compact and len(LogisticsQueryPlannerV2Normalizer._extract_years_from_text(compact)) >= 2:
++            return "year_compare"
++        return None
++
++    @staticmethod
++    def _normalize_view_mode(value: Any, *, question: str) -> str:
++        """归一化运价视图模式。"""
++
++        text = str(value).strip() if value is not None else ""
++        compact = "".join(question.split())
++        if text in {"avg_fee", "average_fee", "均费", "平均运费"}:
++            return "avg_fee"
++        if text in {"monthly_trend", "month_trend", "月度趋势"} or "月度趋势" in compact or "按月" in compact:
++            return "monthly_trend"
++        if any(keyword in compact for keyword in ("平均", "均费", "平均多少钱")):
++            return "avg_fee"
++        return text or "avg_fee"
++
++    @staticmethod
++    def _normalize_price_metric(value: Any, *, question: str) -> str:
++        """归一化价格口径。"""
++
++        text = str(value).strip() if value is not None else ""
++        if text in {"total_fee", "总费用", "总运费", "运费"}:
++            return "total_fee"
++        if text in {"unit_price_per_vehicle", "单价/车", "报价", "运价"}:
++            return "unit_price_per_vehicle"
++        if "报价" in question or "单价" in question:
++            return "unit_price_per_vehicle"
++        return text or "total_fee"
++
++    @staticmethod
++    def _normalize_query_key(value: str | None) -> str | None:
++        """清理 query_key 空白。"""
++
++        return value.strip() if isinstance(value, str) and value.strip() else None
++
++    @staticmethod
++    def _normalize_str_list(value: Any) -> list[str]:
++        """把任意值转成字符串列表。"""
++
++        if value is None:
++            return []
++        if isinstance(value, list):
++            return [str(item).strip() for item in value if str(item).strip()]
++        text = str(value).strip()
++        return [text] if text else []
++
++    @staticmethod
++    def _dedupe_strs(values: list[str]) -> list[str]:
++        """保持顺序去重字符串。"""
++
++        result: list[str] = []
++        seen: set[str] = set()
++        for value in values:
++            if value and value not in seen:
++                seen.add(value)
++                result.append(value)
++        return result
++
++    @staticmethod
++    def _as_float(value: Any, *, default: float) -> float:
++        """安全转换 float。"""
++
++        try:
++            return float(value)
++        except (TypeError, ValueError):
++            return default
++
++
++__all__ = ["LogisticsQueryPlannerV2Normalizer"]
+diff --git a/backend/app/domains/logistics/services/query_planner_v2/planner.py b/backend/app/domains/logistics/services/query_planner_v2/planner.py
+new file mode 100644
+index 0000000..0616018
+--- /dev/null
++++ b/backend/app/domains/logistics/services/query_planner_v2/planner.py
+@@ -0,0 +1,139 @@
++from __future__ import annotations
++
++from backend.app.core.config import settings
++from backend.app.domains.logistics.services.query_planner_v2.capability_registry import (
++    LogisticsQueryPlannerV2CapabilityRegistry,
++)
++from backend.app.domains.logistics.services.query_planner_v2.fallback import LogisticsQueryPlannerV2Fallback
++from backend.app.domains.logistics.services.query_planner_v2.legacy_adapter import LogisticsQueryPlannerV2LegacyAdapter
++from backend.app.domains.logistics.services.query_planner_v2.llm_parser import LogisticsQueryPlannerV2LlmParser
++from backend.app.domains.logistics.services.query_planner_v2.normalizer import LogisticsQueryPlannerV2Normalizer
++from backend.app.domains.logistics.services.query_planner_v2.prompt_builder import LogisticsQueryPlannerV2PromptBuilder
++from backend.app.domains.logistics.services.query_planner_v2.validator import LogisticsQueryPlannerV2Validator
++from backend.app.domains.query_planning.schemas.query_plan_v2 import QueryPlanningV2Plan
++
++
++class LogisticsQueryPlannerV2:
++    """物流领域 Query Planner V2 编排器。
++
++    业务逻辑：
++        1. 自然语言问题先交给 LLM 生成 QueryPlan 候选；
++        2. 后端归一化和 Validator 做白名单/字段/时间/B/C 边界校验；
++        3. 校验通过只生成 shadow QueryPlanningV2Plan，不替换正式物流 QA；
++        4. 任何不可用或校验失败都回退旧 planner。
++    """
++
++    def __init__(
++        self,
++        *,
++        enabled: bool | None = None,
++        mode: str | None = None,
++        min_confidence: float | None = None,
++        allowed_query_keys: list[str] | None = None,
++        registry: LogisticsQueryPlannerV2CapabilityRegistry | None = None,
++        prompt_builder: LogisticsQueryPlannerV2PromptBuilder | None = None,
++        llm_parser: LogisticsQueryPlannerV2LlmParser | object | None = None,
++        normalizer: LogisticsQueryPlannerV2Normalizer | None = None,
++        validator: LogisticsQueryPlannerV2Validator | None = None,
++        legacy_adapter: LogisticsQueryPlannerV2LegacyAdapter | None = None,
++        fallback: LogisticsQueryPlannerV2Fallback | None = None,
++    ) -> None:
++        """初始化 Query Planner V2 编排器。
++
++        参数：
++            enabled/mode/min_confidence/allowed_query_keys: 灰度配置；默认读取 settings。
++            registry/prompt_builder/llm_parser/normalizer/validator: 可注入组件，便于 TDD。
++            legacy_adapter/fallback: 与旧 planner 的适配和回退组件。
++        返回：无。
++        """
++
++        self.enabled = settings.logistics_query_planner_v2_enabled if enabled is None else enabled
++        self.mode = self._normalize_mode(mode if mode is not None else settings.logistics_query_planner_v2_mode)
++        self.registry = registry or LogisticsQueryPlannerV2CapabilityRegistry()
++        configured_allowed = allowed_query_keys if allowed_query_keys is not None else settings.logistics_query_planner_v2_allowed_query_keys
++        registry_keys = sorted(self.registry.allowed_query_keys())
++        self.config_errors: list[str] = []
++        if configured_allowed:
++            self.allowed_query_keys = [key for key in configured_allowed if key in self.registry.allowed_query_keys()]
++            if not self.allowed_query_keys:
++                self.config_errors.append("allowed_query_keys_no_valid_entries")
++        else:
++            self.allowed_query_keys = registry_keys
++        self.min_confidence = (
++            settings.logistics_query_planner_v2_min_confidence if min_confidence is None else min_confidence
++        )
++        self.prompt_builder = prompt_builder or LogisticsQueryPlannerV2PromptBuilder()
++        self.llm_parser = llm_parser or LogisticsQueryPlannerV2LlmParser(enabled=self.enabled)
++        self.normalizer = normalizer or LogisticsQueryPlannerV2Normalizer()
++        self.validator = validator or LogisticsQueryPlannerV2Validator(
++            registry=self.registry,
++            min_confidence=self.min_confidence,
++            allowed_query_keys=set(self.allowed_query_keys),
++        )
++        self.legacy_adapter = legacy_adapter or LogisticsQueryPlannerV2LegacyAdapter()
++        self.fallback = fallback or LogisticsQueryPlannerV2Fallback()
++
++    def should_use(self) -> bool:
++        """判断是否进入 V2 LLM 候选流程。"""
++
++        return bool(self.enabled and self.mode in {"shadow", "assist"} and not self.config_errors)
++
++    def build_shadow_plan(self, question: str, *, trace_id: str | None = None) -> QueryPlanningV2Plan:
++        """构建物流 Query Planner V2 shadow 计划。
++
++        参数：
++            question: 用户原始问题。
++            trace_id: 请求追踪号。
++        返回：
++            QueryPlanningV2Plan；校验失败时为旧 planner fallback 快照。
++        """
++
++        if not self.enabled or self.mode not in {"shadow", "assist"}:
++            return self.fallback.to_query_plan(question=question, trace_id=trace_id, reason="llm_disabled")
++        if self.config_errors:
++            return self.fallback.to_query_plan(
++                question=question,
++                trace_id=trace_id,
++                reason="config_invalid::" + ";".join(self.config_errors),
++            )
++
++        system_prompt = self.prompt_builder.build_system_prompt(self.registry, allowed_query_keys=self.allowed_query_keys)
++        user_prompt = self.prompt_builder.build_user_prompt(question)
++        candidate = self.llm_parser.parse(
++            question=question,
++            system_prompt=system_prompt,
++            user_prompt=user_prompt,
++            allowed_query_keys=list(self.allowed_query_keys),
++        )
++        if candidate.provider_mode != "live":
++            reason = candidate.provider_error or f"llm_not_live::{candidate.provider_mode}"
++            return self.fallback.to_query_plan(question=question, trace_id=trace_id, reason=reason)
++
++        normalized_candidate = self.normalizer.normalize(candidate, question=question)
++        validation = self.validator.validate(normalized_candidate, original_question=question)
++        if not validation.accepted:
++            return self.fallback.to_query_plan(
++                question=question,
++                trace_id=trace_id,
++                reason="validation_failed::" + ";".join(validation.errors),
++            )
++
++        legacy_rule_plan = self.fallback.build_legacy_plan(question)
++        return self.legacy_adapter.to_query_plan(
++            candidate=normalized_candidate,
++            validation=validation,
++            original_question=question,
++            trace_id=trace_id,
++            legacy_rule_plan=legacy_rule_plan,
++            mode=self.mode,
++        )
++
++    @staticmethod
++    def _normalize_mode(value: str | None) -> str:
++        """归一化模式配置。"""
++
++        normalized = (value or "off").strip().lower()
++        return normalized if normalized in {"off", "shadow", "assist"} else "off"
++
++
++__all__ = ["LogisticsQueryPlannerV2"]
+diff --git a/backend/app/domains/logistics/services/query_planner_v2/prompt_builder.py b/backend/app/domains/logistics/services/query_planner_v2/prompt_builder.py
+new file mode 100644
+index 0000000..7b2589b
+--- /dev/null
++++ b/backend/app/domains/logistics/services/query_planner_v2/prompt_builder.py
+@@ -0,0 +1,75 @@
++from __future__ import annotations
++
++import json
++
++from backend.app.domains.logistics.services.query_planner_v2.capability_registry import (
++    LogisticsQueryPlannerV2CapabilityRegistry,
++)
++
++
++class LogisticsQueryPlannerV2PromptBuilder:
++    """构造物流 Query Planner V2 的受控 LLM prompt。
++
++    业务逻辑：Prompt 只允许模型输出 JSON QueryPlan 候选，明确禁止 SQL、查库和最终数值计算。
++    """
++
++    FORBIDDEN_FIELDS = (
++        "sql",
++        "where",
++        "where_clause",
++        "database",
++        "table_name",
++        "answer",
++        "computed_value",
++        "python_code",
++        "tool_call",
++    )
++
++    def build_system_prompt(
++        self,
++        registry: LogisticsQueryPlannerV2CapabilityRegistry,
++        allowed_query_keys: list[str] | set[str] | None = None,
++    ) -> str:
++        """生成系统提示词。
++
++        参数：
++            registry: query_key 能力注册表。
++            allowed_query_keys: 配置层允许进入 prompt 的 query_key 子集。
++        返回：
++            包含白名单和安全边界的中文系统提示词。
++        """
++
++        capabilities_json = json.dumps(registry.prompt_payload(allowed_query_keys), ensure_ascii=False, indent=2)
++        forbidden = ", ".join(self.FORBIDDEN_FIELDS)
++        lines = [
++            "你是物流 QA 的查询规划器，不是数据查询器。",
++            "你的唯一任务是把业务员自然语言问题理解成受控 JSON QueryPlan 候选。",
++            "安全边界：",
++            "1. 不能生成 SQL，不能输出 SQL 片段或 where 条件。",
++            "2. 不能查数据库，不能调用任何工具，不能读取表。",
++            "3. 不能计算业务数值，不能编造平均运费、总费用、车次数等答案。",
++            "4. 只能从后端提供的 query_key 白名单中选择，不能发明 query_key。",
++            "5. 槽位不足时必须输出 clarification_questions。",
++            "6. 超出能力边界时必须输出 unsupported_reason。",
++            "7. 输出必须是严格 JSON，不能有 markdown、解释文字或多余前后缀。",
++            f"8. JSON 中禁止出现这些字段名：{forbidden}。一旦出现后端会 fail closed。",
++            "可选 query_key 能力白名单：",
++            capabilities_json,
++            "输出 JSON 字段：intent, query_key, filters, metrics, dimensions, group_by, aggregations, compare_mode, time_range, confidence, clarification_questions, unsupported_reason, normalized_question。",
++            "线路表达归一提示：合肥发/至/到/运到/往马鞍山发 都表示 origin_place=合肥, city=马鞍山；17米五车/17.5米车/17.5车 都表示 vehicle_type=17.5。",
++        ]
++        return "\n".join(lines)
++
++    def build_user_prompt(self, question: str) -> str:
++        """生成用户提示词。
++
++        参数：
++            question: 原始业务问题。
++        返回：
++            要求模型输出 JSON QueryPlan 的用户提示。
++        """
++
++        return f"原始问题：{question}\n请只返回一个严格 JSON QueryPlan 候选。"
++
++
++__all__ = ["LogisticsQueryPlannerV2PromptBuilder"]
+diff --git a/backend/app/domains/logistics/services/query_planner_v2/validator.py b/backend/app/domains/logistics/services/query_planner_v2/validator.py
+new file mode 100644
+index 0000000..fff3f8c
+--- /dev/null
++++ b/backend/app/domains/logistics/services/query_planner_v2/validator.py
+@@ -0,0 +1,289 @@
++from __future__ import annotations
++
++import re
++from dataclasses import dataclass, field
++from typing import Any
++
++from backend.app.domains.logistics.services.query_planner_v2.capability_registry import (
++    LogisticsQueryPlannerV2CapabilityRegistry,
++)
++from backend.app.domains.logistics.services.query_planner_v2.llm_parser import (
++    LogisticsQueryPlannerV2Candidate,
++    LogisticsQueryPlannerV2LlmParser,
++)
++
++
++@dataclass
++class LogisticsQueryPlannerV2ValidationResult:
++    """物流 Query Planner V2 校验结果。
++
++    参数：
++        accepted: 是否允许进入 shadow deterministic plan。
++        candidate: 归一后的候选。
++        errors: 阻断原因列表。
++        warnings: 非阻断提示。
++    返回：
++        Validator 对 LLM 候选的完整裁决。
++    """
++
++    accepted: bool
++    candidate: LogisticsQueryPlannerV2Candidate
++    errors: list[str] = field(default_factory=list)
++    warnings: list[str] = field(default_factory=list)
++
++
++class LogisticsQueryPlannerV2Validator:
++    """物流 Query Planner V2 后端确定性校验器。
++
++    业务逻辑：
++        1. 以 Capability Registry 为唯一白名单；
++        2. 校验字段、指标、维度、聚合、时间范围和实体归一化；
++        3. B/C 类边界和危险字段一律 fail closed，不允许 LLM 反向放行。
++    """
++
++    ALLOWED_ORIGINS = {"合肥", "阜宁"}
++    # 目的城市不要求穷举全业务城市，但当前 MVP 测试线路必须可识别马鞍山。
++    KNOWN_ROUTE_CITIES = {"马鞍山", "南京", "广州"}
++    ALLOWED_VEHICLE_TYPES = {"17.5", "13", "9.6", "4.2"}
++
++    def __init__(
++        self,
++        *,
++        registry: LogisticsQueryPlannerV2CapabilityRegistry | None = None,
++        min_confidence: float = 0.9,
++        allowed_query_keys: set[str] | list[str] | None = None,
++    ) -> None:
++        """初始化校验器。
++
++        参数：
++            registry: query_key 能力注册表。
++            min_confidence: 允许放行的最低 LLM 置信度。
++            allowed_query_keys: 可选配置层 query_key 白名单。
++        返回：无。
++        """
++
++        self.registry = registry or LogisticsQueryPlannerV2CapabilityRegistry()
++        self.min_confidence = min_confidence
++        self.allowed_query_keys = set(allowed_query_keys or [])
++
++    def validate(self, candidate: LogisticsQueryPlannerV2Candidate, *, original_question: str) -> LogisticsQueryPlannerV2ValidationResult:
++        """校验 LLM QueryPlan 候选。
++
++        参数：
++            candidate: 归一后的 QueryPlan 候选。
++            original_question: 用户原始问题，用于 B/C 边界和多段路径识别。
++        返回：
++            accepted=false 时必须走 fallback 或澄清，不能执行。
++        """
++
++        errors: list[str] = []
++        warnings: list[str] = []
++
++        if candidate.provider_mode != "live":
++            errors.append(f"llm_not_live::{candidate.provider_mode}")
++        forbidden = LogisticsQueryPlannerV2LlmParser._find_forbidden_fields(candidate.raw_payload)
++        for field_name in sorted(forbidden):
++            errors.append(f"forbidden_field::{field_name}")
++        if candidate.unsupported_reason:
++            errors.append("llm_requested_unsupported")
++        if candidate.clarification_questions:
++            errors.append("llm_requested_clarification")
++        if not 0.0 <= self.min_confidence <= 1.0:
++            errors.append(f"config_invalid::min_confidence_range::{self.min_confidence:.3f}")
++        if not 0.0 <= candidate.confidence <= 1.0:
++            errors.append(f"invalid_confidence_range::{candidate.confidence:.3f}")
++        elif candidate.confidence < self.min_confidence:
++            errors.append(f"low_confidence::{candidate.confidence:.3f}<{self.min_confidence:.3f}")
++        if self._is_policy_locked_question(original_question) or self._is_policy_locked_question(candidate.normalized_question):
++            errors.append("policy_locked::bc_boundary")
++
++        capability = self.registry.get(candidate.query_key)
++        if capability is None:
++            errors.append(f"unknown_query_key::{candidate.query_key}")
++        elif self.allowed_query_keys and candidate.query_key not in self.allowed_query_keys:
++            errors.append(f"query_key_not_allowed_by_config::{candidate.query_key}")
++
++        if capability is not None:
++            self._validate_filters(candidate, capability, errors)
++            self._validate_collection("metric", candidate.metrics, capability.allowed_metrics, errors)
++            self._validate_collection("dimension", candidate.dimensions, capability.allowed_dimensions, errors)
++            self._validate_collection("group_by", candidate.group_by, capability.allowed_group_by, errors)
++            self._validate_collection("aggregation", candidate.aggregations, capability.allowed_aggregations, errors)
++            if candidate.compare_mode and candidate.compare_mode not in capability.allowed_compare_modes:
++                errors.append(f"compare_mode_not_allowed::{candidate.compare_mode}")
++            self._validate_question_years(candidate, capability.time_scope, original_question, errors)
++            self._validate_time_scope(candidate, capability.time_scope, errors)
++            self._validate_normalized_entities(candidate, errors)
++
++        if self._has_multi_hop_route(original_question):
++            errors.append("multi_hop_route_requires_clarification")
++
++        return LogisticsQueryPlannerV2ValidationResult(
++            accepted=not errors,
++            candidate=candidate,
++            errors=self._dedupe(errors),
++            warnings=warnings,
++        )
++
++    def _validate_filters(self, candidate: LogisticsQueryPlannerV2Candidate, capability: Any, errors: list[str]) -> None:
++        """校验过滤字段白名单和必填槽位。"""
++
++        for key in candidate.filters:
++            if key not in capability.allowed_filters:
++                errors.append(f"filter_not_allowed::{key}")
++        for key in sorted(capability.required_filters):
++            if candidate.filters.get(key) in (None, "", []):
++                errors.append(f"missing_required_filter::{key}")
++        for group in capability.required_any_filters:
++            if not any(candidate.filters.get(key) not in (None, "", []) for key in group):
++                joined = "|".join(sorted(group))
++                errors.append(f"missing_required_any_filter::{joined}")
++
++    @staticmethod
++    def _validate_collection(label: str, values: list[str], allowed: set[str], errors: list[str]) -> None:
++        """校验指标/维度/分组/聚合是否在白名单内。"""
++
++        for value in values:
++            if value not in allowed:
++                errors.append(f"{label}_not_allowed::{value}")
++
++    @classmethod
++    def _validate_question_years(
++        cls,
++        candidate: LogisticsQueryPlannerV2Candidate,
++        time_scope: str,
++        original_question: str,
++        errors: list[str],
++    ) -> None:
++        """用原始问题中的显式年份反校验 LLM 候选，防止年份被候选改写绕过。"""
++
++        question_years = cls._extract_years_from_text(original_question)
++        if not question_years:
++            return
++        candidate_years = cls._extract_candidate_years(candidate)
++        if set(candidate_years) != set(question_years):
++            errors.append("question_candidate_years_conflict")
++        if time_scope == "historical_2023_2025" and any(year < 2023 or year > 2025 for year in question_years):
++            errors.append("time_scope_mismatch::question_historical_2023_2025")
++        if 2026 in question_years and any(year <= 2025 for year in question_years):
++            errors.append("time_scope_mismatch::question_historical_system_mixed")
++
++    @classmethod
++    def _extract_candidate_years(cls, candidate: LogisticsQueryPlannerV2Candidate) -> list[int]:
++        """从候选 filters/time_range 中抽取年份，用于和原始问题做一致性比对。"""
++
++        raw_years = candidate.filters.get("years") or candidate.time_range.get("years") or []
++        if not isinstance(raw_years, list):
++            raw_years = [raw_years]
++        years: list[int] = []
++        for item in raw_years:
++            try:
++                years.append(int(item))
++            except (TypeError, ValueError):
++                years.extend(cls._extract_years_from_text(str(item)))
++        return cls._dedupe_ints(years)
++
++    @staticmethod
++    def _extract_years_from_text(text: str) -> list[int]:
++        """从用户问题或 LLM 字符串槽位中抽取四位/两位年份。"""
++
++        years: list[int] = []
++        for match in re.findall(r"20\d{2}", text or ""):
++            years.append(int(match))
++        for match in re.findall(r"(?<!\d)(2\d)\s*年", text or ""):
++            years.append(2000 + int(match))
++        return LogisticsQueryPlannerV2Validator._dedupe_ints(years)
++
++    @staticmethod
++    def _dedupe_ints(values: list[int]) -> list[int]:
++        """保持顺序去重年份。"""
++
++        result: list[int] = []
++        seen: set[int] = set()
++        for value in values:
++            if value not in seen:
++                seen.add(value)
++                result.append(value)
++        return result
++
++    @staticmethod
++    def _validate_time_scope(candidate: LogisticsQueryPlannerV2Candidate, time_scope: str, errors: list[str]) -> None:
++        """校验历史台账和 2026 系统数据不能误混。"""
++
++        allowed_time_range_keys = {"years", "months", "source_scope", "time_scope"}
++        for key in candidate.time_range:
++            if key not in allowed_time_range_keys:
++                errors.append(f"time_range_key_not_allowed::{key}")
++        for scope_key in ("source_scope", "time_scope"):
++            declared_scope = candidate.time_range.get(scope_key)
++            if declared_scope and str(declared_scope).strip() != time_scope:
++                errors.append(f"time_scope_mismatch::{scope_key}::{declared_scope}")
++
++        years = candidate.filters.get("years") or candidate.time_range.get("years") or []
++        if not isinstance(years, list):
++            years = [years]
++        normalized_years: list[int] = []
++        for item in years:
++            try:
++                normalized_years.append(int(item))
++            except (TypeError, ValueError):
++                errors.append(f"invalid_year::{item}")
++        if time_scope == "historical_2023_2025" and any(year < 2023 or year > 2025 for year in normalized_years):
++            errors.append("time_scope_mismatch::historical_2023_2025")
++        if 2026 in normalized_years and any(year <= 2025 for year in normalized_years):
++            errors.append("time_scope_mismatch::historical_system_mixed")
++
++    def _validate_normalized_entities(self, candidate: LogisticsQueryPlannerV2Candidate, errors: list[str]) -> None:
++        """校验始发地、目的地、车型是否已经归一到受控表达。"""
++
++        origin = candidate.filters.get("origin_place")
++        if origin and origin not in self.ALLOWED_ORIGINS:
++            errors.append(f"origin_not_normalized::{origin}")
++        city = candidate.filters.get("city")
++        if city and (not isinstance(city, str) or "到" in city or "至" in city or city not in self.KNOWN_ROUTE_CITIES):
++            errors.append(f"city_not_normalized::{city}")
++        vehicle_type = candidate.filters.get("vehicle_type")
++        if vehicle_type and vehicle_type not in self.ALLOWED_VEHICLE_TYPES:
++            errors.append(f"vehicle_type_not_normalized::{vehicle_type}")
++
++    @staticmethod
++    def _is_policy_locked_question(question: str) -> bool:
++        """识别不能被 LLM 反向放行的 B/C 边界问题。"""
++
++        compact = "".join(question.split())
++        locked_keywords = (
++            "预测未来",
++            "未来三个月",
++            "未来一个月",
++            "到货时间",
++            "ETA",
++            "原因是什么",
++            "什么原因",
++            "方案设计",
++            "评分模型",
++        )
++        return any(keyword in compact for keyword in locked_keywords)
++
++    @staticmethod
++    def _has_multi_hop_route(question: str) -> bool:
++        """识别多段路径；当前 MVP 只支持单始发地到单目的地。"""
++
++        compact = "".join(question.split())
++        route_part = re.sub(r"^.*?年", "", compact)
++        connector_count = len(re.findall(r"(至|到|->|→)", route_part))
++        return connector_count >= 2
++
++    @staticmethod
++    def _dedupe(values: list[str]) -> list[str]:
++        """保持顺序去重。"""
++
++        result: list[str] = []
++        seen: set[str] = set()
++        for value in values:
++            if value not in seen:
++                seen.add(value)
++                result.append(value)
++        return result
++
++
++__all__ = ["LogisticsQueryPlannerV2ValidationResult", "LogisticsQueryPlannerV2Validator"]
+diff --git a/tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py b/tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py
+new file mode 100644
+index 0000000..6381f28
+--- /dev/null
++++ b/tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py
+@@ -0,0 +1,434 @@
++from __future__ import annotations
++
++import json
++from typing import Any
++
++from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
++from backend.app.domains.logistics.services.query_planner_v2.capability_registry import (
++    LogisticsQueryPlannerV2CapabilityRegistry,
++)
++from backend.app.domains.logistics.services.query_planner_v2.fallback import LogisticsQueryPlannerV2Fallback
++from backend.app.domains.logistics.services.query_planner_v2.legacy_adapter import LogisticsQueryPlannerV2LegacyAdapter
++from backend.app.domains.logistics.services.query_planner_v2.llm_parser import LogisticsQueryPlannerV2LlmParser
++from backend.app.domains.logistics.services.query_planner_v2.normalizer import LogisticsQueryPlannerV2Normalizer
++from backend.app.domains.logistics.services.query_planner_v2.planner import LogisticsQueryPlannerV2
++from backend.app.domains.logistics.services.query_planner_v2.prompt_builder import LogisticsQueryPlannerV2PromptBuilder
++from backend.app.domains.logistics.services.query_planner_v2.validator import LogisticsQueryPlannerV2Validator
++
++
++class _FakeLlmParser:
++    """测试用 LLM Parser：按问题返回固定 QueryPlan 候选，不触发真实外部调用。"""
++
++    def __init__(self, payload_by_question: dict[str, dict[str, Any]]) -> None:
++        self.payload_by_question = payload_by_question
++        self.calls: list[dict[str, Any]] = []
++
++    def parse(self, *, question: str, system_prompt: str, user_prompt: str, allowed_query_keys: list[str]):
++        self.calls.append(
++            {
++                "question": question,
++                "system_prompt": system_prompt,
++                "user_prompt": user_prompt,
++                "allowed_query_keys": allowed_query_keys,
++            }
++        )
++        parser = LogisticsQueryPlannerV2LlmParser(enabled=True, client=None)
++        payload = self.payload_by_question[question]
++        return parser.parse_text(json.dumps(payload, ensure_ascii=False), question=question)
++
++
++class _FakeLegacyPlanner:
++    """测试用旧 planner：用于验证 fallback 不查数，只回退到旧受控 plan。"""
++
++    def __init__(self, plan: LogisticsDataQaPlan) -> None:
++        self.plan = plan
++        self.questions: list[str] = []
++
++    def build_plan(self, question: str) -> LogisticsDataQaPlan:
++        self.questions.append(question)
++        return self.plan
++
++
++def _route_payload(question: str, **overrides: Any) -> dict[str, Any]:
++    """构造路线运价 QueryPlan 候选。"""
++    payload: dict[str, Any] = {
++        "intent": "aggregate",
++        "query_key": "hist_route_pricing_analysis",
++        "filters": {
++            "years": [2025],
++            "origin_place": "合肥",
++            "city": "马鞍山",
++            "vehicle_type": "17.5",
++            "view_mode": "avg_fee",
++            "price_metric": "total_fee",
++        },
++        "metrics": ["avg_fee", "row_count"],
++        "dimensions": [],
++        "group_by": [],
++        "aggregations": ["avg"],
++        "compare_mode": None,
++        "time_range": {"years": [2025]},
++        "confidence": 0.95,
++        "clarification_questions": [],
++        "unsupported_reason": None,
++        "normalized_question": question,
++    }
++    for key, value in overrides.items():
++        if key == "filters":
++            payload["filters"] = {**payload["filters"], **value}
++        else:
++            payload[key] = value
++    return payload
++
++
++def test_capability_registry_declares_mvp_query_keys_and_route_pricing_contract() -> None:
++    """能力表必须覆盖首批 MVP query_key，并声明路线运价可执行白名单。"""
++    registry = LogisticsQueryPlannerV2CapabilityRegistry()
++
++    assert registry.allowed_query_keys() >= {
++        "hist_route_pricing_analysis",
++        "hist_total_fee_city_rank",
++        "hist_avg_fee_by_month",
++        "hist_carrier_kpi_by_year",
++    }
++    capability = registry.get("hist_route_pricing_analysis")
++    assert capability is not None
++    assert capability.allow_assist is True
++    assert capability.time_scope == "historical_2023_2025"
++    assert capability.executable_service == "LogisticsDataQaService.hist_route_pricing_analysis"
++    assert {"years", "origin_place", "vehicle_type", "view_mode", "price_metric"} <= capability.required_filters
++    assert {"city", "province"} in capability.required_any_filters
++    assert {"avg_fee", "total_fee", "row_count"} <= capability.allowed_metrics
++    assert {"avg", "count"} <= capability.allowed_aggregations
++
++
++def test_prompt_builder_contains_safety_contract_and_allowed_query_keys() -> None:
++    """Prompt 必须声明 LLM 只做规划，禁止 SQL/查库/计算答案。"""
++    prompt = LogisticsQueryPlannerV2PromptBuilder().build_system_prompt(LogisticsQueryPlannerV2CapabilityRegistry())
++
++    assert "查询规划器" in prompt
++    assert "不能生成 SQL" in prompt
++    assert "不能查数据库" in prompt
++    assert "不能计算业务数值" in prompt
++    assert "严格 JSON" in prompt
++    assert "hist_route_pricing_analysis" in prompt
++    for forbidden in ("where_clause", "table_name", "answer", "computed_value", "python_code", "tool_call"):
++        assert forbidden in prompt
++
++
++def test_prompt_builder_respects_configured_query_key_subset() -> None:
++    """Prompt 能力表应按灰度 query_key 裁剪，避免诱导 LLM 选择未放行能力。"""
++    prompt = LogisticsQueryPlannerV2PromptBuilder().build_system_prompt(
++        LogisticsQueryPlannerV2CapabilityRegistry(),
++        allowed_query_keys=["hist_route_pricing_analysis"],
++    )
++
++    assert "hist_route_pricing_analysis" in prompt
++    assert "hist_carrier_kpi_by_year" not in prompt
++    assert "hist_total_fee_city_rank" not in prompt
++
++
++def test_non_route_capability_does_not_receive_route_only_default_filters() -> None:
++    """非线路运价 query_key 不应被注入 view_mode/price_metric 这类线路专属默认槽位。"""
++    normalizer = LogisticsQueryPlannerV2Normalizer()
++    validator = LogisticsQueryPlannerV2Validator(registry=LogisticsQueryPlannerV2CapabilityRegistry())
++    payload = {
++        "intent": "aggregate",
++        "query_key": "hist_total_fee_city_rank",
++        "filters": {"years": [2025], "province": "江苏省"},
++        "metrics": ["total_fee", "row_count"],
++        "dimensions": ["city", "province"],
++        "group_by": ["city"],
++        "aggregations": ["sum", "count"],
++        "compare_mode": "none",
++        "time_range": {"years": [2025]},
++        "confidence": 0.95,
++        "clarification_questions": [],
++        "unsupported_reason": None,
++        "normalized_question": "2025年江苏省城市总费用排名",
++    }
++
++    candidate = normalizer.normalize(payload, question="2025年江苏省城市总费用排名")
++    validation = validator.validate(candidate, original_question="2025年江苏省城市总费用排名")
++
++    assert "view_mode" not in candidate.filters
++    assert "price_metric" not in candidate.filters
++    assert candidate.filters["province"] == "江苏"
++    assert validation.accepted, validation.errors
++
++
++def test_llm_parser_accepts_strict_json_and_fail_closes_forbidden_payload() -> None:
++    """Parser 只接受严格 JSON，遇到 SQL / answer / computed_value 等危险字段必须 fail closed。"""
++    parser = LogisticsQueryPlannerV2LlmParser(enabled=True, client=None)
++
++    ok = parser.parse_text(
++        json.dumps(_route_payload("2025年合肥到马鞍山17.5米车平均运费"), ensure_ascii=False),
++        question="2025年合肥到马鞍山17.5米车平均运费",
++    )
++    assert ok.provider_mode == "live"
++    assert ok.query_key == "hist_route_pricing_analysis"
++    assert ok.confidence == 0.95
++
++    markdown_wrapped = parser.parse_text(
++        "```json\n" + json.dumps(_route_payload("2025年合肥到马鞍山17.5米车平均运费"), ensure_ascii=False) + "\n```",
++        question="2025年合肥到马鞍山17.5米车平均运费",
++    )
++    assert markdown_wrapped.provider_mode == "error"
++    assert "json_parse_error" in (markdown_wrapped.provider_error or "")
++
++    nan_payload = json.dumps(_route_payload("2025年合肥到马鞍山17.5米车平均运费"), ensure_ascii=False).replace(
++        '"confidence": 0.95', '"confidence": NaN'
++    )
++    bad_nan = parser.parse_text(nan_payload, question="2025年合肥到马鞍山17.5米车平均运费")
++    assert bad_nan.provider_mode == "error"
++    assert "json_parse_error" in (bad_nan.provider_error or "")
++
++    bad_where = parser.parse_text(
++        json.dumps({**_route_payload("危险输出"), "where": "1=1"}, ensure_ascii=False),
++        question="危险输出",
++    )
++    assert bad_where.provider_mode == "error"
++    assert "forbidden_field::where" in (bad_where.provider_error or "")
++
++    bad_nested_where = parser.parse_text(
++        json.dumps(
++            {**_route_payload("危险输出"), "filters": {**_route_payload("危险输出")["filters"], "nested": {"where": "1=1"}}},
++            ensure_ascii=False,
++        ),
++        question="危险输出",
++    )
++    assert bad_nested_where.provider_mode == "error"
++    assert "forbidden_field::where" in (bad_nested_where.provider_error or "")
++
++    bad_unknown = parser.parse_text(
++        json.dumps({**_route_payload("危险输出"), "debug_extra": "不允许的自由字段"}, ensure_ascii=False),
++        question="危险输出",
++    )
++    assert bad_unknown.provider_mode == "error"
++    assert "unexpected_field::debug_extra" in (bad_unknown.provider_error or "")
++
++    bad = parser.parse_text(
++        json.dumps({**_route_payload("危险输出"), "sql": "select * from dwd_logistics_hist_shipment_detail"}, ensure_ascii=False),
++        question="危险输出",
++    )
++    assert bad.provider_mode == "error"
++    assert bad.query_key is None
++    assert "forbidden_field::sql" in (bad.provider_error or "")
++
++    bad_answer = parser.parse_text(
++        json.dumps({**_route_payload("危险输出"), "answer": "平均运费是 7005 元"}, ensure_ascii=False),
++        question="危险输出",
++    )
++    assert bad_answer.provider_mode == "error"
++    assert "forbidden_field::answer" in (bad_answer.provider_error or "")
++
++
++def test_normalizer_and_validator_accept_route_pricing_semantic_variants() -> None:
++    """多种线路问法应由 LLM 候选 + 后端归一校验统一到 hist_route_pricing_analysis。"""
++    questions = [
++        "2025年合肥发马鞍山17.5米车的平均运费",
++        "2025年合肥至马鞍山17.5米车的平均运费",
++        "2025年合肥到马鞍山17.5米车的平均运费",
++        "2025年从合肥运到马鞍山17.5米车平均多少钱",
++        "2025年合肥往马鞍山发17米五车均费",
++    ]
++    normalizer = LogisticsQueryPlannerV2Normalizer()
++    validator = LogisticsQueryPlannerV2Validator(registry=LogisticsQueryPlannerV2CapabilityRegistry())
++    legacy_adapter = LogisticsQueryPlannerV2LegacyAdapter()
++
++    for question in questions:
++        candidate = normalizer.normalize(_route_payload(question, filters={"vehicle_type": "17米五"}), question=question)
++        validation = validator.validate(candidate, original_question=question)
++        assert validation.accepted, validation.errors
++        legacy_plan = legacy_adapter.to_logistics_plan(validation.candidate)
++        assert legacy_plan.query_key == "hist_route_pricing_analysis"
++        assert legacy_plan.filters == {
++            "years": [2025],
++            "origin_place": "合肥",
++            "city": "马鞍山",
++            "vehicle_type": "17.5",
++            "view_mode": "avg_fee",
++            "price_metric": "total_fee",
++        }
++        assert legacy_plan.metrics == ["avg_fee", "row_count"]
++
++
++def test_validator_rejects_invalid_query_key_filter_low_confidence_2026_and_bc_boundary() -> None:
++    """Validator 必须拦截非法 query_key/filter、低置信、历史/系统年份混用和 B/C 越界。"""
++    normalizer = LogisticsQueryPlannerV2Normalizer()
++    validator = LogisticsQueryPlannerV2Validator(registry=LogisticsQueryPlannerV2CapabilityRegistry(), min_confidence=0.9)
++
++    cases = [
++        ("bad_key", _route_payload("bad_key", query_key="free_sql"), "unknown_query_key"),
++        ("bad_filter", _route_payload("bad_filter", filters={"raw_sql": "1=1"}), "filter_not_allowed::raw_sql"),
++        ("low_conf", _route_payload("low_conf", confidence=0.5), "low_confidence"),
++        ("year_2026", _route_payload("year_2026", filters={"years": [2026]}, time_range={"years": [2026]}), "time_scope_mismatch"),
++        (
++            "bad_source_scope",
++            _route_payload("2025年合肥到马鞍山17.5米车平均运费", time_range={"years": [2025], "source_scope": "system_2026"}),
++            "time_scope_mismatch::source_scope",
++        ),
++        (
++            "bad_time_scope_when_source_scope_matches",
++            _route_payload(
++                "2025年合肥到马鞍山17.5米车平均运费",
++                time_range={"years": [2025], "source_scope": "historical_2023_2025", "time_scope": "system_2026"},
++            ),
++            "time_scope_mismatch::time_scope",
++        ),
++        (
++            "bad_time_range_key",
++            _route_payload("2025年合肥到马鞍山17.5米车平均运费", time_range={"years": [2025], "free_scope": "x"}),
++            "time_range_key_not_allowed::free_scope",
++        ),
++        (
++            "bc_boundary",
++            _route_payload("预测未来三个月各区域发运量", filters={"years": [2025]}),
++            "policy_locked",
++        ),
++    ]
++    for question, payload, expected_error in cases:
++        candidate = normalizer.normalize(payload, question=question)
++        validation = validator.validate(candidate, original_question=question)
++        assert not validation.accepted
++        assert any(error.startswith(expected_error) for error in validation.errors), validation.errors
++
++
++def test_validator_rejects_year_rewrite_against_original_question() -> None:
++    """原问题中的显式年份必须由 Validator 独立校验，不能信任 LLM 改写后的年份。"""
++    normalizer = LogisticsQueryPlannerV2Normalizer()
++    validator = LogisticsQueryPlannerV2Validator(registry=LogisticsQueryPlannerV2CapabilityRegistry())
++
++    single_2026_question = "2026年合肥到马鞍山17.5米车平均运费"
++    single_2026_candidate = normalizer.normalize(
++        _route_payload(single_2026_question, filters={"years": [2025]}, time_range={"years": [2025]}),
++        question=single_2026_question,
++    )
++    single_2026_result = validator.validate(single_2026_candidate, original_question=single_2026_question)
++
++    assert not single_2026_result.accepted
++    assert "time_scope_mismatch::question_historical_2023_2025" in single_2026_result.errors
++    assert "question_candidate_years_conflict" in single_2026_result.errors
++
++    mixed_year_question = "2025和2026年合肥到马鞍山17.5米车平均运费对比"
++    malicious_candidate = normalizer.normalize(
++        _route_payload(mixed_year_question, filters={"years": [2025]}, time_range={"years": [2025]}),
++        question="2025年合肥到马鞍山17.5米车平均运费",
++    )
++    mixed_year_result = validator.validate(malicious_candidate, original_question=mixed_year_question)
++
++    assert not mixed_year_result.accepted
++    assert "time_scope_mismatch::question_historical_2023_2025" in mixed_year_result.errors
++    assert "question_candidate_years_conflict" in mixed_year_result.errors
++
++
++def test_validator_rejects_invalid_plan_axes_and_confidence_range() -> None:
++    """非法指标、维度、分组、聚合、对比模式和置信度范围都必须 fail closed。"""
++    normalizer = LogisticsQueryPlannerV2Normalizer()
++    validator = LogisticsQueryPlannerV2Validator(registry=LogisticsQueryPlannerV2CapabilityRegistry(), min_confidence=0.9)
++    cases = [
++        (_route_payload("bad_metric", metrics=["profit"]), "metric_not_allowed::profit"),
++        (_route_payload("bad_dimension", dimensions=["raw_table"]), "dimension_not_allowed::raw_table"),
++        (_route_payload("bad_group_by", group_by=["sql_group"]), "group_by_not_allowed::sql_group"),
++        (_route_payload("bad_aggregation", aggregations=["median"]), "aggregation_not_allowed::median"),
++        (_route_payload("bad_compare", compare_mode="free_compare"), "compare_mode_not_allowed::free_compare"),
++        (_route_payload("bad_confidence", confidence=1.5), "invalid_confidence_range::1.500"),
++    ]
++
++    for payload, expected_error in cases:
++        candidate = normalizer.normalize(payload, question=str(payload["normalized_question"]))
++        validation = validator.validate(candidate, original_question=str(payload["normalized_question"]))
++        assert not validation.accepted
++        assert expected_error in validation.errors
++
++
++def test_validator_rejects_unknown_origin_and_multihop_route() -> None:
++    """未知始发地、多段路径必须澄清，不能被 LLM 候选反向放行。"""
++    normalizer = LogisticsQueryPlannerV2Normalizer()
++    validator = LogisticsQueryPlannerV2Validator(registry=LogisticsQueryPlannerV2CapabilityRegistry())
++
++    unknown_origin = normalizer.normalize(
++        _route_payload("2025年广德至马鞍山17.5米车的平均运费", filters={"origin_place": "广德"}),
++        question="2025年广德至马鞍山17.5米车的平均运费",
++    )
++    unknown_result = validator.validate(unknown_origin, original_question="2025年广德至马鞍山17.5米车的平均运费")
++    assert not unknown_result.accepted
++    assert "origin_not_normalized::广德" in unknown_result.errors
++
++    multihop = normalizer.normalize(
++        _route_payload("2025年合肥至马鞍山到南京17.5米车的平均运费"),
++        question="2025年合肥至马鞍山到南京17.5米车的平均运费",
++    )
++    multihop_result = validator.validate(multihop, original_question="2025年合肥至马鞍山到南京17.5米车的平均运费")
++    assert not multihop_result.accepted
++    assert "multi_hop_route_requires_clarification" in multihop_result.errors
++
++
++def test_planner_builds_shadow_query_plan_without_replacing_legacy_fallback() -> None:
++    """编排器应生成 shadow QueryPlan；旧 planner 仍作为正式 fallback，不被自动替换。"""
++    question = "2025年合肥到马鞍山17.5米车平均运费"
++    old_plan = LogisticsDataQaPlan(intent="clarification", needs_clarification=True, clarification_questions=["旧 planner 澄清"])
++    fake_parser = _FakeLlmParser({question: _route_payload(question)})
++    planner = LogisticsQueryPlannerV2(
++        enabled=True,
++        mode="shadow",
++        llm_parser=fake_parser,
++        fallback=LogisticsQueryPlannerV2Fallback(legacy_planner=_FakeLegacyPlanner(old_plan)),
++    )
++
++    plan = planner.build_shadow_plan(question, trace_id="trace-v2")
++
++    assert plan.domain == "logistics"
++    assert plan.strategy == "DIRECT_RETRIEVAL"
++    assert plan.query_key == "hist_route_pricing_analysis"
++    assert plan.confidence == 0.95
++    assert plan.slots.filters["origin_place"] == "合肥"
++    assert plan.slots.filters["city"] == "马鞍山"
++    assert plan.slots.time_range == {"years": [2025]}
++    assert plan.slots.aggregations == ["avg"]
++    assert plan.execution_policy.shadow_only is True
++    assert plan.execution_policy.llm_can_execute is False
++    assert plan.guardrail_decision.final_source == "llm_query_planner_v2_shadow"
++    assert plan.rule_plan["intent"] == "clarification"
++    assert fake_parser.calls[0]["allowed_query_keys"]
++    assert "hist_route_pricing_analysis" in fake_parser.calls[0]["system_prompt"]
++
++
++def test_planner_fails_closed_when_allowed_query_key_config_has_no_valid_entries() -> None:
++    """灰度 query_key 配置全无效时必须 fail closed，不能退化为全能力放行。"""
++    question = "2025年合肥到马鞍山17.5米车平均运费"
++    old_plan = LogisticsDataQaPlan(intent="clarification", needs_clarification=True, clarification_questions=["旧 planner 澄清"])
++    fake_parser = _FakeLlmParser({question: _route_payload(question)})
++    planner = LogisticsQueryPlannerV2(
++        enabled=True,
++        mode="shadow",
++        allowed_query_keys=["typo_query_key"],
++        llm_parser=fake_parser,
++        fallback=LogisticsQueryPlannerV2Fallback(legacy_planner=_FakeLegacyPlanner(old_plan)),
++    )
++
++    plan = planner.build_shadow_plan(question, trace_id="trace-invalid-config")
++
++    assert planner.should_use() is False
++    assert fake_parser.calls == []
++    assert plan.strategy == "CLARIFY"
++    assert plan.guardrail_decision.final_source == "legacy_rule_planner_fallback"
++    assert "config_invalid::allowed_query_keys_no_valid_entries" in (plan.guardrail_decision.blocked_reason or "")
++
++
++def test_fallback_returns_legacy_rule_plan_when_llm_disabled_or_validation_fails() -> None:
++    """LLM 不可用或校验失败时必须回退旧 planner，并保留 fail-closed 审计原因。"""
++    question = "2025年合肥到马鞍山17.5米车平均运费"
++    old_plan = LogisticsDataQaPlan(intent="clarification", needs_clarification=True, clarification_questions=["旧 planner 澄清"])
++    legacy = _FakeLegacyPlanner(old_plan)
++    fallback = LogisticsQueryPlannerV2Fallback(legacy_planner=legacy)
++
++    plan = fallback.to_query_plan(question=question, trace_id="trace-fb", reason="llm_disabled")
++
++    assert legacy.questions == [question]
++    assert plan.strategy == "CLARIFY"
++    assert plan.query_key is None
++    assert plan.clarification_questions == ["旧 planner 澄清"]
++    assert plan.guardrail_decision.accepted is False
++    assert plan.guardrail_decision.blocked_reason == "llm_disabled"
++    assert plan.execution_policy.shadow_only is True

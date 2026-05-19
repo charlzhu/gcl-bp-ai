@@ -1041,6 +1041,38 @@ class LogisticsDataQaService:
                 warnings=warnings,
             )
 
+        if plan.query_key == "hist_mw_by_year":
+            data = self.repository.hist_mw_by_year(
+                years=filters["years"],
+                carrier_name=filters.get("carrier_name"),
+            )
+            years = [int(year) for year in filters["years"]]
+            scope_label = f"{min(years)}-{max(years)}年" if len(years) > 1 else f"{years[0]}年"
+            scope_parts = [scope_label]
+            if filters.get("carrier_name"):
+                scope_parts.append(f"承运商{filters['carrier_name']}")
+            scope_text = "".join(scope_parts)
+            missing_years = [int(year) for year in data.get("missing_years") or []]
+            if missing_years:
+                missing_year_text = "、".join(f"{year}年" for year in missing_years)
+                warnings.append(f"{scope_text}在{missing_year_text}无匹配记录，已保留空值行。")
+            summary = f"{scope_text}每年发运量已按年份返回。"
+            if missing_years:
+                summary = f"{summary}其中{'、'.join(f'{year}年' for year in missing_years)}无匹配记录。"
+            return self._build_result(
+                answer_summary=summary,
+                plan=plan,
+                table_columns=["biz_year", "shipment_mw", "row_count"],
+                table_rows=data.get("items") or [],
+                calculation_logic=[
+                    "历史发运量按 actual_watt 汇总后除以 1,000,000 折算为 MW。",
+                    "用户明确给出多个年份时，按请求年份逐年对齐；某年无匹配记录时保留空值行。",
+                    "如限定承运商，则按历史台账中的物流公司名称做包含匹配。",
+                ],
+                data_scope={"business_scope": "历史物流逐年发运量", **filters},
+                warnings=warnings,
+            )
+
         if plan.query_key == "hist_carrier_kpi_by_year":
             # 城市是本 query_key 的可选筛选条件；只有用户明确给出城市时才下推，
             # 这样既避免丢失用户给出的城市范围，也兼容只支持 region_name 的既有测试替身。
@@ -1388,7 +1420,6 @@ class LogisticsDataQaService:
             )
             view_mode = filters["view_mode"]
             price_metric = filters.get("price_metric", "total_fee")
-            price_metric_label = "单价/车" if price_metric == "unit_price_per_vehicle" else "总费用"
             price_summary_label = "报价" if price_metric == "unit_price_per_vehicle" else "运费"
             if filters.get("default_year_scope_label"):
                 scope_parts = [filters["default_year_scope_label"]]
@@ -1410,7 +1441,7 @@ class LogisticsDataQaService:
             scope_text = "".join(scope_parts)
             if view_mode == "monthly_avg":
                 summary = f"{scope_text}每月平均{price_summary_label}已按月份返回。"
-                table_columns = ["biz_month", "avg_fee", "row_count"]
+                table_columns = ["biz_month", "avg_fee", "total_fee", "shipment_trip_count", "row_count"]
             elif view_mode == "year_compare":
                 missing_years = [int(year) for year in data.get("missing_years") or []]
                 summary = f"{scope_text}{price_summary_label}对比已按年份返回。"
@@ -1420,28 +1451,35 @@ class LogisticsDataQaService:
                     warnings.append(
                         f"{scope_text}在{missing_year_text}无匹配记录，已保留空值行，避免显式年份被静默遗漏。"
                     )
-                table_columns = ["biz_year", "avg_fee", "row_count"]
+                table_columns = ["biz_year", "avg_fee", "total_fee", "shipment_trip_count", "row_count"]
             elif view_mode == "fee_extremes":
                 summary_row = data["summary_row"] or {}
                 summary = (
                     f"{scope_text}最高{price_summary_label}为{int(summary_row.get('max_fee') or 0):,}元，"
                     f"最低{price_summary_label}为{int(summary_row.get('min_fee') or 0):,}元。"
                 )
-                table_columns = ["min_fee", "max_fee", "avg_fee", "row_count"]
+                table_columns = ["min_fee", "max_fee", "avg_fee", "total_fee", "shipment_trip_count", "row_count"]
             else:
                 summary_row = data["summary_row"] or {}
                 summary = f"{scope_text}平均{price_summary_label}为{int(summary_row.get('avg_fee') or 0):,}元。"
-                table_columns = ["avg_fee", "row_count"]
+                table_columns = ["avg_fee", "total_fee", "shipment_trip_count", "row_count"]
+            calculation_logic = (
+                ["历史线路报价 / 单价按单价/车字段求样本均值。"]
+                if price_metric == "unit_price_per_vehicle"
+                else ["历史线路均价按总费用 / 总车次（车次数）计算，先汇总匹配线路总费用，再除以汇总车次数。"]
+            )
+            calculation_logic.extend(
+                [
+                    "当问题指定城市时优先按城市模糊匹配，兼容广州/广州市等同一城市写法；否则按目的省份过滤。",
+                    "车型口径通过车型字段模糊匹配实现。",
+                ]
+            )
             return self._build_result(
                 answer_summary=summary,
                 plan=plan,
                 table_columns=table_columns,
                 table_rows=data["items"],
-                calculation_logic=[
-                    f"历史线路{price_summary_label}按 dwd_logistics_hist_shipment_detail.{price_metric}（{price_metric_label}）统计。",
-                    "当问题指定城市时优先按 city 模糊过滤，兼容广州/广州市等同一城市写法；否则按 province 过滤。",
-                    "车型口径通过 required_vehicle_type 模糊匹配实现。",
-                ],
+                calculation_logic=calculation_logic,
                 data_scope={"table": "dwd_logistics_hist_shipment_detail", **filters},
                 warnings=warnings,
             )

@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "可在 fail-closed guard 中进一步断言稳定错误码，避免未来只检查 status 时误吞具体 mismatch/schema 错误。",
+    "当前 git status 显示存在大量未跟踪非 M9 文件/产物；若准备提交，请确认本次 M9 只纳入相关 scoped 文件和必要产物，避免范围混入。"
+  ],
+  "summary": "M9 scoped 审查通过：explicit_year_buckets 仅在可解析且与 biz_year 过滤集合完全一致时去重，测试覆盖重复/多给/少给/非法值，未发现安全或逻辑问题。"
+}

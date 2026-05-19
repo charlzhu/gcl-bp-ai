@@ -165,8 +165,8 @@ def test_model_aliases_normalize_bom_order_name(live_db_session) -> None:
     assert result.resolved_config["model_code"].source == "bom_header.order_name"
 
 
-def test_cable_length_without_wire_size_returns_unresolved(live_db_session) -> None:
-    """接线盒只给线长但未给线径时不能默认猜 4mm²。"""
+def test_cable_length_without_wire_size_uses_default_wire_size_when_length_matches(live_db_session) -> None:
+    """接线盒只给线长但未给线径时，应按模型默认线径拼真实 option，不能因此中断功率测算。"""
     session = live_db_session
     line = (
         session.query(PlanBomMaterialLine)
@@ -182,7 +182,7 @@ def test_cable_length_without_wire_size_returns_unresolved(live_db_session) -> N
         .first()
     )
     if line is None:
-        pytest.skip("当前真实 BOM 中没有只写线长但未写线径的接线盒样本，跳过 fail-closed 用例。")
+        pytest.skip("当前真实 BOM 中没有只写线长但未写线径的接线盒样本，跳过默认线径回归用例。")
     header = (
         session.query(PlanBomHeader)
         .filter_by(
@@ -202,10 +202,11 @@ def test_cable_length_without_wire_size_returns_unresolved(live_db_session) -> N
         version_no=header.version_no,
     )
 
-    cable_items = [item for item in result.unresolved_items if item.factor_key == "cable"]
-    assert cable_items
-    assert "cable" not in result.to_prediction_configuration()
-    assert cable_items[0].candidate_options
+    assert result.status == RESOLVED_STATUS
+    assert "cable" in result.resolved_config
+    assert result.resolved_config["cable"].value == "+400/-200mm（4mm²）"
+    assert result.resolved_config["cable"].source == "bom_material_line.junction_box+model_default_wire_size"
+    assert "cable" in result.to_prediction_configuration()
 
 
 def test_invalid_explicit_benchmark_returns_unresolved(live_db_session) -> None:

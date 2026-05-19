@@ -1,0 +1,137 @@
+## HEAD (no branch)
+A  ai/archive/requirements/requirement_20260514_1420.md
+A  ai/inbox/attachments/middle_db/Result_10_3.xlsx
+A  ai/inbox/attachments/middle_db/Result_10_4.xlsx
+A  ai/inbox/attachments/middle_db/Result_12.xlsx
+A  ai/inbox/attachments/middle_db/Result_12_2.xlsx
+A  ai/inbox/attachments/middle_db/Result_12_3.xlsx
+A  ai/inbox/attachments/middle_db/Result_12_4.xlsx
+A  ai/inbox/attachments/middle_db/Result_12_5.xlsx
+A  ai/inbox/attachments/middle_db/Result_13.xlsx
+A  ai/inbox/attachments/middle_db/Result_13_2.xlsx
+A  ai/inbox/attachments/middle_db/Result_13_3.xlsx
+A  ai/inbox/attachments/middle_db/Result_13_4.xlsx
+A  ai/inbox/attachments/middle_db/Result_13_5.xlsx
+A  ai/inbox/attachments/middle_db/Result_14.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_dm_logics_company_month_rank.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_dwd_logistics_ship_task.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_dws_logistics_detail_union.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_dws_logistics_monthly_metric.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_ods_logistic_ship_task.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_plan_bom_header.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_plan_bom_import_batch.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_plan_bom_material_line.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_plan_bom_revision.xlsx
+A  ai/inbox/attachments/middle_db/logistics_ai_sys_query_log.xlsx
+A  ai/inbox/attachments/middle_db/sys_data_source.xlsx
+A  ai/inbox/attachments/middle_db/sys_query_log.xlsx
+A  ai/inbox/attachments/middle_db/sys_task_error_log.xlsx
+A  ai/inbox/attachments/middle_db/sys_task_log.xlsx
+A  "ai/inbox/attachments/sap_mid/MID\344\270\213\346\211\200\346\234\211\350\247\206\345\233\276.xlsx"
+A  "ai/inbox/attachments/sap_mid/MID\344\270\213\346\211\200\346\234\211\350\247\206\345\233\276\345\255\227\346\256\265.xlsx"
+A  ai/inbox/attachments/sap_mid/V_HF_SAP_INOUT_DAILY.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_AFKO.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_AFPO.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_AUFK.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_CRKLSZ.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_EBAN.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_EKBE.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_EKET.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_EKKO.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_EKPO.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_MAST.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_RESB.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_STAS.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_STKO.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_STPO.xlsx
+A  ai/inbox/attachments/sap_mid/V_SAP_HFFN_STZU.xlsx
+A  "ai/inbox/attachments/sap_mid/\350\247\206\345\233\276SQL.xlsx"
+MM ai/inbox/requirement.md
+ M ai/tasks/running/TASK-query-planning-v2-phase56/diff.patch
+ M backend/.env.example
+ M backend/app/domains/logistics/repositories/data_qa_repository.py
+ M backend/app/domains/logistics/services/data_qa_planner.py
+ M backend/app/domains/logistics/services/data_qa_service.py
+ M backend/app/domains/logistics/services/slot_extractor.py
+ M backend/app/domains/plan_bom/config/power_aliases.json
+ M backend/app/domains/plan_bom/services/answer_presentation_service.py
+ M backend/app/domains/plan_bom/services/nlu_center_service.py
+ M backend/app/domains/plan_bom/services/power_config_resolver_service.py
+ M backend/app/domains/plan_bom/services/qa_service.py
+ M docs/LOGISTICS_ANSWER_PRESENTATION_LAYER.md
+ M docs/LOGISTICS_NLU_CENTER_V1.md
+ M docs/PLAN_BOM_NLU_CENTER.md
+ M docs/PLAN_BOM_TRIAL_RUNBOOK.md
+ M docs/TRIAL_RELEASE_READINESS_CHECK.md
+ M frontend/src/views/business-chat/BusinessChatPage.vue
+ M scripts/logistics_data_qa_real_e2e_acceptance.py
+ M scripts/plan_bom_answer_presentation_live_eval.py
+ M scripts/plan_bom_nlu_eval.py
+ M tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
+ M tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py
+ M tests/business_acceptance/test_plan_power_docx_question_regression.py
+ M tests/business_acceptance/test_plan_power_m4_config_resolver.py
+ M tests/business_acceptance/test_plan_power_m5_qa_integration.py
+?? ai/eval/runs/run_20260507_001940_full_all/clarification_batch_state.md
+?? ai/eval/scripts/cron_batch_recover_plan_power_branch_prompt.md
+?? ai/outbox/
+?? ai/tasks/running/TASK-ai-answer-experience-v2/
+?? ai/tasks/running/TASK-ai-answer-stream/
+?? ai/tasks/running/TASK-bom-layout-v2/
+?? ai/tasks/running/TASK-bom-query-log/
+?? ai/tasks/running/TASK-bom-typography/
+?? ai/tasks/running/TASK-bom-visual-polish/
+?? ai/tasks/running/TASK-business-chat-markdown-rendering/
+?? ai/tasks/running/TASK-business-feedback-excel-qa-fix/
+?? ai/tasks/running/TASK-llm-led-composite-decomposition/
+?? ai/tasks/running/TASK-logistics-2025-hefei-guangzhou-17_5-price/
+?? ai/tasks/running/TASK-logistics-carrier-filter-empty-result/
+?? ai/tasks/running/TASK-logistics-city-carrier-scope-fix/
+?? ai/tasks/running/TASK-logistics-city-fee-topn/
+?? ai/tasks/running/TASK-logistics-composite-decomposition/
+?? ai/tasks/running/TASK-logistics-entruster-dept-field-clarification/
+?? ai/tasks/running/TASK-logistics-explicit-month-caveat/
+?? ai/tasks/running/TASK-logistics-explicit-year-scope/
+?? ai/tasks/running/TASK-logistics-extra-fee-2026-01/
+?? ai/tasks/running/TASK-logistics-hefei-maanshan-route-pricing/
+?? ai/tasks/running/TASK-logistics-railway-sync-scope/
+?? ai/tasks/running/TASK-logistics-ranking-topn-generalization/
+?? ai/tasks/running/TASK-logistics-route-year-compare-2023-fix/
+?? ai/tasks/running/TASK-plan-bom-batch-upload/
+?? ai/tasks/running/TASK-plan-power-bom-direct-link-efficiency/
+?? ai/tasks/running/TASK-plan-power-exact-bom-disambiguation/
+?? ai/tasks/running/TASK-plan-power-explicit-config-clarification-fix/
+?? ai/tasks/running/TASK-plan-power-factor-effect-compare-fix/
+?? ai/tasks/running/TASK-plan-power-fall-ratio-excel-like-table/
+?? ai/tasks/running/TASK-plan-power-fall-ratio-real-subrows/
+?? ai/tasks/running/TASK-plan-power-fall-ratio-subrows/
+?? ai/tasks/running/TASK-plan-power-no-bom-explicit-config/
+?? ai/tasks/running/TASK-plan-power-real-business-qa-fix/
+?? ai/tasks/running/TASK-plan-power-recommendation-export-polish/
+?? ai/tasks/running/TASK-plan-power-recommendation-table-polish/
+?? ai/tasks/running/TASK-planbom-answer-business-language/
+?? ai/tasks/running/TASK-smart-chat-detail-excel-export/
+?? ai/tasks/running/TASK-smart-chat-excel-alignment/
+?? ai/tasks/running/TASK-smart-chat-new-session-button/
+?? ai/tasks/running/TASK-smart-chat-single-fallback/
+?? backend/app/domains/logistics/services/query_planner_v2/
+?? backend/app/services/business_answer_stream_service.py
+?? docs/LOGISTICS_QA_QUERY_PLANNING_V2_MVP_DESIGN.md
+?? frontend/src/utils/businessMarkdown.ts
+?? frontend/src/utils/streamingApi.ts
+?? screenshot-1778725756747.png
+?? screenshot-1778726076317.png
+?? screenshot-1778726110917.png
+?? screenshot-1778745254805.png
+?? screenshot-1778745329407.png
+?? screenshot-1778745437177.png
+?? screenshot-1778746010284.png
+?? screenshot-1778746391452.png
+?? screenshot-1778746586544.png
+?? tests/business_acceptance/test_business_chat_answer_format_preference.py
+?? tests/business_acceptance/test_logistics_carrier_filter_scope.py
+?? tests/business_acceptance/test_logistics_field_scope_clarification.py
+?? tests/business_acceptance/test_logistics_llm_led_composite_decomposition.py
+?? tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py
+?? tests/frontend/
+?? tests/unit/logistics/

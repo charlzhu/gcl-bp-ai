@@ -1,0 +1,1217 @@
+diff --git a/backend/app/domains/logistics/services/nl2sql/__init__.py b/backend/app/domains/logistics/services/nl2sql/__init__.py
+index bdf36d3..e1e9398 100644
+--- a/backend/app/domains/logistics/services/nl2sql/__init__.py
++++ b/backend/app/domains/logistics/services/nl2sql/__init__.py
+@@ -32,6 +32,19 @@ from backend.app.domains.logistics.services.nl2sql.m7_readonly_smoke import (
+     build_default_logistics_nl2sql_m7_readonly_smoke_samples,
+     run_logistics_nl2sql_m7_readonly_smoke,
+ )
++from backend.app.domains.logistics.services.nl2sql.m8_shadow_eval import (
++    DEFAULT_M8_ARTIFACT_DIR,
++    DEFAULT_M8_RECORDS_FILENAME,
++    DEFAULT_M8_REPORT_FILENAME,
++    DEFAULT_M8_SAMPLE_IDS,
++    M8_SHADOW_EVAL_VERSION,
++    LogisticsNl2SqlM8ShadowEvalOutcome,
++    LogisticsNl2SqlM8ShadowEvalRunResult,
++    LogisticsNl2SqlM8ShadowEvalSample,
++    build_default_logistics_nl2sql_m8_shadow_eval_samples,
++    render_safe_m8_summary_json,
++    run_logistics_nl2sql_m8_shadow_eval,
++)
+ from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
+ from backend.app.domains.logistics.services.nl2sql.shadow_pipeline import (
+     LogisticsNl2SqlShadowPipeline,
+@@ -86,6 +99,14 @@ __all__ = [
+     "LogisticsNl2SqlM7ReadonlySmokeOutcome",
+     "LogisticsNl2SqlM7ReadonlySmokeRunResult",
+     "LogisticsNl2SqlM7ReadonlySmokeSample",
++    "DEFAULT_M8_ARTIFACT_DIR",
++    "DEFAULT_M8_RECORDS_FILENAME",
++    "DEFAULT_M8_REPORT_FILENAME",
++    "DEFAULT_M8_SAMPLE_IDS",
++    "M8_SHADOW_EVAL_VERSION",
++    "LogisticsNl2SqlM8ShadowEvalOutcome",
++    "LogisticsNl2SqlM8ShadowEvalRunResult",
++    "LogisticsNl2SqlM8ShadowEvalSample",
+     "LogisticsNl2SqlShadowPipeline",
+     "LogisticsNl2SqlShadowPipelineRequest",
+     "LogisticsNl2SqlShadowPipelineResult",
+@@ -105,12 +126,15 @@ __all__ = [
+     "LogisticsSqlSafetyResult",
+     "check_logistics_sql_safety",
+     "build_default_logistics_nl2sql_m7_readonly_smoke_samples",
++    "build_default_logistics_nl2sql_m8_shadow_eval_samples",
+     "build_default_logistics_nl2sql_shadow_smoke_samples",
+     "build_logistics_nl2sql_evaluation_report",
+     "redact_evaluation_text",
++    "render_safe_m8_summary_json",
+     "render_logistics_sql",
+     "render_logistics_nl2sql_evaluation_report_markdown",
+     "run_logistics_nl2sql_m7_readonly_smoke",
++    "run_logistics_nl2sql_m8_shadow_eval",
+     "run_logistics_nl2sql_shadow_smoke",
+     "summarize_evaluation_logs",
+     "validate_logistics_sql_plan_candidate",
+diff --git a/backend/app/domains/logistics/services/nl2sql/evaluation_report.py b/backend/app/domains/logistics/services/nl2sql/evaluation_report.py
+index c3f41be..4804884 100644
+--- a/backend/app/domains/logistics/services/nl2sql/evaluation_report.py
++++ b/backend/app/domains/logistics/services/nl2sql/evaluation_report.py
+@@ -89,6 +89,20 @@ class LogisticsNl2SqlEvaluationReport(BaseModel):
+     safety_block_count: int
+     execution_failure_count: int
+     sql_hash_coverage: float
++    by_metric_id: dict[str, int] = Field(default_factory=dict)
++    by_dimension_id: dict[str, int] = Field(default_factory=dict)
++    by_table_id: dict[str, int] = Field(default_factory=dict)
++    by_category: dict[str, int] = Field(default_factory=dict)
++    by_business_case: dict[str, int] = Field(default_factory=dict)
++    by_metric_family: dict[str, int] = Field(default_factory=dict)
++    expected_status_match_count: int = 0
++    expected_status_mismatch_count: int = 0
++    expected_status_match_rate: float = 0.0
++    safety_pass_count: int = 0
++    executor_touched_count: int = 0
++    executor_not_touched_count: int = 0
++    catalog_ref_coverage: float = 0.0
++    distinct_catalog_ref_count: int = 0
+     top_errors: list[LogisticsNl2SqlEvaluationReportTopError] = Field(default_factory=list)
+     sample_outcomes: list[LogisticsNl2SqlEvaluationReportSampleOutcome] = Field(default_factory=list)
+     warnings: list[str] = Field(default_factory=list)
+@@ -100,7 +114,18 @@ class LogisticsNl2SqlEvaluationReport(BaseModel):
+
+         return _safe_report_text(str(value or "")) or EVALUATION_REPORT_SCHEMA_VERSION
+
+-    @field_validator("by_status", "by_stage", "by_error_code", mode="before")
++    @field_validator(
++        "by_status",
++        "by_stage",
++        "by_error_code",
++        "by_metric_id",
++        "by_dimension_id",
++        "by_table_id",
++        "by_category",
++        "by_business_case",
++        "by_metric_family",
++        mode="before",
++    )
+     @classmethod
+     def _sanitize_counter_dict(cls, value: Any) -> dict[str, int]:
+         """报表聚合 key 可能来自外部状态/错误码，直接构造时也要脱敏。"""
+@@ -116,6 +141,12 @@ class LogisticsNl2SqlEvaluationReport(BaseModel):
+         "fail_closed_count",
+         "safety_block_count",
+         "execution_failure_count",
++        "distinct_catalog_ref_count",
++        "expected_status_match_count",
++        "expected_status_mismatch_count",
++        "safety_pass_count",
++        "executor_touched_count",
++        "executor_not_touched_count",
+         mode="before",
+     )
+     @classmethod
+@@ -124,7 +155,7 @@ class LogisticsNl2SqlEvaluationReport(BaseModel):
+
+         return _safe_report_non_negative_int(value)
+
+-    @field_validator("success_rate", "sql_hash_coverage", mode="before")
++    @field_validator("success_rate", "sql_hash_coverage", "catalog_ref_coverage", "expected_status_match_rate", mode="before")
+     @classmethod
+     def _sanitize_ratio_field(cls, value: Any) -> float:
+         """比例字段限制在 0-1 范围。"""
+@@ -145,6 +176,8 @@ def build_logistics_nl2sql_evaluation_report(
+     sample_ids: dict[str, str] | None = None,
+     sample_descriptions: dict[str, str] | None = None,
+     warnings: list[str] | None = None,
++    include_catalog_breakdown: bool = False,
++    sample_metadata: dict[str, dict[str, Any]] | None = None,
+ ) -> LogisticsNl2SqlEvaluationReport:
+     """基于 M5 evaluation log 生成 M6 离线评估报表。
+
+@@ -153,6 +186,10 @@ def build_logistics_nl2sql_evaluation_report(
+         sample_ids: 可选 trace_id 到业务样例 ID 的映射，smoke runner 用它还原稳定样例 ID。
+         sample_descriptions: 可选 trace_id 到业务描述的映射。
+         warnings: 报表级别告警，会执行同一套脱敏逻辑。
++        include_catalog_breakdown: 是否输出 catalog ref 的指标/维度/表覆盖聚合；默认关闭，避免 M6/M7
++            通用报表扩大内部表名暴露面。M8 shadow-only 评估显式开启。
++        sample_metadata: 可选 trace_id 到样例评估元数据的映射，用于 M8 输出 category、metric_family
++            和 expected_status 一致率；默认关闭，不影响 M6/M7 旧报表。
+     返回：
+         可 JSON 序列化、可 Markdown 渲染的安全报表对象。
+     """
+@@ -178,6 +215,13 @@ def build_logistics_nl2sql_evaluation_report(
+     failure_count = max(0, total - success_count - skipped_count - unsupported_count)
+     eligible_hash_records = [record for record in safe_records if record.status in SQL_HASH_ELIGIBLE_STATUSES]
+     hash_present_count = sum(1 for record in eligible_hash_records if record.sql_hash)
++    metric_counter, dimension_counter, table_counter, records_with_catalog_refs, distinct_catalog_refs = _catalog_breakdown(
++        safe_records,
++        enabled=include_catalog_breakdown,
++    )
++    metadata_summary = _sample_metadata_summary(safe_records, sample_metadata or {})
++    safety_pass_count = sum(1 for record in safe_records if record.sql_hash and record.status != "safety_failed")
++    executor_touched_count = sum(1 for record in safe_records if record.stage in {"explain", "trial"})
+
+     report_warnings = _dedupe_report_texts(
+         [*(warnings or []), *(warning for record in safe_records for warning in record.warnings)]
+@@ -199,6 +243,20 @@ def build_logistics_nl2sql_evaluation_report(
+         safety_block_count=status_counter.get("safety_failed", 0),
+         execution_failure_count=sum(status_counter.get(status, 0) for status in EXECUTION_FAILURE_STATUSES),
+         sql_hash_coverage=(hash_present_count / len(eligible_hash_records)) if eligible_hash_records else 0.0,
++        by_metric_id=dict(metric_counter),
++        by_dimension_id=dict(dimension_counter),
++        by_table_id=dict(table_counter),
++        by_category=dict(metadata_summary["by_category"]),
++        by_business_case=dict(metadata_summary["by_business_case"]),
++        by_metric_family=dict(metadata_summary["by_metric_family"]),
++        expected_status_match_count=metadata_summary["expected_status_match_count"],
++        expected_status_mismatch_count=metadata_summary["expected_status_mismatch_count"],
++        expected_status_match_rate=metadata_summary["expected_status_match_rate"],
++        safety_pass_count=safety_pass_count,
++        executor_touched_count=executor_touched_count,
++        executor_not_touched_count=max(0, total - executor_touched_count),
++        catalog_ref_coverage=(records_with_catalog_refs / total) if include_catalog_breakdown and total else 0.0,
++        distinct_catalog_ref_count=len(distinct_catalog_refs) if include_catalog_breakdown else 0,
+         top_errors=[
+             LogisticsNl2SqlEvaluationReportTopError(error_code=error_code, count=count)
+             for error_code, count in sorted(error_counter.items(), key=lambda item: (-item[1], first_seen_error_order[item[0]]))[:10]
+@@ -228,7 +286,7 @@ def render_logistics_nl2sql_evaluation_report_markdown(report: LogisticsNl2SqlEv
+
+     safe_report = LogisticsNl2SqlEvaluationReport.model_validate(report.model_dump(mode="json"))
+     lines: list[str] = [
+-        "# NL2SQL Logistics M6 Shadow Smoke Evaluation Report",
++        "# NL2SQL Logistics Shadow Smoke Evaluation Report",
+         "",
+         "## Summary",
+         f"- total: {safe_report.total}",
+@@ -239,8 +297,16 @@ def render_logistics_nl2sql_evaluation_report_markdown(report: LogisticsNl2SqlEv
+         f"- success_rate: {safe_report.success_rate:.4f}",
+         f"- fail_closed_count: {safe_report.fail_closed_count}",
+         f"- safety_block_count: {safe_report.safety_block_count}",
++        f"- safety_pass_count: {safe_report.safety_pass_count}",
++        f"- executor_touched_count: {safe_report.executor_touched_count}",
++        f"- executor_not_touched_count: {safe_report.executor_not_touched_count}",
++        f"- expected_status_match_count: {safe_report.expected_status_match_count}",
++        f"- expected_status_mismatch_count: {safe_report.expected_status_mismatch_count}",
++        f"- expected_status_match_rate: {safe_report.expected_status_match_rate:.4f}",
+         f"- execution_failure_count: {safe_report.execution_failure_count}",
+         f"- sql_hash_coverage: {safe_report.sql_hash_coverage:.4f}",
++        f"- catalog_ref_coverage: {safe_report.catalog_ref_coverage:.4f}",
++        f"- distinct_catalog_ref_count: {safe_report.distinct_catalog_ref_count}",
+         "",
+         "## By Status",
+     ]
+@@ -252,6 +318,24 @@ def render_logistics_nl2sql_evaluation_report_markdown(report: LogisticsNl2SqlEv
+         lines.extend(f"- {item.error_code}: {item.count}" for item in safe_report.top_errors)
+     else:
+         lines.append("- none")
++    if safe_report.by_metric_id:
++        lines.extend(["", "## By Metric"])
++        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_metric_id.items())
++    if safe_report.by_dimension_id:
++        lines.extend(["", "## By Dimension"])
++        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_dimension_id.items())
++    if safe_report.by_table_id:
++        lines.extend(["", "## By Table"])
++        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_table_id.items())
++    if safe_report.by_category:
++        lines.extend(["", "## By Category"])
++        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_category.items())
++    if safe_report.by_business_case:
++        lines.extend(["", "## By Business Case"])
++        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_business_case.items())
++    if safe_report.by_metric_family:
++        lines.extend(["", "## By Metric Family"])
++        lines.extend(f"- {key}: {value}" for key, value in safe_report.by_metric_family.items())
+     lines.extend(["", "## Sample Outcomes", "| sample_id | description | status | stage | error_codes |", "| --- | --- | --- | --- | --- |"])
+     for outcome in safe_report.sample_outcomes:
+         lines.append(
+@@ -275,6 +359,96 @@ def render_logistics_nl2sql_evaluation_report_markdown(report: LogisticsNl2SqlEv
+     return "\n".join(lines) + "\n"
+
+
++def _catalog_breakdown(
++    records: list[LogisticsNl2SqlEvaluationLogRecord],
++    *,
++    enabled: bool,
++) -> tuple[Counter[str], Counter[str], Counter[str], int, set[str]]:
++    """按 catalog ref 聚合 M8 shadow-only 评估维度。
++
++    默认报表不输出该聚合；M8 显式开启后，只从 evaluation log 的 `catalog_ids` 中解析
++    `metric:*` / `dimension:*` / `table:*`，不读取 SQL 原文或参数值。
++    """
++
++    metric_counter: Counter[str] = Counter()
++    dimension_counter: Counter[str] = Counter()
++    table_counter: Counter[str] = Counter()
++    records_with_catalog_refs = 0
++    distinct_catalog_refs: set[str] = set()
++    if not enabled:
++        return metric_counter, dimension_counter, table_counter, records_with_catalog_refs, distinct_catalog_refs
++
++    for record in records:
++        safe_ids = _dedupe_report_texts(list(record.catalog_ids))
++        if safe_ids:
++            records_with_catalog_refs += 1
++        for catalog_id in safe_ids:
++            if ":" not in catalog_id:
++                continue
++            ref_type, ref_value = catalog_id.split(":", 1)
++            ref_value = (_safe_report_text(ref_value) or "").strip()
++            if not ref_value:
++                continue
++            distinct_catalog_refs.add(catalog_id)
++            if ref_type == "metric":
++                metric_counter[ref_value] += 1
++            elif ref_type == "dimension":
++                dimension_counter[ref_value] += 1
++            elif ref_type == "table":
++                table_counter[ref_value] += 1
++    return metric_counter, dimension_counter, table_counter, records_with_catalog_refs, distinct_catalog_refs
++
++
++def _sample_metadata_summary(
++    records: list[LogisticsNl2SqlEvaluationLogRecord],
++    metadata_by_trace: dict[str, dict[str, Any]],
++) -> dict[str, Any]:
++    """汇总 M8 样例元数据维度。
++
++    参数：
++        records: 已脱敏 evaluation log 记录。
++        metadata_by_trace: trace_id 到样例元数据的映射，可包含 category、business_case、
++            metric_family、expected_status。
++    返回：
++        计数器和 expected-vs-actual 一致率；未提供元数据时返回空聚合，兼容旧 M6/M7 报表。
++    业务逻辑：
++        只聚合稳定枚举/样例标签，不读取 SQL 文本或参数值。
++    """
++
++    by_category: Counter[str] = Counter()
++    by_business_case: Counter[str] = Counter()
++    by_metric_family: Counter[str] = Counter()
++    match_count = 0
++    mismatch_count = 0
++    expected_count = 0
++    for record in records:
++        metadata = metadata_by_trace.get(record.trace_id) or {}
++        category = _safe_report_text(str(metadata.get("category") or "")) or ""
++        business_case = _safe_report_text(str(metadata.get("business_case") or "")) or ""
++        metric_family = _safe_report_text(str(metadata.get("metric_family") or "")) or ""
++        expected_status = _safe_report_text(str(metadata.get("expected_status") or "")) or ""
++        if category:
++            by_category[category] += 1
++        if business_case:
++            by_business_case[business_case] += 1
++        if metric_family:
++            by_metric_family[metric_family] += 1
++        if expected_status:
++            expected_count += 1
++            if expected_status == record.status:
++                match_count += 1
++            else:
++                mismatch_count += 1
++    return {
++        "by_category": by_category,
++        "by_business_case": by_business_case,
++        "by_metric_family": by_metric_family,
++        "expected_status_match_count": match_count,
++        "expected_status_mismatch_count": mismatch_count,
++        "expected_status_match_rate": (match_count / expected_count) if expected_count else 0.0,
++    }
++
++
+ def _safe_report_text(value: str | None) -> str | None:
+     """报表文本统一脱敏，避免聚合层重新泄露敏感片段。"""
+
+diff --git a/backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py b/backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py
+index 68857d9..abe3f10 100644
+--- a/backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py
++++ b/backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py
+@@ -404,11 +404,11 @@ def _write_report(path: Path, report: LogisticsNl2SqlEvaluationReport) -> None:
+
+
+ def _render_m7_markdown(report: LogisticsNl2SqlEvaluationReport) -> str:
+-    """复用 M6 报表渲染器，并替换标题为 M7 只读 smoke。"""
++    """复用通用报表渲染器，并替换标题为 M7 只读 smoke。"""
+
+     markdown = render_logistics_nl2sql_evaluation_report_markdown(report)
+     return markdown.replace(
+-        "# NL2SQL Logistics M6 Shadow Smoke Evaluation Report",
++        "# NL2SQL Logistics Shadow Smoke Evaluation Report",
+         "# NL2SQL Logistics M7 Readonly Middle DB Shadow Smoke Evaluation Report",
+         1,
+     )
+diff --git a/backend/app/domains/logistics/services/nl2sql/m8_shadow_eval.py b/backend/app/domains/logistics/services/nl2sql/m8_shadow_eval.py
+new file mode 100644
+index 0000000..2b3841c
+--- /dev/null
++++ b/backend/app/domains/logistics/services/nl2sql/m8_shadow_eval.py
+@@ -0,0 +1,625 @@
++from __future__ import annotations
++
++import json
++from copy import deepcopy
++from pathlib import Path
++from typing import Any
++
++from pydantic import BaseModel, ConfigDict, Field
++
++from backend.app.domains.logistics.services.nl2sql.evaluation_log import LogisticsNl2SqlEvaluationLogRecord
++from backend.app.domains.logistics.services.nl2sql.evaluation_report import (
++    LogisticsNl2SqlEvaluationReport,
++    build_logistics_nl2sql_evaluation_report,
++    render_logistics_nl2sql_evaluation_report_markdown,
++)
++from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++from backend.app.domains.logistics.services.nl2sql.shadow_pipeline import (
++    LogisticsNl2SqlShadowPipeline,
++    LogisticsNl2SqlShadowPipelineRequest,
++    LogisticsNl2SqlShadowPipelineResult,
++)
++from backend.app.domains.logistics.services.nl2sql.sql_execution import (
++    FakeLogisticsSqlExecutor,
++    LogisticsSqlExecutionService,
++)
++from backend.app.domains.logistics.services.nl2sql.sql_plan import LogisticsSqlPlanValidationResult
++from backend.app.domains.logistics.services.nl2sql.sql_renderer import LogisticsRenderedSql
++from backend.app.domains.logistics.services.nl2sql.sql_safety import LogisticsSqlSafetyChecker
++
++M8_SHADOW_EVAL_VERSION = "logistics_nl2sql_m8_shadow_eval.v1"
++DEFAULT_M8_RECORDS_FILENAME = "m8-shadow-eval-records.jsonl"
++DEFAULT_M8_REPORT_FILENAME = "m8-shadow-eval-report.md"
++DEFAULT_M8_ARTIFACT_DIR = Path("ai/outbox/kanban/t_7895e090")
++DEFAULT_M8_SAMPLE_IDS: tuple[str, ...] = (
++    "m8_success_yearly_shipment_mw_by_year",
++    "m8_success_carrier_avg_fee_per_trip",
++    "m8_success_monthly_total_fee_trend",
++    "m8_success_region_transport_mode_shipment_fee",
++    "m8_validation_tonnage_unit_rejected",
++    "m8_validation_unknown_price_metric_rejected",
++    "m8_success_carrier_rank_by_mw",
++    "m8_success_origin_customer_topn_detail",
++    "m8_validation_quote_metric_requires_supported_hist_scope",
++    "m8_safety_forbidden_update_sql_blocked",
++    "m8_skipped_missing_candidate",
++    "m8_unsupported_non_sql_direct_strategy",
++)
++
++
++class LogisticsNl2SqlM8ShadowEvalSample(BaseModel):
++    """M8 物流 NL2SQL shadow-only 评估样例。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    sample_id: str
++    description: str
++    request: LogisticsNl2SqlShadowPipelineRequest
++    category: str
++    business_case: str
++    metric_family: str
++    expected_status: str
++    force_safety_sql_failure: bool = False
++    offline_only: bool = True
++
++
++class LogisticsNl2SqlM8ShadowEvalOutcome(BaseModel):
++    """M8 单条 shadow-only 样例执行结果。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    sample: LogisticsNl2SqlM8ShadowEvalSample
++    result: LogisticsNl2SqlShadowPipelineResult
++    evaluation_log_record: LogisticsNl2SqlEvaluationLogRecord
++    executor_call_count_before: int = 0
++    executor_call_count_after: int = 0
++
++
++class LogisticsNl2SqlM8ShadowEvalRunResult(BaseModel):
++    """M8 shadow-only 评估总返回。"""
++
++    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
++
++    outcomes: list[LogisticsNl2SqlM8ShadowEvalOutcome] = Field(default_factory=list)
++    evaluation_log_records: list[LogisticsNl2SqlEvaluationLogRecord] = Field(default_factory=list)
++    report: LogisticsNl2SqlEvaluationReport
++    records_path: Path
++    report_path: Path
++    shadow_only: bool = True
++    live_smoke_executed: bool = False
++
++    def render_markdown(self) -> str:
++        """把 M8 评估报表渲染为 Markdown。"""
++
++        return render_logistics_nl2sql_evaluation_report_markdown(self.report)
++
++
++class _M8UnsafeSqlRenderer:
++    """M8 safety 负例专用 renderer。
++
++    业务逻辑：
++        该 renderer 只在 `force_safety_sql_failure=True` 的离线样例中使用，用于证明写 SQL 会被
++        safety gate fail-closed；它不进入正式 QA 主链路，也不会触达真实数据库。
++    """
++
++    def render(self, validation_result: LogisticsSqlPlanValidationResult) -> LogisticsRenderedSql:
++        """在 SQLPlan 校验通过后返回危险 SQL，供 safety gate 阻断。"""
++
++        if not validation_result.ok or validation_result.normalized_plan is None:
++            raise ValueError("m8_unsafe_renderer_requires_validated_plan")
++        return LogisticsRenderedSql(
++            sql="update dws_logistics_detail_union set shipment_watt = :p0",
++            params={"p0": 0},
++            referenced_tables=["dws_logistics_detail_union"],
++            referenced_columns=[("dws_logistics_detail_union", "shipment_watt")],
++            referenced_joins=[],
++            warnings=["m8_safety_negative_renderer"],
++        )
++
++
++def build_default_logistics_nl2sql_m8_shadow_eval_samples() -> list[LogisticsNl2SqlM8ShadowEvalSample]:
++    """构造 M8 默认 shadow-only 样例集。
++
++    样例覆盖常见物流问题能力：年度发运量、承运商均价、月度费用趋势、区域/运输方式拆分；
++    同时保留吨数和未知价格指标 fail-closed 负例。样例只使用受控 SQLPlan candidate，不读 .env。
++    """
++
++    return [
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_success_yearly_shipment_mw_by_year",
++            description="按年份汇总发运量和明细行数，验证显式多年份桶覆盖",
++            category="trend",
++            business_case="explicit_year_bucket_shipment_volume",
++            metric_family="shipment_volume",
++            expected_status="success",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="2023到2026年每年物流发运量分别是多少",
++                rewritten_question="按年份汇总发运量并保留 2023-2026 年份桶",
++                request_id="m8-yearly-shipment-mw",
++                candidate=_candidate(
++                    metrics=["shipment_mw", "row_count"],
++                    dimensions=["biz_year"],
++                    group_by=["biz_year"],
++                    order_by=[{"dimension": "biz_year", "direction": "asc"}],
++                    requested_unit="MW",
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_success_carrier_avg_fee_per_trip",
++            description="按承运商统计平均每车费用，验证均价口径与总费用/车次同时可追溯",
++            category="ranking",
++            business_case="carrier_average_freight_by_trip",
++            metric_family="average_freight",
++            expected_status="success",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="各物流公司平均运费是多少，按高到低排",
++                rewritten_question="按承运商汇总总费用、车次和平均每车费用",
++                request_id="m8-carrier-avg-fee",
++                candidate=_candidate(
++                    query_type="ranking",
++                    metrics=["avg_fee_per_trip", "total_fee", "shipment_trip_count", "row_count"],
++                    dimensions=["logistics_company_name"],
++                    group_by=["logistics_company_name"],
++                    order_by=[{"metric": "avg_fee_per_trip", "direction": "desc"}],
++                    requested_unit="元/车",
++                    limit=20,
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_success_monthly_total_fee_trend",
++            description="按年月汇总总费用，验证月度趋势维度覆盖",
++            category="trend",
++            business_case="monthly_total_fee_trend",
++            metric_family="total_fee",
++            expected_status="success",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="2023到2026年每月物流总运费趋势是什么",
++                rewritten_question="按年月汇总总费用并按年月升序排序",
++                request_id="m8-monthly-total-fee",
++                candidate=_candidate(
++                    metrics=["total_fee", "row_count"],
++                    dimensions=["biz_month"],
++                    group_by=["biz_month"],
++                    order_by=[{"dimension": "biz_month", "direction": "asc"}],
++                    requested_unit="元",
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_success_region_transport_mode_shipment_fee",
++            description="按区域和运输方式拆分发运量、总费用，验证多维 group by 覆盖",
++            category="breakdown",
++            business_case="region_transport_mode_breakdown",
++            metric_family="shipment_volume",
++            expected_status="success",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="各区域不同运输方式的发运量和总费用分别是多少",
++                rewritten_question="按区域和运输方式汇总发运量、总费用与明细行数",
++                request_id="m8-region-mode-shipment-fee",
++                candidate=_candidate(
++                    query_type="ranking",
++                    metrics=["shipment_mw", "total_fee", "row_count"],
++                    dimensions=["region_name", "transport_mode"],
++                    group_by=["region_name", "transport_mode"],
++                    order_by=[{"metric": "shipment_mw", "direction": "desc"}],
++                    requested_unit="MW",
++                    limit=20,
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_validation_tonnage_unit_rejected",
++            description="吨数/吨位当前不支持，必须停在 SQLPlan 校验边界",
++            category="validation",
++            business_case="unsupported_tonnage_fail_closed",
++            metric_family="unsupported",
++            expected_status="validation_failed",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="2025年运输吨位是多少",
++                rewritten_question="用户请求吨数口径，当前物流 NL2SQL 不支持",
++                request_id="m8-tonnage-rejected",
++                candidate=_candidate(
++                    metrics=["shipment_mw"],
++                    dimensions=[],
++                    group_by=[],
++                    order_by=[],
++                    requested_unit="吨",
++                    business_rules=["default_time_range", "unsupported_tonnage"],
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_validation_unknown_price_metric_rejected",
++            description="未知价格指标不能默认为均价或报价，必须 fail-closed",
++            category="validation",
++            business_case="unknown_price_metric_fail_closed",
++            metric_family="unsupported",
++            expected_status="validation_failed",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="物流神秘价格指标是多少",
++                rewritten_question="未知价格指标不能映射到临近价格概念",
++                request_id="m8-unknown-price-metric",
++                candidate=_candidate(
++                    metrics=["unknown_price_metric"],
++                    dimensions=[],
++                    group_by=[],
++                    order_by=[],
++                    requested_unit="元/车",
++                    extra_catalog_refs=["metric:unknown_price_metric"],
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_success_carrier_rank_by_mw",
++            description="按承运商统计发运量排名，验证哪个物流跑得最多的排名口径",
++            category="ranking",
++            business_case="carrier_rank_by_shipment_mw",
++            metric_family="shipment_volume",
++            expected_status="success",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="哪个物流公司跑得最多，按发运量排名",
++                rewritten_question="按承运商汇总发运量并取 TopN 排名",
++                request_id="m8-carrier-rank-by-mw",
++                candidate=_candidate(
++                    query_type="ranking",
++                    metrics=["carrier_rank_by_mw", "shipment_mw", "row_count"],
++                    dimensions=["logistics_company_name"],
++                    group_by=["logistics_company_name"],
++                    order_by=[{"metric": "carrier_rank_by_mw", "direction": "desc"}],
++                    requested_unit="MW",
++                    limit=10,
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_success_origin_customer_topn_detail",
++            description="按始发地和客户输出明细 TopN，验证明细类 limit 与路线/客户维度覆盖",
++            category="detail",
++            business_case="origin_customer_topn_detail",
++            metric_family="trip_count",
++            expected_status="success",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="从合肥发给重点客户的物流明细前20条是什么",
++                rewritten_question="筛选始发地后返回客户、年份、发运量、总费用、车次明细 TopN",
++                request_id="m8-origin-customer-topn-detail",
++                candidate=_candidate(
++                    query_type="detail",
++                    metrics=["shipment_mw", "total_fee", "shipment_trip_count"],
++                    dimensions=["origin_place", "customer_name", "biz_year"],
++                    filters=[_filter("biz_year", "in", [2023, 2024, 2025, 2026]), _filter("origin_place", "like", ["合肥"])],
++                    group_by=[],
++                    order_by=[{"dimension": "biz_year", "direction": "desc"}],
++                    requested_unit="MW",
++                    limit=20,
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_validation_quote_metric_requires_supported_hist_scope",
++            description="报价/单价/运价依赖历史明细单价表，M8 dws-only shadow 样例必须受控失败",
++            category="validation",
++            business_case="unit_price_scope_fail_closed",
++            metric_family="unit_price",
++            expected_status="validation_failed",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="各线路报价/单价是多少",
++                rewritten_question="报价/单价不能误映射成均价，当前样例未接历史明细表范围",
++                request_id="m8-quote-metric-scope-rejected",
++                candidate=_candidate(
++                    query_type="ranking",
++                    metrics=["unit_price_per_vehicle"],
++                    dimensions=["logistics_company_name"],
++                    group_by=["logistics_company_name"],
++                    order_by=[{"metric": "unit_price_per_vehicle", "direction": "desc"}],
++                    requested_unit="元/车",
++                    limit=20,
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_safety_forbidden_update_sql_blocked",
++            description="渲染器异常输出写 SQL 时必须停在 safety gate，且不触达 executor",
++            category="safety",
++            business_case="forbidden_update_sql_blocked",
++            metric_family="safety_negative",
++            expected_status="safety_failed",
++            force_safety_sql_failure=True,
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="安全负例：禁止任何更新语句",
++                rewritten_question="安全负例只验证 safety gate，不执行数据库写操作",
++                request_id="m8-safety-forbidden-update",
++                candidate=_candidate(
++                    metrics=["shipment_mw"],
++                    dimensions=[],
++                    group_by=[],
++                    order_by=[],
++                    requested_unit="MW",
++                ),
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_skipped_missing_candidate",
++            description="缺少 SQLPlan candidate 时跳过 SQL 阶段，保持 shadow 不影响主流程",
++            category="environment",
++            business_case="missing_candidate_skipped",
++            metric_family="unsupported",
++            expected_status="skipped",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="物流整体情况怎么样",
++                request_id="m8-missing-candidate",
++                candidate=None,
++            ),
++        ),
++        LogisticsNl2SqlM8ShadowEvalSample(
++            sample_id="m8_unsupported_non_sql_direct_strategy",
++            description="非 sql_direct strategy 停在 candidate 边界",
++            category="validation",
++            business_case="non_sql_direct_strategy_unsupported",
++            metric_family="unsupported",
++            expected_status="unsupported",
++            request=LogisticsNl2SqlShadowPipelineRequest(
++                question="请给出物流业务解释性分析",
++                request_id="m8-non-sql-direct",
++                candidate=_candidate(strategy="clarify"),
++            ),
++        ),
++    ]
++
++
++def run_logistics_nl2sql_m8_shadow_eval(
++    *,
++    artifact_dir: str | Path = DEFAULT_M8_ARTIFACT_DIR,
++    samples: list[LogisticsNl2SqlM8ShadowEvalSample] | None = None,
++) -> LogisticsNl2SqlM8ShadowEvalRunResult:
++    """运行 M8 shadow-only 样例评估，并写出 JSONL/Markdown 验收材料。
++
++    该 runner 不读取 backend/.env，不连接真实中间库，只用 fake executor 验证 SQLPlan→Renderer→Safety→
++    evaluation log/report 的离线闭环。
++    """
++
++    resolved_artifact_dir = Path(artifact_dir)
++    resolved_artifact_dir.mkdir(parents=True, exist_ok=True)
++    records_path = resolved_artifact_dir / DEFAULT_M8_RECORDS_FILENAME
++    report_path = resolved_artifact_dir / DEFAULT_M8_REPORT_FILENAME
++    _reset_artifact(records_path)
++    _reset_artifact(report_path)
++
++    catalog = LogisticsSemanticCatalogLoader().load()
++    safety_checker = LogisticsSqlSafetyChecker(catalog=catalog)
++    fake_executor = FakeLogisticsSqlExecutor(
++        explain_rows=[{"select_type": "SIMPLE", "offline": True}],
++        trial_rows=[{"sample_metric": 1, "offline": True}],
++    )
++    execution_service = LogisticsSqlExecutionService(
++        executor=fake_executor,
++        safety_checker=safety_checker,
++        trial_limit=1,
++    )
++    pipeline = LogisticsNl2SqlShadowPipeline(
++        catalog=catalog,
++        safety_checker=safety_checker,
++        execution_service=execution_service,
++        pipeline_version=M8_SHADOW_EVAL_VERSION,
++    )
++    unsafe_sql_pipeline = LogisticsNl2SqlShadowPipeline(
++        catalog=catalog,
++        renderer=_M8UnsafeSqlRenderer(),
++        safety_checker=safety_checker,
++        execution_service=execution_service,
++        pipeline_version=M8_SHADOW_EVAL_VERSION,
++    )
++
++    resolved_samples = samples or build_default_logistics_nl2sql_m8_shadow_eval_samples()
++    outcomes: list[LogisticsNl2SqlM8ShadowEvalOutcome] = []
++    sample_ids_by_trace: dict[str, str] = {}
++    descriptions_by_trace: dict[str, str] = {}
++    sample_metadata_by_trace: dict[str, dict[str, Any]] = {}
++    for sample in resolved_samples:
++        # 仅 safety 负例使用专用 renderer 构造危险 SQL；仍先经过 SQLPlan validator，且只停在 safety gate。
++        active_pipeline = unsafe_sql_pipeline if sample.force_safety_sql_failure else pipeline
++        executor_call_count_before = len(fake_executor.calls)
++        result = active_pipeline.run(sample.request)
++        executor_call_count_after = len(fake_executor.calls)
++        record = result.evaluation_log_record
++        outcomes.append(
++            LogisticsNl2SqlM8ShadowEvalOutcome(
++                sample=sample,
++                result=result,
++                evaluation_log_record=record,
++                executor_call_count_before=executor_call_count_before,
++                executor_call_count_after=executor_call_count_after,
++            )
++        )
++        sample_ids_by_trace[record.trace_id] = sample.sample_id
++        descriptions_by_trace[record.trace_id] = sample.description
++        sample_metadata_by_trace[record.trace_id] = {
++            "category": sample.category,
++            "business_case": sample.business_case,
++            "metric_family": sample.metric_family,
++            "expected_status": sample.expected_status,
++        }
++
++    records = [outcome.evaluation_log_record for outcome in outcomes]
++    report = build_logistics_nl2sql_evaluation_report(
++        records,
++        sample_ids=sample_ids_by_trace,
++        sample_descriptions=descriptions_by_trace,
++        warnings=[f"{M8_SHADOW_EVAL_VERSION} shadow-only; no live database query executed"],
++        include_catalog_breakdown=True,
++        sample_metadata=sample_metadata_by_trace,
++    )
++    _write_records(records_path, records)
++    _write_report(report_path, report)
++    return LogisticsNl2SqlM8ShadowEvalRunResult(
++        outcomes=outcomes,
++        evaluation_log_records=records,
++        report=report,
++        records_path=records_path,
++        report_path=report_path,
++        shadow_only=True,
++        live_smoke_executed=False,
++    )
++
++
++def _candidate(
++    *,
++    query_type: str = "aggregate",
++    metrics: list[str] | None = None,
++    dimensions: list[str] | None = None,
++    filters: list[dict[str, Any]] | None = None,
++    group_by: list[str] | None = None,
++    order_by: list[dict[str, Any]] | None = None,
++    requested_unit: str = "MW",
++    business_rules: list[str] | None = None,
++    limit: int | None = None,
++    strategy: str = "sql_direct",
++    extra_catalog_refs: list[str] | None = None,
++) -> dict[str, Any]:
++    """生成 M8 样例用受控 SQLPlan candidate。"""
++
++    resolved_metrics = metrics or ["shipment_mw", "row_count"]
++    resolved_dimensions = dimensions or []
++    resolved_filters = filters or [_filter("biz_year", "in", [2023, 2024, 2025, 2026])]
++    resolved_group_by = group_by if group_by is not None else list(resolved_dimensions)
++    resolved_order_by = order_by if order_by is not None else []
++    resolved_rules = business_rules or ["default_time_range"]
++    catalog_ids = _catalog_ids(
++        metrics=resolved_metrics,
++        dimensions=[
++            *resolved_dimensions,
++            *(item.get("dimension") for item in resolved_filters if isinstance(item, dict)),
++            *resolved_group_by,
++            *(item.get("dimension") for item in resolved_order_by if isinstance(item, dict) and item.get("dimension")),
++        ],
++        tables=["dws_logistics_detail_union"],
++        rules=resolved_rules,
++        extra=[
++            *(extra_catalog_refs or []),
++            *(f"metric:{item.get('metric')}" for item in resolved_order_by if isinstance(item, dict) and item.get("metric")),
++        ],
++    )
++    candidate: dict[str, Any] = {
++        "schema_version": "logistics_sqlplan_candidate.v1",
++        "domain": "logistics",
++        "strategy": strategy,
++        "catalog_version": "logistics_nl2sql_catalog.v1",
++        "catalog_refs": [
++            {"catalog_id": catalog_id, "catalog_version": "logistics_nl2sql_catalog.v1"}
++            for catalog_id in catalog_ids
++        ],
++        "plan": {
++            "query_type": query_type,
++            "tables": ["dws_logistics_detail_union"],
++            "joins": [],
++            "metrics": resolved_metrics,
++            "dimensions": resolved_dimensions,
++            "filters": resolved_filters,
++            "group_by": resolved_group_by,
++            "order_by": resolved_order_by,
++            "business_rules": resolved_rules,
++            "explicit_year_buckets": [2023, 2024, 2025, 2026],
++            "requested_unit": requested_unit,
++            "limit": limit,
++        },
++        "clarification_questions": [],
++        "unsupported_reason": None,
++        "confidence": 0.9,
++    }
++    return deepcopy(candidate)
++
++
++def _catalog_ids(
++    *,
++    metrics: list[str],
++    dimensions: list[Any],
++    tables: list[str],
++    rules: list[str],
++    extra: list[str],
++) -> list[str]:
++    """按稳定顺序生成去重 catalog ref ID。"""
++
++    ordered: list[str] = []
++    for value in [*(f"table:{item}" for item in tables), *(f"metric:{item}" for item in metrics)]:
++        _append_catalog_id(ordered, value)
++    for item in dimensions:
++        if item:
++            _append_catalog_id(ordered, f"dimension:{item}")
++    for item in rules:
++        _append_catalog_id(ordered, f"rule:{item}")
++    for item in extra:
++        _append_catalog_id(ordered, item)
++    return ordered
++
++
++def _append_catalog_id(values: list[str], item: str) -> None:
++    """向 catalog ref 列表追加非空去重 ID。"""
++
++    normalized = str(item or "").strip()
++    if normalized and normalized not in values:
++        values.append(normalized)
++
++
++def _filter(dimension: str, operator: str, values: list[Any]) -> dict[str, Any]:
++    """生成 M8 样例过滤条件。"""
++
++    return {"dimension": dimension, "operator": operator, "values": values}
++
++
++def _reset_artifact(path: Path) -> None:
++    """重置固定 artifact 文件。"""
++
++    if path.exists():
++        path.unlink()
++
++
++def _write_records(path: Path, records: list[LogisticsNl2SqlEvaluationLogRecord]) -> None:
++    """写出逐行 JSON evaluation log。"""
++
++    lines = [record.model_dump_json() for record in records]
++    path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
++
++
++def _write_report(path: Path, report: LogisticsNl2SqlEvaluationReport) -> None:
++    """写出 Markdown 评估报表。"""
++
++    path.write_text(render_logistics_nl2sql_evaluation_report_markdown(report), encoding="utf-8")
++
++
++def _safe_summary(result: LogisticsNl2SqlM8ShadowEvalRunResult) -> dict[str, Any]:
++    """构造 CLI 可打印的脱敏摘要。"""
++
++    return {
++        "version": M8_SHADOW_EVAL_VERSION,
++        "shadow_only": result.shadow_only,
++        "live_smoke_executed": result.live_smoke_executed,
++        "records_path": str(result.records_path),
++        "report_path": str(result.report_path),
++        "total": result.report.total,
++        "by_status": result.report.by_status,
++        "success_rate": result.report.success_rate,
++        "catalog_ref_coverage": result.report.catalog_ref_coverage,
++        "distinct_catalog_ref_count": result.report.distinct_catalog_ref_count,
++    }
++
++
++def render_safe_m8_summary_json(result: LogisticsNl2SqlM8ShadowEvalRunResult) -> str:
++    """渲染给固定脚本 stdout 使用的安全 JSON 摘要。"""
++
++    return json.dumps(_safe_summary(result), ensure_ascii=False, sort_keys=True)
++
++
++__all__ = [
++    "DEFAULT_M8_ARTIFACT_DIR",
++    "DEFAULT_M8_RECORDS_FILENAME",
++    "DEFAULT_M8_REPORT_FILENAME",
++    "DEFAULT_M8_SAMPLE_IDS",
++    "M8_SHADOW_EVAL_VERSION",
++    "LogisticsNl2SqlM8ShadowEvalOutcome",
++    "LogisticsNl2SqlM8ShadowEvalRunResult",
++    "LogisticsNl2SqlM8ShadowEvalSample",
++    "build_default_logistics_nl2sql_m8_shadow_eval_samples",
++    "render_safe_m8_summary_json",
++    "run_logistics_nl2sql_m8_shadow_eval",
++]
+diff --git a/docs/NL2SQL_LOGISTICS_M8_SHADOW_EVAL_PLAN.md b/docs/NL2SQL_LOGISTICS_M8_SHADOW_EVAL_PLAN.md
+new file mode 100644
+index 0000000..54a49b6
+--- /dev/null
++++ b/docs/NL2SQL_LOGISTICS_M8_SHADOW_EVAL_PLAN.md
+@@ -0,0 +1,53 @@
++# NL2SQL Logistics M8 Shadow Eval Plan
++
++## 背景
++
++M7 已完成只读中间库 smoke：在环境可用时通过受控 SQLPlan、Renderer、Safety、EXPLAIN/trial 执行真实只读库闭环，并输出脱敏 JSONL/Markdown 验收材料。
++
++M8 不接正式物流 QA 主链路，也不读取 `.env` 或真实数据库连接；本阶段目标是把 shadow-only 离线样例集扩展成可持续评估入口，用于后续 M9/M10 灰度前的候选质量观察。
++
++## 范围
++
++1. 新增 M8 默认样例集（12 条）：
++   - 年度发运量按年份拆分；
++   - 承运商平均每车费用，保留总费用与车次追溯；
++   - 月度总费用趋势；
++   - 区域 + 运输方式多维拆分；
++   - 承运商发运量 TopN 排名；
++   - 始发地 + 客户明细 TopN；
++   - 吨数/吨位不支持 fail-closed；
++   - 未知价格指标 fail-closed；
++   - 报价/单价/运价在未接历史明细表范围时 fail-closed，避免误映射为均价；
++   - 写 SQL safety 负例必须停在 safety gate；
++   - 缺少 candidate / 非 sql_direct strategy 边界。
++2. 增强评估报表维度：
++   - `by_metric_id`；
++   - `by_dimension_id`；
++   - `by_table_id`；
++   - `by_category`；
++   - `by_business_case`；
++   - `by_metric_family`；
++   - `expected_status_match_count` / `expected_status_match_rate`；
++   - `safety_pass_count` / `safety_block_count`；
++   - `executor_touched_count` / `executor_not_touched_count`；
++   - `catalog_ref_coverage`；
++   - `distinct_catalog_ref_count`。
++3. 固定脚本入口：`scripts/dev/run_logistics_nl2sql_m8_shadow_eval.py`。
++4. 验收材料默认输出目录：`ai/outbox/kanban/t_7895e090/`。
++
++## 非范围
++
++- 不接前端、聊天主链路或正式物流 Data QA 查询链路；
++- 不生成任意 SQL 文本给 LLM 执行；
++- 不读取 SAP Oracle MID；
++- 不泄露参数值、SQL 原文、`.env`、host/user/password/DSN；
++- 不改变 M7 readonly live smoke 的真实只读库能力。
++
++## 验收命令
++
++```bash
++backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_m8_shadow_eval.py -q
++backend/.venv/bin/python scripts/dev/run_logistics_nl2sql_m8_shadow_eval.py --artifact-dir ai/outbox/kanban/t_7895e090
++```
++
++脚本 stdout 只输出脱敏摘要；详细脱敏 JSONL/Markdown 写入 artifact 目录。
+diff --git a/scripts/dev/run_logistics_nl2sql_m8_shadow_eval.py b/scripts/dev/run_logistics_nl2sql_m8_shadow_eval.py
+new file mode 100644
+index 0000000..937a5d8
+--- /dev/null
++++ b/scripts/dev/run_logistics_nl2sql_m8_shadow_eval.py
+@@ -0,0 +1,37 @@
++from __future__ import annotations
++
++import argparse
++import sys
++from pathlib import Path
++
++# 固定脚本入口：允许本地手动触发 M8 shadow-only 样例评估，避免临时 heredoc 命令。
++REPO_ROOT = Path(__file__).resolve().parents[2]
++if str(REPO_ROOT) not in sys.path:
++    sys.path.insert(0, str(REPO_ROOT))
++
++from backend.app.domains.logistics.services.nl2sql.m8_shadow_eval import (  # noqa: E402
++    DEFAULT_M8_ARTIFACT_DIR,
++    render_safe_m8_summary_json,
++    run_logistics_nl2sql_m8_shadow_eval,
++)
++
++
++def main() -> int:
++    """解析 CLI 参数并执行 M8 shadow-only 评估。"""
++
++    parser = argparse.ArgumentParser(description="Run logistics NL2SQL M8 shadow-only sample evaluation")
++    parser.add_argument(
++        "--artifact-dir",
++        default=str(DEFAULT_M8_ARTIFACT_DIR),
++        help="directory for sanitized M8 JSONL/Markdown artifacts",
++    )
++    args = parser.parse_args()
++
++    result = run_logistics_nl2sql_m8_shadow_eval(artifact_dir=Path(args.artifact_dir))
++    # 只输出脱敏摘要：不打印 SQL、参数、host/user/password/DSN。
++    print(render_safe_m8_summary_json(result))
++    return 0 if result.shadow_only and not result.live_smoke_executed else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/unit/logistics/nl2sql/test_m8_shadow_eval.py b/tests/unit/logistics/nl2sql/test_m8_shadow_eval.py
+new file mode 100644
+index 0000000..2f8db67
+--- /dev/null
++++ b/tests/unit/logistics/nl2sql/test_m8_shadow_eval.py
+@@ -0,0 +1,135 @@
++from __future__ import annotations
++
++import json
++
++from backend.app.domains.logistics.services.nl2sql.m8_shadow_eval import (
++    DEFAULT_M8_RECORDS_FILENAME,
++    DEFAULT_M8_REPORT_FILENAME,
++    M8_SHADOW_EVAL_VERSION,
++    build_default_logistics_nl2sql_m8_shadow_eval_samples,
++    run_logistics_nl2sql_m8_shadow_eval,
++)
++
++
++def test_m8_default_shadow_eval_samples_cover_business_metrics_and_fail_closed_guards() -> None:
++    """M8 默认样例集应覆盖常见物流指标/维度，并保留 fail-closed 负例。"""
++
++    samples = build_default_logistics_nl2sql_m8_shadow_eval_samples()
++    sample_ids = [sample.sample_id for sample in samples]
++
++    assert M8_SHADOW_EVAL_VERSION == "logistics_nl2sql_m8_shadow_eval.v1"
++    assert len(samples) >= 8
++    assert sample_ids[:6] == [
++        "m8_success_yearly_shipment_mw_by_year",
++        "m8_success_carrier_avg_fee_per_trip",
++        "m8_success_monthly_total_fee_trend",
++        "m8_success_region_transport_mode_shipment_fee",
++        "m8_validation_tonnage_unit_rejected",
++        "m8_validation_unknown_price_metric_rejected",
++    ]
++    assert "m8_success_carrier_rank_by_mw" in sample_ids
++    assert "m8_success_origin_customer_topn_detail" in sample_ids
++    assert "m8_validation_quote_metric_requires_supported_hist_scope" in sample_ids
++    assert "m8_safety_forbidden_update_sql_blocked" in sample_ids
++    assert all(sample.offline_only is True for sample in samples)
++    assert {sample.category for sample in samples} >= {"trend", "ranking", "breakdown", "detail", "validation", "safety"}
++    assert {sample.metric_family for sample in samples} >= {
++        "shipment_volume",
++        "total_fee",
++        "trip_count",
++        "average_freight",
++        "unit_price",
++        "unsupported",
++        "safety_negative",
++    }
++    assert all(sample.expected_status for sample in samples)
++
++    run = run_logistics_nl2sql_m8_shadow_eval(samples=samples)
++    by_sample = {outcome.sample.sample_id: outcome.result.status for outcome in run.outcomes}
++
++    assert by_sample["m8_success_yearly_shipment_mw_by_year"] == "success"
++    assert by_sample["m8_success_carrier_avg_fee_per_trip"] == "success"
++    assert by_sample["m8_success_monthly_total_fee_trend"] == "success"
++    assert by_sample["m8_success_region_transport_mode_shipment_fee"] == "success"
++    assert by_sample["m8_success_carrier_rank_by_mw"] == "success"
++    assert by_sample["m8_success_origin_customer_topn_detail"] == "success"
++    assert by_sample["m8_validation_tonnage_unit_rejected"] == "validation_failed"
++    assert by_sample["m8_validation_unknown_price_metric_rejected"] == "validation_failed"
++    assert by_sample["m8_validation_quote_metric_requires_supported_hist_scope"] == "validation_failed"
++    assert by_sample["m8_safety_forbidden_update_sql_blocked"] == "safety_failed"
++    safety_outcome = next(
++        outcome for outcome in run.outcomes if outcome.sample.sample_id == "m8_safety_forbidden_update_sql_blocked"
++    )
++    assert safety_outcome.executor_call_count_after == safety_outcome.executor_call_count_before
++    assert safety_outcome.result.explain_ok is False
++    assert safety_outcome.result.trial_ok is False
++    assert run.report.success_count >= 6
++    assert run.report.fail_closed_count >= 4
++    assert run.report.expected_status_mismatch_count == 0
++
++
++def test_m8_evaluation_report_tracks_catalog_metric_dimension_and_table_coverage(tmp_path) -> None:
++    """M8 报告应新增 catalog 维度评估：指标、业务维度、表覆盖与 catalog ref 覆盖率。"""
++
++    run = run_logistics_nl2sql_m8_shadow_eval(artifact_dir=tmp_path)
++    report = run.report
++
++    assert run.records_path == tmp_path / DEFAULT_M8_RECORDS_FILENAME
++    assert run.report_path == tmp_path / DEFAULT_M8_REPORT_FILENAME
++    assert run.records_path.exists()
++    assert run.report_path.exists()
++    assert len(run.records_path.read_text(encoding="utf-8").splitlines()) == len(run.outcomes)
++
++    assert report.by_metric_id["shipment_mw"] >= 2
++    assert report.by_metric_id["total_fee"] >= 2
++    assert report.by_metric_id["avg_fee_per_trip"] >= 1
++    assert report.by_metric_id["shipment_trip_count"] >= 1
++    assert report.by_dimension_id["biz_year"] >= 1
++    assert report.by_dimension_id["biz_month"] >= 1
++    assert report.by_dimension_id["logistics_company_name"] >= 1
++    assert report.by_dimension_id["region_name"] >= 1
++    assert report.by_dimension_id["transport_mode"] >= 1
++    assert report.by_table_id["dws_logistics_detail_union"] >= 1
++    assert report.by_category["ranking"] >= 1
++    assert report.by_category["safety"] >= 1
++    assert report.by_metric_family["shipment_volume"] >= 1
++    assert report.by_metric_family["average_freight"] >= 1
++    assert report.by_metric_family["unit_price"] >= 1
++    assert report.expected_status_match_count == report.total
++    assert report.expected_status_match_rate == 1.0
++    assert report.safety_pass_count >= report.success_count
++    assert report.safety_block_count >= 1
++    assert report.executor_touched_count >= report.success_count
++    assert report.executor_not_touched_count >= report.fail_closed_count
++    assert report.catalog_ref_coverage >= 0.75
++    assert report.distinct_catalog_ref_count >= 8
++
++    markdown = run.render_markdown()
++    assert "## By Metric" in markdown
++    assert "avg_fee_per_trip" in markdown
++    assert "## By Dimension" in markdown
++    assert "transport_mode" in markdown
++    assert "## By Category" in markdown
++    assert "## By Metric Family" in markdown
++
++
++def test_m8_shadow_eval_artifacts_remain_shadow_only_and_redacted(tmp_path) -> None:
++    """M8 固定 runner 写出的 JSONL/Markdown 只保留脱敏摘要，不泄露 SQL、参数值或连接信息。"""
++
++    run = run_logistics_nl2sql_m8_shadow_eval(artifact_dir=tmp_path)
++    payload = (
++        run.records_path.read_text(encoding="utf-8")
++        + run.report_path.read_text(encoding="utf-8")
++        + json.dumps(run.report.model_dump(mode="json"), ensure_ascii=False)
++    )
++
++    assert run.live_smoke_executed is False
++    assert run.shadow_only is True
++    assert "SELECT" not in payload
++    assert "UPDATE" not in payload
++    assert "mysql://" not in payload
++    assert "MYSQL_PASSWORD" not in payload
++    assert "unit-password" not in payload
++    assert "tok_unitsecret" not in payload
++    assert "raw_param_value" not in payload
++    assert "正式物流 QA 主链路" not in payload

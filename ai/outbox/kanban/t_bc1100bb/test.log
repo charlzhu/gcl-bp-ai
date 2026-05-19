@@ -1,0 +1,63 @@
+# M9 收口测试与验收日志
+
+生成时间：2026-05-19 09:34:44 CST
+任务：t_bc1100bb
+分支：feature/nl2sql-m9-sqlplan-shadow-mvp
+
+## 1. RED 复现
+
+命令：
+backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py::test_sqlplan_generator_deduplicates_safe_explicit_year_buckets_before_validation -q
+
+修复前结果：FAILED
+关键失败码：
+sqlplan_explicit_year_buckets_mismatch::2023,2024,2025,2026::2023,2024,2025,2025,2026
+
+## 2. focused GREEN + provider alias/timeout focused tests
+
+命令：
+backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py::test_sqlplan_generator_deduplicates_safe_explicit_year_buckets_before_validation tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py::test_sqlplan_generator_keeps_unsafe_explicit_year_buckets_fail_closed tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py::test_sqlplan_generator_normalizes_known_safe_provider_key_aliases_before_validation tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py::test_m9_dev_runner_cli_exposes_live_provider_smoke_flags tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py::test_sqlplan_generator_requests_provider_json_object_mode -q
+
+结果：5 passed in 0.70s
+
+## 3. NL2SQL focused broader tests
+
+命令：
+backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql -q
+
+结果：185 passed, 9 warnings in 5.66s
+说明：warnings 为 pymilvus/pkg_resources/google protobuf 依赖弃用提示，非本次改动新增失败。
+
+## 4. compile
+
+命令：
+backend/.venv/bin/python -m py_compile backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py scripts/dev/run_logistics_nl2sql_m9_shadow_sqlplan_generation.py tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py
+
+结果：rc=0
+
+## 5. static scan
+
+命令：
+backend/.venv/bin/python tmp/hermes/m9_static_scan.py
+
+结果：finding_count=0
+输出文件：ai/outbox/kanban/t_bc1100bb/static-scan.json
+
+## 6. live provider shadow gate
+
+命令：
+backend/.venv/bin/python scripts/dev/run_logistics_nl2sql_m9_shadow_sqlplan_generation.py --artifact-dir ai/outbox/kanban/t_bc1100bb --live-provider-smoke --max-live-samples 1 --live-provider-timeout-seconds 60
+
+结果：rc=0
+摘要：total=1, success_count=1, generated_count=1, validation_pass_count=1, expected_status_mismatch_count=0
+输出文件：
+- ai/outbox/kanban/t_bc1100bb/live-provider-shadow-gate.rc
+- ai/outbox/kanban/t_bc1100bb/live-provider-shadow-gate.log
+- ai/outbox/kanban/t_bc1100bb/m9-shadow-sqlplan-generation-report.md
+- ai/outbox/kanban/t_bc1100bb/m9-shadow-sqlplan-generation-records.jsonl
+
+## 7. independent review
+
+方式：delegate_task 只读独立审查
+结果：passed=true，security_concerns=[]，logic_errors=[]
+输出文件：ai/outbox/kanban/t_bc1100bb/review-result-final.json

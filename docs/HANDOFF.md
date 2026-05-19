@@ -1,78 +1,69 @@
+
 # HANDOFF.md
 
-## 交接结论：全量样例题真实网页 E2E 已完成
+## 交接结论：物管域 SAP MID 接入 M1 方案已完成
 
-当前接手者无需继续续跑 E2E。本轮已经完成 `1391` 条原题 + `1890` 条变体，共 `3281` 条真实网页 E2E，自动比对 `3281/3281` 通过。当前下一步已切换为领导演示、小范围业务试运行和真实反馈闭环。
+本轮完成的是 M1 文档和只读审计，不是正式开发。未新增正式接口、未修改前端页面、未创建迁移、未导出 Oracle 大表、未把用户问答接到 Oracle。
 
-### 真实网页入口
+---
 
-- 首页：`/smart-chat`
-- 智能问答：`/smart-chat`
-- BOM 数据管理：`/bom-data`
-- 试运行说明：`/trial-guide`
+## 一、已完成产物
 
-### 样例题验收资产
+1. `docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md`
+2. `docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md`
+3. `docs/SAP_MID_SYNC_DESIGN.md`
+4. `docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md`
+5. `docs/PLAN_BOM_SAP_DATA_SOURCE_MIGRATION_PLAN.md`
+6. `docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md`
+7. `docs/SAP_MID_INTEGRATION_ROADMAP.md`
+8. `docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md`
+9. `docs/CURRENT_STATUS.md`
+10. `docs/NEXT_TASK.md`
+11. `docs/HANDOFF.md`
 
-- 样例题台账脚本：`scripts/trial_sample_question_ledger.py`
-- 标准答案脚本：`scripts/trial_sample_expected_answer_builder.py`
-- 真实网页 E2E 脚本：`scripts/trial_sample_frontend_e2e_eval.py`
-- 循环批量 runner：`scripts/trial_sample_e2e_batch_runner.py`
-- 答案比对脚本：`scripts/trial_sample_answer_comparator.py`
-- 总编排脚本：`scripts/trial_sample_full_e2e_acceptance.py`
+审计中间材料位于：`ai/outbox/kanban/t_a252ec3a/`。
 
-### 当前验收结果
+---
 
-- 样例题：`1391` 条。
-- 变体：`1890` 条。
-- 网页 E2E 全量计划用例：`3281` 条。
-- 已执行真实网页 E2E：`3281` 条。
-- 待执行：`0` 条。
-- 前端执行状态：`pass=3281`。
-- 自动比对：`PASS=3281 / FAIL=0`。
-- B 类正确追问：`1429/1429`。
-- C 类正确拒答解释：`93/93`。
-- 停止条件：`all_cases_completed`。
-- `failed_cases.json` 当前为空。
+## 二、关键结论
 
-### 已完成修复
+1. SAP MID 附件显示 87 个视图、7718 行字段元数据；16 个重点视图覆盖库存、出入库、采购、工单、SAP BOM。
+2. M2 建议只做库存/出入库 MVP：`V_HF_SAP_INOUT_DAILY` 与 `V_SAP_HFFN_CRKLSZ`。
+3. 用户问数必须查智能助手中间库，不能实时直接查 SAP Oracle MID。
+4. LLM 只负责理解和表达，程序负责基于模板准确查数；禁止 LLM 自由 SQL。
+5. 计划 BOM 可扩展 SAP MID 数据源，但需确认 `SAP_MID` 与现有 `SAP` source_type 命名兼容策略。
 
-1. `scripts/trial_sample_eval_common.py`：修复 BOM 线盒/接线盒变体生成，避免“接接线盒”。
-2. `frontend/src/views/business-chat/BusinessChatPage.vue`：修复自动识别，物流历史发运/规格、运价、报价、发货类问题优先走物流。
-3. `backend/app/domains/logistics/services/slot_extractor.py`：补齐全国省份别名，并增强“总运输费用/运量/累计/各按”等口语清洗。
-4. `backend/app/domains/logistics/services/data_qa_planner.py`：补齐运量、运输费用、运价/报价等同义表达、复杂报表 B/C 边界和历史始发地车型汇总。
-5. `backend/app/domains/logistics/repositories/data_qa_repository.py`：历史区域发运件数支持按年份过滤，并补齐历史始发地车型汇总查询。
-6. `backend/app/domains/logistics/services/data_qa_service.py`：补齐历史始发地车型汇总服务分支，并在相关摘要中展示年份/口径。
-7. `scripts/trial_sample_expected_answer_builder.py`：补齐线路运价、2026 客户/承运商/基地/特殊用车、系统 MW、项目名称、额外费用、备注关键词、宽表/矩阵/报表类 B/C 口径。
-8. `scripts/trial_sample_frontend_e2e_eval.py`：增加逐题 checkpoint、服务日志、`--only-failed`、全量计划数统计，并修正 `--max-cases` 与空失败集保护。
-9. `scripts/trial_sample_answer_comparator.py`：兼容恢复型 checkpoint 行，避免历史修复数据影响全量比对。
-10. `scripts/trial_sample_e2e_batch_runner.py`：新增循环批量执行，自动跑前端 E2E + comparator 并记录可恢复状态。
-11. `backend/app/domains/logistics/services/nlu_center_service.py`：补齐既有 903 A 基线的 NLU 诊断候选，不改变正式查询边界。
+---
 
-### 数据口径
+## 三、Oracle smoke test 状态
 
-- 物流标准答案以 `logistics_ai` 中间库为准。
-- 物流源数据为 `23 年至 25 年物流台账数据.zip`、`物流 26 年源数据.zip`，只用于源文件核验和差异说明。
-- BOM 标准答案来自真实 BOM 标准化材料数据。
+`SAP_ORACLE_*` 配置项存在性已确认，但本地 `backend/.venv` 缺少 Oracle Python 驱动（`oracledb` / `cx_Oracle` 均不可导入），因此未连接 Oracle、未执行 `SELECT 1 FROM dual`、未做 count、未读取 live 字段结构、未抽样 Oracle 数据。
 
-### 边界
+不要伪造 Oracle 结果。M2 前必须先补齐驱动并做只读 smoke test。
 
-- 未修改物流 A/B/C 边界：`A=656 / B=178 / C=69 / D=0`
-- 未修改 BOM A/B/C 边界：`A=86 / B=40 / C=3 / D=0`
-- 未使用 mock 数据。
-- 未 hardcode 样例题答案。
-- 未绕过真实前端页面。
-- 未绕过真实业务主链路。
-- 不要继续硬迁 A，不要扩 query_key，不要再把 E2E 未完成当成当前状态。
+---
 
-### 已执行检查
+## 四、下一步建议
 
-- Python 编译检查：通过。
-- 真实网页 E2E：`3281/3281`。
-- 自动比对：`3281/3281`。
-- 前端 build：通过。
-- BOM QA API E2E：`30/30` 通过。
-- BOM 多问法语义回归：`129/129` 通过。
-- 物流 NLU Center dry-run：`122/122` 通过。
-- 物流 903 语义回归：`1559/1559` 通过。
-- 物流 Guardrail bounded check：`10/10` 通过。
-- 发布前 readiness check：通过。
+进入 M2 前，先处理 Oracle 驱动和只读连接验证；验证通过后，由 Codex/开发子任务按 `docs/NEXT_TASK.md` 拆分实现库存/出入库同步 MVP、查询模板和前端物管入口 MVP。
+
+---
+
+## 五、人工确认项
+
+1. Oracle 驱动和网络权限。
+2. MID schema/owner 与只读账号权限。
+3. 库存/出入库业务口径：移动类型方向、库存结存、退料/冲销净额化。
+4. `source_type = SAP_MID` 是否作为正式枚举。
+5. 前端物管入口命名、同步管理权限和展示口径。
+
+---
+
+## 六、边界提醒
+
+1. 不要改 main。
+2. 不要恢复任何临时 token。
+3. 不要把真实账号密码写入文档/日志/代码。
+4. 不要让智能助手问答直接查 Oracle。
+5. 不要在 M2 范围外提前做采购、工单、SAP BOM 的正式开发。
+6. 每轮开发必须保留并回归现有物流、计划 BOM、功率预测能力。

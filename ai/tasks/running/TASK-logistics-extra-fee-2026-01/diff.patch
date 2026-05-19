@@ -1,0 +1,139 @@
+--- a/backend/app/domains/logistics/repositories/data_qa_repository.py
++++ b/backend/app/domains/logistics/repositories/data_qa_repository.py
+@@ -2,7 +2,7 @@
+ 
+ from typing import Any
+ 
+-from sqlalchemy import text
++from sqlalchemy import bindparam, text
+ from sqlalchemy.orm import Session
+ 
+ 
+@@ -3243,35 +3243,43 @@
+         months: list[int] | None = None,
+         base_code: str | None = None,
+     ) -> dict[str, Any]:
+-        """2026 额外费用总额。
+-
+-        说明：
+-            当前额外费用按 assign_detail.extra_cost 汇总，月份和基地按主任务过滤。
+-        """
+-
+-        filters = ["st.biz_year = :year"]
++        """查询系统物流额外费用总额。
++
++        参数：
++            year: 业务年份。
++            months: 可选月份列表；传入后按提货日期优先、业务日期兜底过滤。
++            base_code: 可选基地编码。
++        返回值：
++            包含额外费用金额、贡献任务数和贡献产品明细数的字典。
++        业务逻辑：
++            “额外费用”金额以发运产品明细 dwd_logistics_ship_product.extra_cost 为准；
++            dwd_logistics_assign_detail.extra_cost 是派车/分配明细侧费用，不能混作本题金额来源。
++        """
++
++        filters = ["st.biz_year = :year", "COALESCE(sp.extra_cost, 0) <> 0"]
+         params: dict[str, Any] = {"year": year}
+         if months:
+-            month_sql = ", ".join(str(int(month)) for month in months)
+-            filters.append(f"MONTH(COALESCE(st.pickup_date, st.biz_date)) IN ({month_sql})")
++            normalized_months = [int(month) for month in months]
++            filters.append("MONTH(COALESCE(st.pickup_date, st.biz_date)) IN :months")
++            params["months"] = normalized_months
+         if base_code:
+             filters.append("st.base_code = :base_code")
+             params["base_code"] = base_code
+         where_sql = " AND ".join(filters)
+-        row = self.db.execute(
+-            text(
+-                f"""
+-                SELECT
+-                    ROUND(SUM(COALESCE(ad.extra_cost, 0)), 2) AS extra_fee_amount,
+-                    COUNT(DISTINCT st.task_id) AS task_count,
+-                    COUNT(ad.id) AS detail_count
+-                FROM dwd_logistics_ship_task st
+-                LEFT JOIN dwd_logistics_assign_detail ad ON ad.ship_task_id = st.task_id
+-                WHERE {where_sql}
+-                """
+-            ),
+-            params,
+-        ).mappings().first()
++        statement = text(
++            f"""
++            SELECT
++                COALESCE(ROUND(SUM(sp.extra_cost), 2), 0) AS extra_fee_amount,
++                COUNT(DISTINCT st.task_id) AS task_count,
++                COUNT(sp.source_id) AS detail_count
++            FROM dwd_logistics_ship_task st
++            JOIN dwd_logistics_ship_product sp ON sp.task_id = st.task_id
++            WHERE {where_sql}
++            """
++        )
++        if months:
++            statement = statement.bindparams(bindparam("months", expanding=True))
++        row = self.db.execute(statement, params).mappings().first()
+         return dict(row or {})
+ 
+     def sys_task_count_ranking(self, *, year: int, dimension: str, top_n: int = 10) -> list[dict[str, Any]]:
+--- a/backend/app/domains/logistics/services/data_qa_service.py
++++ b/backend/app/domains/logistics/services/data_qa_service.py
+@@ -2142,8 +2142,8 @@
+                 plan=plan,
+                 table_columns=["extra_fee_amount", "task_count", "detail_count"],
+                 table_rows=[data],
+-                calculation_logic=["额外费用按 dwd_logistics_assign_detail.extra_cost 汇总，并按主任务年月和基地过滤。"],
+-                data_scope={"tables": ["dwd_logistics_ship_task", "dwd_logistics_assign_detail"], **filters},
++                calculation_logic=["额外费用按 dwd_logistics_ship_product.extra_cost 汇总，并按主任务年月和基地过滤。"],
++                data_scope={"tables": ["dwd_logistics_ship_task", "dwd_logistics_ship_product"], **filters},
+                 warnings=warnings,
+             )
+ 
+--- a/tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
++++ b/tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
+@@ -6,6 +6,8 @@
+ """
+ 
+ from __future__ import annotations
++
++from decimal import Decimal
+ 
+ from backend.app.db.session import SessionLocal
+ from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
+@@ -16,6 +18,36 @@
+ from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
+ from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
+ from backend.app.domains.logistics.services.llm_answer_presentation_service import LogisticsLlmAnswerPresentationService
++
++
++def test_sys_extra_fee_summary_uses_ship_product_amount_source() -> None:
++    """验证 2026 年 1 月额外费用使用发运产品明细金额口径。
++
++    参数：无。
++    返回值：无；通过断言验证 planner 路由、金额和贡献记录数。
++    业务逻辑：额外费用金额应来自 ship_product.extra_cost；assign_detail.extra_cost 是派车明细侧费用，
++    不能混入本题的额外费用总额，否则会把 2026 年 1 月从 143,013 元放大到 157,551 元。
++    """
++
++    question = "2026年1月份额外费用产生多少钱，分别是什么项目？什么原因产生的？"
++    plan = LogisticsDataQaPlanner().build_plan(question)
++
++    assert plan.query_key == "sys_extra_fee_summary"
++    assert not plan.needs_clarification
++    assert plan.filters == {
++        "year": 2026,
++        "months": [1],
++        "detail_warning": "extra_fee_project_reason_unfixed",
++    }
++
++    with SessionLocal() as db:
++        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question))
++
++    assert not result.needs_clarification
++    assert "143,013.00元" in result.answer_summary
++    assert result.result_table.rows == [
++        {"extra_fee_amount": Decimal("143013.00"), "task_count": 7, "detail_count": 7}
++    ]
+ 
+ 
+ def test_region_transport_total_quantity_is_supported() -> None:

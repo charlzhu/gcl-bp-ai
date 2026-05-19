@@ -19,7 +19,7 @@ class PlanBomNluCenterService:
 
     说明：
         1. 先用规则层抽取订单、材料、版本、型号、国家、年份和输出形态；
-        2. 可选调用 qwen-plus / OpenAI 兼容 LLM 生成候选理解；
+        2. 可选调用 deepseek-v4-flash / OpenAI 兼容 LLM 生成候选理解；
         3. LLM 候选必须经过订单、材料和版本索引校验，不能越权生成事实；
         4. 最终输出只作为受控 query/service 的输入，不直接回答业务问题。
     """
@@ -37,11 +37,36 @@ class PlanBomNluCenterService:
         "supplier_reuse_quote_prepare",
         "plan_power_prediction",
         "plan_power_supplier_recommendation",
+        "plan_power_factor_effect_compare",
         "power_cell_requirement",
         "unsupported",
         "clarification",
     }
-    POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation"}
+    POWER_INTENTS = {"plan_power_prediction", "plan_power_supplier_recommendation", "plan_power_factor_effect_compare"}
+    POWER_FACTOR_BY_MATERIAL_CATEGORY = {
+        "glass": "glass",
+        "gap_film": "glass",
+        "interconnect_bar": "ribbon",
+        "busbar": "busbar",
+        "junction_box": "cable",
+    }
+    POWER_FACTOR_COMPARE_WORDS = ("相差", "差值", "差多少", "差了多少", "高多少", "低多少", "大多少", "小多少")
+    ALL_ORDER_SCOPE_WORDS = (
+        "所有",
+        "全部",
+        "多个订单",
+        "现有订单",
+        "现有的订单",
+        "当前订单",
+        "当前的订单",
+        "已有订单",
+        "现有BOM",
+        "当前BOM",
+        "清单",
+        "Excel",
+        "excel",
+        "导出",
+    )
     INTENT_ALIASES = {
         "单订单关键材料规格查询": "single_order_material_specs",
         "单订单材料规格查询": "single_order_material_specs",
@@ -64,6 +89,8 @@ class PlanBomNluCenterService:
         "功率档位分布预测": "plan_power_prediction",
         "供应商功率推荐": "plan_power_supplier_recommendation",
         "目标功率供应商推荐": "plan_power_supplier_recommendation",
+        "功率配置影响值对比": "plan_power_factor_effect_compare",
+        "功率配置差值查询": "plan_power_factor_effect_compare",
         "功率电池需求": "plan_power_supplier_recommendation",
         "功率/电池片需求类问题": "plan_power_supplier_recommendation",
         "无法基于当前BOM数据回答的问题": "unsupported",
@@ -139,6 +166,9 @@ class PlanBomNluCenterService:
         normalized = question.strip()
         slots: dict[str, Any] = {}
         slots["order_tail_no"] = self._extract_order_tails(normalized)
+        # “未给订单号但要求现有/全部订单清单”是明确的全订单范围；
+        # 该标记来自原始问题和规则层尾号抽取，不允许 LLM 单独伪造。
+        slots["all_order_scope_requested"] = self._is_all_order_scope_requested(normalized, slots["order_tail_no"])
         slots["compare_orders"] = slots["order_tail_no"][:]
         slots["order_name_hint"] = self._extract_order_name_hint(normalized)
         slots["material_category"] = self._extract_material_categories(normalized)
@@ -152,6 +182,8 @@ class PlanBomNluCenterService:
         slots["supplier_name"] = self._extract_supplier_name(normalized)
         slots["benchmark"] = self._extract_benchmark(normalized)
         slots["explicit_power_configuration"] = self._extract_explicit_power_configuration(normalized)
+        slots["power_factor_options"] = self._extract_power_factor_options(normalized)
+        slots["power_factor_key"] = self._select_power_factor_key(slots)
         slots["need_table"] = any(word in normalized for word in ("表格", "清单", "列表", "统计出来", "列出来"))
         slots["need_excel"] = any(word.lower() in normalized.lower() for word in ("excel", "导表", "导出"))
         slots["output_format"] = "excel" if slots["need_excel"] else ("table" if slots["need_table"] else "narrative")
@@ -180,6 +212,8 @@ class PlanBomNluCenterService:
             受控 intent 编码。
         """
 
+        if self._is_power_factor_effect_compare_question(question, slots):
+            return "plan_power_factor_effect_compare"
         if self._is_power_question(question) or (
             slots.get("target_power_ratio")
             and (slots.get("model") or slots.get("supplier_name") or slots.get("explicit_power_configuration") or slots.get("order_tail_no"))
@@ -215,7 +249,9 @@ class PlanBomNluCenterService:
             return "cross_order_material_compare" if len(slots.get("order_tail_no") or []) >= 2 else "material_consistency_check"
         if any(word in question for word in ("哪些订单没有", "没有接线盒", "是否有", "有没有")):
             return "material_presence_check"
-        if any(word in question for word in ("所有", "全部", "多个订单", "清单", "Excel", "excel", "导出")):
+        if slots.get("all_order_scope_requested"):
+            # 只有业务员未给出订单号时，“现有/所有/全部订单”才代表当前全部 BOM；
+            # 若问题同时包含尾号，必须继续按该尾号做候选消歧，避免绕过单订单实例确认。
             return "scope_material_list" if slots.get("model") or slots.get("year") else "multi_order_material_table"
         if len(slots.get("order_tail_no") or []) >= 2:
             return "multi_order_material_table"
@@ -238,13 +274,33 @@ class PlanBomNluCenterService:
 
         missing: list[str] = []
         has_explicit_power_config = bool(slots.get("model") and slots.get("explicit_power_configuration"))
+        if intent == "plan_power_factor_effect_compare":
+            if not slots.get("model"):
+                missing.append("model")
+            factor_key = slots.get("power_factor_key")
+            factor_options = slots.get("power_factor_options") or {}
+            # 配置影响值对比必须恰好闭合为同一配置项下的两个选项；超过两个不能静默截断计算。
+            if not factor_key or len(factor_options.get(factor_key) or []) != 2:
+                missing.append("power_factor_options")
+            return missing
         if intent in {"plan_power_prediction", "plan_power_supplier_recommendation"} and not slots.get("order_tail_no") and not has_explicit_power_config:
             missing.append("order_id")
         if intent == "plan_power_supplier_recommendation" and not slots.get("target_power_ratio"):
             missing.append("target_power_ratio")
         if intent in {"single_order_material_specs", "specific_material_query", "bom_version_compare"} and not slots.get("order_tail_no"):
             missing.append("order_id")
-        if intent in {"multi_order_material_table", "cross_order_material_compare"} and len(slots.get("order_tail_no") or []) < 2:
+        order_tails = slots.get("order_tail_no") or []
+        bulk_material_intents = {"multi_order_material_table", "scope_material_list", "batch_export_table"}
+        if intent in bulk_material_intents and order_tails and len(order_tails) < 2:
+            # 多订单/范围/批量清单只有在“无订单尾号 + 现有/所有订单范围”时可默认查全部订单；
+            # 若 LLM 把单个显式尾号改写成批量意图，必须保留对比订单缺槽，避免绕过单订单候选消歧。
+            missing.append("compare_orders")
+        if intent in {"multi_order_material_table", "batch_export_table"} and not order_tails and not slots.get(
+            "all_order_scope_requested"
+        ):
+            # 普通“玻璃规格是什么”没有给订单，也没有全订单范围词，不能被 LLM 改写成全量清单。
+            missing.append("order_id")
+        if intent == "cross_order_material_compare" and len(order_tails) < 2:
             missing.append("compare_orders")
         if intent in {"single_order_material_specs", "multi_order_material_table", "cross_order_material_compare"} and not slots.get("material_category"):
             missing.append("material_category")
@@ -321,12 +377,13 @@ class PlanBomNluCenterService:
             tails = [self._normalize_order_tail(str(item)) for item in slot_candidate.get("order_tail_no") or []]
             tails = [item for item in tails if item]
             rule_tails = rule_candidate.slots.get("order_tail_no") or []
-            if is_power_intent and tails != rule_tails:
-                rejected_reasons.append("功率预测类问题的 LLM 订单候选未与规则层原文抽取完全一致，未采纳订单槽位。")
+            if tails and tails != rule_tails:
+                # 订单号是业务数据边界，LLM 只能复述规则层从原文抽取到的尾号，不能新增、替换或扩展订单范围。
+                rejected_reasons.append("LLM 订单候选未与规则层原文抽取完全一致，未采纳订单槽位。")
             elif tails and self._all_order_tails_exist(tails):
                 validated_slots["order_tail_no"] = tails
                 validated_slots["compare_orders"] = tails
-            else:
+            elif tails:
                 rejected_reasons.append("LLM 订单候选未通过 BOM 索引校验，未采纳订单槽位。")
         if "bom_version" in slot_candidate:
             versions = [str(item).upper().strip() for item in slot_candidate.get("bom_version") or [] if str(item).strip()]
@@ -379,6 +436,13 @@ class PlanBomNluCenterService:
             final_intent = rule_candidate.intent
             final_missing = self._detect_missing_slots(final_intent, validated_slots)
             rule_candidate.guardrail_notes.append(f"LLM intent 会引入缺失槽位，保持规则层 intent：{rule_candidate.intent}。")
+        if rule_candidate.missing_slots:
+            # 规则层已经判定缺订单/范围等关键信息时，LLM 不能通过改写 intent 清空缺槽；
+            # 否则后续 QA 会带空订单号进入查询模型，甚至把普通材料问题误当成全订单清单。
+            final_intent = rule_candidate.intent
+            final_missing = self._detect_missing_slots(final_intent, validated_slots)
+            if intent != rule_candidate.intent:
+                rule_candidate.guardrail_notes.append(f"规则层存在缺槽，保持规则层 intent：{rule_candidate.intent}。")
         if intent != rule_candidate.intent:
             rule_candidate.guardrail_notes.append(f"LLM intent 与规则层存在冲突：{rule_candidate.intent} -> {intent}。")
         merged = PlanBomNluCandidate(
@@ -638,7 +702,8 @@ class PlanBomNluCenterService:
             # “超高透”必须放在“高透”前面，避免正则从中间命中成普通高透。
             "glass": r"(?P<value>超高透|高透|双镀|单镀|透明|白玻|镀膜|非镀膜)\s*玻璃",
             "busbar": r"(?P<value>\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*mm?[^，,；;。+]*?)\s*汇流条",
-            "cable": r"(?P<value>\+?\d{2,4}\s*/\s*-?\d{2,4}\s*(?:mm)?\s*(?:线长|线缆长度|线缆|接线盒))",
+            # 兼容“300、200线长 / 300,200线长”这类业务口语；只抽取长度值，线径仍由 M4 根据显式线径或模型默认确定。
+            "cable": r"(?P<value>\+?\d{2,4}\s*(?:/|、|，|,)\s*-?\d{2,4}\s*(?:mm)?)\s*(?:线长|线缆长度|线缆|接线盒)",
         }
         for key, pattern in prefix_extractors.items():
             match = re.search(pattern, question, flags=re.IGNORECASE)
@@ -654,10 +719,10 @@ class PlanBomNluCenterService:
 
         # 兼容结构化后置写法；仅在前置写法没有命中该槽位时使用，避免跨材料贪婪误抽。
         suffix_extractors = {
-            "ribbon": r"焊带\s*[:：]\s*(?P<value>.+?)(?=\+?玻璃|\+?汇流条|\+?接线盒|\+?线长|[，,；;。]|$)",
+            "ribbon": r"焊带\s*[:：]?\s*(?P<value>φ?\s*\d+(?:\.\d+)?(?:\s*\+\s*φ?\s*\d+(?:\.\d+)?)*)\s*(?:mm)?(?=\+?(?:超高透|高透|双镀|单镀|透明|白玻|玻璃|汇流条|接线盒|线长)|[，,；;。]|$)",
             "glass": r"玻璃\s*[:：]\s*(?P<value>.+?)(?=\+?汇流条|\+?接线盒|\+?线长|[，,；;。]|$)",
             "busbar": r"汇流条\s*[:：]\s*(?P<value>.+?)(?=\+?接线盒|\+?线长|[，,；;。]|$)",
-            "cable": r"(?:接线盒|线长|线缆长度|线缆)\s*[:：]?\s*(?P<value>\+?\d{2,4}\s*/\s*-?\d{2,4}(?:mm)?)(?=\s*[，,；;。]|\s*标板|$)",
+            "cable": r"(?:接线盒|线长|线缆长度|线缆)\s*[:：]?\s*(?P<value>\+?\d{2,4}\s*(?:/|、|，|,)\s*-?\d{2,4}(?:mm)?)(?=\s*[，,；;。]|\s*标板|$)",
         }
         for key, pattern in suffix_extractors.items():
             if key in config:
@@ -696,6 +761,104 @@ class PlanBomNluCenterService:
         if benchmark:
             config["benchmark"] = benchmark
         return config
+
+    def _extract_power_factor_options(self, question: str) -> dict[str, list[str]]:
+        """抽取功率模型配置选项差值问法中的候选选项。
+
+        参数：
+            question: 用户原始问题。
+
+        返回：
+            配置项 key 到用户原文选项列表的映射，例如 `{"busbar": ["6*0.3+4*0.3反光", "4*0.4+4*0.3反光"]}`。
+
+        业务逻辑：
+            版型 + 两个配置值 + “相差多少”属于功率模型配置影响值查询，不需要订单号。
+            本方法只做文本抽取，后续仍由 QA 层到 active 功率模型中校验真实 option 和影响值。
+        """
+
+        result: dict[str, list[str]] = {}
+
+        def add_option(factor_key: str, raw_value: str | None) -> None:
+            """追加去重后的配置选项，保持用户原文中的业务顺序。"""
+            value = self._normalize_power_factor_option_text(raw_value)
+            if not value:
+                return
+            result.setdefault(factor_key, [])
+            if value not in result[factor_key]:
+                result[factor_key].append(value)
+
+        normalized_question = question.lower().replace(" ", "")
+        busbar_aliases = [alias.lower().replace(" ", "") for alias in self.material_aliases.get("busbar", [])]
+        if any(alias in normalized_question for alias in busbar_aliases):
+            busbar_pattern = (
+                r"\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*\+\s*"
+                r"\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*(?:反光)?"
+            )
+            for match in re.finditer(busbar_pattern, question, flags=re.IGNORECASE):
+                add_option("busbar", match.group(0))
+
+        # 焊带影响值查询通常写成“0.24焊带和0.26焊带相差多少”或“焊带0.24和0.26差值”。
+        ribbon_aliases = [alias.lower().replace(" ", "") for alias in self.material_aliases.get("interconnect_bar", [])]
+        if any(alias in normalized_question for alias in ribbon_aliases):
+            for pattern in (
+                r"(?P<value>φ?\s*\d+(?:\.\d+)?)\s*(?:mm)?\s*(?:焊带|互联条|互联带)",
+                r"(?:焊带|互联条|互联带)\s*[:：]?\s*(?P<value>φ?\s*\d+(?:\.\d+)?)(?=\s*(?:和|与|、|,|，|相差|差值|差多少|$))",
+            ):
+                for match in re.finditer(pattern, question, flags=re.IGNORECASE):
+                    add_option("ribbon", match.group("value"))
+
+        return result
+
+    @staticmethod
+    def _normalize_power_factor_option_text(value: str | None) -> str:
+        """归一化用户输入的功率配置选项文本，消除空格和中英文符号差异。"""
+        text = (value or "").strip().strip("，,。；;：:")
+        if not text:
+            return ""
+        text = text.replace("＋", "+").replace("＊", "*").replace("×", "*").replace("X", "*").replace("x", "*")
+        text = re.sub(r"\s+", "", text)
+        text = text.replace("毫米", "mm")
+        return text
+
+    @classmethod
+    def _select_power_factor_key(cls, slots: dict[str, Any]) -> str | None:
+        """从材料类别和配置选项中选择唯一的功率模型配置项。"""
+        factor_options = slots.get("power_factor_options") or {}
+        keys_with_options = [key for key, values in factor_options.items() if values]
+        keys_with_exactly_two_options = [key for key, values in factor_options.items() if len(values or []) == 2]
+        if keys_with_options:
+            # 已经从原文抽到配置选项时，只接受唯一配置项且恰好两个选项；多项/多选项均保持缺槽，避免误答。
+            if len(keys_with_options) == 1 and len(keys_with_exactly_two_options) == 1:
+                return keys_with_exactly_two_options[0]
+            return None
+        material_categories = slots.get("material_category") or []
+        inferred = []
+        for category in material_categories:
+            factor_key = cls.POWER_FACTOR_BY_MATERIAL_CATEGORY.get(str(category))
+            if factor_key and factor_key not in inferred:
+                inferred.append(factor_key)
+        return inferred[0] if len(inferred) == 1 else None
+
+    @classmethod
+    def _is_power_factor_effect_compare_question(cls, question: str, slots: dict[str, Any]) -> bool:
+        """判断是否为功率模型配置影响值差异查询。
+
+        参数：
+            question: 用户问题。
+            slots: 规则层已抽取槽位。
+
+        返回：
+            版型、唯一配置项和恰好两个配置选项均闭合时返回 True。
+        """
+        if not slots.get("model"):
+            return False
+        if not any(word in question for word in cls.POWER_FACTOR_COMPARE_WORDS):
+            return False
+        factor_key = slots.get("power_factor_key")
+        if not factor_key:
+            return False
+        factor_options = slots.get("power_factor_options") or {}
+        return len(factor_options.get(factor_key) or []) == 2
 
     def _extract_supplier_name(self, question: str) -> str | None:
         """从问题中抽取已存在于 active 功率模型的供应商。
@@ -851,6 +1014,22 @@ class PlanBomNluCenterService:
             if tail and tail not in normalized:
                 normalized.append(tail)
         return normalized
+
+    @staticmethod
+    def _is_all_order_scope_requested(question: str, order_tails: list[str]) -> bool:
+        """判断用户是否明确要求当前全部订单范围。
+
+        参数：
+            question: 用户问题原文；
+            order_tails: 规则层已抽取出的订单尾号。
+
+        返回：
+            未给具体订单号且命中全订单/清单范围词时返回 True。
+        """
+
+        if order_tails:
+            return False
+        return any(word in question for word in PlanBomNluCenterService.ALL_ORDER_SCOPE_WORDS)
 
     @staticmethod
     def _extract_order_name_hint(question: str) -> str | None:
@@ -1077,7 +1256,7 @@ class PlanBomNluCenterService:
             "你不能改变 A/B/C 边界；信息不足时只输出 missing_slots 候选，不要强行补全。\n"
             "订单必须尽量从用户问题原文提取，不要自行补全不存在的订单号。\n"
             f"intent_candidate 只能取：{sorted(self.INTENTS)}。\n"
-            "slot_candidate 可包含 order_tail_no、model、customer、country、year、bom_version、material_category、target_power_ratio、supplier_name、benchmark、output_format、need_table、need_excel、missing_slots。\n"
+            "slot_candidate 可包含 order_tail_no、model、customer、country、year、bom_version、material_category、target_power_ratio、supplier_name、benchmark、power_factor_key、power_factor_options、output_format、need_table、need_excel、missing_slots。\n"
             f"material_category 必须优先取核心五类：{sorted(CORE_MATERIAL_CATEGORIES)}；如用户明确问非核心材料，只输出原始候选，不能自行扩展成核心材料。\n"
             "严格输出单个 JSON 对象，不要 markdown，不要解释性自然语言。\n"
             "示例：{\"intent_candidate\":\"single_order_material_specs\",\"slot_candidate\":{\"order_tail_no\":[\"00104\"],\"material_category\":[\"glass\",\"junction_box\"],\"need_table\":true},\"confidence\":0.85}"

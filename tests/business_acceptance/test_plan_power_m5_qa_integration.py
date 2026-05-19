@@ -133,6 +133,48 @@ def test_plan_bom_qa_recommends_suppliers_by_target_ratio(live_db_session, qa_se
     assert "差异" not in response.result_table.columns
 
 
+def test_qa_links_customer_instance_bom_to_single_power_efficiency_segment(live_db_session, qa_service) -> None:
+    """版型+客户实例+年份+单号+标板+单一功率+供应商问法，应直接关联 BOM 并返回效率段，不应追问配置。"""
+    header = (
+        live_db_session.query(PlanBomHeader)
+        .filter(
+            PlanBomHeader.is_active == 1,
+            PlanBomHeader.order_name.contains("NT12R/66GDF"),
+            PlanBomHeader.order_name.contains("2025-01048"),
+        )
+        .order_by(PlanBomHeader.id.asc())
+        .first()
+    )
+    if header is None:
+        pytest.skip("当前真实 BOM 数据没有业务反馈中的客户实例样本，跳过该回归。")
+    customer_instance = str(header.order_name or "").replace("Bill of materials", "").strip()
+
+    response = qa_service.ask(
+        f"{customer_instance} 的BOM搭配，莱茵基准，单一功率620需求，需要芜湖什么效率段投产",
+        use_llm=False,
+    )
+
+    assert response.classification == "A"
+    assert response.status.code == "OK"
+    assert response.nlu.intent == "plan_power_supplier_recommendation"
+    assert response.nlu.slots["target_power_ratio"] == {"620": 1.0}
+    assert response.nlu.slots["supplier_name"] == "芜湖"
+    assert response.nlu.slots["benchmark"] == "莱茵基准"
+    resolution = response.raw_result["bom_config_resolution"]
+    assert resolution["status"] == RESOLVED_STATUS
+    assert resolution["order_no"] == header.order_no
+    assert not resolution["unresolved_items"]
+    assert resolution["resolved_config"]["benchmark"]["value"] == "莱茵基准"
+    assert resolution["resolved_config"]["cable"]["value"] == "+400/-200mm（4mm²）"
+    assert response.result_table.rows
+    first_row = response.result_table.rows[0]
+    assert first_row["供应商"] == "芜湖"
+    assert first_row["目标功率档"] == "620W"
+    assert "25.6" in first_row["建议效率段"]
+    assert "25.6" in response.answer_summary
+    assert not any(keyword in response.answer_summary for keyword in ["M3", "M4", "LLM", "raw", "debug", "槽位"])
+
+
 def test_plan_bom_qa_accepts_explicit_supplier_for_power_prediction(live_db_session, qa_service) -> None:
     """显式供应商只作为确定性预测输入，不由 LLM 或前端补算。"""
     tail, _, resolved = _resolved_order_tail(live_db_session)

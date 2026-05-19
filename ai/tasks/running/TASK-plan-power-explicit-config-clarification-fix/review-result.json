@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "Add a dedicated negative regression for plan_power_factor_effect_compare where one extracted option is not present in the active PlanPowerFactorOption rows, asserting CLARIFICATION_REQUIRED with power_factor_options and no computed difference.",
+    "Consider future coverage for symbol variants such as × in busbar/ribbon option extraction if those appear in business questions."
+  ],
+  "summary": "The focused patch satisfies the deterministic Plan BOM power QA clarification fixes, validates active power-model options before computing factor differences, and keeps numeric power-model answers deterministic-only."
+}

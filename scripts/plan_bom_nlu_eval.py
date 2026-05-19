@@ -16,7 +16,7 @@ def parse_args() -> argparse.Namespace:
 
     parser = argparse.ArgumentParser(description="计划 BOM NLU Center 评测")
     parser.add_argument("--question-file", default=None, help="BOM 问题文件路径，支持 .xlsx/.xls/.docx")
-    parser.add_argument("--no-live", action="store_true", help="关闭 qwen-plus live shadow，仅跑规则层")
+    parser.add_argument("--no-live", action="store_true", help="关闭 deepseek-v4-flash live shadow，仅跑规则层")
     return parser.parse_args()
 
 
@@ -88,7 +88,7 @@ def main() -> None:
         f"- 评测问题数：`{report['total']}`",
         f"- 正式问题来源：`{question_meta['question_file_name']}`",
         f"- live_llm_configured：`{report['live_llm_configured']}`",
-        f"- qwen-plus live 调用数：`{report['llm_live_call_count']}`",
+        f"- deepseek-v4-flash live 调用数：`{report['llm_live_call_count']}`",
         f"- live 候选采纳：`{report['llm_live_accepted_count']}`",
         f"- live 候选拒绝：`{report['llm_live_rejected_count']}`",
         f"- 冲突数：`{report['llm_conflict_count']}`",

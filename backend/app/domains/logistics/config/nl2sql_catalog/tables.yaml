@@ -1,0 +1,152 @@
+catalog_version: logistics_nl2sql_catalog.v1
+domain: logistics
+tables:
+  - table_name: dws_logistics_detail_union
+    display_name: 物流明细统一服务表
+    domain: logistics
+    source_system: middle_db
+    allowed_read: true
+    grain: 历史台账与系统正式数据统一到发运产品明细粒度
+    columns:
+      - {name: source_type, data_type: varchar, business_name: 数据来源, semantic_role: dimension, nullable: false}
+      - {name: biz_date, data_type: date, business_name: 业务日期, semantic_role: time, nullable: true}
+      - {name: biz_year, data_type: int, business_name: 年份, semantic_role: time, nullable: true}
+      - {name: biz_month, data_type: varchar, business_name: 年月, semantic_role: time, nullable: true}
+      - {name: task_id, data_type: varchar, business_name: 任务号, semantic_role: trace, nullable: true}
+      - {name: contract_no, data_type: varchar, business_name: 合同号, semantic_role: dimension, nullable: true}
+      - {name: inquiry_no, data_type: varchar, business_name: 询价号, semantic_role: dimension, nullable: true}
+      - {name: ship_instruction_no, data_type: varchar, business_name: 发货指令号, semantic_role: dimension, nullable: true}
+      - {name: sap_order_no, data_type: varchar, business_name: SAP订单号, semantic_role: dimension, nullable: true}
+      - {name: customer_name, data_type: varchar, business_name: 客户, semantic_role: dimension, nullable: true}
+      - {name: logistics_company_name, data_type: varchar, business_name: 承运商, semantic_role: dimension, nullable: true}
+      - {name: warehouse_name, data_type: varchar, business_name: 仓库, semantic_role: dimension, nullable: true}
+      - {name: region_name, data_type: varchar, business_name: 区域, semantic_role: dimension, nullable: true}
+      - {name: origin_place, data_type: varchar, business_name: 始发地, semantic_role: dimension, nullable: true}
+      - {name: transport_mode, data_type: varchar, business_name: 运输方式, semantic_role: dimension, nullable: true}
+      - {name: plate_number, data_type: varchar, business_name: 车牌号, semantic_role: dimension, nullable: true}
+      - {name: product_spec, data_type: varchar, business_name: 产品规格, semantic_role: dimension, nullable: true}
+      - {name: product_power, data_type: decimal, business_name: 产品功率, semantic_role: dimension, nullable: true}
+      - {name: shipment_count, data_type: decimal, business_name: 发运件数, semantic_role: metric, nullable: true}
+      - {name: shipment_watt, data_type: decimal, business_name: 发运瓦数, semantic_role: metric, nullable: true}
+      - {name: shipment_trip_count, data_type: decimal, business_name: 车次, semantic_role: metric, nullable: true}
+      - {name: total_fee, data_type: decimal, business_name: 总费用, semantic_role: metric, nullable: true}
+      - {name: extra_fee, data_type: decimal, business_name: 附加费, semantic_role: metric, nullable: true}
+      - {name: source_ref, data_type: varchar, business_name: 来源追溯, semantic_role: trace, nullable: true}
+  - table_name: dws_logistics_monthly_metric
+    display_name: 物流月度指标服务表
+    domain: logistics
+    source_system: middle_db
+    allowed_read: true
+    grain: 按来源、年月、客户、承运商、区域、仓库、运输方式和始发地聚合
+    columns:
+      - {name: source_type, data_type: varchar, business_name: 数据来源, semantic_role: dimension, nullable: false}
+      - {name: biz_year, data_type: int, business_name: 年份, semantic_role: time, nullable: true}
+      - {name: biz_month, data_type: varchar, business_name: 年月, semantic_role: time, nullable: true}
+      - {name: customer_name, data_type: varchar, business_name: 客户, semantic_role: dimension, nullable: true}
+      - {name: logistics_company_name, data_type: varchar, business_name: 承运商, semantic_role: dimension, nullable: true}
+      - {name: region_name, data_type: varchar, business_name: 区域, semantic_role: dimension, nullable: true}
+      - {name: warehouse_name, data_type: varchar, business_name: 仓库, semantic_role: dimension, nullable: true}
+      - {name: transport_mode, data_type: varchar, business_name: 运输方式, semantic_role: dimension, nullable: true}
+      - {name: origin_place, data_type: varchar, business_name: 始发地, semantic_role: dimension, nullable: true}
+      - {name: shipment_watt, data_type: decimal, business_name: 发运瓦数, semantic_role: metric, nullable: true}
+      - {name: shipment_count, data_type: decimal, business_name: 发运件数, semantic_role: metric, nullable: true}
+      - {name: shipment_trip_count, data_type: decimal, business_name: 车次, semantic_role: metric, nullable: true}
+      - {name: total_fee, data_type: decimal, business_name: 总费用, semantic_role: metric, nullable: true}
+      - {name: extra_fee, data_type: decimal, business_name: 附加费, semantic_role: metric, nullable: true}
+      - {name: row_count, data_type: int, business_name: 明细行数, semantic_role: metric, nullable: true}
+  - table_name: dwd_logistics_hist_shipment_detail
+    display_name: 历史物流发运明细表
+    domain: logistics
+    source_system: middle_db
+    allowed_read: true
+    grain: 2023-2025 历史 Excel 发运明细行
+    columns:
+      - {name: biz_date, data_type: date, business_name: 业务日期, semantic_role: time, nullable: true}
+      - {name: biz_year, data_type: int, business_name: 年份, semantic_role: time, nullable: true}
+      - {name: biz_month, data_type: varchar, business_name: 年月, semantic_role: time, nullable: true}
+      - {name: customer_name, data_type: varchar, business_name: 客户, semantic_role: dimension, nullable: true}
+      - {name: province, data_type: varchar, business_name: 省份, semantic_role: dimension, nullable: true}
+      - {name: city, data_type: varchar, business_name: 城市, semantic_role: dimension, nullable: true}
+      - {name: region_name, data_type: varchar, business_name: 区域, semantic_role: dimension, nullable: true}
+      - {name: origin_place, data_type: varchar, business_name: 始发地, semantic_role: dimension, nullable: true}
+      - {name: transport_mode, data_type: varchar, business_name: 运输方式, semantic_role: dimension, nullable: true}
+      - {name: product_spec, data_type: varchar, business_name: 产品规格, semantic_role: dimension, nullable: true}
+      - {name: required_vehicle_type, data_type: varchar, business_name: 车型, semantic_role: dimension, nullable: true}
+      - {name: logistics_company_name, data_type: varchar, business_name: 承运商, semantic_role: dimension, nullable: true}
+      - {name: actual_qty, data_type: decimal, business_name: 实发件数, semantic_role: metric, nullable: true}
+      - {name: actual_watt, data_type: decimal, business_name: 实发瓦数, semantic_role: metric, nullable: true}
+      - {name: shipment_trip_count, data_type: decimal, business_name: 车次, semantic_role: metric, nullable: true}
+      - {name: unit_price_per_vehicle, data_type: decimal, business_name: 单价/车, semantic_role: metric, nullable: true}
+      - {name: total_fee, data_type: decimal, business_name: 总费用, semantic_role: metric, nullable: true}
+      - {name: fee_per_watt, data_type: decimal, business_name: 单瓦费用, semantic_role: metric, nullable: true}
+      - {name: extra_fee, data_type: decimal, business_name: 附加费, semantic_role: metric, nullable: true}
+  - table_name: dwd_logistics_ship_task
+    display_name: 系统物流发运任务表
+    domain: logistics
+    source_system: middle_db
+    allowed_read: true
+    grain: 2026 系统正式发运任务
+    columns:
+      - {name: task_id, data_type: varchar, business_name: 任务号, semantic_role: trace, nullable: false}
+      - {name: biz_date, data_type: date, business_name: 业务日期, semantic_role: time, nullable: true}
+      - {name: biz_year, data_type: int, business_name: 年份, semantic_role: time, nullable: true}
+      - {name: biz_month, data_type: varchar, business_name: 年月, semantic_role: time, nullable: true}
+      - {name: company_name, data_type: varchar, business_name: 物流公司, semantic_role: dimension, nullable: true}
+      - {name: project_name, data_type: varchar, business_name: 项目, semantic_role: dimension, nullable: true}
+      - {name: delivery_province, data_type: varchar, business_name: 目的省份, semantic_role: dimension, nullable: true}
+      - {name: delivery_city, data_type: varchar, business_name: 目的城市, semantic_role: dimension, nullable: true}
+      - {name: delivery_area, data_type: varchar, business_name: 目的区域, semantic_role: dimension, nullable: true}
+      - {name: transport_mode, data_type: varchar, business_name: 运输方式, semantic_role: dimension, nullable: true}
+      - {name: expand_dept, data_type: varchar, business_name: 扩充部门, semantic_role: dimension, nullable: true}
+      - {name: entrusted_person, data_type: varchar, business_name: 委托人, semantic_role: dimension, nullable: true}
+      - {name: is_formal_data, data_type: tinyint, business_name: 是否正式数据, semantic_role: rule_filter, nullable: true}
+  - table_name: dwd_logistics_assign_task
+    display_name: 系统物流委派任务表
+    domain: logistics
+    source_system: middle_db
+    allowed_read: true
+    grain: 2026 系统发运任务的承运委派信息
+    columns:
+      - {name: task_id, data_type: varchar, business_name: 委派任务号, semantic_role: trace, nullable: false}
+      - {name: ship_task_id, data_type: varchar, business_name: 发运任务号, semantic_role: trace, nullable: false}
+      - {name: company_name, data_type: varchar, business_name: 承运商, semantic_role: dimension, nullable: true}
+      - {name: warehouse_name, data_type: varchar, business_name: 仓库, semantic_role: dimension, nullable: true}
+      - {name: plate_number, data_type: varchar, business_name: 车牌号, semantic_role: dimension, nullable: true}
+  - table_name: dwd_logistics_assign_detail
+    display_name: 系统物流委派明细表
+    domain: logistics
+    source_system: middle_db
+    allowed_read: true
+    grain: 2026 系统委派任务的价格、数量和产品关联明细
+    columns:
+      - {name: source_id, data_type: varchar, business_name: 委派明细来源 ID, semantic_role: trace, nullable: false}
+      - {name: assign_task_id, data_type: varchar, business_name: 委派任务号, semantic_role: trace, nullable: false}
+      - {name: product_source_id, data_type: varchar, business_name: 产品来源 ID, semantic_role: trace, nullable: true}
+      - {name: quantity, data_type: decimal, business_name: 数量, semantic_role: metric, nullable: true}
+      - {name: supplier_price, data_type: decimal, business_name: 供应商价格, semantic_role: metric, nullable: true}
+      - {name: extra_cost, data_type: decimal, business_name: 额外费用, semantic_role: metric, nullable: true}
+  - table_name: dwd_logistics_ship_product
+    display_name: 系统物流发运产品表
+    domain: logistics
+    source_system: middle_db
+    allowed_read: true
+    grain: 2026 系统发运产品明细
+    columns:
+      - {name: source_id, data_type: varchar, business_name: 产品来源 ID, semantic_role: trace, nullable: false}
+      - {name: product_spec, data_type: varchar, business_name: 产品规格, semantic_role: dimension, nullable: true}
+      - {name: power, data_type: decimal, business_name: 功率, semantic_role: dimension, nullable: true}
+  - table_name: dm_logistics_company_month_rank
+    display_name: 物流公司月度排行表
+    domain: logistics
+    source_system: middle_db
+    allowed_read: true
+    grain: 按年月和承运商聚合后的排行
+    columns:
+      - {name: biz_year, data_type: int, business_name: 年份, semantic_role: time, nullable: true}
+      - {name: biz_month, data_type: varchar, business_name: 年月, semantic_role: time, nullable: true}
+      - {name: logistics_company_name, data_type: varchar, business_name: 承运商, semantic_role: dimension, nullable: true}
+      - {name: shipment_watt, data_type: decimal, business_name: 发运瓦数, semantic_role: metric, nullable: true}
+      - {name: shipment_trip_count, data_type: decimal, business_name: 车次, semantic_role: metric, nullable: true}
+      - {name: total_fee, data_type: decimal, business_name: 总费用, semantic_role: metric, nullable: true}
+      - {name: rank_by_watt, data_type: int, business_name: 发运量排名, semantic_role: metric, nullable: true}
+      - {name: rank_by_fee, data_type: int, business_name: 运费排名, semantic_role: metric, nullable: true}

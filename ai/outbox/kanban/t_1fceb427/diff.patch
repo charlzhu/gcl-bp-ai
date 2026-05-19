@@ -1,0 +1,2649 @@
+diff --git a/backend/app/domains/logistics/services/nl2sql/__init__.py b/backend/app/domains/logistics/services/nl2sql/__init__.py
+index c13f2ef..bdf36d3 100644
+--- a/backend/app/domains/logistics/services/nl2sql/__init__.py
++++ b/backend/app/domains/logistics/services/nl2sql/__init__.py
+@@ -24,6 +24,14 @@ from backend.app.domains.logistics.services.nl2sql.evaluation_report import (
+     build_logistics_nl2sql_evaluation_report,
+     render_logistics_nl2sql_evaluation_report_markdown,
+ )
++from backend.app.domains.logistics.services.nl2sql.m7_readonly_smoke import (
++    M7_READONLY_SMOKE_VERSION,
++    LogisticsNl2SqlM7ReadonlySmokeOutcome,
++    LogisticsNl2SqlM7ReadonlySmokeRunResult,
++    LogisticsNl2SqlM7ReadonlySmokeSample,
++    build_default_logistics_nl2sql_m7_readonly_smoke_samples,
++    run_logistics_nl2sql_m7_readonly_smoke,
++)
+ from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
+ from backend.app.domains.logistics.services.nl2sql.shadow_pipeline import (
+     LogisticsNl2SqlShadowPipeline,
+@@ -74,6 +82,10 @@ __all__ = [
+     "LogisticsNl2SqlEvaluationReportSampleOutcome",
+     "LogisticsNl2SqlEvaluationReportTopError",
+     "LogisticsNl2SqlBusinessRules",
++    "M7_READONLY_SMOKE_VERSION",
++    "LogisticsNl2SqlM7ReadonlySmokeOutcome",
++    "LogisticsNl2SqlM7ReadonlySmokeRunResult",
++    "LogisticsNl2SqlM7ReadonlySmokeSample",
+     "LogisticsNl2SqlShadowPipeline",
+     "LogisticsNl2SqlShadowPipelineRequest",
+     "LogisticsNl2SqlShadowPipelineResult",
+@@ -92,11 +104,13 @@ __all__ = [
+     "LogisticsSqlSafetyChecker",
+     "LogisticsSqlSafetyResult",
+     "check_logistics_sql_safety",
++    "build_default_logistics_nl2sql_m7_readonly_smoke_samples",
+     "build_default_logistics_nl2sql_shadow_smoke_samples",
+     "build_logistics_nl2sql_evaluation_report",
+     "redact_evaluation_text",
+     "render_logistics_sql",
+     "render_logistics_nl2sql_evaluation_report_markdown",
++    "run_logistics_nl2sql_m7_readonly_smoke",
+     "run_logistics_nl2sql_shadow_smoke",
+     "summarize_evaluation_logs",
+     "validate_logistics_sql_plan_candidate",
+diff --git a/backend/app/domains/logistics/services/nl2sql/readonly_middle_db.py b/backend/app/domains/logistics/services/nl2sql/readonly_middle_db.py
+new file mode 100644
+index 0000000..b4e315f
+--- /dev/null
++++ b/backend/app/domains/logistics/services/nl2sql/readonly_middle_db.py
+@@ -0,0 +1,332 @@
++from __future__ import annotations
++
++import re
++from pathlib import Path
++from typing import Any, Callable, Protocol
++
++from pydantic import BaseModel, ConfigDict, Field
++
++MYSQL_NAMED_PARAM_RE = re.compile(r":([A-Za-z_][A-Za-z0-9_]*)")
++TRIAL_LIMIT_RE = re.compile(r"\bLIMIT\s+(?::([A-Za-z_][A-Za-z0-9_]*)|%\(([A-Za-z_][A-Za-z0-9_]*)\)s|(\d+))\s*$", re.IGNORECASE)
++REQUIRED_ENV_KEYS: tuple[str, ...] = ("MYSQL_HOST", "MYSQL_PORT", "MYSQL_DB", "MYSQL_USER", "MYSQL_PASSWORD")
++UNSAFE_SELECT_PATTERNS: tuple[re.Pattern[str], ...] = (
++    re.compile(r"(?:/\*|\*/|--|#)"),
++    re.compile(r"\bINTO\s+(?:OUTFILE|DUMPFILE)\b", re.IGNORECASE),
++    re.compile(r"\bLOAD_FILE\s*\(", re.IGNORECASE),
++    re.compile(r"\bUNION\b", re.IGNORECASE),
++    re.compile(r"\bFOR\s+UPDATE\b", re.IGNORECASE),
++    re.compile(r"\bLOCK\s+IN\s+SHARE\s+MODE\b", re.IGNORECASE),
++    re.compile(r"\bPROCEDURE\s+ANALYSE\b", re.IGNORECASE),
++    re.compile(r"\bSLEEP\s*\(", re.IGNORECASE),
++    re.compile(r"\bBENCHMARK\s*\(", re.IGNORECASE),
++)
++
++
++class _ReadonlyConnection(Protocol):
++    """M7 只读 MySQL 连接最小协议，便于单测注入 fake connection。"""
++
++    def cursor(self) -> Any:
++        """返回 DB-API cursor 或支持上下文管理的 cursor。"""
++
++    def close(self) -> None:
++        """关闭连接，真实连接与 fake 连接都应提供该方法。"""
++
++
++class LogisticsReadonlyMiddleDbConfig(BaseModel):
++    """物流 NL2SQL M7 只读中间库连接配置。
++
++    业务逻辑：
++        该对象只在内存中传递给只读 executor，不应直接写入日志、报告或 kanban 产物。
++        上层 `LogisticsReadonlyMiddleDbConfigLoadResult` 会在 JSON 序列化时排除本对象，避免泄漏
++        host/user/password/full DSN。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    host: str = Field(repr=False)
++    port: int
++    database: str = Field(repr=False)
++    user: str = Field(repr=False)
++    password: str = Field(repr=False)
++    charset: str = "utf8mb4"
++    connect_timeout: int = 3
++    read_timeout: int = 10
++    max_trial_limit: int = 20
++
++
++class LogisticsReadonlyMiddleDbConfigLoadResult(BaseModel):
++    """backend/.env 读取结果，默认 JSON 输出只包含脱敏摘要和稳定错误码。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    ok: bool
++    error_code: str | None = None
++    missing_keys: list[str] = Field(default_factory=list)
++    invalid_keys: list[str] = Field(default_factory=list)
++    safe_summary: dict[str, bool] = Field(default_factory=dict)
++    config: LogisticsReadonlyMiddleDbConfig | None = Field(default=None, exclude=True)
++
++
++def load_readonly_middle_db_config(env_path: str | Path) -> LogisticsReadonlyMiddleDbConfigLoadResult:
++    """从指定 backend/.env 读取 M7 只读中间库配置。
++
++    参数：
++        env_path: 项目 backend/.env 路径或单测临时 .env 路径。
++    返回：
++        成功时包含内存 config；失败时 fail-closed，只返回稳定错误码、缺失键名和布尔摘要。
++    """
++
++    resolved_env_path = Path(env_path)
++    if not resolved_env_path.exists():
++        return LogisticsReadonlyMiddleDbConfigLoadResult(
++            ok=False,
++            error_code="readonly_middle_db_env_missing",
++            safe_summary=_safe_summary({}),
++        )
++
++    values = _parse_env_file(resolved_env_path)
++    missing_keys = [key for key in REQUIRED_ENV_KEYS if not str(values.get(key) or "").strip()]
++    if missing_keys:
++        return LogisticsReadonlyMiddleDbConfigLoadResult(
++            ok=False,
++            error_code="readonly_middle_db_config_missing",
++            missing_keys=missing_keys,
++            safe_summary=_safe_summary(values),
++        )
++
++    invalid_keys: list[str] = []
++    try:
++        port = int(str(values["MYSQL_PORT"]).strip())
++    except (TypeError, ValueError):
++        invalid_keys.append("MYSQL_PORT")
++        port = 0
++    if port <= 0 or port > 65535:
++        invalid_keys.append("MYSQL_PORT")
++    if invalid_keys:
++        return LogisticsReadonlyMiddleDbConfigLoadResult(
++            ok=False,
++            error_code="readonly_middle_db_config_invalid",
++            invalid_keys=sorted(set(invalid_keys)),
++            safe_summary=_safe_summary(values),
++        )
++
++    config = LogisticsReadonlyMiddleDbConfig(
++        host=str(values["MYSQL_HOST"]).strip(),
++        port=port,
++        database=str(values["MYSQL_DB"]).strip(),
++        user=str(values["MYSQL_USER"]).strip(),
++        password=str(values["MYSQL_PASSWORD"]).strip(),
++        charset=str(values.get("MYSQL_CHARSET") or "utf8mb4").strip() or "utf8mb4",
++    )
++    return LogisticsReadonlyMiddleDbConfigLoadResult(
++        ok=True,
++        safe_summary=_safe_summary(values, configured=True),
++        config=config,
++    )
++
++
++ReadonlyConnectionFactory = Callable[[LogisticsReadonlyMiddleDbConfig], _ReadonlyConnection]
++
++
++class LogisticsReadonlyMiddleDbExecutor:
++    """物流 NL2SQL M7 真实 MySQL 只读执行器。
++
++    业务逻辑：
++        本 executor 只接受上层 safety 通过后的 `EXPLAIN SELECT ...` 与有界 `SELECT ... LIMIT N`。
++        它负责把 renderer 的 `:p0` 命名参数转换为 PyMySQL 的 `%(p0)s`，并交给 DB driver 做
++        参数绑定；任何非 SELECT、无 LIMIT trial 或 DB 异常都转为稳定错误码，避免报告泄漏连接信息。
++    """
++
++    def __init__(
++        self,
++        *,
++        config: LogisticsReadonlyMiddleDbConfig,
++        connection_factory: ReadonlyConnectionFactory | None = None,
++    ) -> None:
++        """初始化只读 executor。"""
++
++        self.config = config
++        self.connection_factory = connection_factory or _default_connection_factory
++
++    def explain(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++        """执行 `EXPLAIN SELECT ...`，并返回小型执行计划行集。"""
++
++        self._assert_explain_sql(sql)
++        return self._execute(sql, params)
++
++    def trial(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++        """执行有界 `SELECT ... LIMIT N`，并返回小样本行集。"""
++
++        self._assert_trial_sql(sql, params)
++        return self._execute(sql, params)
++
++    @staticmethod
++    def _assert_explain_sql(sql: str) -> None:
++        """只允许 EXPLAIN 包裹单条 SELECT。"""
++
++        normalized = sql.strip()
++        lower_sql = normalized.lower()
++        if ";" in normalized:
++            raise RuntimeError("readonly_middle_db_multi_statement_forbidden")
++        if not lower_sql.startswith("explain select"):
++            raise RuntimeError("readonly_middle_db_explain_select_required")
++        _assert_no_unsafe_select_tokens(normalized)
++
++    def _assert_trial_sql(self, sql: str, params: dict[str, Any]) -> None:
++        """只允许单条有界 SELECT，小样本 LIMIT 不得超过配置上限。"""
++
++        normalized = sql.strip()
++        lower_sql = normalized.lower()
++        if ";" in normalized:
++            raise RuntimeError("readonly_middle_db_multi_statement_forbidden")
++        if not lower_sql.startswith("select"):
++            raise RuntimeError("readonly_middle_db_not_select")
++        _assert_no_unsafe_select_tokens(normalized)
++        limit_match = TRIAL_LIMIT_RE.search(normalized)
++        if not limit_match:
++            raise RuntimeError("readonly_middle_db_trial_limit_required")
++        colon_param, pymysql_param, literal_limit = limit_match.groups()
++        if literal_limit is not None:
++            limit_value = int(literal_limit)
++        else:
++            param_name = colon_param or pymysql_param or ""
++            value = params.get(param_name)
++            if isinstance(value, bool) or not isinstance(value, int):
++                raise RuntimeError("readonly_middle_db_trial_limit_invalid")
++            limit_value = value
++        if limit_value < 0 or limit_value > self.config.max_trial_limit:
++            raise RuntimeError("readonly_middle_db_trial_limit_out_of_range")
++
++    def _execute(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++        """创建短连接执行只读语句，所有外部异常收敛为稳定错误码。"""
++
++        driver_sql = _convert_colon_params_to_pymysql(sql)
++        connection: _ReadonlyConnection | None = None
++        try:
++            connection = self.connection_factory(self.config)
++            return _execute_with_connection(connection, driver_sql, dict(params))
++        except RuntimeError:
++            raise
++        except Exception as exc:  # noqa: BLE001 - DB 边界不能把原始异常写入报告
++            if _looks_like_connection_failure(exc):
++                raise RuntimeError("readonly_middle_db_connection_failed") from None
++            raise RuntimeError("readonly_middle_db_query_failed") from None
++        finally:
++            if connection is not None:
++                try:
++                    connection.close()
++                except Exception:  # noqa: BLE001 - close 失败不能覆盖主错误
++                    pass
++
++
++def _default_connection_factory(config: LogisticsReadonlyMiddleDbConfig) -> _ReadonlyConnection:
++    """使用 PyMySQL 创建只读短连接；连接失败只抛稳定错误码。"""
++
++    try:
++        import pymysql
++        import pymysql.cursors
++    except Exception:  # noqa: BLE001 - 依赖缺失也要 fail-closed
++        raise RuntimeError("readonly_middle_db_driver_unavailable") from None
++
++    try:
++        return pymysql.connect(
++            host=config.host,
++            port=config.port,
++            database=config.database,
++            user=config.user,
++            password=config.password,
++            charset=config.charset,
++            cursorclass=pymysql.cursors.DictCursor,
++            autocommit=True,
++            connect_timeout=config.connect_timeout,
++            read_timeout=config.read_timeout,
++            write_timeout=config.read_timeout,
++        )
++    except Exception:  # noqa: BLE001 - 不向上抛出含 host/user 的驱动错误
++        raise RuntimeError("readonly_middle_db_connection_failed") from None
++
++
++def _assert_no_unsafe_select_tokens(sql: str) -> None:
++    """DB 边界二次 fail-closed：拒绝可读文件/写文件/组合查询/锁表/耗时函数等危险 SELECT 变体。"""
++
++    if any(pattern.search(sql) for pattern in UNSAFE_SELECT_PATTERNS):
++        raise RuntimeError("readonly_middle_db_unsafe_select")
++
++
++def _execute_with_connection(connection: _ReadonlyConnection, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++    """兼容真实 cursor 与 fake cursor 的执行辅助函数。"""
++
++    cursor_obj = connection.cursor()
++    if hasattr(cursor_obj, "__enter__") and hasattr(cursor_obj, "__exit__"):
++        with cursor_obj as cursor:
++            cursor.execute(sql, params)
++            rows = cursor.fetchall()
++    else:
++        cursor = cursor_obj
++        try:
++            cursor.execute(sql, params)
++            rows = cursor.fetchall()
++        finally:
++            close = getattr(cursor, "close", None)
++            if callable(close):
++                close()
++    return [dict(row) for row in rows]
++
++
++def _convert_colon_params_to_pymysql(sql: str) -> str:
++    """把 renderer 的 `:name` 参数占位符转换为 PyMySQL 支持的 `%(name)s`。"""
++
++    return MYSQL_NAMED_PARAM_RE.sub(lambda match: f"%({match.group(1)})s", sql)
++
++
++def _parse_env_file(path: Path) -> dict[str, str]:
++    """解析简单 KEY=VALUE .env 文件，不展开变量、不执行任何内容。"""
++
++    values: dict[str, str] = {}
++    for raw_line in path.read_text(encoding="utf-8").splitlines():
++        line = raw_line.strip()
++        if not line or line.startswith("#"):
++            continue
++        if line.startswith("export "):
++            line = line[len("export ") :].strip()
++        if "=" not in line:
++            continue
++        key, value = line.split("=", 1)
++        normalized_key = key.strip().upper()
++        normalized_value = value.strip()
++        if (
++            len(normalized_value) >= 2
++            and normalized_value[0] == normalized_value[-1]
++            and normalized_value[0] in {"'", '"'}
++        ):
++            normalized_value = normalized_value[1:-1]
++        values[normalized_key] = normalized_value
++    return values
++
++
++def _safe_summary(values: dict[str, str], *, configured: bool = False) -> dict[str, bool]:
++    """生成不含配置值的布尔摘要，供报告或调试确认环境状态。"""
++
++    return {
++        "configured": configured,
++        "host_configured": bool(str(values.get("MYSQL_HOST") or "").strip()),
++        "database_configured": bool(str(values.get("MYSQL_DB") or "").strip()),
++        "user_configured": bool(str(values.get("MYSQL_USER") or "").strip()),
++        "credential_configured": bool(str(values.get("MYSQL_PASSWORD") or "").strip()),
++    }
++
++
++def _looks_like_connection_failure(exc: Exception) -> bool:
++    """尽量把驱动连接类错误归为环境不可用，不暴露原始错误文本。"""
++
++    exc_type = type(exc).__name__.lower()
++    return "connect" in exc_type or "operational" in exc_type or "timeout" in exc_type
++
++
++__all__ = [
++    "LogisticsReadonlyMiddleDbConfig",
++    "LogisticsReadonlyMiddleDbConfigLoadResult",
++    "LogisticsReadonlyMiddleDbExecutor",
++    "ReadonlyConnectionFactory",
++    "load_readonly_middle_db_config",
++]
+diff --git a/backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py b/backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py
+new file mode 100644
+index 0000000..68857d9
+--- /dev/null
++++ b/backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py
+@@ -0,0 +1,433 @@
++from __future__ import annotations
++
++from pathlib import Path
++import json
++import re
++from typing import Any, Callable, Literal
++
++from pydantic import BaseModel, ConfigDict, Field
++
++from backend.app.domains.logistics.services.nl2sql.evaluation_log import (
++    LogisticsNl2SqlEvaluationLogRecord,
++    redact_evaluation_text,
++)
++from backend.app.domains.logistics.services.nl2sql.evaluation_report import (
++    LogisticsNl2SqlEvaluationReport,
++    build_logistics_nl2sql_evaluation_report,
++    render_logistics_nl2sql_evaluation_report_markdown,
++)
++from backend.app.domains.logistics.services.nl2sql.readonly_middle_db import (
++    LogisticsReadonlyMiddleDbConfig,
++    LogisticsReadonlyMiddleDbExecutor,
++    load_readonly_middle_db_config,
++)
++from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++from backend.app.domains.logistics.services.nl2sql.shadow_pipeline import (
++    LogisticsNl2SqlShadowPipeline,
++    LogisticsNl2SqlShadowPipelineRequest,
++    LogisticsNl2SqlShadowPipelineResult,
++)
++from backend.app.domains.logistics.services.nl2sql.shadow_smoke import build_default_logistics_nl2sql_shadow_smoke_samples
++from backend.app.domains.logistics.services.nl2sql.sql_execution import LogisticsSqlExecutionService, LogisticsSqlExecutor
++from backend.app.domains.logistics.services.nl2sql.sql_safety import LogisticsSqlSafetyChecker
++
++M7_READONLY_SMOKE_VERSION = "logistics_nl2sql_m7_readonly_middle_db_smoke.v1"
++M7_HARD_MAX_LIMIT = 20
++DEFAULT_M7_RECORDS_FILENAME = "m7-shadow-smoke-records.jsonl"
++DEFAULT_M7_REPORT_FILENAME = "m7-shadow-smoke-report.md"
++EnvironmentStatus = Literal["available", "environment_unavailable"]
++ReadonlyExecutorFactory = Callable[[LogisticsReadonlyMiddleDbConfig], LogisticsSqlExecutor]
++
++
++class LogisticsNl2SqlM7ReadonlySmokeSample(BaseModel):
++    """M7 只读中间库 shadow smoke 样例。
++
++    业务逻辑：
++        样例只保存业务问题模板和受控 SQLPlan candidate；真实数据库连接由 runner 读取 backend/.env 后
++        显式注入，只用于本阶段 shadow smoke，不接正式 QA 主链路。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    sample_id: str
++    description: str
++    request: LogisticsNl2SqlShadowPipelineRequest
++
++
++class LogisticsNl2SqlM7ReadonlySmokeOutcome(BaseModel):
++    """M7 单条样例执行结果。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    sample: LogisticsNl2SqlM7ReadonlySmokeSample
++    result: LogisticsNl2SqlShadowPipelineResult
++    evaluation_log_record: LogisticsNl2SqlEvaluationLogRecord
++
++
++class LogisticsNl2SqlM7ReadonlySmokeRunResult(BaseModel):
++    """M7 只读中间库 shadow smoke 总返回。"""
++
++    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
++
++    outcomes: list[LogisticsNl2SqlM7ReadonlySmokeOutcome] = Field(default_factory=list)
++    evaluation_log_records: list[LogisticsNl2SqlEvaluationLogRecord] = Field(default_factory=list)
++    report: LogisticsNl2SqlEvaluationReport
++    records_path: Path
++    report_path: Path
++    live_smoke_executed: bool
++    environment_status: EnvironmentStatus
++    environment_error_code: str | None = None
++
++    def render_markdown(self) -> str:
++        """把 M7 安全评估报表渲染为 Markdown。"""
++
++        return _render_m7_markdown(self.report)
++
++
++def build_default_logistics_nl2sql_m7_readonly_smoke_samples() -> list[LogisticsNl2SqlM7ReadonlySmokeSample]:
++    """构造 M7 默认只读 smoke 样例。
++
++    返回：
++        复用 M6 已审计的 SQLPlan success 样例，覆盖 ranking 与 aggregate 两类最小只读闭环。
++    """
++
++    m6_samples = build_default_logistics_nl2sql_shadow_smoke_samples()
++    return [
++        LogisticsNl2SqlM7ReadonlySmokeSample(
++            sample_id="m7_success_valid_ranking",
++            description="合法 SQLPlan + 真实只读中间库 EXPLAIN/trial smoke（ranking）",
++            request=m6_samples[0].request.model_copy(update={"request_id": "m7-success-ranking"}, deep=True),
++        ),
++        LogisticsNl2SqlM7ReadonlySmokeSample(
++            sample_id="m7_success_valid_aggregate",
++            description="合法 SQLPlan + 真实只读中间库 EXPLAIN/trial smoke（aggregate）",
++            request=m6_samples[7].request.model_copy(update={"request_id": "m7-success-aggregate"}, deep=True),
++        ),
++    ]
++
++
++def run_logistics_nl2sql_m7_readonly_smoke(
++    *,
++    env_path: str | Path = Path("backend/.env"),
++    artifact_dir: str | Path = Path("ai/outbox/kanban/t_1fceb427"),
++    samples: list[LogisticsNl2SqlM7ReadonlySmokeSample] | None = None,
++    executor_factory: ReadonlyExecutorFactory | None = None,
++    trial_limit: int = 5,
++    max_limit: int = 20,
++) -> LogisticsNl2SqlM7ReadonlySmokeRunResult:
++    """运行 M7 只读中间库 shadow smoke，并写出 JSONL/Markdown 脱敏报告。
++
++    参数：
++        env_path: backend/.env 路径；缺失或配置不完整时 fail-closed。
++        artifact_dir: M7 验收材料目录，runner 只在该目录下写 JSONL/Markdown。
++        samples: 可选样例集；默认使用 M7 scoped 样例。
++        executor_factory: 可选 executor 工厂，单测可注入 stub；生产 smoke 默认使用 PyMySQL 只读 executor。
++        trial_limit: 无 LIMIT SQL 在 trial 阶段追加的小样本 LIMIT，默认 5。
++        max_limit: M7 safety/trial 上限，默认 20。
++    返回：
++        结构化 run 结果；不包含 SQL 原文、参数值或数据库连接明文。
++    """
++
++    resolved_artifact_dir = Path(artifact_dir)
++    resolved_artifact_dir.mkdir(parents=True, exist_ok=True)
++    records_path = resolved_artifact_dir / DEFAULT_M7_RECORDS_FILENAME
++    report_path = resolved_artifact_dir / DEFAULT_M7_REPORT_FILENAME
++    _reset_artifact(records_path)
++    _reset_artifact(report_path)
++
++    resolved_samples = samples or build_default_logistics_nl2sql_m7_readonly_smoke_samples()
++    config_result = load_readonly_middle_db_config(env_path)
++    if not config_result.ok or config_result.config is None:
++        error_code = config_result.error_code or "readonly_middle_db_config_unavailable"
++        record = _build_environment_unavailable_record(error_code)
++        report = build_logistics_nl2sql_evaluation_report(
++            [record],
++            sample_ids={record.trace_id: "m7_environment_unavailable"},
++            sample_descriptions={record.trace_id: "backend/.env 中间库只读配置不可用，M7 live smoke 已阻塞"},
++            warnings=["M7 readonly middle-db smoke blocked by environment configuration; no live query executed"],
++        )
++        _write_records(records_path, [record])
++        _write_report(report_path, report)
++        return LogisticsNl2SqlM7ReadonlySmokeRunResult(
++            outcomes=[],
++            evaluation_log_records=[record],
++            report=report,
++            records_path=records_path,
++            report_path=report_path,
++            live_smoke_executed=False,
++            environment_status="environment_unavailable",
++            environment_error_code=error_code,
++        )
++
++    effective_max_limit = _clamp_positive_limit(max_limit, upper_bound=M7_HARD_MAX_LIMIT)
++    effective_trial_limit = _clamp_positive_limit(trial_limit, upper_bound=effective_max_limit)
++    catalog = LogisticsSemanticCatalogLoader().load()
++    safety_checker = LogisticsSqlSafetyChecker(catalog=catalog, max_limit=effective_max_limit)
++    executor = executor_factory(config_result.config) if executor_factory else LogisticsReadonlyMiddleDbExecutor(config=config_result.config)
++    execution_service = LogisticsSqlExecutionService(
++        executor=executor,
++        safety_checker=safety_checker,
++        trial_limit=effective_trial_limit,
++    )
++    pipeline = LogisticsNl2SqlShadowPipeline(
++        catalog=catalog,
++        safety_checker=safety_checker,
++        execution_service=execution_service,
++        pipeline_version=M7_READONLY_SMOKE_VERSION,
++    )
++
++    outcomes: list[LogisticsNl2SqlM7ReadonlySmokeOutcome] = []
++    records: list[LogisticsNl2SqlEvaluationLogRecord] = []
++    sample_ids_by_trace: dict[str, str] = {}
++    descriptions_by_trace: dict[str, str] = {}
++    secret_values = _secret_values_from_config(config_result.config)
++    for sample in resolved_samples:
++        try:
++            raw_result = pipeline.run(sample.request)
++            raw_record = raw_result.evaluation_log_record
++        except Exception as exc:  # noqa: BLE001 - runner 必须单样例 fail-closed 后继续
++            raw_record = _build_sample_exception_record(sample, exc)
++            raw_result = _result_from_record(raw_record)
++        safe_record = _sanitize_record_for_m7(raw_record, secret_values=secret_values)
++        safe_result = raw_result.model_copy(update={"evaluation_log_record": safe_record, "error_message": safe_record.error_message})
++        outcomes.append(
++            LogisticsNl2SqlM7ReadonlySmokeOutcome(
++                sample=sample,
++                result=safe_result,
++                evaluation_log_record=safe_record,
++            )
++        )
++        records.append(safe_record)
++        sample_ids_by_trace[safe_record.trace_id] = sample.sample_id
++        descriptions_by_trace[safe_record.trace_id] = sample.description
++
++    environment_error_code = _detect_environment_unavailable_error(records)
++    report = build_logistics_nl2sql_evaluation_report(
++        records,
++        sample_ids=sample_ids_by_trace,
++        sample_descriptions=descriptions_by_trace,
++        warnings=_build_run_warnings(environment_error_code),
++    )
++    _write_records(records_path, records)
++    _write_report(report_path, report)
++    return LogisticsNl2SqlM7ReadonlySmokeRunResult(
++        outcomes=outcomes,
++        evaluation_log_records=records,
++        report=report,
++        records_path=records_path,
++        report_path=report_path,
++        live_smoke_executed=environment_error_code is None,
++        environment_status="environment_unavailable" if environment_error_code else "available",
++        environment_error_code=environment_error_code,
++    )
++
++
++def _clamp_positive_limit(value: int, *, upper_bound: int) -> int:
++    """把外部传入的 smoke LIMIT 钳制到 M7 固定安全上限内。"""
++
++    try:
++        numeric_value = int(value)
++    except (TypeError, ValueError):
++        numeric_value = upper_bound
++    return max(1, min(numeric_value, upper_bound))
++
++
++def _build_environment_unavailable_record(error_code: str) -> LogisticsNl2SqlEvaluationLogRecord:
++    """生成环境不可用 synthetic record，不携带 .env 键值或 SQL。"""
++
++    return LogisticsNl2SqlEvaluationLogRecord.from_pipeline(
++        trace_id="m7-environment-unavailable",
++        request_id=None,
++        question="M7 readonly middle-db shadow smoke",
++        rewritten_question=None,
++        domain="logistics",
++        source_system="middle_db",
++        status="blocked",
++        stage="environment",
++        error_codes=[error_code],
++        error_message=None,
++        catalog_ids=[],
++        catalog_versions=[],
++        sql_hash=None,
++        sql_param_keys=[],
++        validation_errors=[],
++        safety_errors=[],
++        explain_ok=False,
++        trial_ok=False,
++        row_count=0,
++        sample_row_count=0,
++        duration_ms=0,
++        pipeline_version=M7_READONLY_SMOKE_VERSION,
++        warnings=["environment_unavailable"],
++    )
++
++
++def _build_sample_exception_record(
++    sample: LogisticsNl2SqlM7ReadonlySmokeSample,
++    exc: Exception,
++) -> LogisticsNl2SqlEvaluationLogRecord:
++    """把单样例 runner 异常收敛为可报告的受控失败 record。"""
++
++    return LogisticsNl2SqlEvaluationLogRecord.from_pipeline(
++        trace_id=f"m7-sample-exception-{sample.sample_id}",
++        request_id=sample.request.request_id,
++        question=sample.request.question,
++        rewritten_question=sample.request.rewritten_question,
++        domain=sample.request.domain,
++        source_system=sample.request.source_system,
++        status="render_failed",
++        stage="runner",
++        error_codes=["m7_readonly_smoke_sample_failed"],
++        error_message=redact_evaluation_text(str(exc)),
++        catalog_ids=[],
++        catalog_versions=[],
++        sql_hash=None,
++        sql_param_keys=[],
++        validation_errors=[],
++        safety_errors=[],
++        explain_ok=False,
++        trial_ok=False,
++        row_count=0,
++        sample_row_count=0,
++        duration_ms=0,
++        pipeline_version=M7_READONLY_SMOKE_VERSION,
++        warnings=["single sample failed; runner continued"],
++    )
++
++
++def _result_from_record(record: LogisticsNl2SqlEvaluationLogRecord) -> LogisticsNl2SqlShadowPipelineResult:
++    """从 synthetic record 构造 pipeline result，供 runner 异常路径复用。"""
++
++    return LogisticsNl2SqlShadowPipelineResult(
++        status="render_failed",
++        stage=record.stage,
++        error_codes=list(record.error_codes),
++        error_message=record.error_message,
++        trace_id=record.trace_id,
++        sql_hash=record.sql_hash,
++        sql_param_keys=list(record.sql_param_keys),
++        row_count=record.row_count,
++        sample_row_count=record.sample_row_count,
++        explain_ok=record.explain_ok,
++        trial_ok=record.trial_ok,
++        evaluation_log_record=record,
++        log_error=None,
++    )
++
++
++def _sanitize_record_for_m7(
++    record: LogisticsNl2SqlEvaluationLogRecord,
++    *,
++    secret_values: set[str],
++) -> LogisticsNl2SqlEvaluationLogRecord:
++    """对 M7 artifact record 做二次脱敏，额外移除实际 host/user/db 等配置值。"""
++
++    payload = _sanitize_payload(record.model_dump(mode="json"), secret_values=secret_values)
++    return LogisticsNl2SqlEvaluationLogRecord.model_validate(payload)
++
++
++def _sanitize_payload(value: Any, *, secret_values: set[str]) -> Any:
++    """递归脱敏 payload，避免嵌套字段绕过。"""
++
++    if isinstance(value, dict):
++        return {str(key): _sanitize_payload(item, secret_values=secret_values) for key, item in value.items()}
++    if isinstance(value, list):
++        return [_sanitize_payload(item, secret_values=secret_values) for item in value]
++    if isinstance(value, str):
++        return _sanitize_m7_text(value, secret_values=secret_values)
++    return value
++
++
++def _sanitize_m7_text(value: str, *, secret_values: set[str]) -> str:
++    """M7 artifact 文本脱敏：移除 SQL、token、Bearer、host/user/db/password 明文。"""
++
++    safe = redact_evaluation_text(value)
++    for secret_value in sorted(secret_values, key=len, reverse=True):
++        if secret_value:
++            safe = safe.replace(secret_value, "[REDACTED]")
++    safe = re.sub(r"(?i)\bBearer\s+\[REDACTED\]", "[TOKEN_REDACTED]", safe)
++    safe = re.sub(r"(?i)\b(password|passwd|token|api[_-]?key|secret)\b\s*[:=]\s*\[REDACTED\]", "credential=[REDACTED]", safe)
++    return safe
++
++
++def _secret_values_from_config(config: LogisticsReadonlyMiddleDbConfig) -> set[str]:
++    """提取不允许进入 artifact 的连接配置值。"""
++
++    return {
++        str(config.host),
++        str(config.database),
++        str(config.user),
++        str(config.password),
++        f"{config.host}:{config.port}",
++    }
++
++
++def _detect_environment_unavailable_error(records: list[LogisticsNl2SqlEvaluationLogRecord]) -> str | None:
++    """根据稳定错误摘要判断是否属于连接/驱动环境不可用。"""
++
++    environment_error_codes = {
++        "readonly_middle_db_connection_failed",
++        "readonly_middle_db_driver_unavailable",
++    }
++    for record in records:
++        text_parts = [record.error_message or "", *record.error_codes]
++        for text in text_parts:
++            for error_code in environment_error_codes:
++                if error_code in text:
++                    return error_code
++    return None
++
++
++def _build_run_warnings(environment_error_code: str | None) -> list[str]:
++    """生成 M7 run 级别 warning，不包含 SQL 或连接明文。"""
++
++    warnings = ["M7 readonly middle-db shadow smoke only; production QA chain is not connected"]
++    if environment_error_code:
++        warnings.append(f"environment_unavailable::{environment_error_code}")
++    return warnings
++
++
++def _write_records(path: Path, records: list[LogisticsNl2SqlEvaluationLogRecord]) -> None:
++    """写出 JSONL 记录；只使用已脱敏 record。"""
++
++    path.parent.mkdir(parents=True, exist_ok=True)
++    with path.open("w", encoding="utf-8") as handle:
++        for record in records:
++            handle.write(json.dumps(record.model_dump(mode="json"), ensure_ascii=False, sort_keys=True) + "\n")
++
++
++def _write_report(path: Path, report: LogisticsNl2SqlEvaluationReport) -> None:
++    """写出 M7 Markdown 报表。"""
++
++    path.parent.mkdir(parents=True, exist_ok=True)
++    path.write_text(_render_m7_markdown(report), encoding="utf-8")
++
++
++def _render_m7_markdown(report: LogisticsNl2SqlEvaluationReport) -> str:
++    """复用 M6 报表渲染器，并替换标题为 M7 只读 smoke。"""
++
++    markdown = render_logistics_nl2sql_evaluation_report_markdown(report)
++    return markdown.replace(
++        "# NL2SQL Logistics M6 Shadow Smoke Evaluation Report",
++        "# NL2SQL Logistics M7 Readonly Middle DB Shadow Smoke Evaluation Report",
++        1,
++    )
++
++
++def _reset_artifact(path: Path) -> None:
++    """每次 runner 开始前清理旧同名 artifact，避免多次运行 append 误判。"""
++
++    if path.exists():
++        path.unlink()
++
++
++__all__ = [
++    "DEFAULT_M7_RECORDS_FILENAME",
++    "DEFAULT_M7_REPORT_FILENAME",
++    "M7_READONLY_SMOKE_VERSION",
++    "LogisticsNl2SqlM7ReadonlySmokeOutcome",
++    "LogisticsNl2SqlM7ReadonlySmokeRunResult",
++    "LogisticsNl2SqlM7ReadonlySmokeSample",
++    "build_default_logistics_nl2sql_m7_readonly_smoke_samples",
++    "run_logistics_nl2sql_m7_readonly_smoke",
++]
+diff --git a/scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py b/scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py
+new file mode 100644
+index 0000000..cfa3713
+--- /dev/null
++++ b/scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py
+@@ -0,0 +1,55 @@
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++from pathlib import Path
++
++# 固定脚本入口：允许本地手动触发 M7 只读 shadow smoke，避免临时 heredoc 命令。
++REPO_ROOT = Path(__file__).resolve().parents[2]
++if str(REPO_ROOT) not in sys.path:
++    sys.path.insert(0, str(REPO_ROOT))
++
++from backend.app.domains.logistics.services.nl2sql.m7_readonly_smoke import (  # noqa: E402
++    run_logistics_nl2sql_m7_readonly_smoke,
++)
++
++
++def main() -> int:
++    """解析 CLI 参数并执行 M7 只读中间库 smoke。"""
++
++    parser = argparse.ArgumentParser(description="Run logistics NL2SQL M7 readonly middle-db shadow smoke")
++    parser.add_argument("--env-path", default="backend/.env", help="backend/.env path, default: backend/.env")
++    parser.add_argument(
++        "--artifact-dir",
++        default="ai/outbox/kanban/t_1fceb427",
++        help="directory for sanitized M7 JSONL/Markdown artifacts",
++    )
++    parser.add_argument("--trial-limit", type=int, default=5, help="bounded SELECT trial limit, default: 5")
++    parser.add_argument("--max-limit", type=int, default=20, help="maximum allowed SELECT LIMIT, default: 20")
++    args = parser.parse_args()
++
++    result = run_logistics_nl2sql_m7_readonly_smoke(
++        env_path=Path(args.env_path),
++        artifact_dir=Path(args.artifact_dir),
++        trial_limit=args.trial_limit,
++        max_limit=args.max_limit,
++    )
++    # 只输出脱敏摘要：不打印 SQL、参数、host/user/password/DSN。
++    payload = {
++        "environment_status": result.environment_status,
++        "environment_error_code": result.environment_error_code,
++        "live_smoke_executed": result.live_smoke_executed,
++        "records_path": str(result.records_path),
++        "report_path": str(result.report_path),
++        "total": result.report.total,
++        "by_status": result.report.by_status,
++        "by_stage": result.report.by_stage,
++        "success_rate": result.report.success_rate,
++    }
++    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
++    return 0 if result.environment_status == "available" else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py b/tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py
+new file mode 100644
+index 0000000..6dd9c5e
+--- /dev/null
++++ b/tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py
+@@ -0,0 +1,435 @@
++from __future__ import annotations
++
++import json
++from pathlib import Path
++from typing import Any
++
++import pytest
++
++from backend.app.domains.logistics.services.nl2sql.m7_readonly_smoke import (
++    build_default_logistics_nl2sql_m7_readonly_smoke_samples,
++    run_logistics_nl2sql_m7_readonly_smoke,
++)
++from backend.app.domains.logistics.services.nl2sql.readonly_middle_db import (
++    LogisticsReadonlyMiddleDbConfig,
++    LogisticsReadonlyMiddleDbExecutor,
++    load_readonly_middle_db_config,
++)
++from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++from backend.app.domains.logistics.services.nl2sql.sql_execution import LogisticsSqlExecutionService
++from backend.app.domains.logistics.services.nl2sql.sql_plan import LogisticsSqlPlanValidator
++from backend.app.domains.logistics.services.nl2sql.sql_renderer import LogisticsRenderedSql, render_logistics_sql
++from backend.app.domains.logistics.services.nl2sql.sql_safety import LogisticsSqlSafetyChecker
++
++
++class _FakeCursor:
++    """M7 只读 executor 单测用游标，记录 SQL 与参数但不连接数据库。"""
++
++    def __init__(self, calls: list[tuple[str, dict[str, Any]]]) -> None:
++        """初始化调用记录列表。"""
++
++        self.calls = calls
++
++    def __enter__(self) -> "_FakeCursor":
++        """进入上下文并返回自身。"""
++
++        return self
++
++    def __exit__(self, exc_type: object, exc: object, tb: object) -> None:
++        """退出上下文，无需清理真实资源。"""
++
++        return None
++
++    def execute(self, sql: str, params: dict[str, Any]) -> None:
++        """记录即将交给 DB driver 的 SQL 与参数。"""
++
++        self.calls.append((sql, dict(params)))
++
++    def fetchall(self) -> list[dict[str, Any]]:
++        """返回小样本行，模拟 EXPLAIN/SELECT 结果。"""
++
++        return [{"ok": 1}]
++
++
++class _FakeConnection:
++    """M7 只读 executor 单测用连接。"""
++
++    def __init__(self, calls: list[tuple[str, dict[str, Any]]]) -> None:
++        """初始化连接的共享调用记录。"""
++
++        self.calls = calls
++        self.closed = False
++
++    def cursor(self) -> _FakeCursor:
++        """返回记录型 fake cursor。"""
++
++        return _FakeCursor(self.calls)
++
++    def close(self) -> None:
++        """标记连接已关闭。"""
++
++        self.closed = True
++
++
++def test_m7_config_loader_missing_env_fail_closed_without_secret_values(tmp_path: Path) -> None:
++    """缺少 backend/.env 时必须 fail-closed，且结果中不泄露 host/user/password/DSN。"""
++
++    missing_env = tmp_path / "backend" / ".env"
++
++    result = load_readonly_middle_db_config(missing_env)
++    payload = result.model_dump_json()
++
++    assert result.ok is False
++    assert result.error_code == "readonly_middle_db_env_missing"
++    assert result.config is None
++    assert "mysql://" not in payload
++    assert "unit-password" not in payload
++    assert "db.internal" not in payload
++    assert "admin_user" not in payload
++
++
++def test_m7_config_loader_missing_required_key_redacts_existing_env_values(tmp_path: Path) -> None:
++    """配置不完整时可以说明缺失键名，但不能把已存在的真实配置值带入错误结果。"""
++
++    env_path = tmp_path / ".env"
++    env_path.write_text(
++        "MYSQL_HOST=db.internal\nMYSQL_PORT=3306\nMYSQL_USER=admin_user\nMYSQL_PASSWORD=unit-password\n",
++        encoding="utf-8",
++    )
++
++    result = load_readonly_middle_db_config(env_path)
++    payload = result.model_dump_json()
++
++    assert result.ok is False
++    assert result.error_code == "readonly_middle_db_config_missing"
++    assert "MYSQL_DB" in result.missing_keys
++    assert "db.internal" not in payload
++    assert "admin_user" not in payload
++    assert "unit-password" not in payload
++    assert "mysql://" not in payload
++
++
++def test_m7_config_loader_accepts_backend_env_and_only_exposes_redacted_summary(tmp_path: Path) -> None:
++    """有效 .env 只返回内部 config 与脱敏摘要，JSON 序列化不出现连接明文。"""
++
++    env_path = tmp_path / ".env"
++    env_path.write_text(
++        "MYSQL_HOST=db.internal\nMYSQL_PORT=3307\nMYSQL_DB=logistics_ai\n"
++        "MYSQL_USER=admin_user\nMYSQL_PASSWORD=unit-password\nMYSQL_CHARSET=utf8mb4\n",
++        encoding="utf-8",
++    )
++
++    result = load_readonly_middle_db_config(env_path)
++    payload = result.model_dump_json()
++
++    assert result.ok is True
++    assert result.config is not None
++    assert result.safe_summary["configured"] is True
++    assert result.safe_summary["host_configured"] is True
++    assert result.safe_summary["database_configured"] is True
++    assert "db.internal" not in payload
++    assert "logistics_ai" not in payload
++    assert "admin_user" not in payload
++    assert "unit-password" not in payload
++    assert "mysql://" not in payload
++
++
++def test_m7_readonly_executor_runs_explain_and_bounded_trial_select_with_driver_params() -> None:
++    """M7 executor 只能把 EXPLAIN SELECT 与带 LIMIT 的 SELECT 交给 driver，参数保持绑定。"""
++
++    calls: list[tuple[str, dict[str, Any]]] = []
++    executor = LogisticsReadonlyMiddleDbExecutor(
++        config=_unit_config(),
++        connection_factory=lambda _config: _FakeConnection(calls),
++    )
++    service = LogisticsSqlExecutionService(
++        executor=executor,
++        safety_checker=LogisticsSqlSafetyChecker(max_limit=20),
++        trial_limit=5,
++    )
++    rendered = _aggregate_rendered_sql()
++
++    explain = service.explain(rendered)
++    trial = service.trial(rendered)
++
++    assert explain.ok is True, explain.error
++    assert trial.ok is True, trial.error
++    assert len(calls) == 2
++    assert calls[0][0].startswith("EXPLAIN SELECT ")
++    assert "%(p0)s" in calls[0][0]
++    assert calls[0][1] == rendered.params
++    assert calls[1][0].startswith("SELECT ")
++    assert calls[1][0].endswith(" LIMIT %(__trial_limit)s")
++    assert calls[1][1]["__trial_limit"] == 5
++    assert calls[1][1]["__trial_limit"] <= 20
++
++
++def test_m7_readonly_executor_rejects_non_select_and_unbounded_trial_before_driver() -> None:
++    """即使被直接调用，M7 executor 也必须在 driver 前拒绝非 SELECT 与无界 trial SQL。"""
++
++    calls: list[tuple[str, dict[str, Any]]] = []
++    executor = LogisticsReadonlyMiddleDbExecutor(
++        config=_unit_config(),
++        connection_factory=lambda _config: _FakeConnection(calls),
++    )
++
++    with pytest.raises(RuntimeError, match="readonly_middle_db_trial_limit_required"):
++        executor.trial("SELECT dws_logistics_detail_union.biz_year FROM dws_logistics_detail_union", {})
++    with pytest.raises(RuntimeError, match="readonly_middle_db_not_select"):
++        executor.trial("DELETE FROM dws_logistics_detail_union LIMIT 1", {})
++
++    assert calls == []
++
++
++@pytest.mark.parametrize(
++    "unsafe_sql",
++    [
++        "SELECT biz_year FROM dws_logistics_detail_union INTO OUTFILE '/tmp/leak.csv' LIMIT 1",
++        "SELECT biz_year FROM dws_logistics_detail_union INTO DUMPFILE '/tmp/leak.bin' LIMIT 1",
++        "SELECT biz_year FROM dws_logistics_detail_union UNION SELECT user FROM mysql.user LIMIT 1",
++        "SELECT LOAD_FILE('/etc/passwd') FROM dws_logistics_detail_union LIMIT 1",
++        "SELECT biz_year FROM dws_logistics_detail_union -- comment\n LIMIT 1",
++        "SELECT biz_year FROM dws_logistics_detail_union /* hidden */ LIMIT 1",
++        "SELECT biz_year FROM dws_logistics_detail_union # comment\n LIMIT 1",
++        "SELECT biz_year FROM dws_logistics_detail_union LIMIT 1 FOR UPDATE",
++        "SELECT biz_year FROM dws_logistics_detail_union LIMIT 1 LOCK IN SHARE MODE",
++        "SELECT biz_year FROM dws_logistics_detail_union PROCEDURE ANALYSE() LIMIT 1",
++        "SELECT SLEEP(1) FROM dws_logistics_detail_union LIMIT 1",
++        "SELECT BENCHMARK(100, MD5('x')) FROM dws_logistics_detail_union LIMIT 1",
++    ],
++)
++def test_m7_readonly_executor_rejects_dangerous_select_tokens_before_driver(unsafe_sql: str) -> None:
++    """即使 SQL 以 SELECT 开头且 bounded，真实 DB executor 仍需在 driver 前 fail-closed 拒绝危险只读绕过。"""
++
++    calls: list[tuple[str, dict[str, Any]]] = []
++    executor = LogisticsReadonlyMiddleDbExecutor(
++        config=_unit_config(),
++        connection_factory=lambda _config: _FakeConnection(calls),
++    )
++
++    with pytest.raises(RuntimeError, match="readonly_middle_db_unsafe_select"):
++        executor.trial(unsafe_sql, {})
++
++    assert calls == []
++
++
++def test_m7_runner_clamps_cli_supplied_limits_to_m7_upper_bound(tmp_path: Path) -> None:
++    """即使 CLI/调用方传入更大 max_limit，M7 runner 也必须把真实 DB safety 与 trial 上限钳制在 20 以内。"""
++
++    result = run_logistics_nl2sql_m7_readonly_smoke(
++        env_path=_write_valid_env(tmp_path),
++        artifact_dir=tmp_path / "m7-artifacts",
++        samples=build_default_logistics_nl2sql_m7_readonly_smoke_samples()[1:],
++        executor_factory=lambda _config: _StubLogisticsReadonlyExecutor(assert_limit_at_most=20),
++        trial_limit=99,
++        max_limit=99,
++    )
++
++    assert result.live_smoke_executed is True
++    assert result.report.by_status["success"] == 1
++
++
++def test_m7_safety_rejection_skips_readonly_executor_for_excessive_limit() -> None:
++    """超过 M7 上限的 LIMIT 应由 safety 拒绝，并且只读 executor 不得被调用。"""
++
++    calls: list[tuple[str, dict[str, Any]]] = []
++    executor = LogisticsReadonlyMiddleDbExecutor(
++        config=_unit_config(),
++        connection_factory=lambda _config: _FakeConnection(calls),
++    )
++    service = LogisticsSqlExecutionService(
++        executor=executor,
++        safety_checker=LogisticsSqlSafetyChecker(max_limit=20),
++        trial_limit=5,
++    )
++    unsafe = LogisticsRenderedSql(
++        sql="SELECT dws_logistics_detail_union.biz_year FROM dws_logistics_detail_union LIMIT :p0",
++        params={"p0": 100},
++        referenced_tables=["dws_logistics_detail_union"],
++        referenced_columns=[("dws_logistics_detail_union", "biz_year")],
++        limit=100,
++    )
++
++    result = service.trial(unsafe)
++
++    assert result.ok is False
++    assert "sql_safety_limit_out_of_range::100" in result.error_codes
++    assert calls == []
++
++
++def test_m7_runner_missing_env_writes_environment_unavailable_report_and_records(tmp_path: Path) -> None:
++    """真实库环境不可用时 M7 runner 必须记录 blocked/environment_unavailable，而不是伪造成成功。"""
++
++    artifact_dir = tmp_path / "m7-artifacts"
++
++    result = run_logistics_nl2sql_m7_readonly_smoke(
++        env_path=tmp_path / "missing.env",
++        artifact_dir=artifact_dir,
++    )
++
++    assert result.live_smoke_executed is False
++    assert result.environment_status == "environment_unavailable"
++    assert result.environment_error_code == "readonly_middle_db_env_missing"
++    assert result.report.by_status == {"blocked": 1}
++    assert result.records_path == artifact_dir / "m7-shadow-smoke-records.jsonl"
++    assert result.report_path == artifact_dir / "m7-shadow-smoke-report.md"
++    assert result.records_path.exists()
++    assert result.report_path.exists()
++    payload = result.records_path.read_text(encoding="utf-8") + result.report_path.read_text(encoding="utf-8")
++    assert "success" not in result.report.by_status
++    assert "mysql://" not in payload
++    assert "password" not in payload.lower()
++    assert "Bearer" not in payload
++    assert "sk-" not in payload
++
++
++def test_m7_runner_stub_executor_generates_success_artifacts_without_env_secret_leak(tmp_path: Path) -> None:
++    """M7 runner 在 stub executor 路径应生成成功记录与报表，但 artifact 不得泄露 .env 明文值或 SQL 原文。"""
++
++    env_path = _write_valid_env(tmp_path)
++    artifact_dir = tmp_path / "m7-artifacts"
++    samples = build_default_logistics_nl2sql_m7_readonly_smoke_samples()[:1]
++
++    result = run_logistics_nl2sql_m7_readonly_smoke(
++        env_path=env_path,
++        artifact_dir=artifact_dir,
++        samples=samples,
++        executor_factory=lambda _config: _StubLogisticsReadonlyExecutor(),
++    )
++
++    assert result.live_smoke_executed is True
++    assert result.environment_status == "available"
++    assert result.report.success_count == 1
++    assert result.report.by_status["success"] == 1
++    payload = result.records_path.read_text(encoding="utf-8") + result.report_path.read_text(encoding="utf-8")
++    assert "SELECT " not in payload
++    assert "EXPLAIN " not in payload
++    assert "db.internal" not in payload
++    assert "logistics_ai" not in payload
++    assert "admin_user" not in payload
++    assert "unit-password" not in payload
++    assert "mysql://" not in payload
++    assert "Bearer" not in payload
++    assert "sk-" not in payload
++
++
++def test_m7_runner_records_explain_failed_without_leaking_executor_error(tmp_path: Path) -> None:
++    """EXPLAIN 失败应进入 explain_failed，并且报告只保留稳定错误码与脱敏错误。"""
++
++    result = run_logistics_nl2sql_m7_readonly_smoke(
++        env_path=_write_valid_env(tmp_path),
++        artifact_dir=tmp_path / "m7-artifacts",
++        samples=build_default_logistics_nl2sql_m7_readonly_smoke_samples()[:1],
++        executor_factory=lambda _config: _StubLogisticsReadonlyExecutor(mode="explain_failed"),
++    )
++
++    assert result.live_smoke_executed is True
++    assert result.report.by_status["explain_failed"] == 1
++    payload = result.records_path.read_text(encoding="utf-8") + result.report_path.read_text(encoding="utf-8")
++    assert "unit-password" not in payload
++    assert "db.internal" not in payload
++    assert "SELECT " not in payload
++
++
++def test_m7_runner_records_trial_failed_without_leaking_executor_error(tmp_path: Path) -> None:
++    """trial SELECT 失败应进入 trial_failed，并且不把 SQL 或参数值写入 artifact。"""
++
++    result = run_logistics_nl2sql_m7_readonly_smoke(
++        env_path=_write_valid_env(tmp_path),
++        artifact_dir=tmp_path / "m7-artifacts",
++        samples=build_default_logistics_nl2sql_m7_readonly_smoke_samples()[:1],
++        executor_factory=lambda _config: _StubLogisticsReadonlyExecutor(mode="trial_failed"),
++    )
++
++    assert result.live_smoke_executed is True
++    assert result.report.by_status["trial_failed"] == 1
++    payload = result.records_path.read_text(encoding="utf-8") + result.report_path.read_text(encoding="utf-8")
++    assert "raw_param_value" not in payload
++    assert "SELECT " not in payload
++    assert "EXPLAIN " not in payload
++
++
++class _StubLogisticsReadonlyExecutor:
++    """M7 runner 单测用 executor，不连接真实库。"""
++
++    def __init__(self, *, mode: str = "success", assert_limit_at_most: int | None = None) -> None:
++        """初始化 stub 模式，用于覆盖成功、EXPLAIN 失败、trial 失败与 LIMIT 钳制断言。"""
++
++        self.mode = mode
++        self.assert_limit_at_most = assert_limit_at_most
++
++    def explain(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++        """模拟 EXPLAIN；失败模式返回含敏感词的异常以验证脱敏。"""
++
++        if self.mode == "explain_failed":
++            raise RuntimeError("db.internal explain failed password=unit-password")
++        return [{"select_type": "SIMPLE"}]
++
++    def trial(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++        """模拟 SELECT trial；失败模式返回含参数值的异常以验证脱敏。"""
++
++        if self.mode == "trial_failed":
++            raise RuntimeError("trial failed raw_param_value SELECT * FROM dws_logistics_detail_union")
++        if self.assert_limit_at_most is not None:
++            limit_value = params.get("__trial_limit")
++            assert isinstance(limit_value, int)
++            assert limit_value <= self.assert_limit_at_most
++        return [{"sample_metric": 1}]
++
++
++def _write_valid_env(tmp_path: Path) -> Path:
++    """写入单测专用 .env，真实 artifact 不得泄漏其中任何值。"""
++
++    env_path = tmp_path / ".env"
++    env_path.write_text(
++        "MYSQL_HOST=db.internal\nMYSQL_PORT=3307\nMYSQL_DB=logistics_ai\n"
++        "MYSQL_USER=admin_user\nMYSQL_PASSWORD=unit-password\nMYSQL_CHARSET=utf8mb4\n",
++        encoding="utf-8",
++    )
++    return env_path
++
++
++def _unit_config() -> LogisticsReadonlyMiddleDbConfig:
++    """生成单测专用脱敏中间库配置。"""
++
++    return LogisticsReadonlyMiddleDbConfig(
++        host="db.internal",
++        port=3307,
++        database="logistics_ai",
++        user="admin_user",
++        password="unit-password",
++        charset="utf8mb4",
++    )
++
++
++def _aggregate_rendered_sql() -> LogisticsRenderedSql:
++    """生成一条 M7 可用于 EXPLAIN/trial 的 aggregate SQL。"""
++
++    validation = LogisticsSqlPlanValidator(catalog=LogisticsSemanticCatalogLoader().load()).validate(
++        {
++            "schema_version": "logistics_sqlplan_candidate.v1",
++            "domain": "logistics",
++            "strategy": "sql_direct",
++            "catalog_version": "logistics_nl2sql_catalog.v1",
++            "catalog_refs": [
++                {"catalog_id": "table:dws_logistics_detail_union", "catalog_version": "logistics_nl2sql_catalog.v1"},
++                {"catalog_id": "metric:shipment_mw", "catalog_version": "logistics_nl2sql_catalog.v1"},
++                {"catalog_id": "dimension:biz_year", "catalog_version": "logistics_nl2sql_catalog.v1"},
++                {"catalog_id": "rule:default_time_range", "catalog_version": "logistics_nl2sql_catalog.v1"},
++            ],
++            "plan": {
++                "query_type": "aggregate",
++                "tables": ["dws_logistics_detail_union"],
++                "metrics": ["shipment_mw"],
++                "dimensions": [],
++                "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025, 2026]}],
++                "group_by": [],
++                "order_by": [],
++                "business_rules": ["default_time_range"],
++                "explicit_year_buckets": [2023, 2024, 2025, 2026],
++                "requested_unit": "MW",
++                "limit": None,
++            },
++        }
++    )
++    return render_logistics_sql(validation)
+diff --git a/docs/NL2SQL_LOGISTICS_M7_READONLY_MIDDLE_DB_SMOKE_MVP_PLAN.md b/docs/NL2SQL_LOGISTICS_M7_READONLY_MIDDLE_DB_SMOKE_MVP_PLAN.md
+new file mode 100644
+index 0000000..0c5c6dc
+--- /dev/null
++++ b/docs/NL2SQL_LOGISTICS_M7_READONLY_MIDDLE_DB_SMOKE_MVP_PLAN.md
+@@ -0,0 +1,61 @@
++# NL2SQL Logistics M7 Readonly Middle DB Shadow Smoke MVP Plan
++
++## 目标
++
++M7 在 M4 SQL renderer/safety、M5 shadow pipeline、M6 离线 shadow smoke/report 的基础上，增加一个“只读真实 MySQL 中间库 shadow smoke”最小闭环：
++
++1. 使用受控 SQLPlan candidate。
++2. 经过 M3 validator 与 M4 renderer。
++3. 再经过 M4 safety validator。
++4. 使用只读中间库 executor 执行 `EXPLAIN SELECT ...`。
++5. 使用同一安全 SQL 执行带严格上限的 `SELECT ... LIMIT N` trial。
++6. 生成本地 JSONL 与 Markdown 评估报告。
++
++本阶段只用于内部 smoke/evaluation，不接正式物流 QA 主链路，不修改前端，不新增迁移。
++
++## 只读边界
++
++- 配置只从 `backend/.env` 读取 `MYSQL_HOST`、`MYSQL_PORT`、`MYSQL_DB`、`MYSQL_USER`、`MYSQL_PASSWORD`、可选 `MYSQL_CHARSET`。
++- 缺少 `.env` 或配置不完整时 fail-closed，记录 `blocked/environment`，不伪造成 smoke 成功。
++- 只允许 executor 接收：
++  - `EXPLAIN SELECT ...`
++  - `SELECT ... LIMIT N`
++- 非 SELECT、嵌套 EXPLAIN、无 LIMIT trial、超过 M7 上限的 LIMIT 都会在 driver 前被拒绝。
++- SQL 参数保持 driver 绑定：renderer 的 `:p0` 会转换成 PyMySQL `%(p0)s`，不会拼接用户值。
++- artifact 不保存 SQL 原文、参数值、host/user/password/database/full DSN/API key/token。
++
++## 新增入口
++
++固定脚本：
++
++```bash
++backend/.venv/bin/python scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py --artifact-dir ai/outbox/kanban/t_1fceb427
++```
++
++脚本只输出脱敏摘要，完整记录写入：
++
++- `ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl`
++- `ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md`
++
++如真实 MySQL 环境不可用，脚本返回非 0，并在上述 artifact 中记录环境阻塞原因；这不是测试伪失败，而是 M7 live smoke 的真实环境状态。
++
++## 测试覆盖
++
++新增单元测试覆盖：
++
++1. `.env` 缺失 fail-closed。
++2. DB 配置缺失 fail-closed，且不泄漏已存在配置值。
++3. 有效配置只在内存 config 中保留，JSON 摘要脱敏。
++4. 只读 executor 执行 `EXPLAIN SELECT` 与 bounded trial，并保持参数绑定。
++5. executor 直接调用时拒绝非 SELECT 和无界 SELECT。
++6. safety 拒绝时不调用 executor。
++7. runner 在缺少环境时生成 `blocked/environment_unavailable` artifact。
++8. runner 在 stub success/explain_failed/trial_failed 路径生成脱敏 artifact。
++
++## M8 建议
++
++M8 可在 M7 artifact 基础上做更细的真实库 schema/EXPLAIN 质量分析，例如：
++
++- 记录脱敏后的 plan hash 与 catalog coverage 趋势。
++- 对常见样例扩大 smoke 集合，但仍保持 LIMIT 上限。
++- 做 shadow-only SQLPlan 修复建议，不接正式问答执行链路。
+diff --git a/ai/outbox/kanban/t_1fceb427/test.log b/ai/outbox/kanban/t_1fceb427/test.log
+new file mode 100644
+index 0000000..a383f20
+--- /dev/null
++++ b/ai/outbox/kanban/t_1fceb427/test.log
+@@ -0,0 +1,836 @@
++## Recovery final focused M7 tests
++.......................                                                  [100%]
++23 passed in 0.33s
++
++## Recovery final NL2SQL unit tests
++........................................................................ [ 46%]
++........................................................................ [ 92%]
++............                                                             [100%]
++=============================== warnings summary ===============================
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pymilvus/client/__init__.py:6: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
++    from pkg_resources import DistributionNotFound, get_distribution
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('sphinxcontrib')`.
++  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
++    declare_namespace(pkg)
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('zope')`.
++  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
++    declare_namespace(pkg)
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.MessageMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.ScalarMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
++
++-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
++156 passed, 9 warnings in 3.56s
++
++## Recovery final logistics unit tests
++........................................................................ [ 42%]
++........................................................................ [ 84%]
++..........................                                               [100%]
++=============================== warnings summary ===============================
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pymilvus/client/__init__.py:6: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
++    from pkg_resources import DistributionNotFound, get_distribution
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('sphinxcontrib')`.
++  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
++    declare_namespace(pkg)
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('zope')`.
++  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
++    declare_namespace(pkg)
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.MessageMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.ScalarMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
++
++-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
++170 passed, 9 warnings in 3.59s
++
++## Recovery final full unit tests
++........................................................................ [ 33%]
++........................................................................ [ 67%]
++......................................................................   [100%]
++=============================== warnings summary ===============================
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pymilvus/client/__init__.py:6: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
++    from pkg_resources import DistributionNotFound, get_distribution
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('sphinxcontrib')`.
++  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
++    declare_namespace(pkg)
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('zope')`.
++  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
++    declare_namespace(pkg)
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.MessageMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.ScalarMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
++
++-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
++214 passed, 9 warnings in 4.28s
++
++## Recovery final py_compile
++py_compile passed
++
++## Recovery final live MySQL smoke
++{"by_stage": {"trial": 2}, "by_status": {"success": 2}, "environment_error_code": null, "environment_status": "available", "live_smoke_executed": true, "records_path": "ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl", "report_path": "ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md", "success_rate": 1.0, "total": 2}
++
++## Recovery final git diff --check
++git diff --check passed
++
++## Recovery final project wrapper ai/scripts/run_tests.sh basic
++[Test] Start tests, mode=basic
++[Test] Python compile check
++Listing 'backend'...
++Listing 'backend/.venv'...
++Listing 'backend/.venv/bin'...
++Listing 'backend/.venv/include'...
++Listing 'backend/.venv/include/python3.12'...
++Listing 'backend/.venv/lib'...
++Listing 'backend/.venv/lib/python3.12'...
++Listing 'backend/.venv/lib/python3.12/site-packages'...
++Listing 'backend/.venv/lib/python3.12/site-packages/oracledb'...
++Listing 'backend/.venv/lib/python3.12/site-packages/oracledb/plugins'...
++Listing 'backend/.venv/lib/python3.12/site-packages/oracledb-4.0.0.dist-info'...
++Listing 'backend/.venv/lib/python3.12/site-packages/oracledb-4.0.0.dist-info/licenses'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/cli'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/commands'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/distributions'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/index'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/locations'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/metadata'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/models'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/network'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/operations'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/operations/build'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/operations/install'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/req'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/resolution'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/resolution/legacy'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/resolution/resolvelib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/utils'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/vcs'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/cachecontrol'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/cachecontrol/caches'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/certifi'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/distlib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/distro'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/idna'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/msgpack'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/packaging'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pkg_resources'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/platformdirs'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments/filters'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments/formatters'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments/lexers'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments/styles'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pyproject_hooks'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pyproject_hooks/_in_process'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/requests'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/resolvelib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/resolvelib/compat'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/rich'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/tomli'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/truststore'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/contrib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/contrib/_securetransport'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/packages'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/packages/backports'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/util'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip-24.3.1.dist-info'...
++Listing 'backend/alembic'...
++Listing 'backend/alembic/versions'...
++Listing 'backend/app'...
++Listing 'backend/app/api'...
++Listing 'backend/app/api/v1'...
++Listing 'backend/app/api/v1/endpoints'...
++Listing 'backend/app/core'...
++Listing 'backend/app/db'...
++Listing 'backend/app/domains'...
++Listing 'backend/app/domains/business_analysis'...
++Listing 'backend/app/domains/logistics'...
++Listing 'backend/app/domains/logistics/api'...
++Listing 'backend/app/domains/logistics/api/endpoints'...
++Listing 'backend/app/domains/logistics/config'...
++Listing 'backend/app/domains/logistics/config/domains'...
++Listing 'backend/app/domains/logistics/config/domains/business_analysis'...
++Listing 'backend/app/domains/logistics/config/domains/logistics'...
++Listing 'backend/app/domains/logistics/config/domains/material_management'...
++Listing 'backend/app/domains/logistics/config/domains/plan_bom'...
++Listing 'backend/app/domains/logistics/config/global'...
++Listing 'backend/app/domains/logistics/config/nl2sql_catalog'...
++Listing 'backend/app/domains/logistics/config/sql_templates'...
++Listing 'backend/app/domains/logistics/config/sql_templates/logistics'...
++Listing 'backend/app/domains/logistics/etl'...
++Listing 'backend/app/domains/logistics/repositories'...
++Listing 'backend/app/domains/logistics/schemas'...
++Listing 'backend/app/domains/logistics/services'...
++Listing 'backend/app/domains/logistics/services/nl2sql'...
++Listing 'backend/app/domains/logistics/services/query_planner_v2'...
++Listing 'backend/app/domains/material_management'...
++Listing 'backend/app/domains/plan_bom'...
++Listing 'backend/app/domains/plan_bom/api'...
++Listing 'backend/app/domains/plan_bom/api/endpoints'...
++Listing 'backend/app/domains/plan_bom/config'...
++Listing 'backend/app/domains/plan_bom/repositories'...
++Listing 'backend/app/domains/plan_bom/schemas'...
++Listing 'backend/app/domains/plan_bom/services'...
++Listing 'backend/app/domains/query_planning'...
++Listing 'backend/app/domains/query_planning/api'...
++Listing 'backend/app/domains/query_planning/api/endpoints'...
++Listing 'backend/app/domains/query_planning/schemas'...
++Listing 'backend/app/domains/query_planning/services'...
++Listing 'backend/app/integrations'...
++Listing 'backend/app/llm'...
++Listing 'backend/app/middleware'...
++Listing 'backend/app/models'...
++Listing 'backend/app/repositories'...
++Listing 'backend/app/schemas'...
++Listing 'backend/app/services'...
++Listing 'backend/app/tasks'...
++Listing 'backend/app/utils'...
++Listing 'backend/app/vector'...
++Listing 'backend/data'...
++Listing 'backend/data/files'...
++Listing 'backend/data/files/history_uploads'...
++Listing 'backend/data/logs'...
++Listing 'scripts'...
++Listing 'scripts/archive'...
++Listing 'scripts/archive/logistics-903'...
++Listing 'scripts/archive/logistics-abc-migration'...
++Listing 'scripts/archive/logistics-poc'...
++Listing 'scripts/archive/logistics-top200'...
++Listing 'scripts/dev'...
++Listing 'ai/scripts'...
++[Test] Pytest
++
++==================================== ERRORS ====================================
++_ ERROR collecting tests/business_acceptance/test_business_chat_answer_format_preference.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_business_chat_answer_format_preference.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_business_chat_answer_format_preference.py:5: in <module>
++    from backend.app.domains.logistics.schemas.data_qa import (
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_logistics_carrier_filter_scope.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_logistics_carrier_filter_scope.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_logistics_carrier_filter_scope.py:15: in <module>
++    from backend.app.domains.logistics.repositories.data_qa_repository import LogisticsDataQaRepository
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py:12: in <module>
++    from backend.app.db.session import SessionLocal
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_logistics_e2e_robustness_fixes.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_logistics_e2e_robustness_fixes.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_logistics_e2e_robustness_fixes.py:11: in <module>
++    from backend.app.db.session import SessionLocal
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_logistics_field_scope_clarification.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_logistics_field_scope_clarification.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_logistics_field_scope_clarification.py:5: in <module>
++    from backend.app.domains.logistics.repositories.data_qa_repository import LogisticsDataQaRepository
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_logistics_llm_led_composite_decomposition.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_logistics_llm_led_composite_decomposition.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_logistics_llm_led_composite_decomposition.py:12: in <module>
++    from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_logistics_monthly_year_range.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_logistics_monthly_year_range.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_logistics_monthly_year_range.py:5: in <module>
++    from backend.app.domains.logistics.services.data_qa_planner import LogisticsDataQaPlanner
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py:9: in <module>
++    from backend.app.db.session import SessionLocal
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_logistics_system_sync_normalization.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_logistics_system_sync_normalization.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_logistics_system_sync_normalization.py:10: in <module>
++    from backend.app.domains.logistics.repositories.sync_repository import LogisticsSyncRepository
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py:8: in <module>
++    from backend.app.db.session import SessionLocal
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_plan_bom_upload_history_power_activation.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_plan_bom_upload_history_power_activation.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_plan_bom_upload_history_power_activation.py:10: in <module>
++    from backend.app.db.base import Base
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_plan_power_docx_question_regression.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_plan_power_docx_question_regression.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_plan_power_docx_question_regression.py:9: in <module>
++    from backend.app.db.session import SessionLocal
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_plan_power_m2_model_versioning.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_plan_power_m2_model_versioning.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_plan_power_m2_model_versioning.py:16: in <module>
++    from backend.app.api.deps import require_plan_power_write_access
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_plan_power_m3_prediction_engine.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_plan_power_m3_prediction_engine.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_plan_power_m3_prediction_engine.py:12: in <module>
++    from backend.app.db.base import Base
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_plan_power_m4_config_resolver.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_plan_power_m4_config_resolver.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_plan_power_m4_config_resolver.py:7: in <module>
++    from backend.app.db.session import SessionLocal
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/business_acceptance/test_plan_power_m5_qa_integration.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/business_acceptance/test_plan_power_m5_qa_integration.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/business_acceptance/test_plan_power_m5_qa_integration.py:7: in <module>
++    from backend.app.db.session import SessionLocal
++E   ModuleNotFoundError: No module named 'backend'
++____ ERROR collecting tests/unit/logistics/nl2sql/test_catalog_retrieval.py ____
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_catalog_retrieval.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py:8: in <module>
++    from backend.app.core.config import Settings
++E   ModuleNotFoundError: No module named 'backend'
++_____ ERROR collecting tests/unit/logistics/nl2sql/test_evaluation_log.py ______
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_evaluation_log.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_evaluation_log.py:7: in <module>
++    from backend.app.domains.logistics.services.nl2sql.evaluation_log import (
++E   ModuleNotFoundError: No module named 'backend'
++____ ERROR collecting tests/unit/logistics/nl2sql/test_evaluation_report.py ____
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_evaluation_report.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_evaluation_report.py:5: in <module>
++    from backend.app.domains.logistics.services.nl2sql.evaluation_log import LogisticsNl2SqlEvaluationLogRecord
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py:9: in <module>
++    from backend.app.domains.logistics.services.nl2sql.m7_readonly_smoke import (
++E   ModuleNotFoundError: No module named 'backend'
++____ ERROR collecting tests/unit/logistics/nl2sql/test_semantic_catalog.py _____
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_semantic_catalog.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_semantic_catalog.py:7: in <module>
++    from backend.app.domains.logistics.services.nl2sql.business_rules import LogisticsNl2SqlBusinessRules
++E   ModuleNotFoundError: No module named 'backend'
++_____ ERROR collecting tests/unit/logistics/nl2sql/test_shadow_pipeline.py _____
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_shadow_pipeline.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_shadow_pipeline.py:6: in <module>
++    from backend.app.domains.logistics.services.nl2sql.evaluation_log import InMemoryLogisticsNl2SqlEvaluationLogSink
++E   ModuleNotFoundError: No module named 'backend'
++______ ERROR collecting tests/unit/logistics/nl2sql/test_shadow_smoke.py _______
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_shadow_smoke.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_shadow_smoke.py:6: in <module>
++    from backend.app.domains.logistics.services.nl2sql.shadow_smoke import (
++E   ModuleNotFoundError: No module named 'backend'
++______ ERROR collecting tests/unit/logistics/nl2sql/test_sql_execution.py ______
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_sql_execution.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_sql_execution.py:3: in <module>
++    from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++E   ModuleNotFoundError: No module named 'backend'
++________ ERROR collecting tests/unit/logistics/nl2sql/test_sql_plan.py _________
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_sql_plan.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_sql_plan.py:7: in <module>
++    from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
++E   ModuleNotFoundError: No module named 'backend'
++______ ERROR collecting tests/unit/logistics/nl2sql/test_sql_renderer.py _______
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_sql_renderer.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_sql_renderer.py:7: in <module>
++    from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++E   ModuleNotFoundError: No module named 'backend'
++_______ ERROR collecting tests/unit/logistics/nl2sql/test_sql_safety.py ________
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/nl2sql/test_sql_safety.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/nl2sql/test_sql_safety.py:5: in <module>
++    from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py:6: in <module>
++    from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
++E   ModuleNotFoundError: No module named 'backend'
++___ ERROR collecting tests/unit/query_planning/test_query_plan_v2_schema.py ____
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/query_planning/test_query_plan_v2_schema.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/query_planning/test_query_plan_v2_schema.py:6: in <module>
++    from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++E   ModuleNotFoundError: No module named 'backend'
++__ ERROR collecting tests/unit/query_planning/test_query_planning_adapters.py __
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/query_planning/test_query_planning_adapters.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/query_planning/test_query_planning_adapters.py:7: in <module>
++    from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaPlan
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/unit/query_planning/test_query_planning_endpoint_registration.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/query_planning/test_query_planning_endpoint_registration.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/query_planning/test_query_planning_endpoint_registration.py:5: in <module>
++    from backend.app.api.deps import require_query_planning_internal_access
++E   ModuleNotFoundError: No module named 'backend'
++___ ERROR collecting tests/unit/query_planning/test_query_planning_phase4.py ___
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/query_planning/test_query_planning_phase4.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/query_planning/test_query_planning_phase4.py:9: in <module>
++    from backend.app.api.deps import require_query_planning_internal_access
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py:7: in <module>
++    from backend.app.domains.query_planning.services.shadow_report_service import QueryPlanningV2ShadowReportService
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/unit/query_planning/test_query_planning_phase56_response_meta.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/query_planning/test_query_planning_phase56_response_meta.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/query_planning/test_query_planning_phase56_response_meta.py:9: in <module>
++    from backend.app.domains.logistics.api.endpoints import data_qa as logistics_data_qa_endpoint
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/unit/query_planning/test_query_planning_phase5_gray_log_report.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/query_planning/test_query_planning_phase5_gray_log_report.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/query_planning/test_query_planning_phase5_gray_log_report.py:8: in <module>
++    from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
++E   ModuleNotFoundError: No module named 'backend'
++_ ERROR collecting tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py _
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py:7: in <module>
++    from backend.app.domains.logistics.schemas.data_qa import (
++E   ModuleNotFoundError: No module named 'backend'
++______ ERROR collecting tests/unit/query_planning/test_strategy_router.py ______
++ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/tests/unit/query_planning/test_strategy_router.py'.
++Hint: make sure your test modules/packages have valid Python names.
++Traceback:
++/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
++    return _bootstrap._gcd_import(name[level:], package, level)
++tests/unit/query_planning/test_strategy_router.py:3: in <module>
++    from backend.app.domains.query_planning.schemas.query_plan_v2 import (
++E   ModuleNotFoundError: No module named 'backend'
++=========================== short test summary info ============================
++ERROR tests/business_acceptance/test_business_chat_answer_format_preference.py
++ERROR tests/business_acceptance/test_logistics_carrier_filter_scope.py
++ERROR tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
++ERROR tests/business_acceptance/test_logistics_e2e_robustness_fixes.py
++ERROR tests/business_acceptance/test_logistics_field_scope_clarification.py
++ERROR tests/business_acceptance/test_logistics_llm_led_composite_decomposition.py
++ERROR tests/business_acceptance/test_logistics_monthly_year_range.py
++ERROR tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py
++ERROR tests/business_acceptance/test_logistics_system_sync_normalization.py
++ERROR tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py
++ERROR tests/business_acceptance/test_plan_bom_upload_history_power_activation.py
++ERROR tests/business_acceptance/test_plan_power_docx_question_regression.py
++ERROR tests/business_acceptance/test_plan_power_m2_model_versioning.py
++ERROR tests/business_acceptance/test_plan_power_m3_prediction_engine.py
++ERROR tests/business_acceptance/test_plan_power_m4_config_resolver.py
++ERROR tests/business_acceptance/test_plan_power_m5_qa_integration.py
++ERROR tests/unit/logistics/nl2sql/test_catalog_retrieval.py
++ERROR tests/unit/logistics/nl2sql/test_evaluation_log.py
++ERROR tests/unit/logistics/nl2sql/test_evaluation_report.py
++ERROR tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py
++ERROR tests/unit/logistics/nl2sql/test_semantic_catalog.py
++ERROR tests/unit/logistics/nl2sql/test_shadow_pipeline.py
++ERROR tests/unit/logistics/nl2sql/test_shadow_smoke.py
++ERROR tests/unit/logistics/nl2sql/test_sql_execution.py
++ERROR tests/unit/logistics/nl2sql/test_sql_plan.py
++ERROR tests/unit/logistics/nl2sql/test_sql_renderer.py
++ERROR tests/unit/logistics/nl2sql/test_sql_safety.py
++ERROR tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py
++ERROR tests/unit/query_planning/test_query_plan_v2_schema.py
++ERROR tests/unit/query_planning/test_query_planning_adapters.py
++ERROR tests/unit/query_planning/test_query_planning_endpoint_registration.py
++ERROR tests/unit/query_planning/test_query_planning_phase4.py
++ERROR tests/unit/query_planning/test_query_planning_phase54_gray_acceptance.py
++ERROR tests/unit/query_planning/test_query_planning_phase56_response_meta.py
++ERROR tests/unit/query_planning/test_query_planning_phase5_gray_log_report.py
++ERROR tests/unit/query_planning/test_query_planning_phase5_shadow_compare.py
++ERROR tests/unit/query_planning/test_strategy_router.py
++!!!!!!!!!!!!!!!!!!! Interrupted: 37 errors during collection !!!!!!!!!!!!!!!!!!!
++37 errors in 0.61s
++
++## Recovery final project wrapper ai/scripts/run_tests.sh basic with PYTHONPATH
++[Test] Start tests, mode=basic
++[Test] Python compile check
++Listing 'backend'...
++Listing 'backend/.venv'...
++Listing 'backend/.venv/bin'...
++Listing 'backend/.venv/include'...
++Listing 'backend/.venv/include/python3.12'...
++Listing 'backend/.venv/lib'...
++Listing 'backend/.venv/lib/python3.12'...
++Listing 'backend/.venv/lib/python3.12/site-packages'...
++Listing 'backend/.venv/lib/python3.12/site-packages/oracledb'...
++Listing 'backend/.venv/lib/python3.12/site-packages/oracledb/plugins'...
++Listing 'backend/.venv/lib/python3.12/site-packages/oracledb-4.0.0.dist-info'...
++Listing 'backend/.venv/lib/python3.12/site-packages/oracledb-4.0.0.dist-info/licenses'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/cli'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/commands'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/distributions'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/index'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/locations'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/metadata'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/metadata/importlib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/models'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/network'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/operations'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/operations/build'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/operations/install'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/req'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/resolution'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/resolution/legacy'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/resolution/resolvelib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/utils'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_internal/vcs'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/cachecontrol'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/cachecontrol/caches'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/certifi'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/distlib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/distro'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/idna'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/msgpack'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/packaging'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pkg_resources'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/platformdirs'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments/filters'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments/formatters'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments/lexers'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pygments/styles'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pyproject_hooks'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/pyproject_hooks/_in_process'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/requests'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/resolvelib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/resolvelib/compat'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/rich'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/tomli'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/truststore'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/contrib'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/contrib/_securetransport'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/packages'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/packages/backports'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip/_vendor/urllib3/util'...
++Listing 'backend/.venv/lib/python3.12/site-packages/pip-24.3.1.dist-info'...
++Listing 'backend/alembic'...
++Listing 'backend/alembic/versions'...
++Listing 'backend/app'...
++Listing 'backend/app/api'...
++Listing 'backend/app/api/v1'...
++Listing 'backend/app/api/v1/endpoints'...
++Listing 'backend/app/core'...
++Listing 'backend/app/db'...
++Listing 'backend/app/domains'...
++Listing 'backend/app/domains/business_analysis'...
++Listing 'backend/app/domains/logistics'...
++Listing 'backend/app/domains/logistics/api'...
++Listing 'backend/app/domains/logistics/api/endpoints'...
++Listing 'backend/app/domains/logistics/config'...
++Listing 'backend/app/domains/logistics/config/domains'...
++Listing 'backend/app/domains/logistics/config/domains/business_analysis'...
++Listing 'backend/app/domains/logistics/config/domains/logistics'...
++Listing 'backend/app/domains/logistics/config/domains/material_management'...
++Listing 'backend/app/domains/logistics/config/domains/plan_bom'...
++Listing 'backend/app/domains/logistics/config/global'...
++Listing 'backend/app/domains/logistics/config/nl2sql_catalog'...
++Listing 'backend/app/domains/logistics/config/sql_templates'...
++Listing 'backend/app/domains/logistics/config/sql_templates/logistics'...
++Listing 'backend/app/domains/logistics/etl'...
++Listing 'backend/app/domains/logistics/repositories'...
++Listing 'backend/app/domains/logistics/schemas'...
++Listing 'backend/app/domains/logistics/services'...
++Listing 'backend/app/domains/logistics/services/nl2sql'...
++Listing 'backend/app/domains/logistics/services/query_planner_v2'...
++Listing 'backend/app/domains/material_management'...
++Listing 'backend/app/domains/plan_bom'...
++Listing 'backend/app/domains/plan_bom/api'...
++Listing 'backend/app/domains/plan_bom/api/endpoints'...
++Listing 'backend/app/domains/plan_bom/config'...
++Listing 'backend/app/domains/plan_bom/repositories'...
++Listing 'backend/app/domains/plan_bom/schemas'...
++Listing 'backend/app/domains/plan_bom/services'...
++Listing 'backend/app/domains/query_planning'...
++Listing 'backend/app/domains/query_planning/api'...
++Listing 'backend/app/domains/query_planning/api/endpoints'...
++Listing 'backend/app/domains/query_planning/schemas'...
++Listing 'backend/app/domains/query_planning/services'...
++Listing 'backend/app/integrations'...
++Listing 'backend/app/llm'...
++Listing 'backend/app/middleware'...
++Listing 'backend/app/models'...
++Listing 'backend/app/repositories'...
++Listing 'backend/app/schemas'...
++Listing 'backend/app/services'...
++Listing 'backend/app/tasks'...
++Listing 'backend/app/utils'...
++Listing 'backend/app/vector'...
++Listing 'backend/data'...
++Listing 'backend/data/files'...
++Listing 'backend/data/files/history_uploads'...
++Listing 'backend/data/logs'...
++Listing 'scripts'...
++Listing 'scripts/archive'...
++Listing 'scripts/archive/logistics-903'...
++Listing 'scripts/archive/logistics-abc-migration'...
++Listing 'scripts/archive/logistics-poc'...
++Listing 'scripts/archive/logistics-top200'...
++Listing 'scripts/dev'...
++Listing 'ai/scripts'...
++[Test] Pytest
++........................................................................ [ 16%]
++........................................................................ [ 32%]
++........................................................................ [ 48%]
++........................................................................ [ 65%]
++........................................................................ [ 81%]
++........................................................................ [ 97%]
++...........                                                              [100%]
++=============================== warnings summary ===============================
++tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
++  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Unknown extension is not supported and will be removed
++    ws_parser.bind_all()
++
++tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
++  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Conditional Formatting extension is not supported and will be removed
++    ws_parser.bind_all()
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pymilvus/client/__init__.py:6: DeprecationWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html
++    from pkg_resources import DistributionNotFound, get_distribution
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('sphinxcontrib')`.
++  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
++    declare_namespace(pkg)
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  /opt/anaconda3/lib/python3.12/site-packages/pkg_resources/__init__.py:3154: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('zope')`.
++  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
++    declare_namespace(pkg)
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.MessageMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
++
++tests/unit/logistics/nl2sql/test_catalog_retrieval.py::test_milvus_collection_schema_declares_string_primary_key_and_vector_index
++  <frozen importlib._bootstrap>:488: DeprecationWarning: Type google._upb._message.ScalarMapContainer uses PyType_Spec with a metaclass that has custom tp_new. This is deprecated and will no longer be allowed in Python 3.14.
++
++-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
++443 passed, 11 warnings in 22.63s
++[Test] Frontend build
++
++> gcl-bp-intelligent-platform-frontend@0.1.0 build
++> vue-tsc -b && vite build
++
++vite v5.4.21 building for production...
++transforming...
++✓ 1702 modules transformed.
++rendering chunks...
++computing gzip size...
++dist/index.html                                          0.57 kB │ gzip:   0.53 kB
++dist/assets/DetailViewPage-DY6vuC3-.css                  0.21 kB │ gzip:   0.14 kB
++dist/assets/ResultTable-C3CCB_Jw.css                     0.31 kB │ gzip:   0.20 kB
++dist/assets/QueryHistoryPage-C4hz88b1.css                0.52 kB │ gzip:   0.26 kB
++dist/assets/TrialGuidePage-Bu03moO8.css                  0.81 kB │ gzip:   0.38 kB
++dist/assets/QueryResultCard-CapIsKq4.css                 2.59 kB │ gzip:   0.68 kB
++dist/assets/LogisticsDataQaHistoryPage-Dod3diRj.css      3.13 kB │ gzip:   0.88 kB
++dist/assets/NLQueryPage-CECbktQu.css                     5.95 kB │ gzip:   1.53 kB
++dist/assets/PlanBomDetailQueryPage-CJszgW3Q.css          9.46 kB │ gzip:   2.02 kB
++dist/assets/BomDataManagementPage-BPJXPlhE.css          11.26 kB │ gzip:   2.44 kB
++dist/assets/BusinessChatPage-C5B8dwNN.css               16.93 kB │ gzip:   3.70 kB
++dist/assets/index-CewzllaG.css                         362.19 kB │ gzip:  49.72 kB
++dist/assets/queryStorage-DDqzaUkk.js                     0.59 kB │ gzip:   0.27 kB
++dist/assets/logistics-Co0rJ0Eb.js                        0.72 kB │ gzip:   0.32 kB
++dist/assets/TrialGuidePage-zbZUdA_W.js                   0.93 kB │ gzip:   0.66 kB
++dist/assets/planBom-DUgdqOeZ.js                          1.38 kB │ gzip:   0.58 kB
++dist/assets/TaskPage-C0b2Qa-M.js                         2.19 kB │ gzip:   1.06 kB
++dist/assets/ResultTable-B4q_J6T3.js                      4.50 kB │ gzip:   2.43 kB
++dist/assets/LogisticsDataQaHistoryPage-BLoWoUbK.js       6.18 kB │ gzip:   3.09 kB
++dist/assets/DetailViewPage-DvRvcVLQ.js                   6.87 kB │ gzip:   2.54 kB
++dist/assets/StructuredQueryPage-BtpbI5Gd.js              6.93 kB │ gzip:   2.55 kB
++dist/assets/QueryHistoryPage-CMk0Ydyx.js                 9.84 kB │ gzip:   3.89 kB
++dist/assets/NLQueryPage-CNzETi2O.js                     10.16 kB │ gzip:   4.50 kB
++dist/assets/QueryResultCard-DXgRBCRI.js                 14.95 kB │ gzip:   5.35 kB
++dist/assets/BomDataManagementPage-C6VbDHFX.js           17.06 kB │ gzip:   6.17 kB
++dist/assets/PlanBomDetailQueryPage-DSL1uCAG.js          18.15 kB │ gzip:   6.84 kB
++dist/assets/streamingApi-DHh03bij.js                    39.24 kB │ gzip:  15.86 kB
++dist/assets/BusinessChatPage-mqod2OdD.js               663.49 kB │ gzip: 336.85 kB
++dist/assets/index-Uu2PN7u2.js                        1,030.20 kB │ gzip: 340.36 kB
++
++(!) Some chunks are larger than 500 kB after minification. Consider:
++- Using dynamic import() to code-split the application
++- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
++- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
++✓ built in 3.00s
++[Test] All checks passed
++project wrapper with PYTHONPATH exit_code=0
+diff --git a/ai/outbox/kanban/t_1fceb427/static-scan.json b/ai/outbox/kanban/t_1fceb427/static-scan.json
+new file mode 100644
+index 0000000..cc8025f
+--- /dev/null
++++ b/ai/outbox/kanban/t_1fceb427/static-scan.json
+@@ -0,0 +1,70 @@
++{
++  "task_id": "t_1fceb427",
++  "branch": "feature/nl2sql-m7-readonly-middle-db-smoke",
++  "scope": [
++    "backend/app/domains/logistics/services/nl2sql/readonly_middle_db.py",
++    "backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py",
++    "backend/app/domains/logistics/services/nl2sql/__init__.py",
++    "scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py",
++    "tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py",
++    "docs/NL2SQL_LOGISTICS_M7_READONLY_MIDDLE_DB_SMOKE_MVP_PLAN.md",
++    "ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md",
++    "ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl"
++  ],
++  "status": "passed",
++  "blocking_findings": [],
++  "scans": [
++    {
++      "name": "production_added_sensitive_or_dangerous_patterns",
++      "status": "passed",
++      "matches": []
++    },
++    {
++      "name": "m7_artifact_secret_sql_leak_scan",
++      "status": "passed",
++      "patterns": [
++        "SELECT ",
++        "EXPLAIN ",
++        "mysql://",
++        "Bearer",
++        "sk-",
++        "password",
++        "token",
++        "MYSQL_HOST",
++        "MYSQL_USER",
++        "MYSQL_PASSWORD",
++        "MYSQL_DB",
++        "DSN",
++        "host",
++        "user"
++      ],
++      "matches": []
++    },
++    {
++      "name": "test_fixture_sensitive_pattern_review",
++      "status": "passed_with_non_production_fixture",
++      "matches": [
++        {
++          "path": "tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py",
++          "classification": "unit-password/db.internal/admin_user 仅为单元测试脱敏 fixture，不是真实连接信息"
++        }
++      ]
++    },
++    {
++      "name": "agents_command_safety_scan",
++      "status": "passed",
++      "matches": []
++    },
++    {
++      "name": "git_diff_check",
++      "status": "passed",
++      "matches": []
++    },
++    {
++      "name": "post_review_suggestion_fix_scan",
++      "status": "passed",
++      "summary": "已补齐 INTO OUTFILE/DUMPFILE、UNION、LOAD_FILE、SQL 注释、FOR UPDATE、LOCK IN SHARE MODE、PROCEDURE ANALYSE、SLEEP、BENCHMARK 等危险 SELECT 变体的 driver 前拒绝测试。"
++    }
++  ],
++  "summary": "No production hardcoded secret, shell injection, eval/exec, pickle, SQL string-formatting, temporary token, or AGENTS.md command-safety findings. M7 generated report/JSONL did not contain SQL text, DSN, host/user/password, token, Bearer, or sk- patterns."
++}
+diff --git a/ai/outbox/kanban/t_1fceb427/review-bundle.md b/ai/outbox/kanban/t_1fceb427/review-bundle.md
+new file mode 100644
+index 0000000..aeade59
+--- /dev/null
++++ b/ai/outbox/kanban/t_1fceb427/review-bundle.md
+@@ -0,0 +1,96 @@
++# NL2SQL M7 Readonly Middle DB Smoke Focused Review Bundle
++
++## Scope
++
++Task: `t_1fceb427` — logistics NL2SQL M7 readonly middle DB shadow smoke MVP.
++Branch: `feature/nl2sql-m7-readonly-middle-db-smoke`.
++
++Changed source/test/docs files under review:
++
++- `backend/app/domains/logistics/services/nl2sql/readonly_middle_db.py`
++- `backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py`
++- `backend/app/domains/logistics/services/nl2sql/__init__.py`
++- `scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py`
++- `tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py`
++- `docs/NL2SQL_LOGISTICS_M7_READONLY_MIDDLE_DB_SMOKE_MVP_PLAN.md`
++
++Focused diff:
++
++- `ai/outbox/kanban/t_1fceb427/diff.patch`
++
++Generated verification artifacts:
++
++- `ai/outbox/kanban/t_1fceb427/test.log`
++- `ai/outbox/kanban/t_1fceb427/static-scan.json`
++- `ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md`
++- `ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl`
++
++Known unrelated dirty files not in review scope:
++
++- `docs/INVENTORY_SALES_PRODUCTION_EXCEL_AUDIT.md`
++- `docs/INVENTORY_SALES_PRODUCTION_NL2SQL_COMPAT_PLAN.md`
++
++## Requirements to Review
++
++Please fail closed on any of these issues:
++
++1. Real DB path can perform writes or non-SELECT statements.
++2. Executor can bypass the M4 safety gate in the M7 runner.
++3. Trial SELECT can execute unbounded or with LIMIT > 20.
++4. SQL is string-concatenated with parameter values instead of bound parameters.
++5. `.env` host/user/password/database/full DSN/API key/token can leak into JSONL, Markdown, CLI output, or errors.
++6. Real SQL text can leak into generated M7 reports.
++7. M7 accidentally connects the formal logistics QA main chain instead of remaining shadow-only.
++8. New script violates AGENTS.md command-safety rules or uses temporary token mechanisms.
++9. Existing logistics/BOM capabilities are affected outside the scoped NL2SQL shadow package.
++
++## Post-Review Fix Context
++
++A previous independent review failed because direct `LogisticsReadonlyMiddleDbExecutor.trial()` accepted bounded but dangerous SELECT variants such as `SELECT ... INTO OUTFILE ... LIMIT 1` before driver execution.
++
++Implemented fixes:
++
++- DB executor rejects unsafe SELECT variants before driver: SQL comments, `INTO OUTFILE`, `INTO DUMPFILE`, `UNION`, `LOAD_FILE`, `FOR UPDATE`, `LOCK IN SHARE MODE`, `PROCEDURE ANALYSE`, `SLEEP`, `BENCHMARK`.
++- M7 runner clamps caller-supplied `trial_limit` / `max_limit` to hard upper bound `20` before safety checker and execution service construction.
++- Public package `__init__.py` no longer re-exports direct readonly DB config/executor helpers; M7 exports remain runner/sample API only.
++- Recovery pass also addressed the previous non-blocking suggestion by adding explicit tests for `FOR UPDATE`, `LOCK IN SHARE MODE`, `PROCEDURE ANALYSE`, `SLEEP`, and `BENCHMARK`.
++
++## Verification Summary
++
++Recorded in `ai/outbox/kanban/t_1fceb427/test.log` after recovery:
++
++- `backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_*m7*.py -q` → 23 passed.
++- `backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql -q` → 156 passed, 9 warnings from existing pymilvus/pkg_resources deprecations.
++- `backend/.venv/bin/python -m pytest tests/unit/logistics -q` → 170 passed, 9 same warnings.
++- `backend/.venv/bin/python -m pytest tests/unit -q` → 214 passed, 9 same warnings.
++- `backend/.venv/bin/python -m py_compile backend/app/domains/logistics/services/nl2sql/readonly_middle_db.py backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py` → passed.
++- `backend/.venv/bin/python scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py --artifact-dir ai/outbox/kanban/t_1fceb427` → live smoke executed, environment_status available, total 2, success 2, success_rate 1.0.
++- `git diff --check` → passed.
++
++Static scan artifact: `ai/outbox/kanban/t_1fceb427/static-scan.json`.
++
++- Production hardcoded secret/dangerous pattern scan: passed.
++- M7 generated artifact leak scan for SQL/DSN/token patterns: passed.
++- One `unit-password` fixture in the unit test is intentional artificial test data for redaction and not a real secret.
++
++## Key Implementation Points
++
++- `readonly_middle_db.py` loads only `MYSQL_*` config from a provided `.env` path and returns a JSON-safe load result that excludes the in-memory config.
++- `LogisticsReadonlyMiddleDbExecutor` only exposes `explain()` and `trial()`; it rejects multi-statement SQL, non-`EXPLAIN SELECT`, non-`SELECT`, missing trial LIMIT, invalid LIMIT, LIMIT above config upper bound, and dangerous SELECT variants before opening a DB connection.
++- Renderer `:name` params are converted to PyMySQL `%(name)s` placeholders; values remain bound parameters.
++- `m7_readonly_smoke.py` builds a shadow-only runner from existing M6 success samples, uses `LogisticsSqlExecutionService` with `LogisticsSqlSafetyChecker`, writes redacted JSONL/Markdown artifacts, and treats DB config/connection unavailable as environment-unavailable rather than fake success.
++- CLI script only prints a redacted JSON summary and returns nonzero on environment unavailable.
++
++## Reviewer Output Contract
++
++Return only JSON:
++
++```json
++{
++  "passed": true,
++  "security_concerns": [],
++  "logic_errors": [],
++  "suggestions": [],
++  "summary": "one sentence verdict"
++}
++```
+diff --git a/ai/outbox/kanban/t_1fceb427/review-result-final.json b/ai/outbox/kanban/t_1fceb427/review-result-final.json
+new file mode 100644
+index 0000000..118b96a
+--- /dev/null
++++ b/ai/outbox/kanban/t_1fceb427/review-result-final.json
+@@ -0,0 +1,7 @@
++{
++  "passed": true,
++  "security_concerns": [],
++  "logic_errors": [],
++  "suggestions": [],
++  "summary": "已审查 M7 scoped diff、源码、测试与验收产物，并复跑相关单测；未发现真实 DB 写入/非 SELECT、M4 safety gate 绕过、无界或超 20 LIMIT trial、参数拼接、敏感信息/SQL 原文泄漏、误接正式物流 QA 主链路、AGENTS.md 命令安全违规或既有物流/BOM 能力回归问题。"
++}
+diff --git a/ai/outbox/kanban/t_1fceb427/final-acceptance.md b/ai/outbox/kanban/t_1fceb427/final-acceptance.md
+new file mode 100644
+index 0000000..9980d50
+--- /dev/null
++++ b/ai/outbox/kanban/t_1fceb427/final-acceptance.md
+@@ -0,0 +1,175 @@
++# NL2SQL M7 物流只读中间库 Shadow Smoke MVP 最终验收
++
++## 1. 任务结论
++
++- 看板任务：`t_1fceb427`
++- 阶段：NL2SQL M7：物流只读中间库 Shadow Smoke MVP
++- 分支：`feature/nl2sql-m7-readonly-middle-db-smoke`
++- 结论：已完成并通过恢复后最终验证。
++
++本次任务最初因 worker 达到 iteration budget 停止，状态为 blocked。恢复后已补齐缺失的最终 review 结果、最终验收文档、最终测试日志与最终 patch，并重新确认分支为 M7 专用分支。
++
++## 2. 修改文件清单
++
++### 后端代码
++
++- `backend/app/domains/logistics/services/nl2sql/readonly_middle_db.py`
++- `backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py`
++- `backend/app/domains/logistics/services/nl2sql/__init__.py`
++
++### 固定 dev 脚本
++
++- `scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py`
++
++### 测试
++
++- `tests/unit/logistics/nl2sql/test_m7_readonly_middle_db_smoke.py`
++
++### 文档
++
++- `docs/NL2SQL_LOGISTICS_M7_READONLY_MIDDLE_DB_SMOKE_MVP_PLAN.md`
++
++### 验收材料
++
++- `ai/outbox/kanban/t_1fceb427/diff.patch`
++- `ai/outbox/kanban/t_1fceb427/test.log`
++- `ai/outbox/kanban/t_1fceb427/static-scan.json`
++- `ai/outbox/kanban/t_1fceb427/review-bundle.md`
++- `ai/outbox/kanban/t_1fceb427/review-result-final.json`
++- `ai/outbox/kanban/t_1fceb427/final-acceptance.md`
++- `ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md`
++- `ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl`
++
++## 3. 关键改动
++
++1. 新增真实 MySQL 中间库只读 executor：
++   - 只允许 `EXPLAIN SELECT`。
++   - 只允许带 `LIMIT` 的 `SELECT` trial。
++   - 拒绝多语句、非 SELECT、无 LIMIT、LIMIT 超上限。
++   - 参数使用 driver 绑定，不拼接参数值。
++   - DB 异常统一收敛为稳定错误码，避免泄漏 host/user/password/DSN。
++
++2. 新增 M7 shadow smoke runner：
++   - 复用 M6 已审计 success 样例。
++   - 使用 `LogisticsSqlSafetyChecker` 与 `LogisticsSqlExecutionService`。
++   - 缺配置或连接失败时 fail-closed / environment_unavailable，不伪造成功。
++   - 输出脱敏 JSONL 与 Markdown 报告。
++
++3. 新增固定 dev 脚本：
++   - `scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py`
++   - 用于本地触发 M7 只读 smoke，避免临时 heredoc 命令，符合 `AGENTS.md` 命令安全规则。
++
++4. 根据 review 结果补强真实 DB 边界：
++   - driver 前拒绝 SQL 注释、`INTO OUTFILE`、`INTO DUMPFILE`、`UNION`、`LOAD_FILE`、`FOR UPDATE`、`LOCK IN SHARE MODE`、`PROCEDURE ANALYSE`、`SLEEP`、`BENCHMARK`。
++   - M7 runner 将外部传入的 `trial_limit` / `max_limit` 钳制到硬上限 20。
++   - `__init__.py` 不 re-export direct readonly DB config/executor helpers，只保留 M7 runner/sample API。
++
++5. 恢复阶段额外补齐 reviewer 非阻塞建议：
++   - 显式单测覆盖 `FOR UPDATE`、`LOCK IN SHARE MODE`、`PROCEDURE ANALYSE`、`SLEEP`、`BENCHMARK` 等危险 SELECT 变体。
++
++## 4. 最终测试命令和结果
++
++恢复后最终验证记录在：
++
++- `ai/outbox/kanban/t_1fceb427/test.log`
++
++结果如下：
++
++1. Focused M7：
++   - 命令：`backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_*m7*.py -q`
++   - 结果：`23 passed in 0.33s`
++
++2. Adjacent NL2SQL：
++   - 命令：`backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql -q`
++   - 结果：`156 passed, 9 warnings in 3.56s`
++
++3. Logistics unit：
++   - 命令：`backend/.venv/bin/python -m pytest tests/unit/logistics -q`
++   - 结果：`170 passed, 9 warnings in 3.59s`
++
++4. Full unit：
++   - 命令：`backend/.venv/bin/python -m pytest tests/unit -q`
++   - 结果：`214 passed, 9 warnings in 4.28s`
++
++5. py_compile：
++   - 命令：`backend/.venv/bin/python -m py_compile backend/app/domains/logistics/services/nl2sql/readonly_middle_db.py backend/app/domains/logistics/services/nl2sql/m7_readonly_smoke.py scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py`
++   - 结果：passed
++
++6. git diff check：
++   - 命令：`git diff --check`
++   - 结果：passed
++
++7. 项目现有测试 wrapper：
++   - 命令：`PYTHONPATH="$PWD" PATH="$PWD/backend/.venv/bin:$PATH" ai/scripts/run_tests.sh basic`
++   - 结果：`[Test] All checks passed`，退出码 `0`
++   - 说明：恢复过程中曾先直接运行 `ai/scripts/run_tests.sh basic`，该次调用使用了系统 Anaconda pytest 且未带 `PYTHONPATH`，在收集阶段报 `ModuleNotFoundError: No module named 'backend'`。该失败属于 wrapper 调用环境问题，不是 M7 代码逻辑失败；随后已用显式 `PYTHONPATH` 和 venv PATH 重跑通过。
++
++## 5. Live MySQL smoke
++
++已执行 live MySQL smoke：
++
++- 命令：`backend/.venv/bin/python scripts/dev/run_logistics_nl2sql_m7_readonly_smoke.py --artifact-dir ai/outbox/kanban/t_1fceb427`
++- `environment_status`: `available`
++- `live_smoke_executed`: `true`
++- `total`: `2`
++- `success`: `2`
++- `success_rate`: `1.0`
++
++输出报告：
++
++- `ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md`
++- `ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl`
++
++报告与 JSONL 只包含脱敏统计、hash、状态和错误码，不包含 SQL 原文、参数值、host/user/password/full DSN/API key/token。
++
++## 6. 静态扫描和独立 review
++
++### 静态扫描
++
++- 文件：`ai/outbox/kanban/t_1fceb427/static-scan.json`
++- 状态：passed
++- 阻塞项：无
++
++扫描结论：
++
++- 生产代码未发现新增硬编码 secret、shell injection、eval/exec、pickle、SQL 字符串 format、临时 token 等问题。
++- M7 生成的 report / JSONL 未发现 SQL 原文、DSN、host/user/password、token、Bearer、`sk-` 等泄漏模式。
++- 单测中的 `unit-password` / `db.internal` / `admin_user` 仅为脱敏 fixture，非真实密钥或连接信息。
++
++### 独立 review
++
++- 文件：`ai/outbox/kanban/t_1fceb427/review-result-final.json`
++- 结果：passed
++- `security_concerns`: []
++- `logic_errors`: []
++- `suggestions`: []
++
++独立 review 结论：未发现真实 DB 写入/非 SELECT、M4 safety gate 绕过、无界或超 20 LIMIT trial、参数拼接、敏感信息/SQL 原文泄漏、误接正式物流 QA 主链路、AGENTS.md 命令安全违规或既有物流/BOM 能力回归问题。
++
++## 7. 阶段边界确认
++
++本阶段只实现只读 shadow smoke 与本地评估报告能力。
++
++未做：
++
++- 未接正式物流 QA 主链路。
++- 未改前端。
++- 未建数据库迁移。
++- 未连接 Oracle。
++- 未直查 SAP Oracle MID。
++- 未执行任何写库 SQL。
++- 未恢复临时 token 机制。
++- 未向用户可见回答暴露技术 trace。
++
++## 8. 对现有 BOM / 物流能力影响
++
++- 对现有 BOM 能力：无影响。
++- 对现有物流正式问答链路：无影响。
++- 新增能力处于 NL2SQL shadow smoke 层，仅通过固定脚本和 M7 runner 主动触发。
++
++## 9. 已知风险与后续建议
++
++1. M7 live smoke 当前只覆盖 2 条 M6 success 样例，属于 MVP 级真实库连通与只读执行闭环验证。
++2. 后续 M8 建议扩展为更完整的中间库 shadow 样例集与评估维度，包括更多物流指标、时间范围、承运商/路线/报价/均价等业务口径。
++3. 若后续要接正式 QA，仍必须经过独立阶段，不应直接把 M7 shadow runner 接入用户问答主链路。
++4. 可继续把评估记录从本地 JSONL 演进为受控 shadow evaluation store，但需要单独设计迁移与权限边界。
+diff --git a/ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md b/ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md
+new file mode 100644
+index 0000000..5fbdfcc
+--- /dev/null
++++ b/ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-report.md
+@@ -0,0 +1,31 @@
++# NL2SQL Logistics M7 Readonly Middle DB Shadow Smoke Evaluation Report
++
++## Summary
++- total: 2
++- success_count: 2
++- failure_count: 0
++- skipped_count: 0
++- unsupported_count: 0
++- success_rate: 1.0000
++- fail_closed_count: 0
++- safety_block_count: 0
++- execution_failure_count: 0
++- sql_hash_coverage: 1.0000
++
++## By Status
++- success: 2
++
++## By Stage
++- trial: 2
++
++## Top Errors
++- none
++
++## Sample Outcomes
++| sample_id | description | status | stage | error_codes |
++| --- | --- | --- | --- | --- |
++| m7_success_valid_ranking | 合法 SQLPlan + 真实只读中间库 EXPLAIN/trial smoke（ranking） | success | trial |  |
++| m7_success_valid_aggregate | 合法 SQLPlan + 真实只读中间库 EXPLAIN/trial smoke（aggregate） | success | trial |  |
++
++## Warnings
++- M7 readonly middle-db shadow smoke only; production QA chain is not connected
+diff --git a/ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl b/ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl
+new file mode 100644
+index 0000000..f412035
+--- /dev/null
++++ b/ai/outbox/kanban/t_1fceb427/m7-shadow-smoke-records.jsonl
+@@ -0,0 +1,2 @@
++{"catalog_ids": ["table:dws_logistics_detail_union", "metric:shipment_mw", "metric:row_count", "dimension:biz_year", "dimension:logistics_company_name", "rule:default_time_range"], "catalog_versions": ["logistics_nl2sql_catalog.v1"], "created_at": "2026-05-18T03:17:18.704749+00:00", "domain": "logistics", "duration_ms": 66, "error_codes": [], "error_message": null, "explain_ok": true, "pipeline_version": "logistics_nl2sql_m7_readonly_middle_db_smoke.v1", "question": "2025年按承运商统计发运量排名", "request_id": "m7-success-ranking", "rewritten_question": "按承运商汇总发运量并降序排序", "row_count": 20, "safety_errors": [], "sample_row_count": 20, "schema_version": "logistics_nl2sql_evaluation_log.v1", "source_system": "middle_db", "sql_hash": "53a3fc06b6b378571266c0d8c02c792dbebd6e812ca389365581b108fdfbeea2", "sql_param_keys": ["p0", "p1", "p2", "p3", "p4"], "stage": "trial", "status": "success", "trace_id": "f39a700f67284222aac068d6c8c1dfd6", "trial_ok": true, "validation_errors": [], "warnings": []}
++{"catalog_ids": ["table:dws_logistics_detail_union", "metric:shipment_mw", "metric:row_count", "dimension:biz_year", "dimension:logistics_company_name", "rule:default_time_range"], "catalog_versions": ["logistics_nl2sql_catalog.v1"], "created_at": "2026-05-18T03:17:18.715646+00:00", "domain": "logistics", "duration_ms": 10, "error_codes": [], "error_message": null, "explain_ok": true, "pipeline_version": "logistics_nl2sql_m7_readonly_middle_db_smoke.v1", "question": "2025年发运量汇总", "request_id": "m7-success-aggregate", "rewritten_question": null, "row_count": 1, "safety_errors": [], "sample_row_count": 1, "schema_version": "logistics_nl2sql_evaluation_log.v1", "source_system": "middle_db", "sql_hash": "9b83e2ac0b8adb698e5389cc7e99c64b2d135acd5fda4948d8141004f2e33096", "sql_param_keys": ["p0", "p1", "p2", "p3"], "stage": "trial", "status": "success", "trace_id": "3fb4979eda8642d5b266caf5074980f6", "trial_ok": true, "validation_errors": [], "warnings": []}

@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from backend.app.api.v1 import chat, etl, health, logistics_data, logistics_query, system
+from backend.app.domains.business_analysis.api import router as business_analysis_domain_router
 from backend.app.domains.logistics.api import router as logistics_domain_router
 from backend.app.domains.plan_bom.api import router as plan_bom_domain_router
 from backend.app.domains.query_planning.api import router as query_planning_domain_router
@@ -14,4 +15,5 @@ api_router.include_router(logistics_data.router, tags=["Logistics Data"])
 api_router.include_router(chat.router, tags=["Chat"])
 api_router.include_router(logistics_domain_router.router, prefix="/logistics", tags=["Logistics Domain"])
 api_router.include_router(plan_bom_domain_router.router, prefix="/plan-bom", tags=["Plan BOM Domain"])
+api_router.include_router(business_analysis_domain_router, prefix="/business-analysis", tags=["Business Analysis Domain"])
 api_router.include_router(query_planning_domain_router, prefix="/query-planning", tags=["Query Planning V2"])

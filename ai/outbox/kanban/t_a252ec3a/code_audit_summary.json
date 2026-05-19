@@ -1,0 +1,1165 @@
+[
+  {
+    "file": "backend/app/core/config.py",
+    "exists": true,
+    "lines": 447,
+    "size": 14421,
+    "classes": [
+      {
+        "name": "Settings",
+        "bases": [
+          "BaseSettings"
+        ],
+        "methods": [
+          "_normalize_logistics_query_planner_v2_mode",
+          "_parse_logistics_query_planner_v2_allowed_query_keys",
+          "_normalize_llm_guardrail_mode",
+          "_parse_llm_guardrail_a_querykey_whitelist",
+          "_normalize_llm_clarification_assist_mode",
+          "_parse_llm_clarification_assist_category_whitelist",
+          "_normalize_llm_unsupported_assist_mode",
+          "_parse_llm_unsupported_assist_category_whitelist",
+          "ensure_runtime_dirs",
+          "mysql_dsn",
+          "source_mysql_dsn",
+          "resolved_source_mysql_dsn",
+          "APP_HOST",
+          "APP_NAME",
+          "APP_ENV",
+          "APP_DEBUG",
+          "APP_VERSION",
+          "APP_PORT",
+          "API_V1_PREFIX",
+          "TRACE_HEADER_NAME",
+          "REQUEST_ID_HEADER_NAME",
+          "LOG_LEVEL",
+          "MYSQL_HOST",
+          "MYSQL_PORT",
+          "MYSQL_DB",
+          "MYSQL_USER",
+          "MYSQL_PASSWORD",
+          "MYSQL_CHARSET",
+          "REDIS_HOST",
+          "REDIS_PORT",
+          "REDIS_DB",
+          "REDIS_PASSWORD",
+          "MILVUS_HOST",
+          "MILVUS_PORT",
+          "MILVUS_USER",
+          "MILVUS_PASSWORD",
+          "MILVUS_COLLECTION_PREFIX",
+          "SOURCE_MYSQL_HOST",
+          "SOURCE_MYSQL_PORT",
+          "SOURCE_MYSQL_DB"
+        ]
+      }
+    ],
+    "functions": [
+      "get_settings"
+    ],
+    "markers": [
+      "logistics",
+      "SQL",
+      "whitelist",
+      "白名单"
+    ]
+  },
+  {
+    "file": "backend/app/db/session.py",
+    "exists": true,
+    "lines": 41,
+    "size": 1009,
+    "classes": [],
+    "functions": [
+      "get_db",
+      "get_source_db"
+    ],
+    "markers": [
+      "SQL"
+    ]
+  },
+  {
+    "file": "backend/app/api/router.py",
+    "exists": true,
+    "lines": 18,
+    "size": 1086,
+    "classes": [],
+    "functions": [],
+    "markers": [
+      "plan_bom",
+      "logistics"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/api/router.py",
+    "exists": true,
+    "lines": 21,
+    "size": 653,
+    "classes": [],
+    "functions": [],
+    "markers": [
+      "logistics"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/api/endpoints/data_qa.py",
+    "exists": true,
+    "lines": 121,
+    "size": 5167,
+    "classes": [],
+    "functions": [
+      "logistics_data_qa_query",
+      "logistics_data_qa_query_stream"
+    ],
+    "markers": [
+      "logistics",
+      "StreamingResponse",
+      "query_plan_v2"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/api/endpoints/sync_system.py",
+    "exists": true,
+    "lines": 27,
+    "size": 889,
+    "classes": [],
+    "functions": [
+      "run_system_sync"
+    ],
+    "markers": [
+      "logistics"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/api/endpoints/import_history.py",
+    "exists": true,
+    "lines": 35,
+    "size": 1335,
+    "classes": [],
+    "functions": [
+      "import_history_excel",
+      "run_history_import"
+    ],
+    "markers": [
+      "logistics"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/api/endpoints/query.py",
+    "exists": true,
+    "lines": 55,
+    "size": 1839,
+    "classes": [],
+    "functions": [
+      "aggregate_query",
+      "detail_query",
+      "compare_query"
+    ],
+    "markers": [
+      "logistics"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/api/endpoints/nl2query.py",
+    "exists": true,
+    "lines": 20,
+    "size": 819,
+    "classes": [],
+    "functions": [
+      "parse_and_query"
+    ],
+    "markers": [
+      "logistics"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/repositories/data_qa_repository.py",
+    "exists": true,
+    "lines": 3661,
+    "size": 142245,
+    "classes": [
+      {
+        "name": "LogisticsDataQaRepository",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "ensure_runtime_columns",
+          "_ensure_column",
+          "verify_assets",
+          "hist_total_fee_city_rank",
+          "hist_avg_fee_by_month",
+          "hist_avg_fee_per_watt_by_transport",
+          "hist_extra_fee_ratio_peak_month",
+          "hist_total_fee_by_origin_and_carrier",
+          "hist_top_customers_fee_and_mw_by_province",
+          "hist_total_fee_by_province",
+          "hist_total_fee_summary",
+          "hist_carrier_kpi_by_year",
+          "hist_mw_summary",
+          "hist_mw_by_year",
+          "mixed_mw_summary_2023_2026",
+          "mixed_total_fee_summary_2023_2026",
+          "hist_product_spec_mw_summary",
+          "hist_transport_mode_record_summary",
+          "hist_remark_keyword_amount_summary",
+          "hist_remark_keyword_fee_ratio",
+          "hist_high_fee_addresses_by_customer",
+          "hist_quarter_region_metric",
+          "_transport_mode_filter_sql",
+          "hist_mw_by_origin_and_carrier",
+          "hist_mw_by_region_province",
+          "hist_mw_by_all_regions",
+          "hist_monthly_total_fee_by_year",
+          "hist_monthly_metric_by_filters",
+          "hist_unit_fee_per_watt",
+          "hist_city_mw_rank",
+          "hist_route_pricing_analysis",
+          "hist_route_aggregate_summary",
+          "hist_origin_vehicle_metric_summary",
+          "hist_origin_vehicle_breakdown_summary",
+          "hist_monthly_trip_count_summary",
+          "hist_carrier_ranking",
+          "hist_trip_count_by_region",
+          "hist_quantity_by_region",
+          "hist_customer_mw"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "source_type",
+      "logistics",
+      "SQL",
+      "白名单"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/repositories/query_repository.py",
+    "exists": true,
+    "lines": 628,
+    "size": 21269,
+    "classes": [
+      {
+        "name": "LogisticsQueryRepository",
+        "bases": [],
+        "methods": [
+          "aggregate",
+          "detail",
+          "exists_detail_business_no",
+          "compare",
+          "write_query_log",
+          "list_query_logs",
+          "list_query_logs_for_query_planning_gray",
+          "get_query_log_detail",
+          "_aggregate_for_side_total",
+          "_aggregate_for_side_by_dim",
+          "_merge_compare_rows_by_dim",
+          "_build_source_filter",
+          "_build_common_filters"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "source_type",
+      "sys_query_log",
+      "plan_bom",
+      "logistics",
+      "SQL",
+      "白名单",
+      "query_plan_v2"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/repositories/sync_repository.py",
+    "exists": true,
+    "lines": 1064,
+    "size": 45843,
+    "classes": [
+      {
+        "name": "LogisticsSyncRepository",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "ensure_extended_columns",
+          "ensure_sync_dedup_constraints",
+          "_dedupe_by_source_id",
+          "_ensure_unique_index",
+          "_table_has_columns",
+          "get_latest_local_source_updated_at",
+          "_ensure_column",
+          "create_task_log",
+          "finish_task_log",
+          "create_error_log",
+          "fetch_companies",
+          "fetch_warehouses",
+          "fetch_ship_tasks",
+          "fetch_ship_products_by_task_ids",
+          "fetch_assign_tasks_by_ship_task_ids",
+          "fetch_assign_details_by_assign_task_ids",
+          "upsert_ods_companies",
+          "upsert_ods_warehouses",
+          "upsert_ods_ship_tasks",
+          "upsert_ods_ship_products",
+          "upsert_ods_assign_tasks",
+          "upsert_ods_assign_details",
+          "rebuild_dwd_company",
+          "rebuild_dwd_warehouse",
+          "upsert_dwd_ship_task",
+          "upsert_dwd_ship_product",
+          "upsert_dwd_assign_task",
+          "upsert_dwd_assign_detail",
+          "cleanup_dwd_inactive_rows",
+          "cleanup_dwd_assign_detail_duplicates",
+          "scalar",
+          "_chunked_fetch",
+          "_execute_chunk_with_retry",
+          "_in_sql"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "sys_task_log",
+      "logistics",
+      "SQL"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/repositories/import_repository.py",
+    "exists": true,
+    "lines": 411,
+    "size": 14965,
+    "classes": [
+      {
+        "name": "LogisticsHistoryImportRepository",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "create_task_log",
+          "finish_task_log",
+          "create_error_log",
+          "file_md5",
+          "create_excel_file_record",
+          "delete_batch",
+          "batch_insert_ods_rows",
+          "batch_insert_dwd_rows",
+          "_normalize_dwd_row",
+          "_normalize_product_spec_and_accessory",
+          "_truncate_varchar_fields",
+          "_clean_text",
+          "_merge_text",
+          "_log_truncation"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "sys_task_log",
+      "logistics",
+      "SQL"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/data_qa_service.py",
+    "exists": true,
+    "lines": 2719,
+    "size": 125895,
+    "classes": [
+      {
+        "name": "LogisticsDataQaService",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "query",
+          "write_error_log",
+          "verify_assets",
+          "_finalize_result",
+          "_resolve_plan_with_guardrail",
+          "_resolve_status",
+          "_plan_trace_payload",
+          "_guardrail_trace_payload",
+          "_write_history_snapshot",
+          "_resolve_history_row_status",
+          "_execute_plan",
+          "_resolve_clarification_with_assist",
+          "_resolve_unsupported_with_assist",
+          "_build_unsupported_answer_summary",
+          "_build_unsupported_warnings",
+          "_execute_composite_decomposed_plan",
+          "_build_result"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "sys_query_log",
+      "logistics",
+      "白名单",
+      "query_plan_v2"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/data_qa_planner.py",
+    "exists": true,
+    "lines": 4010,
+    "size": 161961,
+    "classes": [
+      {
+        "name": "LogisticsDataQaPlanner",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "build_plan",
+          "build_plan_from_guardrail_candidate",
+          "_build_composite_plan_from_llm_result",
+          "_find_llm_sub_plan_payload",
+          "_extract_llm_source_clause",
+          "_llm_source_clauses_cover_original_question",
+          "_locate_non_overlapping_source_spans",
+          "_high_fee_clause_contains_procurement_ask",
+          "_high_fee_clause_has_unsupported_qualifier",
+          "_filters_have_nonempty_unsupported_keys",
+          "_procurement_clause_has_unsupported_filter",
+          "_procurement_clause_has_unsupported_business_residue",
+          "_procurement_clause_has_leading_unsupported_qualifier",
+          "_coerce_int",
+          "_split_composite_clauses",
+          "_is_high_fee_address_clause",
+          "_is_procurement_mw_clause",
+          "_is_historical_procurement_split_request",
+          "_extract_high_fee_customer_name",
+          "_extract_fee_threshold_yuan",
+          "_build_direct_supported_plan",
+          "_extract_year",
+          "_extract_years",
+          "_extract_months",
+          "_extract_region",
+          "_extract_region_list",
+          "_extract_province",
+          "_extract_origin_place",
+          "_is_hist_origin_vehicle_breakdown_question",
+          "_extract_system_base_name",
+          "_extract_system_base_code",
+          "_extract_destination_city",
+          "_extract_carrier_scope_city",
+          "_extract_transport_mode",
+          "_extract_vehicle_type",
+          "_extract_customer_name",
+          "_extract_sys_total_fee_controlled_field_filters",
+          "_extract_unknown_sys_total_fee_field_scope_terms",
+          "_extract_company_name"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "logistics",
+      "SQL",
+      "白名单"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/query_executor.py",
+    "exists": true,
+    "lines": 118,
+    "size": 3836,
+    "classes": [
+      {
+        "name": "LogisticsQueryExecutor",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "execute"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "logistics",
+      "SQL",
+      "白名单"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/sql_renderer.py",
+    "exists": true,
+    "lines": 64,
+    "size": 2223,
+    "classes": [
+      {
+        "name": "LogisticsSQLRenderer",
+        "bases": [],
+        "methods": [
+          "render_preview",
+          "_to_sql_literal"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "logistics",
+      "SQL"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/sql_whitelist.py",
+    "exists": true,
+    "lines": 47,
+    "size": 1384,
+    "classes": [
+      {
+        "name": "LogisticsSQLWhitelist",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "check"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "logistics",
+      "SQL",
+      "白名单"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/sql_template_registry.py",
+    "exists": true,
+    "lines": 23,
+    "size": 1118,
+    "classes": [
+      {
+        "name": "LogisticsSQLTemplateRegistry",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "get_template_path",
+          "load_sql",
+          "describe"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "SQL"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/sync_service.py",
+    "exists": true,
+    "lines": 481,
+    "size": 20359,
+    "classes": [
+      {
+        "name": "SyncStats",
+        "bases": [],
+        "methods": []
+      },
+      {
+        "name": "LogisticsSystemSyncService",
+        "bases": [],
+        "methods": [
+          "sync_formal_data",
+          "_resolve_updated_since",
+          "_ensure_source_db_alive",
+          "_safe_log_failure",
+          "_fetch_all_ship_tasks",
+          "_chunked",
+          "_normalize_company_row",
+          "_normalize_warehouse_row",
+          "_normalize_ship_task_row",
+          "_normalize_ship_product_row",
+          "_normalize_assign_task_row",
+          "_normalize_assign_detail_row",
+          "_normalize_decimal"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "sys_task_log",
+      "logistics",
+      "SQL"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/import_service.py",
+    "exists": true,
+    "lines": 441,
+    "size": 17049,
+    "classes": [
+      {
+        "name": "LogisticsHistoryImportService",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "import_excel",
+          "run_import",
+          "_resolve_file_path",
+          "_safe_log_failure",
+          "_json_safe_value",
+          "_progress_step",
+          "_chunked",
+          "_emit_progress"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "logistics",
+      "SQL"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/query_planner_v2/planner.py",
+    "exists": true,
+    "lines": 140,
+    "size": 6570,
+    "classes": [
+      {
+        "name": "LogisticsQueryPlannerV2",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "should_use",
+          "build_shadow_plan",
+          "_normalize_mode"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "logistics",
+      "白名单",
+      "query_plan_v2"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/query_planner_v2/validator.py",
+    "exists": true,
+    "lines": 290,
+    "size": 11819,
+    "classes": [
+      {
+        "name": "LogisticsQueryPlannerV2ValidationResult",
+        "bases": [],
+        "methods": []
+      },
+      {
+        "name": "LogisticsQueryPlannerV2Validator",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "validate",
+          "_validate_filters",
+          "_validate_collection",
+          "_validate_question_years",
+          "_extract_candidate_years",
+          "_extract_years_from_text",
+          "_dedupe_ints",
+          "_validate_time_scope",
+          "_validate_normalized_entities",
+          "_is_policy_locked_question",
+          "_has_multi_hop_route",
+          "_dedupe"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "logistics",
+      "白名单"
+    ]
+  },
+  {
+    "file": "backend/app/domains/logistics/services/query_planner_v2/capability_registry.py",
+    "exists": true,
+    "lines": 180,
+    "size": 7884,
+    "classes": [
+      {
+        "name": "LogisticsQueryPlannerV2Capability",
+        "bases": [],
+        "methods": [
+          "to_prompt_dict"
+        ]
+      },
+      {
+        "name": "LogisticsQueryPlannerV2CapabilityRegistry",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "get",
+          "allowed_query_keys",
+          "prompt_payload",
+          "_default_capabilities"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "白名单"
+    ]
+  },
+  {
+    "file": "backend/app/domains/plan_bom/models.py",
+    "exists": true,
+    "lines": 528,
+    "size": 28530,
+    "classes": [
+      {
+        "name": "PlanBomImportBatch",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanBomHeader",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanBomMaterialLine",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanBomRevision",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanBomExportTask",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanBomExportFile",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanPowerModelVersion",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanPowerModelSheet",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanPowerFactorOption",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanPowerSupplierEfficiencyDistribution",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanPowerPowerBin",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanPowerBenchmarkFactor",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanPowerModelValidationCase",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      },
+      {
+        "name": "PlanPowerParseIssue",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "source_type",
+      "EXCEL",
+      "sys_query_log",
+      "plan_bom",
+      "SQL"
+    ]
+  },
+  {
+    "file": "backend/app/domains/plan_bom/api/router.py",
+    "exists": true,
+    "lines": 13,
+    "size": 471,
+    "classes": [],
+    "functions": [],
+    "markers": [
+      "plan_bom"
+    ]
+  },
+  {
+    "file": "backend/app/domains/plan_bom/api/endpoints/qa.py",
+    "exists": true,
+    "lines": 184,
+    "size": 6936,
+    "classes": [],
+    "functions": [
+      "_plan_bom_fallback_has_technical_leak",
+      "_resolve_plan_bom_stream_fallback_answer",
+      "ask_plan_bom",
+      "ask_plan_bom_stream"
+    ],
+    "markers": [
+      "sys_query_log",
+      "plan_bom",
+      "StreamingResponse",
+      "SQL",
+      "query_plan_v2"
+    ]
+  },
+  {
+    "file": "backend/app/domains/plan_bom/api/endpoints/query.py",
+    "exists": true,
+    "lines": 69,
+    "size": 2429,
+    "classes": [],
+    "functions": [
+      "detail_query",
+      "compare_query",
+      "compare_replay"
+    ],
+    "markers": [
+      "sys_query_log",
+      "plan_bom"
+    ]
+  },
+  {
+    "file": "backend/app/domains/plan_bom/api/endpoints/import_excel.py",
+    "exists": true,
+    "lines": 377,
+    "size": 12600,
+    "classes": [],
+    "functions": [
+      "_upload_failure_payload",
+      "_build_quality_summary",
+      "_upload_success_payload",
+      "_import_one_upload_file",
+      "_batch_upload_payload",
+      "_business_type_failure_response",
+      "import_plan_bom_excel",
+      "list_plan_bom_upload_history",
+      "upload_plan_bom_excel"
+    ],
+    "markers": [
+      "EXCEL",
+      "plan_bom"
+    ]
+  },
+  {
+    "file": "backend/app/domains/plan_bom/services/qa_service.py",
+    "exists": true,
+    "lines": 1975,
+    "size": 79594,
+    "classes": [
+      {
+        "name": "PlanBomQaService",
+        "bases": [],
+        "methods": [
+          "__init__",
+          "ask",
+          "_single_order_response",
+          "_multi_or_scope_response",
+          "_compare_response",
+          "_expanded_candidate_compare_response",
+          "_can_expand_compare_candidates",
+          "_expanded_compare_payload_for_candidate",
+          "_compare_side_request_from_candidate",
+          "_compare_side_request_from_context",
+          "_compare_side_label",
+          "_compare_side_name",
+          "_is_description_compare_question",
+          "_compare_rows_for_pair",
+          "_compare_pair_row",
+          "_expanded_pair_summary",
+          "_presence_response",
+          "_infer_single_model_code_from_power_candidates",
+          "_power_response",
+          "_power_factor_effect_compare_response",
+          "_power_factor_label",
+          "_normalize_power_factor_label",
+          "_decimal_to_float",
+          "_format_plain_number",
+          "_power_factor_option_payload",
+          "_power_prediction_response",
+          "_power_recommendation_response",
+          "_power_distribution_rows",
+          "_power_recommendation_rows",
+          "_format_suggested_efficiency_segments",
+          "_format_ctm_value",
+          "_format_efficiency_bin_probability_estimate",
+          "_select_display_efficiency_segments",
+          "_find_efficiency_row",
+          "_format_probability_bins",
+          "_highest_probability_adjacent_bin",
+          "_format_percent_number",
+          "_power_configuration_text",
+          "_power_resolution_clarification_summary",
+          "_candidate_name_mismatch_text"
+        ]
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "sys_query_log",
+      "plan_bom",
+      "logistics",
+      "query_plan_v2"
+    ]
+  },
+  {
+    "file": "backend/app/domains/plan_bom/services/detail_query_service.py",
+    "exists": false
+  },
+  {
+    "file": "backend/app/domains/plan_bom/services/import_service.py",
+    "exists": false
+  },
+  {
+    "file": "backend/app/domains/plan_bom/services/repository.py",
+    "exists": false
+  },
+  {
+    "file": "backend/app/models/sys_task_log.py",
+    "exists": true,
+    "lines": 42,
+    "size": 1744,
+    "classes": [
+      {
+        "name": "SysTaskLog",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "sys_task_log",
+      "logistics",
+      "SQL"
+    ]
+  },
+  {
+    "file": "backend/app/models/sys_task_error_log.py",
+    "exists": true,
+    "lines": 32,
+    "size": 1320,
+    "classes": [
+      {
+        "name": "SysTaskErrorLog",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      }
+    ],
+    "functions": [],
+    "markers": []
+  },
+  {
+    "file": "backend/app/models/sys_query_log.py",
+    "exists": true,
+    "lines": 36,
+    "size": 1335,
+    "classes": [
+      {
+        "name": "SysQueryLog",
+        "bases": [
+          "Base"
+        ],
+        "methods": []
+      }
+    ],
+    "functions": [],
+    "markers": [
+      "sys_query_log"
+    ]
+  },
+  {
+    "file": "backend/app/models/sys_data_source.py",
+    "exists": false
+  },
+  {
+    "file": "frontend/src/router/index.ts",
+    "exists": true,
+    "lines": 60,
+    "size": 1383,
+    "notable_lines": [
+      "path: '/',",
+      "path: '/smart-chat',",
+      "path: '/logistics/data-qa',",
+      "path: '/logistics/data-qa/history',",
+      "path: '/nl-query',",
+      "path: '/structured-query',",
+      "path: '/tasks',",
+      "path: '/history',",
+      "path: '/detail-view',",
+      "path: '/plan-bom/detail-query',",
+      "path: '/bom-data',",
+      "path: '/trial-guide',"
+    ],
+    "markers": [
+      "logistics"
+    ]
+  },
+  {
+    "file": "frontend/src/layouts/AppLayout.vue",
+    "exists": true,
+    "lines": 599,
+    "size": 13783,
+    "notable_lines": [
+      "<el-sub-menu index=\"smart-chat\" class=\"chat-submenu\" data-testid=\"nav-smart-chat\">",
+      ":index=\"`chat:${session.id}`\"",
+      "<el-menu-item index=\"/bom-data\" data-testid=\"nav-bom-data\">",
+      "<el-menu-item index=\"/trial-guide\" data-testid=\"nav-trial-guide\">",
+      "title: 'BOM 数据管理',",
+      "description: '上传治理、版本追溯与模型生效管理',",
+      "title: '试运行说明',",
+      "description: '试运行范围、验收口径与操作边界',",
+      "title: '智能问答',",
+      "description: '经营计划、物流与计划 BOM 的统一问答入口',",
+      ":deep(.menu .el-sub-menu__title:hover),"
+    ],
+    "markers": []
+  },
+  {
+    "file": "frontend/src/views/business-chat/BusinessChatPage.vue",
+    "exists": true,
+    "lines": 3121,
+    "size": 92004,
+    "notable_lines": [
+      "<el-radio-group v-model=\"domainMode\" size=\"small\" class=\"domain-switch\" data-testid=\"domain-switch\">",
+      "<el-radio-button value=\"auto\" data-testid=\"domain-auto\">自动识别</el-radio-button>",
+      "<el-radio-button value=\"logistics\" data-testid=\"domain-logistics\">物流数据</el-radio-button>",
+      "<el-radio-button value=\"plan_bom\" data-testid=\"domain-plan-bom\">计划 BOM</el-radio-button>",
+      "title: string",
+      "path: string",
+      "const domainMode = computed<BusinessChatDomain>({",
+      "domainMode.value = item.mode",
+      "title: presentation?.title || '物流数据问答结果',",
+      "title: presentation?.title || `计划 BOM 问答结果（${data.classification || '未知'}）`,",
+      "title: value.title || '',",
+      "title: typeof chart.title === 'string' ? chart.title : '',",
+      "path: buildPieSlicePath(110, 110, 84, start, cursor),",
+      "description: '规格描述',",
+      "left_description: '左侧规格',",
+      "right_description: '右侧规格',",
+      ":deep(.domain-switch .el-radio-button__inner) {",
+      ":deep(.domain-switch .el-radio-button__original-radio:checked + .el-radio-button__inner) {"
+    ],
+    "markers": [
+      "plan_bom",
+      "logistics",
+      "SQL"
+    ]
+  },
+  {
+    "file": "frontend/src/api/logistics.ts",
+    "exists": true,
+    "lines": 338,
+    "size": 7498,
+    "notable_lines": [
+      "import { postJsonLineStream, type JsonLineStreamHandlers } from '@/utils/streamingApi'",
+      "const resp = await http.post('/logistics/nl2query/parse-and-query', payload)",
+      "const resp = await http.post('/logistics/data-qa/query', payload)",
+      "return postJsonLineStream<LogisticsDataQaResult>('/logistics/data-qa/query/stream', payload, handlers)",
+      "const resp = await http.post('/logistics/query-service/aggregate', payload)",
+      "const resp = await http.get('/logistics/data/hist/import/tasks')",
+      "const resp = await http.get('/logistics/data/sys/sync/tasks')",
+      "const resp = await http.get('/sys/query/log', { params })",
+      "const resp = await http.get(`/sys/query/log/${logId}`)"
+    ],
+    "markers": [
+      "logistics"
+    ]
+  },
+  {
+    "file": "frontend/src/api/planBom.ts",
+    "exists": true,
+    "lines": 372,
+    "size": 9555,
+    "notable_lines": [
+      "import { postJsonLineStream, type JsonLineStreamHandlers } from '@/utils/streamingApi'",
+      "const resp = await http.post('/plan-bom/query/detail', payload)",
+      "title: string",
+      "const resp = await http.post('/plan-bom/qa/ask', payload)",
+      "return postJsonLineStream<PlanBomQaResponse>('/plan-bom/qa/ask/stream', payload, handlers)",
+      "const resp = await http.post('/plan-bom/upload', formData, {",
+      "const resp = await http.post('/plan-bom/upload', formData, {",
+      "const resp = await http.post('/plan-bom/power-model/import', formData, {",
+      "const resp = await http.get('/plan-bom/upload/history', { params: { limit } })",
+      "const resp = await http.get('/plan-bom/power-model/versions')",
+      "const resp = await http.post(`/plan-bom/power-model/versions/${versionId}/activate`)"
+    ],
+    "markers": [
+      "source_type",
+      "plan_bom"
+    ]
+  },
+  {
+    "file": "frontend/src/components/ResultTable.vue",
+    "exists": true,
+    "lines": 370,
+    "size": 7992,
+    "notable_lines": [
+      "title: '结果表格',"
+    ],
+    "markers": [
+      "source_type",
+      "logistics"
+    ]
+  },
+  {
+    "file": "frontend/src/utils/streamingApi.ts",
+    "exists": true,
+    "lines": 106,
+    "size": 2929,
+    "notable_lines": [
+      "*   path: 后端相对 API 路径。",
+      "export async function postJsonLineStream<TDone>(",
+      "path: string,"
+    ],
+    "markers": []
+  }
+]

@@ -1,0 +1,18 @@
+# TASK-logistics-route-year-compare-2023-fix 静态检查
+
+## 命令
+
+```bash
+git diff --check -- \
+  backend/app/domains/logistics/repositories/data_qa_repository.py \
+  backend/app/domains/logistics/services/data_qa_service.py \
+  tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py
+```
+
+## 结果
+
+通过，无输出。
+
+## 补充说明
+
+当前仓库在本轮开始前已有大量未提交历史变更；本轮静态检查仅限定在本次物流多年份线路运价修复涉及的三个文件上，避免把其它任务残留变更混入判断。

@@ -709,12 +709,83 @@ def test_2025_hefei_to_guangzhou_17_5_quote_uses_unit_price_per_vehicle() -> Non
 
 
 
+def test_2025_hefei_to_guangdong_17_5_route_avg_uses_total_fee_divided_by_trips() -> None:
+    """验证 2025 合肥发广东 17.5 米均价按总费用 / 总车次计算。
+
+    参数：无。
+    返回值：无；通过断言验证 planner 槽位、目的省份过滤和 service 均价口径。
+    业务逻辑：线路均价不是记录级总费用均值，也不是单价/车字段均值，而是所选线路范围内总费用除以总车次。
+    """
+
+    question = "2025年合肥发广东17.5米车均价是多少？"
+    plan = LogisticsDataQaPlanner().build_plan(question)
+
+    assert plan.query_key == "hist_route_pricing_analysis"
+    assert not plan.needs_clarification
+    assert plan.filters == {
+        "years": [2025],
+        "vehicle_type": "17.5",
+        "view_mode": "avg_fee",
+        "price_metric": "total_fee",
+        "origin_place": "合肥",
+        "province": "广东",
+    }
+
+    with SessionLocal() as db:
+        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question, use_llm=False))
+
+    assert not result.needs_clarification
+    assert result.result_table is not None
+    row = result.result_table.rows[0]
+    assert int(row["avg_fee"] or 0) == 9958
+    assert int(row["row_count"] or 0) == 194
+    assert "9,958" in result.answer_summary
+    assert any("总费用 / 总车次" in item for item in result.calculation_logic)
+
+
+
+def test_2025_hefei_to_guangzhou_17_5_route_avg_uses_city_like_and_trip_denominator() -> None:
+    """验证 2025 合肥发广州 17.5 米均价兼容广州/广州市并按车次加权。
+
+    参数：无。
+    返回值：无；通过断言验证目的城市模糊过滤和总费用 / 总车次均价。
+    业务逻辑：城市写法存在“广州/广州市”差异，线路均价应先合并同城记录，再用总费用除以总车次。
+    """
+
+    question = "2025年合肥发广州17.5米车均价是多少？"
+    plan = LogisticsDataQaPlanner().build_plan(question)
+
+    assert plan.query_key == "hist_route_pricing_analysis"
+    assert not plan.needs_clarification
+    assert plan.filters == {
+        "years": [2025],
+        "vehicle_type": "17.5",
+        "view_mode": "avg_fee",
+        "price_metric": "total_fee",
+        "origin_place": "合肥",
+        "city": "广州",
+    }
+
+    with SessionLocal() as db:
+        result = LogisticsDataQaService(db=db).query(LogisticsDataQaQueryRequest(question=question, use_llm=False))
+
+    assert not result.needs_clarification
+    assert result.result_table is not None
+    row = result.result_table.rows[0]
+    assert int(row["avg_fee"] or 0) == 10558
+    assert int(row["row_count"] or 0) == 2
+    assert "10,558" in result.answer_summary
+    assert any("广州/广州市" in item for item in result.calculation_logic)
+
+
+
 def test_multi_year_route_pricing_keeps_requested_year_when_city_has_no_rows() -> None:
     """验证多年线路运价对比不会静默丢弃无匹配记录的显式年份。
 
     参数：无。
     返回值：无；通过断言验证 2023/2024/2025 三个显式年份都出现在结果表。
-    业务逻辑：用户明确问“23/24/25 年分别运价”时，即使某一年当前筛选条件无记录，也必须保留该年份并给出无数据提示，不能只返回有数据年份。
+    业务逻辑：用户明确问“23/24/25 年分别运价”时，即使某一年当前筛选条件无记录，也必须保留该年份并给出无数据提示；
+    有数据年份的线路运价按总费用 / 总车次计算，不能按单价/车字段均值替代。
     """
 
     question = "23年、24年、25年合肥发广州17.5车运价分别是多少？"
@@ -726,7 +797,7 @@ def test_multi_year_route_pricing_keeps_requested_year_when_city_has_no_rows() -
         "years": [2023, 2024, 2025],
         "vehicle_type": "17.5",
         "view_mode": "year_compare",
-        "price_metric": "unit_price_per_vehicle",
+        "price_metric": "total_fee",
         "origin_place": "合肥",
         "city": "广州",
     }
@@ -763,7 +834,7 @@ def test_multi_year_route_pricing_does_not_drop_existing_province_year_rows() ->
     assert result.result_table is not None
     rows_by_year = {int(row["biz_year"]): row for row in result.result_table.rows}
     assert list(rows_by_year) == [2023, 2024, 2025]
-    assert int(rows_by_year[2023]["avg_fee"] or 0) == 11842
+    assert int(rows_by_year[2023]["avg_fee"] or 0) == 12394
     assert int(rows_by_year[2023]["row_count"] or 0) == 103
     assert int(rows_by_year[2024]["row_count"] or 0) > 0
     assert int(rows_by_year[2025]["row_count"] or 0) > 0

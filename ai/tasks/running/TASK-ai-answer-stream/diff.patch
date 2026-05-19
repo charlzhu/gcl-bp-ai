@@ -1,0 +1,3080 @@
+diff --git a/backend/app/domains/logistics/api/endpoints/data_qa.py b/backend/app/domains/logistics/api/endpoints/data_qa.py
+index 0e48879..1b3a013 100644
+--- a/backend/app/domains/logistics/api/endpoints/data_qa.py
++++ b/backend/app/domains/logistics/api/endpoints/data_qa.py
+@@ -1,9 +1,11 @@
+ from fastapi import APIRouter, Depends, Request
++from fastapi.responses import StreamingResponse
+ 
+ from backend.app.api.deps import get_logistics_data_qa_service
+ from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
+ from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
+ from backend.app.schemas.common import ApiResponse
++from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService, build_json_line_event
+ 
+ router = APIRouter()
+ 
+@@ -23,3 +25,73 @@ def logistics_data_qa_query(
+         # 物流数据问答正式页需要把错误态也纳入查询历史，便于业务回看。
+         service.write_error_log(question=payload.question, trace_id=trace_id, message=str(exc))
+         raise
++
++
++@router.post("/query/stream")
++def logistics_data_qa_query_stream(
++    payload: LogisticsDataQaQueryRequest,
++    request: Request,
++    service: LogisticsDataQaService = Depends(get_logistics_data_qa_service),
++) -> StreamingResponse:
++    """物流数据问答流式入口。
++
++    说明：
++        1. 先执行原有确定性查询链路，保证计算和表格仍来自后端；
++        2. 再把用户问题和确定性结果送入 LLM 表达层，流式输出自然语言答案；
++        3. 最终 done 事件返回完整结构化结果，前端据此渲染表格、卡片和追问。
++    """
++
++    trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
++    stream_service = BusinessAnswerStreamService()
++
++    def iter_events():
++        """逐行输出 NDJSON 事件，便于 fetch ReadableStream 解析。"""
++
++        yield build_json_line_event("meta", {"trace_id": trace_id, "domain": "logistics", "stage": "received"})
++        try:
++            result = service.query(payload, trace_id=trace_id)
++            result_payload = result.model_dump(mode="json")
++            yield build_json_line_event(
++                "meta",
++                {
++                    "trace_id": trace_id,
++                    "domain": "logistics",
++                    "stage": "deterministic_result_ready",
++                    "status_code": (result_payload.get("status") or {}).get("code"),
++                },
++            )
++            chunks: list[str] = []
++            for chunk in stream_service.stream_answer(
++                domain="logistics",
++                question=payload.question,
++                deterministic_payload=result_payload,
++                fallback_answer=result_payload.get("answer_summary"),
++            ):
++                chunks.append(chunk)
++                yield build_json_line_event("delta", {"text": chunk})
++            final_answer = "".join(chunks).strip()
++            final_payload = stream_service.apply_streamed_answer(
++                domain="logistics",
++                deterministic_payload=result_payload,
++                streamed_answer=final_answer,
++            )
++            yield build_json_line_event(
++                "done",
++                {"trace_id": trace_id, "domain": "logistics", "answer": final_answer, "data": final_payload},
++            )
++        except Exception as exc:  # noqa: BLE001
++            service.write_error_log(question=payload.question, trace_id=trace_id, message=str(exc))
++            yield build_json_line_event(
++                "error",
++                {
++                    "trace_id": trace_id,
++                    "domain": "logistics",
++                    "message": "当前物流问答执行失败，请稍后重试；如持续失败，请联系管理员。",
++                },
++            )
++
++    return StreamingResponse(
++        iter_events(),
++        media_type="application/x-ndjson; charset=utf-8",
++        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
++    )
+diff --git a/backend/app/domains/logistics/services/data_qa_planner.py b/backend/app/domains/logistics/services/data_qa_planner.py
+index e9a99e4..b0eee52 100644
+--- a/backend/app/domains/logistics/services/data_qa_planner.py
++++ b/backend/app/domains/logistics/services/data_qa_planner.py
+@@ -85,7 +85,7 @@ class LogisticsDataQaPlanner:
+         "物流发运合计多少量",
+         "发运多少量",
+     )
+-    TRIP_KEYWORDS = ("总车次", "承运车次", "发运车次", "多少车次", "多少车", "总共发了多少车次", "总车数", "车数", "车辆数")
++    TRIP_KEYWORDS = ("总车次", "承运车次", "发运车次", "多少车次", "多少车", "总共发了多少车次", "总车数", "车数", "车辆数", "车次")
+     TOTAL_FEE_KEYWORDS = (
+         "总费用",
+         "总运费",
+@@ -97,6 +97,8 @@ class LogisticsDataQaPlanner:
+         "运费多少",
+         "运输费用",
+     )
++    REMARK_SUPPORTED_KEYWORDS = ("倒运", "中转", "换车", "压车", "放空")
++    REMARK_FEE_RATIO_KEYWORDS = ("倒运", "中转")
+     ASSIST_SUPPORTED_QUERY_KEYS = {
+         "hist_total_fee_city_rank",
+         "hist_avg_fee_by_month",
+@@ -134,6 +136,7 @@ class LogisticsDataQaPlanner:
+         """把自然语言问题转换成最小可执行查询计划。"""
+         normalized_question = question.strip()
+         compact = re.sub(r"\s+", "", normalized_question)
++        ranking_top_n = self._extract_top_n(compact)
+         policy = LogisticsQuestionBankResponsePolicy().match(normalized_question)
+ 
+         # 不支持边界必须先于高置信 A 类候选生效。
+@@ -163,6 +166,38 @@ class LogisticsDataQaPlanner:
+ 
+         pre_year = self._extract_year(compact)
+         pre_origin_place = self._extract_origin_place(compact)
++        pre_remark_amount_keywords = self._extract_valid_remark_keywords(compact, self.REMARK_SUPPORTED_KEYWORDS)
++        if self._is_supported_remark_keyword_amount_summary(compact, pre_year, pre_remark_amount_keywords):
++            # remark 年度汇总是受控白名单；必须早于始发地/车型等宽条件分支，避免其它 query_key 抢先吞掉备注条件。
++            return LogisticsDataQaPlan(
++                intent="aggregate",
++                query_key="hist_remark_keyword_amount_summary",
++                metrics=["record_count", "total_fee"],
++                dimensions=[],
++                filters={"year": pre_year, "keywords": pre_remark_amount_keywords},
++            )
++        if self._is_supported_remark_keyword_fee_ratio(compact):
++            # remark 费用占比是受控白名单；直接放行，未命中的 remark 问法一律进入澄清保护。
++            return LogisticsDataQaPlan(
++                intent="aggregate",
++                query_key="hist_remark_keyword_fee_ratio",
++                metrics=["total_fee", "fee_share_pct"],
++                dimensions=[],
++                filters={"keywords": ["倒运", "中转"], "default_history_scope": "2023-2025"},
++            )
++        if self._is_remark_keyword_question_needing_clarification(compact):
++            return LogisticsDataQaPlan(
++                intent="clarification",
++                needs_clarification=True,
++                clarification_questions=[
++                    "请先确认备注关键词、时间范围、统计指标和是否需要明细。",
++                    "当前仅支持已审计的备注关键词年度记录数/费用金额汇总，以及倒运/中转总费用占历史物流总费用比例。",
++                ],
++                clarification_missing_slots=["备注关键词口径", "统计指标口径", "时间范围或明细模板"],
++                clarification_reason="当前问题包含备注关键词条件，但未命中已审计的窄口径白名单，不能用通用费用或其它聚合结果替代。",
++                clarification_category="remark_keyword_scope",
++                clarification_template="remark_keyword_scope",
++            )
+         if (
+             "目的省份和车型组合" in compact
+             and any(keyword in compact for keyword in ("平均单车费用", "平均单车运费", "平均单价/车", "车次", "总费用"))
+@@ -223,17 +258,10 @@ class LogisticsDataQaPlanner:
+                 sort=[{"field": "total_fee", "direction": "desc"}],
+             )
+ 
+-        remark_amount_keywords = [keyword for keyword in ("倒运", "中转", "换车", "压车", "放空") if keyword in compact]
+-        if (
+-            pre_year in {2023, 2024, 2025}
+-            and "备注中包含" in compact
+-            and remark_amount_keywords
+-            and any(keyword in compact for keyword in ("记录数量", "记录数"))
+-            and any(keyword in compact for keyword in ("费用金额", "总费用", "费用"))
+-            and not any(keyword in compact for keyword in ("按年份拆分", "涉及区域", "前50", "前五十", "明细", "线路"))
+-        ):
++        remark_amount_keywords = self._extract_valid_remark_keywords(compact, self.REMARK_SUPPORTED_KEYWORDS)
++        if self._is_supported_remark_keyword_amount_summary(compact, pre_year, remark_amount_keywords):
+             # 年度 remark 多关键词记录数/费用金额是历史台账字段可直接计算的窄汇总；
+-            # 明细清单、区域分布和跨年拆分仍交给复杂报表保护规则，避免扩大支持范围。
++            # 明细清单、区域分布、未知关键词、运费别名和跨年拆分仍保持澄清，避免扩大支持范围。
+             return LogisticsDataQaPlan(
+                 intent="aggregate",
+                 query_key="hist_remark_keyword_amount_summary",
+@@ -390,7 +418,8 @@ class LogisticsDataQaPlanner:
+                 filters=filters,
+             )
+ 
+-        if "各城市总费用排名前五" in compact:
++        city_total_fee_rank_limit = self._extract_city_total_fee_rank_limit(compact)
++        if year and province and city_total_fee_rank_limit:
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key="hist_total_fee_city_rank",
+@@ -399,7 +428,7 @@ class LogisticsDataQaPlanner:
+                 filters={"year": year, "province": province},
+                 group_by=["city"],
+                 sort=[{"field": "total_fee", "direction": "desc"}],
+-                limit=5,
++                limit=city_total_fee_rank_limit,
+             )
+ 
+         if "每月平均运费" in compact and origin_place and province and "17.5" in compact:
+@@ -560,16 +589,24 @@ class LogisticsDataQaPlanner:
+             )
+ 
+         if "SIGNEDFOR签收率" in compact and "承运商" in compact and year == 2026:
++            signedfor_top_n = self._extract_top_n(compact) or 10
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key="sys_signedfor_rate_by_carrier",
+                 metrics=["signedfor_rate"],
+                 dimensions=["carrier"],
+-                filters={"year": year},
++                filters={"year": year, "top_n": signedfor_top_n},
+                 group_by=["carrier"],
++                limit=signedfor_top_n,
+             )
+ 
+-        if year in {2023, 2024, 2025} and self._is_carrier_kpi_question(compact) and not self._is_monthly_fee_compare_question(compact):
++        if (
++            year in {2023, 2024, 2025}
++            and self._is_carrier_kpi_question(compact)
++            and not self._is_monthly_fee_compare_question(compact)
++            and not self._extract_top_n(compact)
++            and not self._has_extra_breakdown_intent(compact, allowed_dimension="carrier_name")
++        ):
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key="hist_carrier_kpi_by_year",
+@@ -694,7 +731,14 @@ class LogisticsDataQaPlanner:
+                 filters={"year": year, "special_scope": "liujuan"},
+             )
+ 
+-        if year == 2026 and customer_name and self._is_total_fee_question(compact) and not origin_place:
++        if (
++            year == 2026
++            and customer_name
++            and self._is_total_fee_question(compact)
++            and not origin_place
++            and not ranking_top_n
++            and not any(keyword in compact for keyword in ("排名", "排行", "top", "TOP"))
++        ):
+             filters: dict[str, Any] = {"year": year, "months": months, "customer_name": customer_name}
+             if monthly_breakdown:
+                 filters["monthly_breakdown"] = True
+@@ -708,7 +752,15 @@ class LogisticsDataQaPlanner:
+                 sort=[{"field": "biz_month", "direction": "asc"}] if monthly_breakdown else [],
+             )
+ 
+-        if year == 2026 and company_name and self._is_total_fee_question(compact) and not origin_place and not customer_name:
++        if (
++            year == 2026
++            and company_name
++            and self._is_total_fee_question(compact)
++            and not origin_place
++            and not customer_name
++            and not ranking_top_n
++            and not any(keyword in compact for keyword in ("排名", "排行", "top", "TOP"))
++        ):
+             filters: dict[str, Any] = {"year": year, "months": months, "company_name": company_name}
+             if monthly_breakdown:
+                 filters["monthly_breakdown"] = True
+@@ -736,6 +788,8 @@ class LogisticsDataQaPlanner:
+             and not system_base_code
+             and not procurement_type
+             and not any(keyword in compact for keyword in ("经营计划", "辅料送样", "刘娟"))
++            and not ranking_top_n
++            and not any(keyword in compact for keyword in ("排名", "排行", "top", "TOP"))
+         ):
+             return LogisticsDataQaPlan(
+                 intent="aggregate",
+@@ -861,7 +915,8 @@ class LogisticsDataQaPlanner:
+         vehicle_type = self._resolve_assist_vehicle_type(compact, llm_result)
+         special_scope = self._resolve_assist_special_scope(compact, llm_result)
+ 
+-        if candidate_query_key == "hist_total_fee_city_rank" and year and province:
++        city_total_fee_rank_limit = self._extract_city_total_fee_rank_limit(compact)
++        if candidate_query_key == "hist_total_fee_city_rank" and year and province and city_total_fee_rank_limit:
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key=candidate_query_key,
+@@ -870,7 +925,7 @@ class LogisticsDataQaPlanner:
+                 filters={"year": year, "province": province},
+                 group_by=["city"],
+                 sort=[{"field": "total_fee", "direction": "desc"}],
+-                limit=5,
++                limit=city_total_fee_rank_limit,
+             )
+ 
+         if candidate_query_key == "hist_avg_fee_by_month" and year and origin_place and province and vehicle_type:
+@@ -965,13 +1020,15 @@ class LogisticsDataQaPlanner:
+             )
+ 
+         if candidate_query_key == "sys_signedfor_rate_by_carrier" and year == 2026:
++            signedfor_top_n = self._extract_top_n(compact) or 10
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key=candidate_query_key,
+                 metrics=["signedfor_rate"],
+                 dimensions=["carrier"],
+-                filters={"year": year},
++                filters={"year": year, "top_n": signedfor_top_n},
+                 group_by=["carrier"],
++                limit=signedfor_top_n,
+             )
+ 
+         if candidate_query_key == "hist_multi_origin_customers" and year:
+@@ -1040,6 +1097,7 @@ class LogisticsDataQaPlanner:
+         carrier_name = self._extract_historical_carrier_name(compact)
+         procurement_type = self._extract_procurement_type(compact)
+         monthly_breakdown = self._is_monthly_breakdown_request(compact)
++        ranking_top_n = self._extract_top_n(compact)
+         if (
+             company_name
+             and (
+@@ -1359,7 +1417,7 @@ class LogisticsDataQaPlanner:
+                 filters={"year": year, "months": months, "transport_mode": transport_mode},
+             )
+ 
+-        if "倒运" in compact and "中转" in compact and any(keyword in compact for keyword in ("总费用占", "总运费占", "比例", "占比")):
++        if self._is_supported_remark_keyword_fee_ratio(compact):
+             return LogisticsDataQaPlan(
+                 intent="aggregate",
+                 query_key="hist_remark_keyword_fee_ratio",
+@@ -1422,16 +1480,25 @@ class LogisticsDataQaPlanner:
+                 group_by=["status"],
+             )
+ 
+-        if year == 2026 and "PREASSIGN" in compact and "省" in compact and any(keyword in compact for keyword in ("最多", "排名")):
++        if (
++            year == 2026
++            and "PREASSIGN" in compact
++            and "省" in compact
++            and any(keyword in compact for keyword in ("最多", "排名", "排行"))
++            and not self._has_reverse_ranking_intent(compact)
++            and not self._has_extra_breakdown_intent(compact, allowed_dimension="delivery_province")
++            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric="task_count")
++        ):
++            top_n = ranking_top_n or 10
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key="sys_task_status_province_ranking",
+                 metrics=["task_count"],
+                 dimensions=["delivery_province"],
+-                filters={"year": year, "status": "PREASSIGN", "top_n": 10},
++                filters={"year": year, "status": "PREASSIGN", "top_n": top_n},
+                 group_by=["delivery_province"],
+                 sort=[{"field": "task_count", "direction": "desc"}],
+-                limit=10,
++                limit=top_n,
+             )
+ 
+         if year == 2026 and "reconciliation_status" in compact and "填充率" in compact and "月份" in compact:
+@@ -1451,21 +1518,30 @@ class LogisticsDataQaPlanner:
+                 query_key="sys_ship_product_detail_stats",
+                 metrics=["avg_detail_count", "detail_count"],
+                 dimensions=["task_id"],
+-                filters={"year": year, "top_n": 10},
++                filters={"year": year, "top_n": ranking_top_n or 10},
+                 sort=[{"field": "detail_count", "direction": "desc"}],
+-                limit=10,
++                limit=ranking_top_n or 10,
+             )
+ 
+-        if year == 2026 and "司机" in compact and any(keyword in compact for keyword in ("派车任务量最高", "前20", "前二十")):
++        if (
++            year == 2026
++            and "司机" in compact
++            and "派车任务量" in compact
++            and (ranking_top_n or "最高" in compact)
++            and not self._has_reverse_ranking_intent(compact)
++            and not self._has_extra_breakdown_intent(compact, allowed_dimension="driver_name")
++            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric="assign_task_count")
++        ):
++            top_n = ranking_top_n or 20
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key="sys_driver_task_ranking",
+                 metrics=["assign_task_count"],
+                 dimensions=["driver_name"],
+-                filters={"year": year, "top_n": 20},
++                filters={"year": year, "top_n": top_n},
+                 group_by=["driver_name"],
+                 sort=[{"field": "assign_task_count", "direction": "desc"}],
+-                limit=20,
++                limit=top_n,
+             )
+ 
+         if year == 2026 and "送货单解析状态分布" in compact:
+@@ -1723,10 +1799,13 @@ class LogisticsDataQaPlanner:
+         carrier_ranking_metric = self._resolve_carrier_ranking_metric(compact)
+         if (
+             carrier_ranking_metric
++            and ranking_top_n
+             and any(keyword in compact for keyword in ("承运商", "物流公司", "各物流"))
+-            and "前十" in compact
+             and year in {2024, 2025, 2026}
+             and (year in {2024, 2025} or months)
++            and not self._has_reverse_ranking_intent(compact)
++            and not self._has_extra_breakdown_intent(compact, allowed_dimension="carrier_name")
++            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric=carrier_ranking_metric)
+         ):
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+@@ -1737,11 +1816,11 @@ class LogisticsDataQaPlanner:
+                     "year": year,
+                     "months": months if year == 2026 else None,
+                     "ranking_metric": carrier_ranking_metric,
+-                    "top_n": 10,
++                    "top_n": ranking_top_n,
+                 },
+                 group_by=["carrier_name"],
+                 sort=[{"field": carrier_ranking_metric, "direction": "desc"}],
+-                limit=10,
++                limit=ranking_top_n,
+             )
+ 
+         if year == 2026 and any(keyword in compact for keyword in ("招标", "询比价")) and self._is_mw_question(compact):
+@@ -1812,28 +1891,46 @@ class LogisticsDataQaPlanner:
+                 filters=filters,
+             )
+ 
+-        if year == 2026 and "送达城市任务量排名前十" in compact:
++        if (
++            year == 2026
++            and ranking_top_n
++            and "送达城市" in compact
++            and "任务量" in compact
++            and any(keyword in compact for keyword in ("排名", "排行"))
++            and not self._has_reverse_ranking_intent(compact)
++            and not self._has_extra_breakdown_intent(compact, allowed_dimension="delivery_city")
++            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric="task_count")
++        ):
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key="sys_task_count_ranking",
+                 metrics=["task_count"],
+                 dimensions=["delivery_city"],
+-                filters={"year": year, "dimension": "delivery_city", "top_n": 10},
++                filters={"year": year, "dimension": "delivery_city", "top_n": ranking_top_n},
+                 group_by=["delivery_city"],
+                 sort=[{"field": "task_count", "direction": "desc"}],
+-                limit=10,
++                limit=ranking_top_n,
+             )
+ 
+-        if year == 2026 and "project_name维度任务量排名前十" in compact:
++        if (
++            year == 2026
++            and ranking_top_n
++            and "project_name维度" in compact
++            and "任务量" in compact
++            and any(keyword in compact for keyword in ("排名", "排行"))
++            and not self._has_reverse_ranking_intent(compact)
++            and not self._has_extra_breakdown_intent(compact, allowed_dimension="project_name")
++            and not self._has_extra_metric_for_single_metric_ranking(compact, allowed_metric="task_count")
++        ):
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key="sys_task_count_ranking",
+                 metrics=["task_count"],
+                 dimensions=["project_name"],
+-                filters={"year": year, "dimension": "project_name", "top_n": 10},
++                filters={"year": year, "dimension": "project_name", "top_n": ranking_top_n},
+                 group_by=["project_name"],
+                 sort=[{"field": "task_count", "direction": "desc"}],
+-                limit=10,
++                limit=ranking_top_n,
+             )
+ 
+         if year == 2026 and "delivery_distance" in compact and "填充率" in compact:
+@@ -1842,10 +1939,10 @@ class LogisticsDataQaPlanner:
+                 query_key="sys_delivery_distance_fill_rate_by_province",
+                 metrics=["fill_rate"],
+                 dimensions=["delivery_province"],
+-                filters={"year": year, "top_n": 10},
++                filters={"year": year, "top_n": ranking_top_n or 10},
+                 group_by=["delivery_province"],
+                 sort=[{"field": "fill_rate", "direction": "asc"}],
+-                limit=10,
++                limit=ranking_top_n or 10,
+             )
+ 
+         if (year == 2026 or "送货单解析成功率" in compact) and "承运商" in compact and "解析成功率" in compact:
+@@ -1854,8 +1951,9 @@ class LogisticsDataQaPlanner:
+                 query_key="sys_parse_success_rate_by_carrier",
+                 metrics=["parse_success_rate"],
+                 dimensions=["company_name"],
+-                filters={"year": 2026, "top_n": 10},
++                filters={"year": 2026, "top_n": ranking_top_n or 10},
+                 group_by=["company_name"],
++                limit=ranking_top_n or 10,
+             )
+ 
+         if year == 2026 and "company_id" in compact and "找不到映射" in compact:
+@@ -1873,35 +1971,48 @@ class LogisticsDataQaPlanner:
+                 query_key="sys_extra_cost_audited_concentration",
+                 metrics=["task_count"],
+                 dimensions=["company_name", "delivery_province"],
+-                filters={"year": year, "top_n": 10},
++                filters={"year": year, "top_n": ranking_top_n or 10},
++                limit=ranking_top_n or 10,
+             )
+ 
+-        if province and any(keyword in compact for keyword in ("前5名客户", "前五名客户", "客户按总费用排前五", "客户按总费用排前5")) and "总费用" in compact and self._is_mw_question(compact):
++        if (
++            province
++            and ranking_top_n
++            and "客户" in compact
++            and self._is_total_fee_question(compact)
++            and self._is_mw_question(compact)
++            and not self._has_reverse_ranking_intent(compact)
++            and not self._has_extra_breakdown_intent(compact, allowed_dimension="customer_name")
++        ):
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key="hist_top_customers_fee_and_mw_by_province",
+                 metrics=["total_fee", "shipment_mw"],
+                 dimensions=["customer_name"],
+-                filters={"year": year, "province": province},
++                filters={"year": year, "province": province, "top_n": ranking_top_n},
+                 group_by=["customer_name"],
+                 sort=[{"field": "total_fee", "direction": "desc"}],
+-                limit=5,
++                limit=ranking_top_n,
+             )
+ 
+         if (
+             "历史台账" in compact
+-            and "前10个客户" in compact
++            and ranking_top_n
++            and "客户" in compact
+             and self._is_mw_question(compact)
++            and not self._is_total_fee_question(compact)
++            and not self._has_reverse_ranking_intent(compact)
++            and not self._has_extra_breakdown_intent(compact, allowed_dimension="customer_name")
+         ):
+             return LogisticsDataQaPlan(
+                 intent="ranking",
+                 query_key="hist_customer_mw_ranking",
+                 metrics=["shipment_mw"],
+                 dimensions=["customer_name"],
+-                filters={"year": year if year in {2023, 2024, 2025} else None, "top_n": 10},
++                filters={"year": year if year in {2023, 2024, 2025} else None, "top_n": ranking_top_n},
+                 group_by=["customer_name"],
+                 sort=[{"field": "shipment_mw", "direction": "desc"}],
+-                limit=10,
++                limit=ranking_top_n,
+             )
+ 
+         if (
+@@ -2354,6 +2465,363 @@ class LogisticsDataQaPlanner:
+         """判断当前问句是否在问总费用/总运费。"""
+         return any(keyword in question for keyword in self.TOTAL_FEE_KEYWORDS)
+ 
++    def _extract_top_n(self, question: str) -> int | None:
++        """抽取排名类问题中的正整数 TopN。
++
++        参数：
++            question: 已压缩空白的用户问题。
++        返回值：
++            命中“前5/前五/前十一/Top20”等正整数表达时返回 N，否则返回 None。
++        业务逻辑：
++            该函数只负责解析数量，不单独决定 query_key；调用方必须继续校验年份、维度、
++            指标和排序方向，避免把复杂排名问题误收进简单 TopN 分支。
++        """
++
++        normalized = question.rstrip("?？。.!！")
++        top_match = re.search(
++            r"(?i)top(?P<limit>\d+)(?:名|位|条|个(?!月|工作日|自然日|日|年))?"
++            r"(?=$|[?？。.!！,，；;、]|和|与|及|客户|承运商|物流公司|城市|项目|省|状态|司机|结果)",
++            normalized,
++        )
++        if top_match:
++            return self._parse_positive_integer(top_match.group("limit"))
++
++        front_match = re.search(
++            r"前(?P<limit>\d+|[一二两三四五六七八九十]+)"
++            # “前五集中在哪里/前五主要集中在哪”也是业务常见 TopN 问法，不能因为“集中”不是维度词而退回默认 10。
++            r"(?:名|位|条|个(?!月|工作日|自然日|日|年)|(?=$|[?？。.!！,，；;、]|和|与|及|客户|承运商|物流公司|城市|项目|省|状态|司机|结果|集中|在哪|哪里))",
++            normalized,
++        )
++        if not front_match:
++            return None
++        return self._parse_positive_integer(front_match.group("limit"))
++
++    @staticmethod
++    def _parse_positive_integer(raw_value: str) -> int | None:
++        """把阿拉伯数字或常见中文数字转换为正整数。
++
++        参数：
++            raw_value: 待解析的数字文本，例如 10、五、十一、二十。
++        返回值：
++            可解析且大于 0 时返回整数，否则返回 None。
++        业务逻辑：
++            当前 TopN 只需要稳定覆盖几十以内的业务问法；不解析复杂大写金额或小数，
++            防止非排名数量被误当成 limit。
++        """
++
++        value = raw_value.strip()
++        if not value:
++            return None
++        if value.isdigit():
++            parsed = int(value)
++            return parsed if parsed > 0 else None
++
++        digit_map = {
++            "一": 1,
++            "二": 2,
++            "两": 2,
++            "三": 3,
++            "四": 4,
++            "五": 5,
++            "六": 6,
++            "七": 7,
++            "八": 8,
++            "九": 9,
++        }
++        if value in digit_map:
++            return digit_map[value]
++        if value == "十":
++            return 10
++        if "十" not in value or value.count("十") != 1:
++            return None
++
++        tens_text, ones_text = value.split("十", 1)
++        tens = 1 if tens_text == "" else digit_map.get(tens_text)
++        ones = 0 if ones_text == "" else digit_map.get(ones_text)
++        if tens is None or ones is None:
++            return None
++        parsed = tens * 10 + ones
++        return parsed if parsed > 0 else None
++
++    @staticmethod
++    def _has_reverse_ranking_intent(question: str) -> bool:
++        """判断问题是否要求反向排序或低值排名。"""
++
++        return any(
++            keyword in question
++            for keyword in (
++                "最低",
++                "最少",
++                "倒数",
++                "升序",
++                "从低到高",
++                "由低到高",
++                "后十",
++                "后10",
++                "bottom",
++                "Bottom",
++                "BOTTOM",
++            )
++        )
++
++    @staticmethod
++    def _has_extra_breakdown_intent(question: str, *, allowed_dimension: str | None = None) -> bool:
++        """判断 TopN 问题是否追加了当前 query_key 不支持的拆分维度。
++
++        参数：
++            question: 已压缩空白的问题。
++            allowed_dimension: 当前 query_key 已经承载的分组维度；该维度本身不算额外拆分。
++        返回值：
++            用户追加“按区域/按月份/按城市”等非当前维度拆分诉求时返回 True。
++        业务逻辑：
++            TopN 泛化只允许改变返回条数，不能静默丢弃新的拆分维度；但像
++            “按省任务量排名”本身就是 delivery_province 维度，不能被误拦截。
++        """
++
++        dimension_phrases = {
++            "region_name": ("区域", "大区"),
++            "carrier_name": ("承运商", "物流公司", "物流供应商"),
++            "company_name": ("承运商", "物流公司", "物流供应商"),
++            "delivery_city": ("城市", "送达城市"),
++            "city": ("城市", "送达城市"),
++            "delivery_province": ("省份", "省", "送达省份"),
++            "customer_name": ("客户",),
++            "project_name": ("项目", "project_name"),
++            "driver_name": ("司机", "驾驶员"),
++            "biz_month": ("月份", "月度", "按月"),
++        }
++        allowed_phrases = set(dimension_phrases.get(allowed_dimension or "", ()))
++
++        for dimension_key, phrases in dimension_phrases.items():
++            if dimension_key == allowed_dimension:
++                continue
++            for phrase in phrases:
++                if phrase in allowed_phrases:
++                    continue
++                patterns = (
++                    f"按{phrase}",
++                    f"按{phrase}分",
++                    f"按{phrase}拆分",
++                    f"{phrase}拆分",
++                    f"{phrase}分组",
++                    f"分{phrase}",
++                    f"各{phrase}",
++                    f"{phrase}维度",
++                )
++                if any(pattern in question for pattern in patterns):
++                    return True
++
++        if any(keyword in question for keyword in ("拆分", "分组")):
++            # 如果出现泛化拆分词但没有命中允许维度，保守澄清，避免丢条件。
++            return not any(phrase in question for phrase in allowed_phrases)
++        return False
++
++    def _has_extra_metric_for_single_metric_ranking(self, question: str, *, allowed_metric: str) -> bool:
++        """判断单指标排名问题是否混入了其它指标。
++
++        参数：
++            question: 已压缩空白的用户问题。
++            allowed_metric: 当前 query_key 支持的唯一排序指标。
++        返回值：
++            问句中出现当前单指标 query_key 之外的费用、发运量、车次或单瓦成本诉求时返回 True。
++        业务逻辑：
++            TopN 泛化只改变 limit，不扩大指标集合；例如“总发运量和总费用排名”不能被
++            “客户总发运量排名”或“承运商总费用排名”静默吞掉。
++        """
++
++        asks_total_fee = self._is_total_fee_question(question)
++        asks_mw = self._is_mw_question(question)
++        asks_trip = self._is_trip_question(question)
++        asks_unit_fee = self._is_unit_fee_question(question)
++        asks_task_count = any(keyword in question for keyword in ("任务量", "任务数", "订单数", "主任务数", "派车任务量"))
++
++        if allowed_metric == "total_fee":
++            return asks_mw or asks_trip or asks_unit_fee or asks_task_count
++        if allowed_metric in {"shipment_mw", "task_count", "assign_task_count"}:
++            return asks_total_fee or asks_trip or asks_unit_fee or (asks_task_count and allowed_metric == "shipment_mw")
++        if allowed_metric == "unit_fee_per_watt":
++            return asks_total_fee or asks_mw or asks_trip or asks_task_count
++        return False
++
++    def _extract_city_total_fee_rank_limit(self, question: str) -> int | None:
++        """抽取省份内城市总费用排名问题的 TopN 限制。
++
++        参数：
++            question: 已压缩空白的用户问题。
++        返回值：
++            命中“城市 + 总费用 + 排名 + 前N”窄口径时返回 N，否则返回 None。
++        业务逻辑：
++            该能力只服务“YYYY年<省份>各城市总费用排名前N”类明确问题；年份和省份由调用方校验，
++            本函数不放宽到缺省时间、缺省地域或非城市维度的模糊排名问题。
++        """
++
++        extra_scope_keywords = (
++            "承运商",
++            "物流公司",
++            "发运量",
++            "运量",
++            "车次",
++            "车型",
++            "客户",
++            "项目",
++            "拆分",
++            "分组",
++            "最低",
++            "最少",
++            "倒数",
++            "从低到高",
++            "升序",
++        )
++        if any(keyword in question for keyword in extra_scope_keywords) or self._has_extra_breakdown_intent(question, allowed_dimension="city"):
++            # 额外维度、额外指标或反向排序会改变执行口径，不能被单纯“各城市总费用 TopN”吞掉。
++            return None
++
++        normalized = question.rstrip("?？。.!！")
++        rank_pattern = re.compile(
++            r"(?:各)?城市"
++            r"(?:总费用|总运费)"
++            r"(?:排名|排行)"
++            r"(?:前(?P<limit>\d+|[一二两三四五六七八九十两]+)|(?P<top>top\d+))"
++            r"(?:名|个|位)?$",
++            re.IGNORECASE,
++        )
++        match = rank_pattern.search(normalized)
++        if not match:
++            # 只接受“城市总费用排名前N”这一窄结构；如果用户追加了承运商拆分、发运量、最低排名等口径，
++            # 这里故意不命中，让后续澄清/不支持边界接管，避免把复杂问题错答成单纯城市 TopN。
++            return None
++
++        raw_limit = match.group("limit") or (match.group("top") or "").lower().removeprefix("top")
++        return self._parse_positive_integer(raw_limit)
++
++    @staticmethod
++    def _normalize_remark_question(question: str) -> str:
++        """规整备注关键词问题，便于做严格整句白名单匹配。
++
++        参数：
++            question: 用户问题原文或已压缩文本。
++        返回值：
++            去掉空白、引号和句末问号后的问题文本。
++        业务逻辑：只做格式归一，不改写业务词，避免把未审计别名扩展为已支持口径。
++        """
++
++        normalized = re.sub(r"\s+", "", question)
++        normalized = re.sub(r"[“”‘’\"']", "", normalized)
++        return normalized.rstrip("?？。.")
++
++    @staticmethod
++    def _has_remark_keyword_intent(question: str) -> bool:
++        """判断问题是否表达“备注包含某关键词”的意图。
++
++        参数：
++            question: 已压缩空白的问题。
++        返回值：
++            命中“备注包含”或“备注中包含”时返回 True。
++        业务逻辑：remark 字段是专门口径，未白名单支持时必须 fail closed，不能落入通用总费用/承运商链路。
++        """
++
++        normalized = LogisticsDataQaPlanner._normalize_remark_question(question)
++        return bool(re.search(r"备注(?:中|里)?[^\w]*包含", normalized))
++
++    @staticmethod
++    def _extract_keywords_from_remark_phrase(phrase: str, allowed_keywords: tuple[str, ...]) -> list[str]:
++        """从已定位的备注关键词短语中抽取受控关键词。
++
++        参数：
++            phrase: 严格正则已捕获的关键词短语。
++            allowed_keywords: 当前 query_key 允许的关键词集合。
++        返回值：
++            短语只由允许关键词和连接词构成时，返回命中的关键词；否则返回空列表。
++        业务逻辑：必须校验严格 fullmatch 捕获的 phrase，不能重新从整句搜索第一个分隔符，否则会吞掉后续未知条件。
++        """
++
++        keyword_pattern = "|".join(re.escape(keyword) for keyword in allowed_keywords)
++        connector_pattern = r"(?:或|和|、|,|，|/|及|与)"
++        if not re.fullmatch(rf"(?:{keyword_pattern})(?:{connector_pattern}(?:{keyword_pattern}))*", phrase):
++            return []
++        tokens = re.findall(keyword_pattern, phrase)
++        if len(tokens) != len(set(tokens)):
++            return []
++        return [keyword for keyword in allowed_keywords if keyword in tokens]
++
++    def _extract_valid_remark_keywords(self, question: str, allowed_keywords: tuple[str, ...]) -> list[str]:
++        """从备注关键词短语中抽取受控关键词。
++
++        参数：
++            question: 用户问题。
++            allowed_keywords: 当前 query_key 允许的关键词集合。
++        返回值：
++            按 allowed_keywords 顺序返回问题中出现的关键词；短语包含未知词时返回空列表。
++        业务逻辑：不能只靠全文包含关键词，否则“倒运和装卸”会被错误窄化为“倒运”。
++        """
++
++        normalized = self._normalize_remark_question(question)
++        match = re.search(r"备注(?:中|里)?[：:,，]?包含(?P<phrase>.+?)(?:的记录数量|的记录数|的记录[，,]?其总费用占|的记录总费用占|的总费用占|其总费用占|总费用占)", normalized)
++        if not match:
++            return []
++        phrase = match.group("phrase")
++        return self._extract_keywords_from_remark_phrase(phrase, allowed_keywords)
++
++    def _is_supported_remark_keyword_amount_summary(self, question: str, year: int | None, remark_keywords: list[str]) -> bool:
++        """判断是否为已审计的年度备注关键词记录数/费用金额汇总。
++
++        参数：
++            question: 已压缩空白的问题。
++            year: 抽取出的年份。
++            remark_keywords: 已校验的备注关键词。
++        返回值：
++            仅当问题完整匹配单年、受控关键词、记录数量和费用金额口径时返回 True。
++        业务逻辑：区域、明细、占比、总运费别名、未知关键词都会改变统计口径，必须澄清。
++        """
++
++        normalized = self._normalize_remark_question(question)
++        match = re.fullmatch(
++            r"(?:请统计|统计)?(?P<year>2023|2024|2025)年备注(?:中|里)?[：:,，]?包含(?P<phrase>.+?)的记录(?:数量|数)和(?:费用金额|金额|总费用|费用)(?:是多少)?",
++            normalized,
++        )
++        exact_keywords = self._extract_keywords_from_remark_phrase(match.group("phrase"), self.REMARK_SUPPORTED_KEYWORDS) if match else []
++        return bool(
++            match
++            and year in {2023, 2024, 2025}
++            and int(match.group("year")) == year
++            and exact_keywords
++            and exact_keywords == remark_keywords
++        )
++
++    def _is_supported_remark_keyword_fee_ratio(self, question: str) -> bool:
++        """判断是否为已审计的备注倒运/中转费用占历史物流总费用比例。
++
++        参数：
++            question: 用户问题。
++        返回值：
++            仅当问题不带显式时间、关键词只包含倒运/中转、分母为历史物流总费用且使用总费用口径时返回 True。
++        业务逻辑：总运费、历史总费用、百分比、区域/车型/明细等别名或额外条件暂未审计，必须澄清。
++        """
++
++        normalized = self._normalize_remark_question(question)
++        match = re.fullmatch(
++            r"(?:请问|请统计|统计)?备注(?:中|里)?[：:,，]?包含(?P<phrase>.+?)(?:的记录[，,]?其|的记录|其)?的?总费用占历史物流总费用(?:的)?(?:比例|占比)(?:是多少)?",
++            normalized,
++        )
++        remark_keywords = self._extract_keywords_from_remark_phrase(match.group("phrase"), self.REMARK_FEE_RATIO_KEYWORDS) if match else []
++        return (
++            bool(match)
++            and not self._extract_years(question)
++            and remark_keywords == list(self.REMARK_FEE_RATIO_KEYWORDS)
++        )
++
++    def _is_remark_keyword_question_needing_clarification(self, question: str) -> bool:
++        """判断未落入白名单的备注关键词问题是否需要澄清保护。
++
++        参数：
++            question: 已压缩空白的用户问题。
++        返回值：
++            只要表达“备注包含”意图且未被白名单放行，就返回 True。
++        业务逻辑：remark 字段查询不能被当作承运商名、区域名或普通总费用问题继续兜底，否则会产生误答。
++        """
++
++        return self._has_remark_keyword_intent(question)
++
+     def _is_complex_report_question(self, question: str) -> bool:
+         """判断是否属于当前应追问报表模板的复杂报表题。
+ 
+@@ -2367,6 +2835,14 @@ class LogisticsDataQaPlanner:
+             该判断不扩 query_key，只保护现有稳定链路，避免把单指标结果包装成完整报表。
+         """
+ 
++        if self._is_supported_remark_keyword_fee_ratio(question):
++            # 备注“倒运/中转”费用占历史物流总费用比例已有专用确定性 query_key；
++            # 不能被宽表/明细类备注关键词保护规则误判为复杂报表。
++            return False
++        if self._is_remark_keyword_question_needing_clarification(question):
++            # 未落入严格白名单的备注关键词题必须先追问，避免掉入通用总费用/承运商抽取链路误答。
++            return True
++
+         complex_keywords = (
+             "宽表",
+             "透视表",
+@@ -2601,6 +3077,6 @@ class LogisticsDataQaPlanner:
+         """解析承运商排名题的排序指标。"""
+         if self._is_unit_fee_question(question):
+             return "unit_fee_per_watt"
+-        if any(keyword in question for keyword in ("总运费", "运费排名", "按运费排名", "运输费用排名", "按运输费用排名")):
++        if any(keyword in question for keyword in ("总费用", "总运费", "费用排名", "运费排名", "按费用排名", "按运费排名", "运输费用排名", "按运输费用排名")):
+             return "total_fee"
+         return None
+diff --git a/backend/app/domains/plan_bom/api/endpoints/qa.py b/backend/app/domains/plan_bom/api/endpoints/qa.py
+index a42ef4c..3b5e0d1 100644
+--- a/backend/app/domains/plan_bom/api/endpoints/qa.py
++++ b/backend/app/domains/plan_bom/api/endpoints/qa.py
+@@ -1,11 +1,13 @@
+ from __future__ import annotations
+ 
+ from fastapi import APIRouter, Depends, Request
++from fastapi.responses import StreamingResponse
+ 
+ from backend.app.api.deps import get_plan_bom_qa_service
+ from backend.app.domains.plan_bom.schemas.qa import PlanBomQaRequest
+ from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
+ from backend.app.schemas.common import ApiResponse
++from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService, build_json_line_event
+ 
+ router = APIRouter()
+ 
+@@ -26,8 +28,83 @@ def ask_plan_bom(
+     """
+ 
+     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", payload.trace_id or ""))
+-    result = service.ask(payload.question, use_llm=True, trace_id=trace_id)
+-    return ApiResponse.success(result.model_dump(mode="json"), trace_id=trace_id)
++    try:
++        result = service.ask(payload.question, use_llm=True, trace_id=trace_id)
++        return ApiResponse.success(result.model_dump(mode="json"), trace_id=trace_id)
++    except Exception as exc:  # noqa: BLE001
++        # 计划 BOM 问答与物流问答使用同一张 sys_query_log；异常也要留存，便于业务回看失败问题。
++        service.write_error_log(question=payload.question, trace_id=trace_id, message=str(exc))
++        raise
++
++
++@router.post("/ask/stream")
++def ask_plan_bom_stream(
++    payload: PlanBomQaRequest,
++    request: Request,
++    service: PlanBomQaService = Depends(get_plan_bom_qa_service),
++) -> StreamingResponse:
++    """计划 BOM 自然语言问答流式入口。
++
++    说明：
++        1. 确定性 BOM/NLU/功率模型链路先执行，保证事实和数值可追溯；
++        2. 把用户原问题和确定性响应快照交给 LLM，只生成更自然的答案表达；
++        3. done 事件返回完整结构化结果，表格和状态不由 LLM 改写。
++    """
++
++    trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", payload.trace_id or ""))
++    stream_service = BusinessAnswerStreamService()
++
++    def iter_events():
++        """逐行输出 NDJSON 事件，供前端 fetch 流式消费。"""
++
++        yield build_json_line_event("meta", {"trace_id": trace_id, "domain": "plan_bom", "stage": "received"})
++        try:
++            result = service.ask(payload.question, use_llm=True, trace_id=trace_id)
++            result_payload = result.model_dump(mode="json")
++            yield build_json_line_event(
++                "meta",
++                {
++                    "trace_id": trace_id,
++                    "domain": "plan_bom",
++                    "stage": "deterministic_result_ready",
++                    "status_code": (result_payload.get("status") or {}).get("code"),
++                },
++            )
++            chunks: list[str] = []
++            for chunk in stream_service.stream_answer(
++                domain="plan_bom",
++                question=payload.question,
++                deterministic_payload=result_payload,
++                fallback_answer=result_payload.get("answer_summary"),
++            ):
++                chunks.append(chunk)
++                yield build_json_line_event("delta", {"text": chunk})
++            final_answer = "".join(chunks).strip()
++            final_payload = stream_service.apply_streamed_answer(
++                domain="plan_bom",
++                deterministic_payload=result_payload,
++                streamed_answer=final_answer,
++            )
++            yield build_json_line_event(
++                "done",
++                {"trace_id": trace_id, "domain": "plan_bom", "answer": final_answer, "data": final_payload},
++            )
++        except Exception as exc:  # noqa: BLE001
++            service.write_error_log(question=payload.question, trace_id=trace_id, message=str(exc))
++            yield build_json_line_event(
++                "error",
++                {
++                    "trace_id": trace_id,
++                    "domain": "plan_bom",
++                    "message": "当前计划 BOM 问答执行失败，请稍后重试；如持续失败，请联系管理员。",
++                },
++            )
++
++    return StreamingResponse(
++        iter_events(),
++        media_type="application/x-ndjson; charset=utf-8",
++        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
++    )
+ 
+ 
+ __all__ = ["router"]
+diff --git a/frontend/src/api/logistics.ts b/frontend/src/api/logistics.ts
+index a2909ba..7b53e34 100644
+--- a/frontend/src/api/logistics.ts
++++ b/frontend/src/api/logistics.ts
+@@ -1,4 +1,5 @@
+ import { http } from '@/utils/http'
++import { postJsonLineStream, type JsonLineStreamHandlers } from '@/utils/streamingApi'
+ 
+ /**
+  * 自然语言查询请求体。
+@@ -257,6 +258,17 @@ export async function fetchLogisticsDataQaQuery(payload: LogisticsDataQaPayload)
+   }
+ }
+ 
++/**
++ * 物流数据问答流式查询。
++ * 说明：后端先完成确定性查询，再把“提问 + 结果”交给 LLM 流式表达。
++ */
++export async function streamLogisticsDataQaQuery(
++  payload: LogisticsDataQaPayload,
++  handlers: JsonLineStreamHandlers<LogisticsDataQaResult>,
++) {
++  return postJsonLineStream<LogisticsDataQaResult>('/logistics/data-qa/query/stream', payload, handlers)
++}
++
+ /**
+  * 读取物流数据问答历史列表。
+  * 说明：
+diff --git a/frontend/src/api/planBom.ts b/frontend/src/api/planBom.ts
+index b2c1f8e..cdb121c 100644
+--- a/frontend/src/api/planBom.ts
++++ b/frontend/src/api/planBom.ts
+@@ -1,4 +1,5 @@
+ import { http } from '@/utils/http'
++import { postJsonLineStream, type JsonLineStreamHandlers } from '@/utils/streamingApi'
+ 
+ /**
+  * 计划 BOM 明细查询请求体。
+@@ -166,6 +167,17 @@ export async function askPlanBomQuestion(payload: PlanBomQaPayload) {
+   return resp.data as { data?: PlanBomQaResponse } | PlanBomQaResponse
+ }
+ 
++/**
++ * 调用计划 BOM 自然语言问答流式接口。
++ * 说明：后端先完成 BOM 查询/功率计算，再把“提问 + 确定性结果”交给 LLM 流式表达。
++ */
++export async function streamPlanBomQuestion(
++  payload: PlanBomQaPayload,
++  handlers: JsonLineStreamHandlers<PlanBomQaResponse>,
++) {
++  return postJsonLineStream<PlanBomQaResponse>('/plan-bom/qa/ask/stream', payload, handlers)
++}
++
+ /**
+  * 上传计划 BOM Excel 文件。
+  */
+@@ -214,17 +226,44 @@ function emitUploadProgress(event: UploadProgressEventLike, callback?: (percenta
+ export async function uploadPlanBomExcel(file: File, options: PlanBomUploadOptions = {}) {
+   const formData = new FormData()
+   formData.append('file', file)
++  appendPlanBomUploadFields(formData, options)
++  const resp = await http.post('/plan-bom/upload', formData, {
++    headers: { 'Content-Type': 'multipart/form-data' },
++    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
++  })
++  return resp.data
++}
++
++/**
++ * 批量上传计划 BOM Excel 文件。
++ * 说明：
++ * 1. 多个文件统一使用后端 files 字段，后端逐文件解析并返回汇总；
++ * 2. 前端不解析 Excel 内容，只负责选择文件、上传和展示逐文件结果；
++ * 3. 继续复用单文件上传的 source / overwrite / remark / 进度参数。
++ */
++export async function uploadPlanBomExcelBatch(files: File[], options: PlanBomUploadOptions = {}) {
++  const formData = new FormData()
++  files.forEach((file) => {
++    formData.append('files', file)
++  })
++  appendPlanBomUploadFields(formData, options)
++  const resp = await http.post('/plan-bom/upload', formData, {
++    headers: { 'Content-Type': 'multipart/form-data' },
++    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
++  })
++  return resp.data
++}
++
++/**
++ * 追加 BOM 上传公共表单字段。
++ */
++function appendPlanBomUploadFields(formData: FormData, options: PlanBomUploadOptions) {
+   formData.append('business_type', options.business_type || 'plan_bom')
+   formData.append('source', options.source || 'manual_upload')
+   formData.append('overwrite', String(options.overwrite ?? true))
+   if (options.remark) {
+     formData.append('remark', options.remark)
+   }
+-  const resp = await http.post('/plan-bom/upload', formData, {
+-    headers: { 'Content-Type': 'multipart/form-data' },
+-    onUploadProgress: (event) => emitUploadProgress(event, options.onUploadProgress),
+-  })
+-  return resp.data
+ }
+ 
+ /**
+diff --git a/frontend/src/utils/http.ts b/frontend/src/utils/http.ts
+index 98ae2af..884097a 100644
+--- a/frontend/src/utils/http.ts
++++ b/frontend/src/utils/http.ts
+@@ -52,6 +52,21 @@ export const http = axios.create({
+   timeout: 30000,
+ })
+ 
++/**
++ * 为 fetch / ReadableStream 构造与 Axios 相同的 API 地址。
++ *
++ * 参数：
++ *   path: 以 / 开头的后端 API 路径，不包含 apiPrefix。
++ *
++ * 返回值：
++ *   可直接传给 fetch 的 URL，默认仍为同源相对路径。
++ */
++export function buildApiUrl(path: string) {
++  const base = resolveBrowserApiBaseURL().replace(/\/+$/, '')
++  const normalizedPath = path.startsWith('/') ? path : `/${path}`
++  return `${base}${normalizedPath}`
++}
++
+ http.interceptors.response.use(
+   (response) => response,
+   (error) => {
+diff --git a/frontend/src/views/business-chat/BusinessChatPage.vue b/frontend/src/views/business-chat/BusinessChatPage.vue
+index 3475e1b..cec89b6 100644
+--- a/frontend/src/views/business-chat/BusinessChatPage.vue
++++ b/frontend/src/views/business-chat/BusinessChatPage.vue
+@@ -54,21 +54,27 @@
+           </div>
+ 
+           <div class="bubble">
+-            <p v-if="message.content" data-testid="message-content">{{ message.content }}</p>
++            <p
++              v-if="message.content && !message.presentation"
++              :class="{ 'streaming-answer': message.role === 'assistant' && message.loading }"
++              data-testid="message-content"
++            >
++              {{ message.content }}
++            </p>
+ 
+             <!-- 加载动画：三点跳动 -->
+             <div v-if="message.loading" class="loading-row" data-testid="message-loading" aria-live="polite">
+               <span class="typing-indicator">
+                 <span /><span /><span />
+               </span>
+-              <span class="loading-text">正在查询</span>
++              <span class="loading-text">{{ message.content ? 'AI 正在生成回答' : '正在理解问题并查询数据' }}</span>
+             </div>
+ 
+             <div v-if="message.error" class="error" data-testid="message-error">{{ message.error }}</div>
+ 
+             <div
+               v-if="message.presentation"
+-              :class="['result', `result--${resolveResultTone(message.status)}`]"
++              :class="['result', `result--${resolveResultTone(message.status)}`, resolveAssistantResultLayout(message)]"
+               data-testid="assistant-result"
+             >
+               <div class="result-hero">
+@@ -82,9 +88,12 @@
+                   <span v-if="message.presentation.displayType" class="display-badge">
+                     {{ formatDisplayTypeLabel(message.presentation.displayType) }}
+                   </span>
++                  <span class="display-badge display-badge--layout">
++                    {{ resolveAssistantReplyKicker(message) }}
++                  </span>
+                 </div>
+                 <div v-if="message.presentation.title" class="result-title" data-testid="result-title">{{ message.presentation.title }}</div>
+-                <p v-if="message.presentation.answer" class="result-answer" data-testid="result-answer">{{ message.presentation.answer }}</p>
++                <p v-if="message.presentation.answer" class="result-answer assistant-prose" data-testid="result-answer">{{ message.presentation.answer }}</p>
+                 <div v-if="buildResultSummaryItems(message).length" class="result-summary-strip">
+                   <span
+                     v-for="item in buildResultSummaryItems(message)"
+@@ -204,7 +213,7 @@
+                 </svg>
+               </div>
+ 
+-              <div v-if="message.presentation.cards.length" class="metric-grid" data-testid="result-cards">
++              <div v-if="shouldShowMetricCards(message)" class="metric-grid" data-testid="result-cards">
+                 <div v-for="card in message.presentation.cards" :key="card.label" class="metric-card">
+                   <div class="metric-accent" />
+                   <div class="metric-body">
+@@ -215,13 +224,76 @@
+                 </div>
+               </div>
+ 
+-              <div v-if="message.presentation.table" class="result-table-card">
++              <div v-if="shouldShowResultTable(message)" class="result-table-card">
+                 <div class="result-table-card__head">
+-                  <span>明细数据</span>
+-                  <em>{{ message.presentation.table.rows.length }} 行</em>
++                  <div class="result-table-card__title">
++                    <span>明细数据</span>
++                    <em>{{ getAssistantResultTable(message)?.rows.length || 0 }} 行</em>
++                  </div>
++                  <el-button
++                    type="primary"
++                    plain
++                    size="small"
++                    class="result-table-card__export"
++                    data-testid="export-result-table-excel"
++                    :disabled="!getAssistantResultTable(message)?.rows.length"
++                    @click="exportAssistantTableToExcel(message)"
++                  >
++                    导出 Excel
++                  </el-button>
++                </div>
++                <div
++                  v-if="shouldUseIrregularResultTable(message)"
++                  class="result-table-scroll"
++                  data-testid="result-table-scroll"
++                >
++                  <table class="result-table result-table--irregular" data-testid="result-table">
++                    <thead>
++                      <tr>
++                        <th
++                          v-for="column in getAssistantResultTable(message)?.columns || []"
++                          :key="column"
++                          :style="getResultTableColumnStyle(column)"
++                        >
++                          {{ column }}
++                        </th>
++                      </tr>
++                    </thead>
++                    <tbody>
++                      <tr
++                        v-for="(row, rowIndex) in getAssistantResultTable(message)?.rows || []"
++                        :key="buildIrregularResultTableRowKey(row, rowIndex)"
++                      >
++                        <template
++                          v-for="column in getAssistantResultTable(message)?.columns || []"
++                          :key="`${rowIndex}-${column}`"
++                        >
++                          <td
++                            v-if="shouldRenderIrregularResultTableCell(row, column)"
++                            :rowspan="getIrregularResultTableCellRowSpan(row, column)"
++                            :class="getIrregularResultTableCellClassName(column)"
++                            :style="getResultTableColumnStyle(column)"
++                          >
++                            <span
++                              :class="[
++                                'result-table__cell',
++                                {
++                                  'result-table__cell--multi-line': isMultiLineTableColumn(column),
++                                  'result-table__cell--fall-ratio': isFallRatioEstimateColumn(column),
++                                },
++                              ]"
++                            >
++                              {{ formatTableCell(row[column]) }}
++                            </span>
++                          </td>
++                        </template>
++                      </tr>
++                    </tbody>
++                  </table>
+                 </div>
+                 <el-table
+-                  :data="message.presentation.table.rows"
++                  v-else
++                  :data="getAssistantResultTable(message)?.rows || []"
+                   size="small"
+                   border
+                   class="result-table"
+@@ -230,13 +302,28 @@
+                   empty-text="暂无明细数据"
+                 >
+                   <el-table-column
+-                    v-for="column in message.presentation.table.columns"
++                    v-for="column in getAssistantResultTable(message)?.columns || []"
+                     :key="column"
+                     :prop="column"
+                     :label="column"
+-                    min-width="130"
+-                    show-overflow-tooltip
+-                  />
++                    :min-width="getResultTableColumnMinWidth(column)"
++                    :class-name="getResultTableColumnClassName(column)"
++                    :show-overflow-tooltip="!isMultiLineTableColumn(column)"
++                  >
++                    <template #default="scope">
++                      <span
++                        :class="[
++                          'result-table__cell',
++                          {
++                            'result-table__cell--multi-line': isMultiLineTableColumn(column),
++                            'result-table__cell--fall-ratio': isFallRatioEstimateColumn(column),
++                          },
++                        ]"
++                      >
++                        {{ formatTableCell(scope.row[column]) }}
++                      </span>
++                    </template>
++                  </el-table-column>
+                 </el-table>
+               </div>
+ 
+@@ -300,8 +387,10 @@
+ 
+ <script setup lang="ts">
+ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+-import { fetchLogisticsDataQaQuery, type LogisticsDataQaResult } from '@/api/logistics'
+-import { askPlanBomQuestion, type PlanBomQaResponse } from '@/api/planBom'
++import { ElMessage } from 'element-plus'
++import * as XLSX from 'xlsx-js-style'
++import { streamLogisticsDataQaQuery, type LogisticsDataQaResult } from '@/api/logistics'
++import { streamPlanBomQuestion, type PlanBomQaResponse } from '@/api/planBom'
+ import {
+   buildBusinessChatMessageId,
+   buildBusinessChatSessionTitle,
+@@ -320,6 +409,10 @@ interface UnifiedTable {
+   rows: Array<Record<string, any>>
+ }
+ 
++const resultTableRowSpanKey = '__resultTableRowSpan'
++const resultTableSubRowIndexKey = '__resultTableSubRowIndex'
++const resultTableSourceRowIndexKey = '__resultTableSourceRowIndex'
++
+ interface UnifiedResult {
+   displayType: string
+   title: string
+@@ -385,6 +478,8 @@ interface ResultSummaryItem {
+   value: string
+ }
+ 
++type AssistantResultLayoutClass = 'ai-response-card--narrative' | 'ai-response-card--data' | 'ai-response-card--chart'
++
+ const pieChartColors = ['#2f7a4a', '#60a5fa', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b']
+ 
+ const question = ref('')
+@@ -603,25 +698,45 @@ async function submitQuestion(input?: string) {
+ 
+   try {
+     if (resolvedDomain === 'logistics') {
+-      const response = await fetchLogisticsDataQaQuery({ question: text })
+-      const data = (response as any).data || response
+-      completeAssistantMessage(sessionId, assistantId, {
+-        content: '',
+-        domain: resolvedDomain,
+-        status: data?.status?.code || 'OK',
+-        presentation: adaptLogisticsResult(data),
+-        rawResponse: data,
+-      })
++      let completed = false
++      await streamLogisticsDataQaQuery(
++        { question: text },
++        {
++          onDelta: (chunk) => updateAssistantStreamingContent(sessionId, assistantId, chunk),
++          onDone: (streamData) => {
++            const data = ((streamData as any)?.data || streamData) as LogisticsDataQaResult
++            completed = true
++            completeAssistantMessage(sessionId, assistantId, {
++              content: '',
++              domain: resolvedDomain,
++              status: data?.status?.code || 'OK',
++              presentation: adaptLogisticsResult(data),
++              rawResponse: data as unknown as Record<string, any>,
++            })
++          },
++        },
++      )
++      if (!completed) throw new Error('流式回答未正常结束，请稍后重试。')
+     } else {
+-      const response = await askPlanBomQuestion({ question: text })
+-      const data = (response as any).data || response
+-      completeAssistantMessage(sessionId, assistantId, {
+-        content: '',
+-        domain: resolvedDomain,
+-        status: data?.status?.code || data?.classification || 'OK',
+-        presentation: adaptPlanBomResult(data),
+-        rawResponse: data,
+-      })
++      let completed = false
++      await streamPlanBomQuestion(
++        { question: text },
++        {
++          onDelta: (chunk) => updateAssistantStreamingContent(sessionId, assistantId, chunk),
++          onDone: (streamData) => {
++            const data = ((streamData as any)?.data || streamData) as PlanBomQaResponse
++            completed = true
++            completeAssistantMessage(sessionId, assistantId, {
++              content: '',
++              domain: resolvedDomain,
++              status: data?.status?.code || data?.classification || 'OK',
++              presentation: adaptPlanBomResult(data),
++              rawResponse: data as unknown as Record<string, any>,
++            })
++          },
++        },
++      )
++      if (!completed) throw new Error('流式回答未正常结束，请稍后重试。')
+     }
+   } catch (error) {
+     failAssistantMessage(
+@@ -695,6 +810,26 @@ function appendAssistantMessage(
+   return message.id
+ }
+ 
++/**
++ * 追加流式回答片段。
++ *
++ * 参数：
++ *   sessionId: 当前会话窗口 ID。
++ *   messageId: 正在生成的助手消息 ID。
++ *   chunk: 后端 LLM 流式输出的文本片段。
++ *
++ * 返回值：无。仅更新当前助手气泡中的临时文本，done 后再渲染结构化结果。
++ */
++function updateAssistantStreamingContent(sessionId: string, messageId: string, chunk: string) {
++  if (!chunk) return
++  mutateSession(sessionId, (session) => {
++    const target = session.messages.find((message) => message.id === messageId)
++    if (!target || !target.loading) return
++    target.content = `${target.content || ''}${chunk}`
++    target.status = 'streaming'
++  })
++}
++
+ /** 完成指定窗口内的助手消息，保证切换窗口后结果仍写回原窗口。 */
+ function completeAssistantMessage(
+   sessionId: string,
+@@ -819,16 +954,222 @@ function normalizeChart(chart: NonNullable<LogisticsDataQaResult['presentation']
+ /** 统一表格列名，避免业务界面直接暴露英文技术字段。 */
+ function normalizeTable(table: UnifiedTable | null): UnifiedTable | null {
+   if (!table?.rows?.length) return null
++  if (table.rows.some((row) => row && typeof row === 'object' && resultTableRowSpanKey in row && resultTableSubRowIndexKey in row)) {
++    return table
++  }
+   const sourceColumns = table.columns?.length ? table.columns : Object.keys(table.rows[0] || {})
+   const columns = sourceColumns.map((column, index) => localizeColumnName(column, index))
+-  const rows = table.rows.map((row) => {
++  const normalizedRows = table.rows.map((row) => {
+     const next: Record<string, any> = {}
+     sourceColumns.forEach((column, index) => {
+       next[columns[index]] = row[column]
+     })
+     return next
+   })
+-  return { columns, rows }
++  return { columns, rows: expandFallRatioEstimateRows(normalizedRows, columns) }
++}
++
++/**
++ * 把“落档比例预估”由单元格内多行拆成真实表格子行。
++ * 参数：rows 已完成列名归一化的表格行；columns 当前可见列名。
++ * 返回值：展开后的表格行，并携带 rowspan 元信息供 Element Plus 合并其它列。
++ */
++function expandFallRatioEstimateRows(rows: Array<Record<string, any>>, columns: string[]) {
++  const fallRatioColumn = columns.find((column) => isFallRatioEstimateColumn(column))
++  if (!fallRatioColumn) {
++    return rows.map((row, sourceRowIndex) => ({
++      ...row,
++      [resultTableRowSpanKey]: 1,
++      [resultTableSubRowIndexKey]: 0,
++      [resultTableSourceRowIndexKey]: sourceRowIndex,
++    }))
++  }
++
++  return rows.flatMap((row, sourceRowIndex) => {
++    const lines = splitFallRatioEstimateLines(row[fallRatioColumn])
++    const rowSpan = Math.max(lines.length, 1)
++    return lines.map((line, subRowIndex) => ({
++      ...row,
++      [fallRatioColumn]: line,
++      [resultTableRowSpanKey]: rowSpan,
++      [resultTableSubRowIndexKey]: subRowIndex,
++      [resultTableSourceRowIndexKey]: sourceRowIndex,
++    }))
++  })
++}
++
++/**
++ * 判断明细表列是否是“落档比例预估”。
++ * 参数：column 当前可见列名。
++ * 返回值：该列需要按“每个效率段一行”的异形表格结构展示时返回 true。
++ */
++function isFallRatioEstimateColumn(column: string) {
++  return localizeColumnName(column) === '落档比例预估'
++}
++
++/**
++ * 判断明细表列是否需要按多行文本展示。
++ * 参数：column 当前可见列名。
++ * 返回值：需要保留换行时返回 true。
++ */
++function isMultiLineTableColumn(column: string) {
++  return isFallRatioEstimateColumn(column)
++}
++
++/**
++ * 根据列类型给表格列设置最小宽度。
++ * 参数：column 当前可见列名。
++ * 返回值：Element Plus 表格列 min-width，落档比例列加宽以避免效率段被拆散。
++ */
++function getResultTableColumnMinWidth(column: string) {
++  return isFallRatioEstimateColumn(column) ? 420 : 130
++}
++
++/**
++ * 构造原生异形表格列样式。
++ * 参数：column 当前可见列名。
++ * 返回值：列最小宽度，确保附件中的“落档比例预估”有足够书写空间。
++ */
++function getResultTableColumnStyle(column: string) {
++  return { minWidth: `${getResultTableColumnMinWidth(column)}px` }
++}
++
++/**
++ * 判断是否使用附件式原生异形表格。
++ * 参数：message 当前助手消息。
++ * 返回值：存在落档比例列时返回 true，使该列可以像供应商行一样另起真实行。
++ */
++function shouldUseIrregularResultTable(message: BusinessChatMessage) {
++  const table = getAssistantResultTable(message)
++  return Boolean(table?.columns.some((column) => isFallRatioEstimateColumn(column)) && table.rows.length)
++}
++
++/**
++ * 判断异形表格当前单元格是否需要渲染。
++ * 参数：row 展示行；column 当前可见列名。
++ * 返回值：落档比例列每个子行都渲染，其它列只在原业务行首个子行渲染并 rowspan 合并。
++ */
++function shouldRenderIrregularResultTableCell(row: Record<string, any>, column: string) {
++  return isFallRatioEstimateColumn(column) || getResultTableSubRowIndex(row) === 0
++}
++
++/**
++ * 计算异形表格当前单元格 rowspan。
++ * 参数：row 展示行；column 当前可见列名。
++ * 返回值：落档比例列始终 1，其它列按原业务行子行数纵向合并。
++ */
++function getIrregularResultTableCellRowSpan(row: Record<string, any>, column: string) {
++  return isFallRatioEstimateColumn(column) ? 1 : getResultTableRowSpan(row)
++}
++
++/**
++ * 生成异形表格单元格 class。
++ * 参数：column 当前可见列名。
++ * 返回值：落档比例列附加专用 class，便于单独控制横向滚动和不折行。
++ */
++function getIrregularResultTableCellClassName(column: string) {
++  return isFallRatioEstimateColumn(column) ? 'result-table__td--fall-ratio' : ''
++}
++
++/**
++ * 构造异形表格展示行 key。
++ * 参数：row 展示行；rowIndex 当前展开后的行号。
++ * 返回值：稳定区分同一业务行下多个落档比例子行。
++ */
++function buildIrregularResultTableRowKey(row: Record<string, any>, rowIndex: number) {
++  return `${row[resultTableSourceRowIndexKey] ?? rowIndex}-${row[resultTableSubRowIndexKey] ?? 0}`
++}
++
++/**
++ * 给特殊列添加单元格 class，便于只针对“落档比例预估”列开启横向滚动。
++ * 参数：column 当前可见列名。
++ * 返回值：Element Plus 表格列 class-name。
++ */
++function getResultTableColumnClassName(column: string) {
++  return isFallRatioEstimateColumn(column) ? 'result-table-column--fall-ratio' : ''
++}
++
++/**
++ * 读取展开行的合并行数。
++ * 参数：row 展示表格行。
++ * 返回值：大于等于 1 的 rowspan。
++ */
++function getResultTableRowSpan(row: Record<string, any>) {
++  const value = Number(row?.[resultTableRowSpanKey])
++  return Number.isFinite(value) && value > 1 ? Math.floor(value) : 1
++}
++
++/**
++ * 读取展开行在原业务行中的子行序号。
++ * 参数：row 展示表格行。
++ * 返回值：从 0 开始的子行序号。
++ */
++function getResultTableSubRowIndex(row: Record<string, any>) {
++  const value = Number(row?.[resultTableSubRowIndexKey])
++  return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
++}
++
++/**
++ * Element Plus 表格合并策略：落档比例每段一行，其它列按原业务行纵向合并。
++ * 参数：row/column 为 Element Plus span-method 入参。
++ * 返回值：当前单元格的 rowspan/colspan。
++ */
++function getResultTableSpanMethod({ row, column }: { row: Record<string, any>; column: { property?: string } }) {
++  const property = String(column?.property || '')
++  if (isFallRatioEstimateColumn(property)) return { rowspan: 1, colspan: 1 }
++
++  const rowSpan = getResultTableRowSpan(row)
++  if (rowSpan <= 1) return { rowspan: 1, colspan: 1 }
++  return getResultTableSubRowIndex(row) === 0 ? { rowspan: rowSpan, colspan: 1 } : { rowspan: 0, colspan: 0 }
++}
++
++/**
++ * 构造导出 Excel 的合并单元格配置，使导出的异形表格与页面展示一致。
++ * 参数：table 已归一化且已展开的表格。
++ * 返回值：xlsx `!merges` 可识别的合并区域数组。
++ */
++function buildAssistantTableExportMerges(table: UnifiedTable) {
++  const merges: Array<{ s: { r: number; c: number }; e: { r: number; c: number } }> = []
++  table.rows.forEach((row, rowIndex) => {
++    const rowSpan = getResultTableRowSpan(row)
++    if (rowSpan <= 1 || getResultTableSubRowIndex(row) !== 0) return
++    table.columns.forEach((column, columnIndex) => {
++      if (isFallRatioEstimateColumn(column)) return
++      merges.push({
++        s: { r: rowIndex + 1, c: columnIndex },
++        e: { r: rowIndex + rowSpan, c: columnIndex },
++      })
++    })
++  })
++  return merges
++}
++
++/**
++ * 将“落档比例预估”拆成一个效率段一行的展示数组。
++ * 参数：value 后端返回的单元格原值，可能是换行分隔的新格式，也可能是历史分号分隔格式。
++ * 返回值：每个元素对应截图红框中的一个独立效率段。
++ */
++function splitFallRatioEstimateLines(value: unknown) {
++  const text = String(formatTableCell(value) || '')
++  if (!text.trim()) return ['']
++  const lines = text
++    .split(/(?:\r?\n|[；;])+/)
++    .map((line) => line.trim())
++    .filter(Boolean)
++  return lines.length ? lines : [text.trim()]
++}
++
++/**
++ * 格式化明细表单元格展示值，只做显示层归一化，不改变后端业务事实。
++ * 参数：value 后端返回的单元格原值。
++ * 返回值：可直接展示的字符串或数值。
++ */
++function formatTableCell(value: unknown): string | number | boolean {
++  if (value === null || value === undefined) return ''
++  if (typeof value === 'number' || typeof value === 'boolean') return value
++  if (Array.isArray(value)) return value.map((item) => formatTableCell(item)).join('、')
++  if (typeof value === 'object') return JSON.stringify(value)
++  return String(value)
+ }
+ 
+ /** 构造图表标题。 */
+@@ -1122,6 +1463,10 @@ const columnNameMap: Record<string, string> = {
+   changed_fields: '变化字段',
+   status: '状态',
+   row_count: '记录数',
++  ctm值: 'CTM 值',
++  ctm_值: 'CTM 值',
++  ctm_value: 'CTM 值',
++  落档比例预估: '落档比例预估',
+ }
+ 
+ function localizeColumnName(column: string, index = 0) {
+@@ -1322,8 +1667,9 @@ function buildResultSummaryItems(message: BusinessChatMessage): ResultSummaryIte
+   const presentation = message.presentation as UnifiedResult | null | undefined
+   if (!presentation) return []
+   const items: ResultSummaryItem[] = []
+-  if (presentation.table?.rows.length) {
+-    items.push({ label: '行明细', value: String(presentation.table.rows.length) })
++  const table = getAssistantResultTable(message)
++  if (table?.rows.length) {
++    items.push({ label: '行明细', value: String(table.rows.length) })
+   }
+   if (presentation.cards.length) {
+     items.push({ label: '项指标', value: String(presentation.cards.length) })
+@@ -1334,6 +1680,167 @@ function buildResultSummaryItems(message: BusinessChatMessage): ResultSummaryIte
+   return items
+ }
+ 
++/** 判断助手回复应采用叙事、数据还是图表布局；只控制 UI 层，不改变后端业务结果。 */
++function resolveAssistantResultLayout(message: BusinessChatMessage): AssistantResultLayoutClass {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  if (presentation?.chart) return 'ai-response-card--chart'
++  if (getAssistantResultTable(message)?.rows.length || presentation?.cards.length) return 'ai-response-card--data'
++  return 'ai-response-card--narrative'
++}
++
++/** 指标卡只在后端返回卡片且当前布局需要数据摘要时展示。 */
++function shouldShowMetricCards(message: BusinessChatMessage): boolean {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return Boolean(presentation?.cards.length)
++}
++
++/** 获取当前助手消息的可见明细表，兼容已保存的旧会话原始表格。 */
++function getAssistantResultTable(message: BusinessChatMessage): UnifiedTable | null {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return normalizeTable(presentation?.table || null)
++}
++
++/** 表格只在后端返回有效列和行时展示，避免空表占据叙事型回答空间。 */
++function shouldShowResultTable(message: BusinessChatMessage): boolean {
++  const table = getAssistantResultTable(message)
++  return Boolean(table?.columns.length && table.rows.length)
++}
++
++/**
++ * 将当前助手回复中的明细表导出为 Excel。
++ *
++ * 参数：
++ *   message: 当前助手消息，导出其中 presentation.table 的已展示明细。
++ *
++ * 返回：
++ *   无返回值；浏览器侧触发 xlsx 文件下载。
++ */
++function exportAssistantTableToExcel(message: BusinessChatMessage) {
++  const table = getAssistantResultTable(message)
++  if (!table?.columns.length || !table.rows.length) {
++    ElMessage.warning('当前回答没有可导出的明细数据')
++    return
++  }
++
++  const exportRows = buildAssistantTableExportRows(table)
++  const worksheet = XLSX.utils.json_to_sheet(exportRows, { header: table.columns })
++  const exportMerges = buildAssistantTableExportMerges(table)
++  if (exportMerges.length) worksheet['!merges'] = exportMerges
++  applyAssistantTableExportAlignment(worksheet)
++  // 按中文列名和单元格内容给出保守列宽，避免导出后业务用户第一眼只能看到截断内容。
++  worksheet['!cols'] = table.columns.map((column) => ({
++    wch: Math.max(12, Math.min(36, String(column).length + 8)),
++  }))
++  const workbook = XLSX.utils.book_new()
++  XLSX.utils.book_append_sheet(workbook, worksheet, '明细数据')
++  XLSX.writeFile(workbook, buildAssistantTableExportFileName(message))
++  ElMessage.success(`已导出 ${table.rows.length} 行明细数据`)
++}
++
++/**
++ * 构造 Excel 导出行，保持列顺序与页面表格一致。
++ *
++ * 参数：
++ *   table: 已归一化的页面展示表格。
++ *
++ * 返回：
++ *   适合 XLSX.utils.json_to_sheet 的对象数组。
++ */
++function buildAssistantTableExportRows(table: UnifiedTable): Array<Record<string, string | number | boolean>> {
++  return table.rows.map((row) => {
++    const next: Record<string, string | number | boolean> = {}
++    const mergedSubRow = getResultTableSubRowIndex(row) > 0
++    table.columns.forEach((column) => {
++      next[column] = mergedSubRow && !isFallRatioEstimateColumn(column) ? '' : normalizeAssistantTableExportCell(row[column])
++    })
++    return next
++  })
++}
++
++/**
++ * 给导出的 Excel 可见内容单元格统一设置垂直居中、左对齐。
++ *
++ * 参数：
++ *   worksheet: SheetJS 工作表对象，函数会直接修改其中已有单元格样式。
++ *
++ * 返回：
++ *   无返回值；保留既有样式并补充 alignment 配置。
++ */
++function applyAssistantTableExportAlignment(worksheet: XLSX.WorkSheet) {
++  const rangeRef = worksheet['!ref']
++  if (!rangeRef) return
++  const range = XLSX.utils.decode_range(rangeRef)
++  for (let rowIndex = range.s.r; rowIndex <= range.e.r; rowIndex += 1) {
++    for (let columnIndex = range.s.c; columnIndex <= range.e.c; columnIndex += 1) {
++      const cellRef = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex })
++      const cell = worksheet[cellRef]
++      if (!cell) continue
++      cell.s = {
++        ...(cell.s || {}),
++        alignment: {
++          ...(cell.s?.alignment || {}),
++          vertical: 'center',
++          horizontal: 'left',
++        },
++      }
++    }
++  }
++}
++
++/** 归一化 Excel 单元格值，避免对象/数组导出成 [object Object]。 */
++function normalizeAssistantTableExportCell(value: unknown): string | number | boolean {
++  if (value === null || value === undefined) return ''
++  if (typeof value === 'number' || typeof value === 'boolean') return value
++  if (value instanceof Date) return value.toISOString()
++  if (Array.isArray(value)) return value.map((item) => normalizeAssistantTableExportCell(item)).join('、')
++  if (typeof value === 'object') {
++    try {
++      return JSON.stringify(value)
++    } catch (_error) {
++      return String(value)
++    }
++  }
++  return String(value)
++}
++
++/** 根据回答标题和时间生成安全 Excel 文件名。 */
++function buildAssistantTableExportFileName(message: BusinessChatMessage) {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  const fallbackTitle = domainLabelMap[message.domain] || '智能助手明细数据'
++  const safeTitle = sanitizeAssistantTableExportFileName(presentation?.title || fallbackTitle) || '智能助手明细数据'
++  return `${safeTitle.slice(0, 36)}_${formatAssistantTableExportTimestamp(new Date())}.xlsx`
++}
++
++/** 清理文件名中的系统保留字符。 */
++function sanitizeAssistantTableExportFileName(value: string) {
++  return String(value || '')
++    .replace(/[\\/:*?"<>|\r\n\t]+/g, '_')
++    .replace(/\s+/g, ' ')
++    .trim()
++}
++
++/** 构造导出时间戳，便于同一回答多次导出时区分文件。 */
++function formatAssistantTableExportTimestamp(date: Date) {
++  const pad = (value: number) => String(value).padStart(2, '0')
++  return [
++    date.getFullYear(),
++    pad(date.getMonth() + 1),
++    pad(date.getDate()),
++    '_',
++    pad(date.getHours()),
++    pad(date.getMinutes()),
++    pad(date.getSeconds()),
++  ].join('')
++}
++
++/** 根据回答布局生成轻量提示词，不参与业务判断。 */
++function resolveAssistantReplyKicker(message: BusinessChatMessage): string {
++  const layout = resolveAssistantResultLayout(message)
++  if (layout === 'ai-response-card--chart') return '图表视图'
++  if (layout === 'ai-response-card--data') return '数据视图'
++  return '文字说明'
++}
++
+ /** 展示类型中文化，便于把后端 display_type 作为轻量徽标呈现。 */
+ function formatDisplayTypeLabel(displayType?: string) {
+   const mapping: Record<string, string> = {
+@@ -1613,6 +2120,24 @@ onBeforeUnmount(() => {
+   margin: 0;
+ }
+ 
++.streaming-answer {
++  max-width: 760px;
++  color: #111827;
++  white-space: pre-wrap;
++  word-break: break-word;
++}
++
++.streaming-answer::after {
++  content: '';
++  display: inline-block;
++  width: 7px;
++  height: 1em;
++  margin-left: 2px;
++  vertical-align: -2px;
++  border-right: 2px solid var(--brand-logo-blue, #3071b9);
++  animation: cursorBlink 0.9s steps(1) infinite;
++}
++
+ /* ======== 加载动画 ======== */
+ .loading-row {
+   display: flex;
+@@ -1646,6 +2171,15 @@ onBeforeUnmount(() => {
+   animation: fadeIn 0.3s ease-out;
+ }
+ 
++.ai-response-card--narrative {
++  max-width: 780px;
++}
++
++.ai-response-card--data,
++.ai-response-card--chart {
++  max-width: 100%;
++}
++
+ .result-hero {
+   display: grid;
+   gap: 8px;
+@@ -1715,6 +2249,10 @@ onBeforeUnmount(() => {
+   word-break: break-word;
+ }
+ 
++.assistant-prose {
++  white-space: pre-wrap;
++}
++
+ .result-summary-strip {
+   display: flex;
+   flex-wrap: wrap;
+@@ -1933,6 +2471,17 @@ onBeforeUnmount(() => {
+   font-size: 12px;
+ }
+ 
++@keyframes cursorBlink {
++  0%,
++  45% {
++    opacity: 1;
++  }
++  46%,
++  100% {
++    opacity: 0;
++  }
++}
++
+ @media (max-width: 720px) {
+   .presentation-chart__pie-layout {
+     grid-template-columns: 1fr;
+@@ -1953,6 +2502,44 @@ onBeforeUnmount(() => {
+   overflow: hidden;
+ }
+ 
++.result-table-scroll {
++  max-height: 360px;
++  overflow: auto;
++}
++
++.result-table--irregular {
++  width: 100%;
++  min-width: max-content;
++  border-collapse: collapse;
++  table-layout: auto;
++  background: #ffffff;
++}
++
++.result-table--irregular th,
++.result-table--irregular td {
++  border: 1px solid #e5e7eb;
++  padding: 8px 10px;
++  color: #111827;
++  font-size: 13px;
++  line-height: 1.45;
++  text-align: left;
++  vertical-align: middle;
++  background: #ffffff;
++}
++
++.result-table--irregular th {
++  position: sticky;
++  top: 0;
++  z-index: 1;
++  background: #f8fafc;
++  font-weight: 700;
++  white-space: nowrap;
++}
++
++.result-table--irregular td {
++  min-height: 42px;
++}
++
+ .result-table-card__head {
+   display: flex;
+   align-items: center;
+@@ -1965,6 +2552,13 @@ onBeforeUnmount(() => {
+   font-weight: 700;
+ }
+ 
++.result-table-card__title {
++  display: inline-flex;
++  align-items: center;
++  gap: 8px;
++  min-width: 0;
++}
++
+ .result-table-card__head em {
+   flex: none;
+   font-style: normal;
+@@ -1973,6 +2567,17 @@ onBeforeUnmount(() => {
+   font-weight: 500;
+ }
+ 
++.result-table-card__export {
++  flex: none;
++  border-color: var(--brand-green-border);
++}
++
++.result-table-card__export:not(.is-disabled):hover {
++  border-color: var(--brand-green);
++  background: var(--brand-green-bg);
++  color: var(--brand-green);
++}
++
+ :deep(.result-table .el-table__header-wrapper th) {
+   background: #f8fafb;
+   color: #374151;
+@@ -1993,6 +2598,40 @@ onBeforeUnmount(() => {
+   transition: background 0.15s ease;
+ }
+ 
++.result-table__cell {
++  display: inline-block;
++  max-width: 100%;
++  line-height: 1.55;
++  word-break: break-word;
++}
++
++.result-table__cell--multi-line {
++  white-space: pre-line;
++}
++
++:deep(.result-table-column--fall-ratio .cell) {
++  overflow-x: auto;
++  white-space: nowrap;
++}
++
++.result-table__td--fall-ratio {
++  overflow-x: auto;
++  white-space: nowrap;
++}
++
++.result-table--irregular .result-table__cell {
++  max-width: none;
++}
++
++.result-table__cell--fall-ratio {
++  display: block;
++  width: max-content;
++  max-width: none;
++  white-space: nowrap;
++  word-break: keep-all;
++  overflow-wrap: normal;
++}
++
+ /* ======== 追问区域 ======== */
+ .follow-up {
+   display: grid;
+diff --git a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+index 4c11a7a..63a5408 100644
+--- a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
++++ b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ from pathlib import Path
++import re
+ 
+ 
+ ROOT = Path(__file__).resolve().parents[2]
+@@ -12,7 +13,7 @@ def test_bom_data_management_exposes_separate_power_model_upload_entry_without_t
+     """BOM 数据管理页必须保留独立功率模型上传入口，并移除临时管理 token 输入。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+ 
+-    assert "上传 BOM Excel" in page
++    assert "BOM 文件上传" in page
+     assert "上传功率模型" in page
+     assert "请选择功率模型 xlsm 文件" in page
+     assert "uploadPowerModelFile" in page
+@@ -31,6 +32,35 @@ def test_bom_data_management_exposes_separate_power_model_upload_entry_without_t
+     assert "上传失败" in page
+ 
+ 
++def test_bom_excel_upload_supports_batch_files_end_to_end_contract() -> None:
++    """BOM Excel 上传应支持一次选择多个文件，并由后端返回批量汇总与逐文件结果。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++    query_page = (FRONTEND / "views" / "plan-bom" / "PlanBomDetailQueryPage.vue").read_text(encoding="utf-8")
++    api = (FRONTEND / "api" / "planBom.ts").read_text(encoding="utf-8")
++    endpoint = (BACKEND / "domains" / "plan_bom" / "api" / "endpoints" / "import_excel.py").read_text(encoding="utf-8")
++
++    assert "type=\"file\"" in page
++    assert "multiple" in page
++    assert "selectedFiles" in page
++    assert "请选择 1 个或多个 BOM Excel 文件" in page
++    assert "uploadPlanBomExcelBatch" in page
++    assert "uploadBatchResult" in page
++    assert "批量上传" in page
++    assert "逐文件结果" in page
++    assert "BOM Excel 批量上传导入" in query_page
++    assert "multiple @change=\"handleUploadInputChange\"" in query_page
++    assert "uploadPlanBomExcelBatch(files)" in query_page
++    assert "files.forEach" in api
++    assert "formData.append('files', file)" in api
++    assert "uploadPlanBomExcelBatch(files: File[]" in api
++    assert "total_files" in endpoint
++    assert "success_count" in endpoint
++    assert "failed_count" in endpoint
++    assert "items" in endpoint
++    assert "files: list[UploadFile] | None = File(default=None)" in endpoint
++    assert "file: UploadFile | None = File(default=None)" in endpoint
++
++
+ def test_bom_data_management_progress_and_status_are_isolated_per_upload_type() -> None:
+     """BOM 和功率模型上传必须分别维护进度与提示，避免两个入口状态串扰。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+@@ -112,7 +142,10 @@ def test_bom_data_management_page_defines_own_vertical_scroll_container() -> Non
+     assert "height: calc(100vh - 64px);" in page
+     assert "overflow-y: auto;" in page
+     assert "overflow-x: hidden;" in page
+-    assert "padding: 32px" in page
++    assert "display: grid;" in page
++    assert "grid-auto-rows: max-content;" in page
++    assert "gap: 20px;" in page
++    assert "padding: 24px 28px 36px;" in page
+     assert "margin: 0 auto;" in page
+ 
+ 
+@@ -122,6 +155,8 @@ def test_bom_data_management_history_uses_tabs_and_pagination_for_dense_tables()
+ 
+     assert "<el-tabs" in page
+     assert "historyActiveTab" in page
++    assert "label=\"上传数据\"" in page
++    assert "label=\"查看历史\"" in page
+     assert "name=\"bom_upload_history\"" in page
+     assert "name=\"power_model_versions\"" in page
+     assert "pagedBomUploadHistory" in page
+@@ -131,39 +166,100 @@ def test_bom_data_management_history_uses_tabs_and_pagination_for_dense_tables()
+     assert "handlePowerHistoryPageChange" in page
+ 
+ 
+-def test_bom_data_management_page_focuses_on_two_primary_metrics_and_status_chips() -> None:
+-    """BOM 数据管理页不应堆叠过多指标卡，应只保留少量主指标和轻量状态。"""
++def test_bom_data_management_page_uses_clean_workspace_without_duplicate_chips() -> None:
++    """BOM 数据管理首屏应去掉重复标签和英文装饰，用紧凑状态条与统一上传卡片突出操作。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+     template = page.split("<script setup", 1)[0]
+ 
++    assert "bom-page bom-page--clean" in template
+     assert "primaryOverviewCards" in page
+-    assert "secondary-status-strip" in page
+-    assert "upload-zone-card" in page
+-    assert "BOM 数据导入" in page
+-    assert "功率模型版本" in page
++    assert "compact-status-row" in template
++    assert "upload-dropzone" in template
++    assert "upload-action-button" in template
++    assert "BOM 文件上传" in page
++    assert "功率模型上传" in page
+     assert "BOM 上传批次" in page
+     assert "当前生效模型" in page
+     assert "v-for=\"item in primaryOverviewCards\"" in template
+-    assert "hero-metric-strip" not in template
+-    assert "ops-overview-grid" not in template
+-    assert "文件隔离" in page
+-    assert "温和校验" in page
+-    assert "版本追溯" in page
++    assert "hero-tags" not in template
++    assert "secondary-status-strip" not in template
++    assert "DATA WORKSPACE" not in template
++    assert "POWER" not in template
++    assert template.count("文件隔离") <= 1
++
+ 
++def test_bom_data_management_visual_layout_uses_separate_cards_and_refined_tabs() -> None:
++    """BOM 页面首屏应把概览区和操作区拉开，指标卡与 tab 应采用统一的企业级组件样式。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++    template = page.split("<script setup", 1)[0]
+ 
+-def test_bom_data_management_copy_stays_minimal_and_hierarchy_first() -> None:
+-    """BOM 数据管理页应减少说明文字，用指标、短标签和视觉层次突出重点。"""
++    assert "bom-hero-card" in template
++    assert "bom-workspace-card" in template
++    assert template.index("bom-hero-card") < template.index("bom-workspace-card")
++    assert "management-tabs management-tabs--segmented" in template
++    assert "overview-card__top" in template
++    assert "overview-card__badge" in template
++    assert "overview-card__value" in template
++    assert "workspace-card-head" in template
++    assert "workspace-tab-label" in template
++    assert ".bom-page--clean" in page
++    assert ".bom-hero-card" in page
++    assert ".bom-workspace-card" in page
++    assert "gap: 20px" in page
++    assert "box-shadow: 0 10px 28px" in page
++
++
++def test_bom_data_management_typography_is_restrained_and_business_readable() -> None:
++    """BOM 页面应收敛字号和装饰，避免超大标题、强渐变和过重阴影造成花哨感。"""
++    page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
++
++    assert "font-size: clamp(34px, 4vw, 52px);" not in page
++    assert "font-size: clamp(28px, 2.6vw, 38px);" not in page
++    assert "font-size: 24px;" not in page
++    assert "font-size: 17px;" not in page
++    assert "font-size: 18px;" not in page
++    assert "radial-gradient" not in page
++    assert ".overview-card::after" not in page
++    assert "width: 320px;" not in page
++    assert "box-shadow: 0 18px 50px" not in page
++    assert "box-shadow: 0 16px 42px" not in page
++    assert "font-size: clamp(26px, 2.4vw, 34px);" in page
++    assert "font-size: clamp(22px, 2vw, 30px);" in page
++    assert "font-size: 20px;" in page
++    assert "font-size: 14px;" in page
++
++
++def test_bom_data_management_copy_stays_minimal_business_friendly_and_hierarchy_first() -> None:
++    """BOM 数据管理页应减少说明文字和英文技术词，用业务动作、短标签和视觉层次突出重点。"""
+     page = (FRONTEND / "views" / "plan-bom" / "BomDataManagementPage.vue").read_text(encoding="utf-8")
+     template = page.split("<script setup", 1)[0]
+ 
+     assert "primaryOverviewCards" in page
+-    assert "secondary-status-strip" in page
++    assert "compact-status-row" in page
+     assert "<ol>" not in template
+     assert "统一管理计划 BOM 数据导入与功率模型版本" not in template
+     assert "普通 BOM Excel 用于明细查询和智能问答。" not in template
+     assert "BOM 上传历史与功率模型版本历史采用 tab 页分区展示" not in template
+     assert "当前表格按上传时间倒序展示" not in template
+-    assert template.count("。") <= 8
++    assert 'label="Warning"' not in template
++    assert 'label="Error"' not in template
++    assert "Issue 数" not in template
++    assert "文件 Hash" not in template
++    assert "版本 ID" not in template
++    assert "{{ row.status }}" not in template
++    assert 'prop="source_tag" label="来源" min-width="120" show-overflow-tooltip />' not in template
++    assert "formatStatusLabel(row.status)" in template
++    assert "formatSourceTagLabel(row.source_tag)" in template
++    assert "formatStatusLabel(row.parse_status)" in template
++    assert "formatStatusLabel(uploadPowerModelResult.version?.parse_status)" in template
++    assert "uploadPowerModelResult.version?.parse_status || '-'" not in template
++    assert "问题数" in page
++    assert "文件指纹" in page
++    assert "版本编号" in page
++    assert "手动上传" in page
++    assert "选择文件后可上传" in page
++    assert "选择模型后可上传" in page
++    assert template.count("。") <= 6
+ 
+ 
+ def test_app_layout_uses_chatgpt_like_neutral_shell_and_richer_palette() -> None:
+@@ -203,6 +299,109 @@ def test_business_chat_assistant_response_layout_is_adaptive_not_fixed_template(
+     assert "v-if=\"message.presentation.table\" class=\"result-table-card\"" not in template
+ 
+ 
++def test_business_chat_detail_table_can_export_excel_when_rows_exist() -> None:
++    """智能助手回复中存在明细表格时，业务用户应能直接导出 Excel 文件。"""
++    chat = (FRONTEND / "views" / "business-chat" / "BusinessChatPage.vue").read_text(encoding="utf-8")
++    template = chat.split("<script setup", 1)[0]
++
++    package_json = (ROOT / "frontend" / "package.json").read_text(encoding="utf-8")
++
++    assert "import * as XLSX from 'xlsx-js-style'" in chat
++    assert "\"xlsx-js-style\"" in package_json
++    assert "import { ElMessage } from 'element-plus'" in chat
++    assert "data-testid=\"export-result-table-excel\"" in template
++    assert "导出 Excel" in template
++    assert "@click=\"exportAssistantTableToExcel(message)\"" in template
++    assert "shouldShowResultTable(message)" in template
++    assert "function getAssistantResultTable" in chat
++    assert "getAssistantResultTable(message)?.rows.length || 0" in template
++    assert ":disabled=\"!getAssistantResultTable(message)?.rows.length\"" in template
++    assert "function exportAssistantTableToExcel" in chat
++    assert "function buildAssistantTableExportRows" in chat
++    assert "function applyAssistantTableExportAlignment" in chat
++    assert "XLSX.utils.decode_range" in chat
++    assert "XLSX.utils.encode_cell" in chat
++    assert "vertical: 'center'" in chat
++    assert "horizontal: 'left'" in chat
++    assert "cell.s =" in chat
++    assert "function buildAssistantTableExportMerges" in chat
++    assert "worksheet['!merges']" in chat
++    assert "mergedSubRow && !isFallRatioEstimateColumn(column) ? ''" in chat
++    assert "function buildAssistantTableExportFileName" in chat
++    assert "XLSX.utils.json_to_sheet" in chat
++    assert "XLSX.utils.book_append_sheet" in chat
++    assert "XLSX.writeFile" in chat
++    assert "ctm值: 'CTM 值'" in chat
++    assert "ctm_值: 'CTM 值'" in chat
++    assert "落档比例预估: '落档比例预估'" in chat
++    assert "function isMultiLineTableColumn" in chat
++    assert ":show-overflow-tooltip=\"!isMultiLineTableColumn(column)\"" in template
++    assert "result-table__cell--multi-line" in chat
++    assert "white-space: pre-line" in chat
++    assert "ElMessage.warning('当前回答没有可导出的明细数据')" in chat
++    assert "ElMessage.success(`已导出 ${table.rows.length} 行明细数据`)" in chat
++    assert "智能助手明细数据" in chat
++    assert "xlsx" in chat
++
++
++def test_business_chat_fall_ratio_estimate_uses_excel_like_irregular_rows() -> None:
++    """落档比例预估应像附件 Excel 一样另起真实行，并让其它列纵向合并。"""
++    chat = (FRONTEND / "views" / "business-chat" / "BusinessChatPage.vue").read_text(encoding="utf-8")
++    template = chat.split("<script setup", 1)[0]
++
++    assert "function isFallRatioEstimateColumn" in chat
++    assert "function splitFallRatioEstimateLines" in chat
++    assert "function expandFallRatioEstimateRows" in chat
++    assert "function shouldUseIrregularResultTable" in chat
++    assert re.search(
++        r"function shouldUseIrregularResultTable\(message: BusinessChatMessage\) \{[^}]*const table = getAssistantResultTable\(message\)",
++        chat,
++        re.S,
++    )
++    assert "function shouldRenderIrregularResultTableCell" in chat
++    assert "function getIrregularResultTableCellRowSpan" in chat
++    assert "function buildIrregularResultTableRowKey" in chat
++    assert "v-if=\"shouldUseIrregularResultTable(message)\"" in template
++    assert "getAssistantResultTable(message)?.columns || []" in template
++    assert "getAssistantResultTable(message)?.rows || []" in template
++    assert "<table" in template
++    assert "class=\"result-table result-table--irregular\"" in template
++    assert ":rowspan=\"getIrregularResultTableCellRowSpan(row, column)\"" in template
++    assert "v-if=\"shouldRenderIrregularResultTableCell(row, column)\"" in template
++    assert "v-else" in template
++    assert "v-for=\"(line, lineIndex) in splitFallRatioEstimateLines(scope.row[column])\"" not in template
++    assert "result-table__fall-ratio-line" not in template
++    assert "result-table__cell--fall-ratio" in chat
++    assert "vertical-align: middle" in chat
++    assert "white-space: nowrap" in chat
++    assert "overflow-x: auto" in chat
++
++
++
++def test_business_chat_uses_backend_llm_streaming_answer_pipeline() -> None:
++    """智能助手应优先消费后端 LLM 流式答案，并在前端增量展示，不再只等同步接口一次性返回。"""
++    chat = (FRONTEND / "views" / "business-chat" / "BusinessChatPage.vue").read_text(encoding="utf-8")
++    template = chat.split("<script setup", 1)[0]
++    logistics_api = (FRONTEND / "api" / "logistics.ts").read_text(encoding="utf-8")
++    plan_bom_api = (FRONTEND / "api" / "planBom.ts").read_text(encoding="utf-8")
++    streaming_api = (FRONTEND / "utils" / "streamingApi.ts").read_text(encoding="utf-8")
++
++    assert "streamLogisticsDataQaQuery" in logistics_api
++    assert "streamPlanBomQuestion" in plan_bom_api
++    assert "postJsonLineStream" in streaming_api
++    assert "ReadableStream" in streaming_api
++    assert "TextDecoder" in streaming_api
++    assert "/logistics/data-qa/query/stream" in logistics_api
++    assert "/plan-bom/qa/ask/stream" in plan_bom_api
++    assert "streamLogisticsDataQaQuery" in chat
++    assert "streamPlanBomQuestion" in chat
++    assert "function updateAssistantStreamingContent" in chat
++    assert "AI 正在生成回答" in template
++    assert "'streaming-answer': message.role === 'assistant' && message.loading" in template
++    assert "message.content && !message.presentation" in template
++    assert "completeAssistantMessage" in chat
++
++
+ def test_power_model_token_dependency_removed_from_current_backend_sources() -> None:
+     """临时功率模型 token 功能应从当前后端源码移除，后续改由用户权限模块接管。"""
+     deps = (BACKEND / "api" / "deps.py").read_text(encoding="utf-8")
+diff --git a/backend/app/services/business_answer_stream_service.py b/backend/app/services/business_answer_stream_service.py
+new file mode 100644
+index 0000000..4b56f8d
+--- /dev/null
++++ b/backend/app/services/business_answer_stream_service.py
+@@ -0,0 +1,313 @@
++from __future__ import annotations
++
++import json
++from copy import deepcopy
++from typing import Any, Iterable
++
++from openai import OpenAI
++
++from backend.app.core.config import settings
++
++
++JSONLineEvent = dict[str, Any]
++
++
++def build_json_line_event(event: str, data: dict[str, Any]) -> str:
++    """构造前端可增量解析的一行 JSON 流事件。
++
++    参数：
++        event: 事件名，常用值包括 meta、delta、done、error。
++        data: 当前事件的数据体，必须可 JSON 序列化。
++
++    返回：
++        以换行符结尾的 JSON 字符串。
++    """
++
++    return json.dumps({"event": event, "data": data}, ensure_ascii=False, default=str) + "\n"
++
++
++class BusinessAnswerStreamService:
++    """业务智能问答的流式答案表达服务。
++
++    说明：
++        1. 后端先完成确定性查询、计算和表格生成；
++        2. 本服务只把“用户原问题 + 确定性结果快照”交给 LLM 做答案表达；
++        3. LLM 流式输出只替换 presentation.answer，不允许改表格、状态、查询结果和数值事实；
++        4. 未配置 LLM 或调用失败时，将确定性答案切块流式返回，保证前端体验不退化。
++    """
++
++    MAX_PROMPT_ROWS = 30
++    MAX_PROMPT_CHARS = 12000
++    FALLBACK_CHUNK_SIZE = 18
++
++    def __init__(
++        self,
++        *,
++        enabled: bool | None = None,
++        base_url: str | None = None,
++        api_key: str | None = None,
++        model: str | None = None,
++        client: Any | None = None,
++        timeout: float | None = None,
++    ) -> None:
++        """初始化流式答案表达服务。
++
++        参数：
++            enabled: 是否启用 LLM 表达，默认跟随全局答案表达开关。
++            base_url: OpenAI 兼容接口地址。
++            api_key: OpenAI 兼容接口密钥。
++            model: 使用的表达模型名。
++            client: 测试注入的 OpenAI 兼容客户端。
++            timeout: 单次 LLM 调用超时时间。
++
++        返回：
++            无返回值。
++        """
++
++        self.enabled = settings.llm_answer_presentation_enabled if enabled is None else enabled
++        self.base_url = base_url if base_url is not None else settings.llm_base_url
++        self.api_key = api_key if api_key is not None else settings.llm_api_key
++        self.model = model if model is not None else (settings.llm_answer_presentation_model or settings.llm_model)
++        self.timeout = timeout if timeout is not None else settings.llm_answer_presentation_timeout
++        self._client = client
++        self._last_stream_source = "deterministic_fallback"
++        self._last_fallback_reason = "not_started"
++
++    def stream_answer(
++        self,
++        *,
++        domain: str,
++        question: str,
++        deterministic_payload: dict[str, Any],
++        fallback_answer: str | None = None,
++    ) -> Iterable[str]:
++        """流式生成业务答案文本。
++
++        参数：
++            domain: 业务域标识，例如 logistics 或 plan_bom。
++            question: 用户原始问题，必须进入 LLM 上下文。
++            deterministic_payload: 后端确定性结果快照。
++            fallback_answer: LLM 不可用时的确定性答案。
++
++        返回：
++            文本 chunk 迭代器；每个 chunk 都可直接追加到前端气泡中。
++        """
++
++        fallback = self._resolve_fallback_answer(deterministic_payload, fallback_answer)
++        if not self._is_llm_available():
++            self._last_stream_source = "deterministic_fallback"
++            self._last_fallback_reason = "llm_not_configured"
++            yield from self._chunk_text(fallback)
++            return
++        try:
++            self._last_stream_source = "llm"
++            self._last_fallback_reason = ""
++            stream = self._create_llm_stream(domain=domain, question=question, deterministic_payload=deterministic_payload)
++            emitted = False
++            for event in stream:
++                chunk = self._extract_delta_text(event)
++                if not chunk:
++                    continue
++                emitted = True
++                yield chunk
++            if not emitted:
++                self._last_stream_source = "deterministic_fallback"
++                self._last_fallback_reason = "llm_empty_stream"
++                yield from self._chunk_text(fallback)
++        except Exception as exc:  # noqa: BLE001
++            # LLM 只负责表达增强，失败不能影响确定性查询结果可用性。
++            self._last_stream_source = "deterministic_fallback"
++            self._last_fallback_reason = f"llm_stream_error:{type(exc).__name__}"
++            yield from self._chunk_text(fallback)
++
++    def apply_streamed_answer(
++        self,
++        *,
++        domain: str,
++        deterministic_payload: dict[str, Any],
++        streamed_answer: str,
++    ) -> dict[str, Any]:
++        """把流式答案合并回响应 payload。
++
++        参数：
++            domain: 业务域标识，用于兜底 presentation 标题。
++            deterministic_payload: 原始确定性响应，不会被原地修改。
++            streamed_answer: LLM 或降级流式输出的完整答案。
++
++        返回：
++            已更新 presentation.answer 的响应 payload；表格和状态保持确定性原值。
++        """
++
++        payload = deepcopy(deterministic_payload)
++        final_answer = streamed_answer.strip() or self._resolve_fallback_answer(payload, None)
++        presentation = payload.get("presentation")
++        if not isinstance(presentation, dict):
++            presentation = {
++                "display_type": "narrative",
++                "title": self._default_title(domain),
++                "answer": final_answer,
++                "highlights": [],
++                "table_spec": None,
++                "caveats": [],
++                "debug": {},
++            }
++            payload["presentation"] = presentation
++        presentation["answer"] = final_answer
++        debug = presentation.get("debug")
++        if not isinstance(debug, dict):
++            debug = {}
++            presentation["debug"] = debug
++        debug["stream_answer_source"] = self._last_stream_source
++        if self._last_stream_source == "llm":
++            debug["llm_model_name"] = self.model
++        if self._last_fallback_reason:
++            debug["fallback_reason"] = self._last_fallback_reason
++        debug["stream_answer_domain"] = domain
++        return payload
++
++    def _create_llm_stream(self, *, domain: str, question: str, deterministic_payload: dict[str, Any]):
++        """创建 OpenAI 兼容流式响应对象。
++
++        参数：
++            domain: 业务域标识。
++            question: 用户原始问题。
++            deterministic_payload: 确定性结果快照。
++
++        返回：
++            OpenAI 兼容流式事件迭代器。
++        """
++
++        client = self._client or OpenAI(
++            base_url=self.base_url,
++            api_key=self.api_key,
++            timeout=self.timeout,
++            max_retries=settings.llm_answer_presentation_max_retries,
++        )
++        return client.chat.completions.create(
++            model=self.model,
++            temperature=0.2,
++            stream=True,
++            messages=[
++                {"role": "system", "content": self._build_system_prompt(domain)},
++                {"role": "user", "content": self._build_user_prompt(question, deterministic_payload)},
++            ],
++        )
++
++    def _is_llm_available(self) -> bool:
++        """判断 LLM 流式表达是否可用。"""
++
++        return bool(self.enabled and self.base_url and self.api_key and self.model)
++
++    @classmethod
++    def _build_system_prompt(cls, domain: str) -> str:
++        """构造约束 LLM 只做表达的系统提示词。"""
++
++        domain_label = "计划 BOM" if domain == "plan_bom" else "物流经营"
++        return (
++            f"你是{domain_label}智能问答的答案表达层。"
++            "你会收到用户原问题和后端确定性查询结果。"
++            "你的任务是用中文业务口吻流式输出更自然、更有 AI 感的答案。"
++            "严禁新增、猜测或改写订单、客户、供应商、金额、数量、比例、日期、规格、功率、CTM 等事实。"
++            "表格、状态和数值以系统给出的确定性结果为准；如果明细很多，只概括结论并提示用户查看下方表格。"
++            "不要输出 JSON、Markdown 表格或代码块；不要暴露字段名、SQL、内部状态码、debug 信息。"
++            "如果结果要求澄清或暂不支持，要温和说明原因并给出可执行的补充问法。"
++        )
++
++    def _build_user_prompt(self, question: str, deterministic_payload: dict[str, Any]) -> str:
++        """把用户原问题和确定性结果压缩为 LLM 上下文。"""
++
++        prompt_payload = {
++            "用户原问题": question,
++            "确定性结果": self._compact_payload(deterministic_payload),
++            "表达要求": [
++                "先直接回答业务员最关心的结论，再说明依据。",
++                "只引用确定性结果中出现的事实；不要补充外部知识。",
++                "结构化明细由前端表格展示，正文不要重复铺满所有行。",
++                "语气专业、清楚、有温度，但不要夸张营销。",
++            ],
++        }
++        text = json.dumps(prompt_payload, ensure_ascii=False, default=str)
++        if len(text) <= self.MAX_PROMPT_CHARS:
++            return text
++        return text[: self.MAX_PROMPT_CHARS] + "\n【上下文因过长已截断，请只基于已给出的确定性事实表达。】"
++
++    def _compact_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
++        """压缩确定性响应，避免把大表完整塞入 LLM 上下文。"""
++
++        compact = deepcopy(payload)
++        self._truncate_table(compact.get("result_table"))
++        presentation = compact.get("presentation")
++        if isinstance(presentation, dict):
++            self._truncate_table(presentation.get("table_spec"))
++            presentation.pop("debug", None)
++        compact.pop("trace_events", None)
++        compact.pop("raw_result", None)
++        return compact
++
++    def _truncate_table(self, table: Any) -> None:
++        """把表格行数限制到 prompt 可控范围，同时保留总行数提示。"""
++
++        if not isinstance(table, dict):
++            return
++        rows = table.get("rows")
++        if not isinstance(rows, list):
++            return
++        original_count = len(rows)
++        if original_count > self.MAX_PROMPT_ROWS:
++            table["rows"] = rows[: self.MAX_PROMPT_ROWS]
++            table["truncated_for_llm"] = True
++            table["total_rows"] = original_count
++
++    @staticmethod
++    def _extract_delta_text(event: Any) -> str:
++        """从 OpenAI 兼容 chunk 中提取增量文本。"""
++
++        try:
++            if isinstance(event, dict):
++                choice = (event.get("choices") or [{}])[0]
++                delta = choice.get("delta") or {}
++                return str(delta.get("content") or "")
++            choices = getattr(event, "choices", None) or []
++            if not choices:
++                return ""
++            delta = getattr(choices[0], "delta", None)
++            return str(getattr(delta, "content", "") or "")
++        except Exception:  # noqa: BLE001
++            return ""
++
++    @classmethod
++    def _chunk_text(cls, text: str) -> Iterable[str]:
++        """把降级答案切成小块，模拟流式输出体验。"""
++
++        value = text or "当前没有可展示的答案。"
++        for index in range(0, len(value), cls.FALLBACK_CHUNK_SIZE):
++            yield value[index : index + cls.FALLBACK_CHUNK_SIZE]
++
++    @staticmethod
++    def _resolve_fallback_answer(payload: dict[str, Any], fallback_answer: str | None) -> str:
++        """从响应快照中提取降级答案。"""
++
++        if fallback_answer:
++            return fallback_answer
++        presentation = payload.get("presentation")
++        if isinstance(presentation, dict) and presentation.get("answer"):
++            return str(presentation["answer"])
++        if payload.get("answer_summary"):
++            return str(payload["answer_summary"])
++        status = payload.get("status")
++        if isinstance(status, dict) and status.get("message"):
++            return str(status["message"])
++        return "当前查询已完成，请查看下方结构化结果。"
++
++    @staticmethod
++    def _default_title(domain: str) -> str:
++        """生成缺省展示标题。"""
++
++        if domain == "plan_bom":
++            return "计划 BOM 智能回答"
++        if domain == "logistics":
++            return "物流经营智能回答"
++        return "智能回答"
++
++
++__all__ = ["BusinessAnswerStreamService", "build_json_line_event"]
+diff --git a/frontend/src/utils/streamingApi.ts b/frontend/src/utils/streamingApi.ts
+new file mode 100644
+index 0000000..d62c5ac
+--- /dev/null
++++ b/frontend/src/utils/streamingApi.ts
+@@ -0,0 +1,105 @@
++import { buildApiUrl } from '@/utils/http'
++
++export type JsonLineStreamEventName = 'meta' | 'delta' | 'done' | 'error' | string
++
++export interface JsonLineStreamEvent<TDone> {
++  event: JsonLineStreamEventName
++  data: {
++    text?: string
++    answer?: string
++    message?: string
++    data?: TDone
++    [key: string]: any
++  }
++}
++
++export interface JsonLineStreamHandlers<TDone> {
++  onMeta?: (data: JsonLineStreamEvent<TDone>['data']) => void
++  onDelta?: (text: string, data: JsonLineStreamEvent<TDone>['data']) => void
++  onDone?: (data: TDone, eventData: JsonLineStreamEvent<TDone>['data']) => void
++  onError?: (message: string, eventData?: JsonLineStreamEvent<TDone>['data']) => void
++}
++
++/**
++ * 使用 fetch + ReadableStream 消费后端 NDJSON 流式接口。
++ *
++ * 参数：
++ *   path: 后端相对 API 路径。
++ *   payload: POST JSON 请求体。
++ *   handlers: meta/delta/done/error 事件回调。
++ *
++ * 返回值：
++ *   Promise<void>，done 或 error 事件处理完成后结束。
++ *
++ * 业务逻辑：
++ *   后端会先完成确定性查询，再把问题和结果送入 LLM 表达层。前端只增量展示
++ *   delta 文本，并在 done 事件到达后渲染确定性结构化表格。
++ */
++export async function postJsonLineStream<TDone>(
++  path: string,
++  payload: Record<string, any>,
++  handlers: JsonLineStreamHandlers<TDone>,
++) {
++  const response = await fetch(buildApiUrl(path), {
++    method: 'POST',
++    headers: { 'Content-Type': 'application/json' },
++    body: JSON.stringify(payload),
++  })
++  if (!response.ok) {
++    throw new Error(`流式接口请求失败：${response.status}`)
++  }
++  const body: ReadableStream<Uint8Array> | null = response.body
++  if (!body) {
++    throw new Error('当前浏览器不支持流式回答，请刷新后重试。')
++  }
++
++  const reader = body.getReader()
++  const decoder = new TextDecoder('utf-8')
++  let buffer = ''
++  let doneSeen = false
++
++  while (true) {
++    const { value, done } = await reader.read()
++    if (done) break
++    buffer += decoder.decode(value, { stream: true })
++    const lines = buffer.split('\n')
++    buffer = lines.pop() || ''
++    for (const line of lines) {
++      doneSeen = dispatchJsonLineEvent(line, handlers) || doneSeen
++    }
++  }
++
++  const tail = `${buffer}${decoder.decode()}`.trim()
++  if (tail) {
++    doneSeen = dispatchJsonLineEvent(tail, handlers) || doneSeen
++  }
++  if (!doneSeen) {
++    throw new Error('流式回答未正常结束，请稍后重试。')
++  }
++}
++
++/** 解析并分发单行 NDJSON 事件。 */
++function dispatchJsonLineEvent<TDone>(line: string, handlers: JsonLineStreamHandlers<TDone>) {
++  const trimmed = line.trim()
++  if (!trimmed) return false
++  const event = JSON.parse(trimmed) as JsonLineStreamEvent<TDone>
++  const eventData = event.data || {}
++  if (event.event === 'meta') {
++    handlers.onMeta?.(eventData)
++    return false
++  }
++  if (event.event === 'delta') {
++    handlers.onDelta?.(String(eventData.text || ''), eventData)
++    return false
++  }
++  if (event.event === 'done') {
++    handlers.onDone?.(eventData.data as TDone, eventData)
++    return true
++  }
++  if (event.event === 'error') {
++    const message = String(eventData.message || '流式回答失败，请稍后重试。')
++    handlers.onError?.(message, eventData)
++    throw new Error(message)
++  }
++  return false
++}
+diff --git a/tests/business_acceptance/test_ai_streaming_answer.py b/tests/business_acceptance/test_ai_streaming_answer.py
+new file mode 100644
+index 0000000..79a67c9
+--- /dev/null
++++ b/tests/business_acceptance/test_ai_streaming_answer.py
+@@ -0,0 +1,269 @@
++from __future__ import annotations
++
++import json
++from types import SimpleNamespace
++from typing import Any
++
++import anyio
++
++from backend.app.domains.logistics.api.endpoints.data_qa import logistics_data_qa_query_stream
++from backend.app.domains.logistics.schemas.data_qa import (
++    LogisticsDataQaPlan,
++    LogisticsDataQaQueryRequest,
++    LogisticsDataQaResult,
++    LogisticsDataQaStatus,
++    LogisticsDataQaTable,
++)
++from backend.app.domains.plan_bom.api.endpoints.qa import ask_plan_bom_stream
++from backend.app.domains.plan_bom.schemas.qa import PlanBomQaRequest, PlanBomQaResponse
++from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService, build_json_line_event
++
++
++class _FakeStreamingClient:
++    """记录 OpenAI 兼容流式调用参数，并按 chunk 返回模拟 token。"""
++
++    def __init__(self, chunks: list[str]) -> None:
++        self.chunks = chunks
++        self.calls: list[dict[str, Any]] = []
++        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self.create))
++
++    def create(self, **kwargs: Any):  # noqa: ANN201
++        self.calls.append(kwargs)
++        return [
++            SimpleNamespace(choices=[SimpleNamespace(delta=SimpleNamespace(content=chunk))])
++            for chunk in self.chunks
++        ]
++
++
++def _sample_payload() -> dict[str, Any]:
++    """构造最小确定性问答结果，模拟后端已完成查询后的快照。"""
++
++    return {
++        "question": "订单00104的玻璃规格是什么？",
++        "domain": "plan_bom",
++        "classification": "A",
++        "status": {"code": "OK", "message": "查询成功", "success": True, "severity": "info"},
++        "answer_summary": "已查询订单00104的玻璃规格，共返回1条BOM材料。",
++        "result_table": {
++            "columns": ["order_no", "material_category", "description"],
++            "rows": [{"order_no": "00104", "material_category": "glass", "description": "双玻组件用测试玻璃"}],
++        },
++        "presentation": {
++            "display_type": "table",
++            "title": "计划 BOM 查询结果",
++            "answer": "已查询订单00104的玻璃规格，共返回1条BOM材料。",
++            "highlights": ["返回 1 条结构化记录。"],
++            "table_spec": {
++                "columns": ["order_no", "material_category", "description"],
++                "rows": [{"order_no": "00104", "material_category": "glass", "description": "双玻组件用测试玻璃"}],
++            },
++            "debug": {"presentation_source": "deterministic"},
++        },
++    }
++
++
++def test_streaming_answer_sends_question_and_deterministic_payload_to_llm() -> None:
++    """流式答案必须把用户问题和确定性结果一起交给 LLM，但不能让 LLM改结构化表格。"""
++
++    fake_client = _FakeStreamingClient(["我已经定位到订单00104，", "玻璃规格见下方明细。"])
++    payload = _sample_payload()
++    service = BusinessAnswerStreamService(
++        enabled=True,
++        base_url="http://llm.local/v1",
++        api_key="unit-test-key",
++        model="unit-test-model",
++        client=fake_client,
++    )
++
++    chunks = list(
++        service.stream_answer(
++            domain="plan_bom",
++            question="订单00104的玻璃规格是什么？",
++            deterministic_payload=payload,
++            fallback_answer=payload["answer_summary"],
++        )
++    )
++    final_payload = service.apply_streamed_answer(
++        domain="plan_bom",
++        deterministic_payload=payload,
++        streamed_answer="".join(chunks),
++    )
++
++    assert chunks == ["我已经定位到订单00104，", "玻璃规格见下方明细。"]
++    assert fake_client.calls and fake_client.calls[0]["stream"] is True
++    prompt_text = fake_client.calls[0]["messages"][1]["content"]
++    assert "订单00104的玻璃规格是什么" in prompt_text
++    assert "已查询订单00104的玻璃规格" in prompt_text
++    assert "双玻组件用测试玻璃" in prompt_text
++    assert final_payload["presentation"]["answer"] == "我已经定位到订单00104，玻璃规格见下方明细。"
++    assert final_payload["result_table"] == payload["result_table"]
++    assert final_payload["presentation"]["table_spec"] == payload["presentation"]["table_spec"]
++    assert final_payload["presentation"]["debug"]["stream_answer_source"] == "llm"
++
++
++def test_streaming_answer_falls_back_to_deterministic_answer_when_llm_unconfigured() -> None:
++    """未配置 LLM 时不能报错，应把确定性答案切块流式返回，保证前端体验和验收稳定。"""
++
++    payload = _sample_payload()
++    service = BusinessAnswerStreamService(enabled=True, base_url="", api_key="", model="")
++
++    chunks = list(
++        service.stream_answer(
++            domain="plan_bom",
++            question="订单00104的玻璃规格是什么？",
++            deterministic_payload=payload,
++            fallback_answer=payload["answer_summary"],
++        )
++    )
++    final_payload = service.apply_streamed_answer(
++        domain="plan_bom",
++        deterministic_payload=payload,
++        streamed_answer="".join(chunks),
++    )
++
++    assert "".join(chunks) == "已查询订单00104的玻璃规格，共返回1条BOM材料。"
++    assert len(chunks) >= 2
++    assert final_payload["presentation"]["answer"] == "已查询订单00104的玻璃规格，共返回1条BOM材料。"
++    assert final_payload["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert final_payload["presentation"]["debug"]["fallback_reason"] == "llm_not_configured"
++
++
++def test_json_line_event_is_frontend_stream_parser_friendly() -> None:
++    """后端流事件使用一行一个 JSON 对象，方便 fetch ReadableStream 增量解析。"""
++
++    line = build_json_line_event("delta", {"text": "你好"})
++
++    assert line.endswith("\n")
++    assert '"event": "delta"' in line
++    assert '"text": "你好"' in line
++
++
++class _FakeRequest:
++    """模拟 FastAPI Request 中流式接口会读取的最小状态。"""
++
++    state = SimpleNamespace(trace_id="stream-test-trace")
++    client = SimpleNamespace(host="127.0.0.1")
++
++
++class _FakePlanBomQaService:
++    """模拟计划 BOM 确定性服务，验证流式 endpoint 仍先走 service.ask。"""
++
++    def __init__(self) -> None:
++        self.questions: list[tuple[str, bool, str | None]] = []
++        self.error_logs: list[dict[str, Any]] = []
++
++    def ask(self, question: str, *, use_llm: bool = True, trace_id: str | None = None) -> PlanBomQaResponse:
++        self.questions.append((question, use_llm, trace_id))
++        return PlanBomQaResponse(
++            question=question,
++            classification="A",
++            status={"code": "OK", "message": "查询成功", "success": True, "severity": "info"},
++            nlu={"question": question, "intent": "material_detail", "slots": {"order_no": "00104"}, "confidence": 1.0},
++            answer_summary="已查询订单00104的玻璃规格，共返回1条BOM材料。",
++            result_table={"columns": ["订单号", "材料类别", "规格描述"], "rows": [{"订单号": "00104", "材料类别": "玻璃", "规格描述": "双玻测试规格"}]},
++            presentation={
++                "display_type": "table",
++                "title": "订单00104材料明细",
++                "answer": "已查询订单00104的玻璃规格，共返回1条BOM材料。",
++                "table_spec": {"columns": ["订单号", "材料类别", "规格描述"], "rows": [{"订单号": "00104", "材料类别": "玻璃", "规格描述": "双玻测试规格"}]},
++                "debug": {"presentation_source": "deterministic"},
++            },
++        )
++
++    def write_error_log(self, **kwargs: Any) -> None:
++        self.error_logs.append(kwargs)
++
++
++class _FakeLogisticsDataQaService:
++    """模拟物流确定性服务，验证流式 endpoint 不绕过原有查询链路。"""
++
++    def __init__(self) -> None:
++        self.questions: list[tuple[str, str | None]] = []
++        self.error_logs: list[dict[str, Any]] = []
++
++    def query(self, payload: LogisticsDataQaQueryRequest, trace_id: str | None = None) -> LogisticsDataQaResult:
++        self.questions.append((payload.question, trace_id))
++        return LogisticsDataQaResult(
++            status=LogisticsDataQaStatus(code="OK", message="查询成功", success=True, severity="info"),
++            answer_summary="2024年江苏省各城市总费用排名前五已返回。",
++            result_table=LogisticsDataQaTable(columns=["城市", "总费用"], rows=[{"城市": "南京", "总费用": 123}]),
++            query_plan=LogisticsDataQaPlan(
++                intent="ranking",
++                query_key="hist_total_fee_city_rank",
++                metrics=["total_fee"],
++                dimensions=["city"],
++                filters={"year": 2024, "province": "江苏"},
++                limit=5,
++            ),
++            presentation={
++                "display_type": "table",
++                "title": "江苏省城市费用排名",
++                "answer": "2024年江苏省各城市总费用排名前五已返回。",
++                "table_spec": {"columns": ["城市", "总费用"], "rows": [{"城市": "南京", "总费用": 123}]},
++                "debug": {"presentation_source": "deterministic"},
++            },
++        )
++
++    def write_error_log(self, **kwargs: Any) -> None:
++        self.error_logs.append(kwargs)
++
++
++async def _collect_stream_events(response) -> list[dict[str, Any]]:  # noqa: ANN001
++    """收集 StreamingResponse 的 NDJSON 事件，供 endpoint 契约测试断言。"""
++
++    chunks: list[str] = []
++    async for item in response.body_iterator:
++        chunks.append(item.decode("utf-8") if isinstance(item, bytes) else item)
++    return [json.loads(line) for line in "".join(chunks).splitlines() if line.strip()]
++
++
++def test_plan_bom_stream_endpoint_emits_delta_before_done_and_keeps_structured_payload() -> None:
++    """计划 BOM 流式接口应先发 delta，再发 done；最终表格仍来自确定性服务。"""
++
++    service = _FakePlanBomQaService()
++    response = ask_plan_bom_stream(
++        PlanBomQaRequest(question="订单00104的玻璃规格是什么？"),
++        _FakeRequest(),
++        service,
++    )
++
++    events = anyio.run(_collect_stream_events, response)
++    event_names = [event["event"] for event in events]
++    done_payload = events[-1]["data"]
++
++    assert event_names[:2] == ["meta", "meta"]
++    assert "delta" in event_names
++    assert event_names[-1] == "done"
++    assert service.questions == [("订单00104的玻璃规格是什么？", True, "stream-test-trace")]
++    assert done_payload["domain"] == "plan_bom"
++    assert done_payload["answer"] == "已查询订单00104的玻璃规格，共返回1条BOM材料。"
++    assert done_payload["data"]["presentation"]["answer"] == done_payload["answer"]
++    assert done_payload["data"]["result_table"]["rows"] == [{"订单号": "00104", "材料类别": "玻璃", "规格描述": "双玻测试规格"}]
++    assert done_payload["data"]["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert not service.error_logs
++
++
++def test_logistics_stream_endpoint_emits_delta_before_done_and_keeps_structured_payload() -> None:
++    """物流流式接口应复用确定性查询结果，并以 done 事件返回完整结构化数据。"""
++
++    service = _FakeLogisticsDataQaService()
++    response = logistics_data_qa_query_stream(
++        LogisticsDataQaQueryRequest(question="2024年江苏省各城市总费用排名前五？"),
++        _FakeRequest(),
++        service,
++    )
++
++    events = anyio.run(_collect_stream_events, response)
++    event_names = [event["event"] for event in events]
++    done_payload = events[-1]["data"]
++
++    assert event_names[:2] == ["meta", "meta"]
++    assert "delta" in event_names
++    assert event_names[-1] == "done"
++    assert service.questions == [("2024年江苏省各城市总费用排名前五？", "stream-test-trace")]
++    assert done_payload["domain"] == "logistics"
++    assert done_payload["answer"] == "2024年江苏省各城市总费用排名前五已返回。"
++    assert done_payload["data"]["presentation"]["answer"] == done_payload["answer"]
++    assert done_payload["data"]["result_table"]["rows"] == [{"城市": "南京", "总费用": 123}]
++    assert done_payload["data"]["presentation"]["debug"]["stream_answer_source"] == "deterministic_fallback"
++    assert not service.error_logs

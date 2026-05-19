@@ -1,0 +1,45 @@
+catalog_version: logistics_nl2sql_catalog.v1
+domain: logistics
+examples:
+  - example_id: m9_example_carrier_mw_ranking
+    display_name: 承运商发运量排名 SQLPlan 示例
+    domain: logistics
+    question: 哪个物流跑得最多？
+    query_type: ranking
+    metrics: [shipment_mw, row_count]
+    dimensions: [logistics_company_name]
+    filters:
+      - dimension: biz_year
+        operator: in
+        values: [2023, 2024, 2025, 2026]
+        source: default_time_range
+    group_by: [logistics_company_name]
+    business_rules: [default_time_range]
+    catalog_refs:
+      - table:dws_logistics_detail_union
+      - metric:shipment_mw
+      - metric:row_count
+      - dimension:biz_year
+      - dimension:logistics_company_name
+      - rule:default_time_range
+    notes: 无显式时间时默认 2023-2026；“物流”按承运商维度，“跑得最多”按发运量 MW 降序。
+  - example_id: m9_example_yearly_mw_breakdown
+    display_name: 多年份发运量拆分 SQLPlan 示例
+    domain: logistics
+    question: 2023年到2025年每年发运量分别是多少？
+    query_type: aggregate
+    metrics: [shipment_mw, row_count]
+    dimensions: [biz_year]
+    filters:
+      - dimension: biz_year
+        operator: in
+        values: [2023, 2024, 2025]
+        source: user_explicit
+    group_by: [biz_year]
+    business_rules: []
+    catalog_refs:
+      - table:dws_logistics_detail_union
+      - metric:shipment_mw
+      - metric:row_count
+      - dimension:biz_year
+    notes: 用户显式请求多个年份时，SQLPlan 必须携带完整 explicit_year_buckets，后续结果不能静默丢年份。

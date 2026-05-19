@@ -45,6 +45,7 @@ class LogisticsQueryPlannerV2Validator:
     # 目的城市不要求穷举全业务城市，但当前 MVP 测试线路必须可识别马鞍山。
     KNOWN_ROUTE_CITIES = {"马鞍山", "南京", "广州"}
     ALLOWED_VEHICLE_TYPES = {"17.5", "13", "9.6", "4.2"}
+    ALLOWED_ROUTE_PRICE_METRICS = {"total_fee", "unit_price_per_vehicle"}
 
     def __init__(
         self,
@@ -105,6 +106,7 @@ class LogisticsQueryPlannerV2Validator:
 
         if capability is not None:
             self._validate_filters(candidate, capability, errors)
+            self._validate_route_price_metric(candidate, capability, errors)
             self._validate_collection("metric", candidate.metrics, capability.allowed_metrics, errors)
             self._validate_collection("dimension", candidate.dimensions, capability.allowed_dimensions, errors)
             self._validate_collection("group_by", candidate.group_by, capability.allowed_group_by, errors)
@@ -138,6 +140,29 @@ class LogisticsQueryPlannerV2Validator:
             if not any(candidate.filters.get(key) not in (None, "", []) for key in group):
                 joined = "|".join(sorted(group))
                 errors.append(f"missing_required_any_filter::{joined}")
+
+    @classmethod
+    def _validate_route_price_metric(cls, candidate: LogisticsQueryPlannerV2Candidate, capability: Any, errors: list[str]) -> None:
+        """校验线路价格口径必须归一为受控枚举。
+
+        参数：
+            candidate: 已归一化的 QueryPlan 候选。
+            capability: 当前 query_key 的能力声明。
+            errors: 阻断原因输出列表。
+        返回：
+            无；非法价格口径追加 `price_metric_not_allowed` 错误。
+        业务逻辑：
+            路线价格只允许两类后端确定性口径：
+            `unit_price_per_vehicle` 表示报价/单价/运价，`total_fee` 表示均价计算时的总费用/车次口径。
+        """
+
+        if "price_metric" not in capability.allowed_filters:
+            return
+        value = candidate.filters.get("price_metric")
+        if value in (None, "", []):
+            return
+        if value not in cls.ALLOWED_ROUTE_PRICE_METRICS:
+            errors.append(f"price_metric_not_allowed::{value}")
 
     @staticmethod
     def _validate_collection(label: str, values: list[str], allowed: set[str], errors: list[str]) -> None:

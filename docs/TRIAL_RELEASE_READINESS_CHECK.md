@@ -1,8 +1,8 @@
 # 试运行发布前检查报告
 
 - 发布包：经营计划智能助手试运行发布包：物流问答 + 计划 BOM 问答
-- 生成时间：`2026-04-28T19:37:20`
-- 总体结果：`通过`
+- 生成时间：`2026-05-14T16:25:05`
+- 总体结果：`未通过`
 
 ## 状态分布
 
@@ -13,7 +13,7 @@
 
 | 检查项 | 结果 |
 | --- | --- |
-| `required_docs_exist` | `PASS` |
+| `required_docs_exist` | `FAIL` |
 | `required_reports_exist` | `PASS` |
 | `frontend_files_exist` | `PASS` |
 | `env_example_exists` | `PASS` |
@@ -33,4 +33,4 @@
 
 ## 失败明细
 
-- 无。
+- 缺失文档：`['docs/LOGISTICS_903_ACCEPTANCE_REPORT.md']`

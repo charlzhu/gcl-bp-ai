@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import logging
 import re
+from decimal import Decimal
 from typing import Any
 
 from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
 from backend.app.domains.plan_bom.constants import CANDIDATE_SCOPE_ORDER_IDENTITY, CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
-from backend.app.domains.plan_bom.models import PlanBomHeader, PlanBomMaterialLine
+from backend.app.domains.plan_bom.models import PlanBomHeader, PlanBomMaterialLine, PlanPowerFactorOption, PlanPowerModelSheet, PlanPowerModelVersion
 from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
 from backend.app.domains.plan_bom.schemas.qa import PlanBomNluCandidate, PlanBomQaResponse, PlanBomQaStatus, PlanBomTableSpec
 from backend.app.domains.plan_bom.schemas.query import (
@@ -159,6 +160,13 @@ class PlanBomQaService:
                 {"intent": nlu.intent, "slots": nlu.slots},
             )
             response = self._power_response(question=question, nlu=nlu)
+        elif nlu.intent == "plan_power_factor_effect_compare":
+            trace_recorder.add(
+                "branch_selected",
+                "问题进入功率模型配置影响值对比分支。",
+                {"intent": nlu.intent, "slots": nlu.slots},
+            )
+            response = self._power_factor_effect_compare_response(question=question, nlu=nlu)
         elif nlu.intent in {"single_order_material_specs", "specific_material_query"}:
             trace_recorder.add(
                 "branch_selected",
@@ -824,6 +832,165 @@ class PlanBomQaService:
                 raw={"bom_config_resolution": resolution_payload, "power_error": str(exc)},
             )
 
+    def _power_factor_effect_compare_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:
+        """处理功率模型配置影响值差异查询。
+
+        参数：
+            question: 用户原始问题。
+            nlu: 已抽取版型、配置项和两个配置选项的 NLU 结果。
+
+        返回：
+            A 类配置影响值对比响应；若版型或选项无法在 active 功率模型中命中，则 fail-closed 追问。
+
+        业务逻辑：
+            这类问题问的是 Excel 功率模型中“某配置项两个选项的影响值相差多少”，
+            不依赖具体订单/BOM 明细，因此不能因为缺少订单号而追问；但所有选项必须回到
+            当前生效功率模型的真实 option 校验后才能返回差值，避免按文本硬算。
+        """
+
+        model_code = str(nlu.slots.get("model") or "").strip()
+        factor_key = str(nlu.slots.get("power_factor_key") or "").strip()
+        factor_options = nlu.slots.get("power_factor_options") or {}
+        option_values = list(factor_options.get(factor_key) or [])
+        if not model_code or not factor_key or len(option_values) != 2:
+            nlu.missing_slots = sorted({str(slot) for slot in [*(nlu.missing_slots or []), "power_factor_options"]})
+            return self._clarification_response(
+                question=question,
+                nlu=nlu,
+                raw={"power_factor_effect_compare": {"model_code": model_code, "factor_key": factor_key, "options": option_values}},
+            )
+
+        version = self.repository.db.query(PlanPowerModelVersion).filter_by(is_active=1).first()
+        if version is None:
+            return self._empty_response(
+                question=question,
+                nlu=nlu,
+                reason="当前没有生效的功率模型版本，无法查询配置影响值。",
+                raw={"power_factor_effect_compare": {"model_code": model_code, "factor_key": factor_key}},
+            )
+        sheet = (
+            self.repository.db.query(PlanPowerModelSheet)
+            .filter_by(version_id=version.id, normalized_model_code=model_code)
+            .first()
+        )
+        if sheet is None:
+            return self._empty_response(
+                question=question,
+                nlu=nlu,
+                reason=f"当前生效功率模型中没有版型 {model_code}。",
+                raw={"power_factor_effect_compare": {"model_code": model_code, "factor_key": factor_key}},
+            )
+
+        options = (
+            self.repository.db.query(PlanPowerFactorOption)
+            .filter_by(sheet_id=sheet.id, factor_key=factor_key, is_valid=1)
+            .order_by(PlanPowerFactorOption.id.asc())
+            .all()
+        )
+        option_by_label = {self._normalize_power_factor_label(option.option_label): option for option in options}
+        selected_options = [option_by_label.get(self._normalize_power_factor_label(value)) for value in option_values]
+        if any(option is None or option.effect_value is None for option in selected_options):
+            nlu.missing_slots = sorted({str(slot) for slot in [*(nlu.missing_slots or []), "power_factor_options"]})
+            return self._with_presentation(
+                PlanBomQaResponse(
+                    question=question,
+                    classification="B",
+                    status=PlanBomQaStatus(code="CLARIFICATION_REQUIRED", message="需要确认功率配置选项", severity="warning"),
+                    nlu=nlu,
+                    answer_summary=(
+                        f"已识别为 {model_code} 的{self._power_factor_label(factor_key)}影响值对比，"
+                        "但至少有一个配置选项未命中当前生效功率模型。请从模型候选配置中确认后再比较。"
+                    ),
+                    raw_result={
+                        "power_factor_effect_compare": {
+                            "model_code": model_code,
+                            "factor_key": factor_key,
+                            "requested_options": option_values,
+                            "candidate_options": [option.option_label for option in options[:20]],
+                        }
+                    },
+                    warnings=["配置影响值对比未完全命中 active 模型 option，已停止计算差值。"],
+                )
+            )
+
+        left_option, right_option = selected_options
+        assert left_option is not None and right_option is not None
+        assert left_option.effect_value is not None and right_option.effect_value is not None
+        left_effect = self._decimal_to_float(left_option.effect_value)
+        right_effect = self._decimal_to_float(right_option.effect_value)
+        absolute_difference = round(abs(left_effect - right_effect), 6)
+        factor_label = self._power_factor_label(factor_key)
+        answer = (
+            f"{model_code} 的{factor_label}功率影响值对比："
+            f"{left_option.option_label} 为 {self._format_plain_number(left_effect)}W，"
+            f"{right_option.option_label} 为 {self._format_plain_number(right_effect)}W，"
+            f"二者相差 {self._format_plain_number(absolute_difference)}W。"
+        )
+        payload = {
+            "model_code": model_code,
+            "factor_key": factor_key,
+            "factor_label": factor_label,
+            "left": self._power_factor_option_payload(left_option),
+            "right": self._power_factor_option_payload(right_option),
+            "absolute_difference": absolute_difference,
+        }
+        rows = [
+            {"配置项": factor_label, "选项": left_option.option_label, "功率影响值": left_effect},
+            {"配置项": factor_label, "选项": right_option.option_label, "功率影响值": right_effect},
+            {"配置项": factor_label, "选项": "差值", "功率影响值": absolute_difference},
+        ]
+        return self._with_presentation(
+            PlanBomQaResponse(
+                question=question,
+                classification="A",
+                status=PlanBomQaStatus(code="OK", message="配置影响值对比成功"),
+                nlu=nlu,
+                answer_summary=answer,
+                result_table=PlanBomTableSpec(columns=["配置项", "选项", "功率影响值"], rows=rows),
+                raw_result={"power_factor_effect_compare": payload},
+            )
+        )
+
+    @staticmethod
+    def _power_factor_label(factor_key: str) -> str:
+        """把功率模型配置项 key 转为业务可读名称。"""
+        labels = {
+            "glass": "玻璃",
+            "ribbon": "焊带",
+            "busbar": "汇流条",
+            "cable": "接线盒线缆",
+            "supplier": "供应商",
+            "cell_size": "电池尺寸",
+            "benchmark": "标板基准",
+        }
+        return labels.get(factor_key, factor_key)
+
+    @staticmethod
+    def _normalize_power_factor_label(value: str | None) -> str:
+        """归一化功率模型 option 标签，用于用户文本与 active 模型 option 的确定性匹配。"""
+        text = str(value or "").strip()
+        text = text.replace("＋", "+").replace("＊", "*").replace("×", "*").replace("X", "*").replace("x", "*")
+        return re.sub(r"\s+", "", text)
+
+    @staticmethod
+    def _decimal_to_float(value: Decimal | int | float) -> float:
+        """把数据库 Decimal 影响值转成前端和测试易消费的 float。"""
+        return float(value)
+
+    @staticmethod
+    def _format_plain_number(value: float) -> str:
+        """格式化普通数值，去掉无意义尾零。"""
+        return f"{value:.6f}".rstrip("0").rstrip(".")
+
+    @staticmethod
+    def _power_factor_option_payload(option: PlanPowerFactorOption) -> dict[str, Any]:
+        """输出配置 option 的审计载荷，所有数值来自 active 功率模型。"""
+        return {
+            "option_label": option.option_label,
+            "effect_value": PlanBomQaService._decimal_to_float(option.effect_value or 0),
+            "source_cell": option.source_cell_ref,
+        }
+
     def _power_prediction_response(
         self,
         *,
@@ -889,12 +1056,23 @@ class PlanBomQaService:
         """
 
         rows = self._power_recommendation_rows(recommendation)
-        top_supplier = recommendation.recommendations[0].supplier_name if recommendation.recommendations else "无"
+        top_item = recommendation.recommendations[0] if recommendation.recommendations else None
+        top_supplier = top_item.supplier_name if top_item else "无"
         source_label = f"订单 {resolution_payload.get('order_no')} 的 BOM 配置" if resolution_payload.get("order_no") else "显式输入配置"
-        answer = (
-            f"已按{source_label}和目标功率比例完成供应商推荐，"
-            f"当前最高匹配供应商为 {top_supplier}。"
-        )
+        efficiency_label = self._format_suggested_efficiency_segments(top_item.suggested_efficiency_segments) if top_item else ""
+        if efficiency_label:
+            # 用户问“什么效率段投产”时，正文必须直接给出最低建议效率段；
+            # 多个效率段仍保留在明细表中，避免只返回泛化的“推荐供应商”。
+            first_efficiency = efficiency_label.split("、", 1)[0]
+            answer = (
+                f"已按{source_label}和目标功率比例完成供应商推荐，"
+                f"{top_supplier}建议从 {first_efficiency} 效率段投产；可重点关注效率段：{efficiency_label}。"
+            )
+        else:
+            answer = (
+                f"已按{source_label}和目标功率比例完成供应商推荐，"
+                f"当前最高匹配供应商为 {top_supplier}。"
+            )
         warnings = list(resolution_payload.get("warnings") or []) + list(recommendation.warnings)
         return self._with_presentation(
             PlanBomQaResponse(
@@ -1383,6 +1561,7 @@ class PlanBomQaService:
             "bom_version": "BOM 版本",
             "target_power_ratio": "目标功率档比例",
             "power_configuration": "功率预测所需配置",
+            "power_factor_options": "需要对比的两个功率模型配置选项",
             "supported_material_category": "当前要查询的核心材料范围",
         }
         return mapping.get(slot, "更明确的查询条件")

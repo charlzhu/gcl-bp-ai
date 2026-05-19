@@ -1,0 +1,1940 @@
+diff --git a/backend/.env.example b/backend/.env.example
+index 8c8f7f5..3169063 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -48,28 +48,41 @@ MILVUS_HOST=127.0.0.1
+ MILVUS_PORT=19530
+ MILVUS_USER=
+ MILVUS_PASSWORD=
++MILVUS_COLLECTION_PREFIX=gcl_bp_ai
++
++# =========================
++# 物流 NL2SQL M2 语义召回配置
++# =========================
++# 模型名称按百炼控制台实际开通名称填写；示例不包含任何真实密钥。
++EMBEDDING_MODEL=Qwen3-Embedding-4B
++EMBEDDING_DIMENSION=2560
++RERANK_MODEL=Qwen3-Reranker
++RERANK_ENDPOINT_PATH=/api/v1/services/rerank/text-rerank/text-rerank
++NL2SQL_RECALL_TOP_K=12
++NL2SQL_RERANK_TOP_K=6
++NL2SQL_RERANK_MIN_SCORE=0.0
+ 
+ # =========================
+ # 源系统 MySQL（只读）
+ # =========================
+-SOURCE_MYSQL_HOST=10.76.13.161
++SOURCE_MYSQL_HOST=<source_mysql_host>
+ SOURCE_MYSQL_PORT=19531
+-SOURCE_MYSQL_DB=jyjh_db
+-SOURCE_MYSQL_USER=jyjhuser_zcc
+-SOURCE_MYSQL_PASSWORD="jyjh123!"
++SOURCE_MYSQL_DB=<source_mysql_db>
++SOURCE_MYSQL_USER=<source_mysql_user>
++SOURCE_MYSQL_PASSWORD=<source_mysql_password>
+ 
+ # =========================
+-# 大模型配置（OpenAI 兼容模式，示例为阿里云 DashScope）
++# 大模型配置（OpenAI 兼容模式，示例模型为 deepseek-v4-flash；Base URL 请按实际供应商填写）
+ # =========================
+-LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+-LLM_API_KEY=<your_dashscope_api_key>
+-LLM_MODEL=qwen-plus
++LLM_BASE_URL=<your_openai_compatible_base_url>
++LLM_API_KEY=
++LLM_MODEL=deepseek-v4-flash
+ 
+ # =========================
+ # 物流答案表达层配置
+ # =========================
+ LLM_ANSWER_PRESENTATION_ENABLED=true
+-LLM_ANSWER_PRESENTATION_MODEL=qwen-plus
++LLM_ANSWER_PRESENTATION_MODEL=deepseek-v4-flash
+ LLM_ANSWER_PRESENTATION_TIMEOUT=30
+ LLM_ANSWER_PRESENTATION_MAX_RETRIES=1
+ 
+diff --git a/backend/app/core/config.py b/backend/app/core/config.py
+index f1beb81..9527779 100644
+--- a/backend/app/core/config.py
++++ b/backend/app/core/config.py
+@@ -38,6 +38,14 @@ class Settings(BaseSettings):
+     milvus_port: int = 19530
+     milvus_user: str = ""
+     milvus_password: str = ""
++    milvus_collection_prefix: str = "gcl_bp_ai"
++    embedding_model: str = ""
++    embedding_dimension: int = 2560
++    rerank_model: str = ""
++    rerank_endpoint_path: str = "/api/v1/services/rerank/text-rerank/text-rerank"
++    nl2sql_recall_top_k: int = 12
++    nl2sql_rerank_top_k: int = 6
++    nl2sql_rerank_min_score: float = 0.0
+     source_mysql_host: str = "10.76.13.161"
+     source_mysql_port: int = 19531
+     source_mysql_db: str = "jyjh_db"
+@@ -361,6 +369,34 @@ class Settings(BaseSettings):
+     def MILVUS_COLLECTION_PREFIX(self) -> str:
+         return self.milvus_collection_prefix
+ 
++    @property
++    def EMBEDDING_MODEL(self) -> str:
++        return self.embedding_model
++
++    @property
++    def EMBEDDING_DIMENSION(self) -> int:
++        return self.embedding_dimension
++
++    @property
++    def RERANK_MODEL(self) -> str:
++        return self.rerank_model
++
++    @property
++    def RERANK_ENDPOINT_PATH(self) -> str:
++        return self.rerank_endpoint_path
++
++    @property
++    def NL2SQL_RECALL_TOP_K(self) -> int:
++        return self.nl2sql_recall_top_k
++
++    @property
++    def NL2SQL_RERANK_TOP_K(self) -> int:
++        return self.nl2sql_rerank_top_k
++
++    @property
++    def NL2SQL_RERANK_MIN_SCORE(self) -> float:
++        return self.nl2sql_rerank_min_score
++
+     @property
+     def SOURCE_MYSQL_HOST(self) -> str:
+         return self.source_mysql_host
+diff --git a/backend/requirements.txt b/backend/requirements.txt
+index 078d599..077286b 100644
+--- a/backend/requirements.txt
++++ b/backend/requirements.txt
+@@ -18,6 +18,7 @@ xlrd==2.0.1
+ 
+ redis==5.1.1
+ httpx==0.27.2
++openai==2.16.0
+ loguru==0.7.2
+ 
+ pytest==8.3.3
+diff --git a/backend/app/domains/logistics/services/nl2sql/__init__.py b/backend/app/domains/logistics/services/nl2sql/__init__.py
+new file mode 100644
+index 0000000..709424a
+--- /dev/null
++++ b/backend/app/domains/logistics/services/nl2sql/__init__.py
+@@ -0,0 +1,19 @@
++"""物流 NL2SQL 子能力入口。
++
++本包只承载 NL2SQL shadow 架构所需的 catalog、规则和后续 SQLPlan 辅助能力，
++当前 M1 不接管既有物流 Data QA 正式查询链路。
++"""
++
++from backend.app.domains.logistics.services.nl2sql.business_rules import LogisticsNl2SqlBusinessRules
++from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
++    LogisticsCatalogRecallDocumentBuilder,
++    LogisticsCatalogRecallService,
++)
++from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++
++__all__ = [
++    "LogisticsCatalogRecallDocumentBuilder",
++    "LogisticsCatalogRecallService",
++    "LogisticsNl2SqlBusinessRules",
++    "LogisticsSemanticCatalogLoader",
++]
+diff --git a/backend/app/domains/logistics/services/nl2sql/catalog_retrieval.py b/backend/app/domains/logistics/services/nl2sql/catalog_retrieval.py
+new file mode 100644
+index 0000000..01a01c5
+--- /dev/null
++++ b/backend/app/domains/logistics/services/nl2sql/catalog_retrieval.py
+@@ -0,0 +1,1030 @@
++from __future__ import annotations
++
++import hashlib
++import json
++import re
++from typing import Any, Literal
++
++from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
++
++from backend.app.core.config import settings
++from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
++    LogisticsCatalogColumn,
++    LogisticsCatalogDimension,
++    LogisticsCatalogJoin,
++    LogisticsCatalogMetric,
++    LogisticsCatalogRule,
++    LogisticsCatalogTable,
++    LogisticsSemanticCatalog,
++    LogisticsSemanticCatalogLoader,
++)
++
++LOGISTICS_NL2SQL_CATALOG_COLLECTION_SUFFIX = "logistics_nl2sql_catalog"
++FORBIDDEN_RECALL_IDENTIFIER_TOKENS = (
++    "sys_query_log",
++    "v_sap",
++    "sap_mid",
++    "oracle_mid",
++    "oracle_",
++    "ods_",
++)
++FORBIDDEN_RECALL_SOURCE_SYSTEMS = {"sap", "sap_mid", "oracle", "oracle_mid", "ods"}
++FORBIDDEN_RECALL_SECRET_KEYS = {
++    "api_key",
++    "apikey",
++    "secret",
++    "password",
++    "passwd",
++    "token",
++    "access_token",
++    "refresh_token",
++}
++
++
++class LogisticsCatalogRecallDocument(BaseModel):
++    """可进入 M2 embedding/Milvus/rerank 的受控 Semantic Catalog 文档。
++
++    业务逻辑：
++        文档只承载 catalog 元信息和业务语义，不携带可执行 SQL，也不允许 SAP/ODS/日志表等
++        非中间库来源进入向量索引。后续 SQLPlan 只能通过 catalog_id 回查白名单 catalog。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    catalog_id: str
++    catalog_version: str
++    doc_type: Literal["table", "column", "metric", "dimension", "rule", "join"]
++    title: str
++    content: str
++    keywords: list[str] = Field(default_factory=list)
++    source_table: str | None = None
++    metadata: dict[str, Any] = Field(default_factory=dict)
++
++    @model_validator(mode="after")
++    def _validate_safe_recall_payload(self) -> "LogisticsCatalogRecallDocument":
++        """阻断非白名单来源进入召回链路。"""
++
++        for value in _iter_payload_strings(
++            {
++                "catalog_id": self.catalog_id,
++                "title": self.title,
++                "content": self.content,
++                "keywords": self.keywords,
++                "source_table": self.source_table,
++                "metadata": self.metadata,
++            }
++        ):
++            forbidden = _find_forbidden_recall_identifier(value)
++            if forbidden:
++                raise ValueError(f"forbidden_recall_identifier::{forbidden}")
++            secret = _find_secret_like_text(value)
++            if secret:
++                raise ValueError(f"forbidden_recall_secret::{secret}")
++
++        secret_key = _find_secret_key(self.metadata)
++        if secret_key:
++            raise ValueError(f"forbidden_recall_secret::{secret_key}")
++
++        source_system = str(self.metadata.get("source_system") or "").strip().lower()
++        if source_system in FORBIDDEN_RECALL_SOURCE_SYSTEMS:
++            raise ValueError(f"forbidden_source_system::{source_system}")
++        return self
++
++
++class LogisticsCatalogRecallHit(BaseModel):
++    """Milvus/Rerank 命中的单条受控召回结果。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    document: LogisticsCatalogRecallDocument
++    vector_score: float = 0.0
++    rerank_score: float | None = None
++    source: str = "milvus"
++
++
++class LogisticsCatalogRerankScore(BaseModel):
++    """Reranker 对 catalog_id 的精排分数。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    catalog_id: str
++    score: float
++
++
++class LogisticsCatalogRecallResult(BaseModel):
++    """M2 index/recall 的受控返回对象。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    status: Literal["ok", "disabled", "empty", "error"]
++    hits: list[LogisticsCatalogRecallHit] = Field(default_factory=list)
++    error: str | None = None
++    indexed_count: int = 0
++
++
++class LogisticsCatalogRecallDocumentBuilder:
++    """把 M1 Semantic Catalog 转换成 M2 召回文档。"""
++
++    def __init__(self, *, max_content_chars: int = 1200) -> None:
++        self.max_content_chars = max_content_chars
++
++    def build(self, catalog: LogisticsSemanticCatalog) -> list[LogisticsCatalogRecallDocument]:
++        """生成 table/column/metric/dimension/rule/join 文档。"""
++
++        documents: list[LogisticsCatalogRecallDocument] = []
++        for table in catalog.allowed_tables():
++            safe_columns = _safe_recall_columns(table)
++            documents.append(self._table_document(catalog.catalog_version, table, safe_columns))
++            documents.extend(
++                self._column_document(catalog.catalog_version, table, column) for column in safe_columns
++            )
++        documents.extend(self._metric_document(catalog.catalog_version, metric) for metric in catalog.metrics)
++        documents.extend(self._dimension_document(catalog.catalog_version, dimension) for dimension in catalog.dimensions)
++        documents.extend(self._rule_document(catalog.catalog_version, rule) for rule in catalog.rules)
++        documents.extend(self._join_document(catalog.catalog_version, join) for join in catalog.joins)
++        return documents
++
++    def _table_document(
++        self,
++        catalog_version: str,
++        table: LogisticsCatalogTable,
++        columns: list[LogisticsCatalogColumn],
++    ) -> LogisticsCatalogRecallDocument:
++        keywords = _dedupe_strings(
++            [table.table_name, table.display_name, table.grain or ""]
++            + [column.name for column in columns]
++            + [column.business_name or "" for column in columns]
++        )
++        content = self._content(
++            "表",
++            table.display_name,
++            f"表标识 {table.table_name}",
++            f"粒度 {table.grain}" if table.grain else "",
++            "字段 " + "，".join(
++                _format_column_for_content(column) for column in columns[:30]
++            ),
++        )
++        return LogisticsCatalogRecallDocument(
++            catalog_id=f"table:{table.table_name}",
++            catalog_version=catalog_version,
++            doc_type="table",
++            title=table.display_name,
++            content=content,
++            keywords=keywords,
++            source_table=table.table_name,
++            metadata={
++                "table": table.table_name,
++                "source_system": table.source_system,
++                "domain": table.domain,
++                "grain": table.grain,
++                "allowed_read": table.allowed_read,
++                "columns": [column.name for column in columns],
++            },
++        )
++
++    def _column_document(
++        self,
++        catalog_version: str,
++        table: LogisticsCatalogTable,
++        column: LogisticsCatalogColumn,
++    ) -> LogisticsCatalogRecallDocument:
++        title = column.business_name or column.name
++        content = self._content(
++            "字段",
++            title,
++            f"字段标识 {table.table_name}.{column.name}",
++            f"类型 {column.data_type}",
++            f"语义角色 {column.semantic_role}" if column.semantic_role else "",
++            f"所属表 {table.display_name}",
++        )
++        return LogisticsCatalogRecallDocument(
++            catalog_id=f"column:{table.table_name}.{column.name}",
++            catalog_version=catalog_version,
++            doc_type="column",
++            title=title,
++            content=content,
++            keywords=_dedupe_strings([column.name, title, column.semantic_role or "", table.table_name, table.display_name]),
++            source_table=table.table_name,
++            metadata={
++                "table": table.table_name,
++                "column": column.name,
++                "data_type": column.data_type,
++                "business_name": column.business_name,
++                "semantic_role": column.semantic_role,
++                "nullable": column.nullable,
++                "source_system": table.source_system,
++            },
++        )
++
++    def _metric_document(self, catalog_version: str, metric: LogisticsCatalogMetric) -> LogisticsCatalogRecallDocument:
++        content = self._content(
++            "指标",
++            metric.display_name,
++            f"指标标识 {metric.metric_id}",
++            f"同义词 {'，'.join(metric.aliases)}" if metric.aliases else "",
++            f"单位 {metric.unit}" if metric.unit else "",
++            f"聚合 {metric.aggregation}" if metric.aggregation else "",
++            _business_safe_text(metric.business_note or ""),
++            "依赖字段 " + "，".join(metric.source_columns) if metric.source_columns else "",
++        )
++        return LogisticsCatalogRecallDocument(
++            catalog_id=f"metric:{metric.metric_id}",
++            catalog_version=catalog_version,
++            doc_type="metric",
++            title=metric.display_name,
++            content=content,
++            keywords=_dedupe_strings([metric.metric_id, metric.display_name, metric.unit or "", *metric.aliases]),
++            source_table=metric.table,
++            metadata={
++                "metric_id": metric.metric_id,
++                "table": metric.table,
++                "unit": metric.unit,
++                "aggregation": metric.aggregation,
++                "source_columns": list(metric.source_columns),
++            },
++        )
++
++    def _dimension_document(
++        self,
++        catalog_version: str,
++        dimension: LogisticsCatalogDimension,
++    ) -> LogisticsCatalogRecallDocument:
++        content = self._content(
++            "维度",
++            dimension.display_name,
++            f"维度标识 {dimension.dimension_id}",
++            f"同义词 {'，'.join(dimension.aliases)}" if dimension.aliases else "",
++            f"字段 {dimension.table}.{dimension.column}" if dimension.table else f"字段 {dimension.column}",
++            dimension.business_note or "",
++        )
++        return LogisticsCatalogRecallDocument(
++            catalog_id=f"dimension:{dimension.dimension_id}",
++            catalog_version=catalog_version,
++            doc_type="dimension",
++            title=dimension.display_name,
++            content=content,
++            keywords=_dedupe_strings([dimension.dimension_id, dimension.display_name, dimension.column, *dimension.aliases]),
++            source_table=dimension.table,
++            metadata={
++                "dimension_id": dimension.dimension_id,
++                "table": dimension.table,
++                "column": dimension.column,
++            },
++        )
++
++    def _rule_document(self, catalog_version: str, rule: LogisticsCatalogRule) -> LogisticsCatalogRecallDocument:
++        content = self._content(
++            "规则",
++            rule.display_name,
++            f"规则标识 {rule.rule_id}",
++            f"类型 {rule.rule_type}",
++            f"同义词 {'，'.join(rule.aliases)}" if rule.aliases else "",
++            f"动作 {rule.action}",
++            rule.business_message or "",
++        )
++        return LogisticsCatalogRecallDocument(
++            catalog_id=f"rule:{rule.rule_id}",
++            catalog_version=catalog_version,
++            doc_type="rule",
++            title=rule.display_name,
++            content=content,
++            keywords=_dedupe_strings([rule.rule_id, rule.display_name, rule.rule_type, rule.action, *rule.aliases]),
++            source_table=None,
++            metadata={
++                "rule_id": rule.rule_id,
++                "rule_type": rule.rule_type,
++                "action": rule.action,
++                "relax_filters": rule.relax_filters,
++            },
++        )
++
++    def _join_document(self, catalog_version: str, join: LogisticsCatalogJoin) -> LogisticsCatalogRecallDocument:
++        content = self._content(
++            "关联",
++            join.join_id,
++            f"左表 {join.left_table}",
++            f"右表 {join.right_table}",
++            f"关联类型 {join.join_type}",
++            join.business_note or "",
++        )
++        return LogisticsCatalogRecallDocument(
++            catalog_id=f"join:{join.join_id}",
++            catalog_version=catalog_version,
++            doc_type="join",
++            title=join.join_id,
++            content=content,
++            keywords=_dedupe_strings([join.join_id, join.left_table, join.right_table, join.join_type]),
++            source_table=join.left_table,
++            metadata={
++                "join_id": join.join_id,
++                "left_table": join.left_table,
++                "right_table": join.right_table,
++                "join_type": join.join_type,
++                # 召回 payload 只暴露受控关联语义，不携带 join.on 等 SQL-like 片段；
++                # 后续 SQLPlan 必须通过 catalog_id 回查后端白名单规则。
++                "join_condition_count": len(join.on),
++            },
++        )
++
++    def _content(self, *parts: str) -> str:
++        text = "；".join(part.strip() for part in parts if str(part).strip())
++        text = re.sub(r"\s+", " ", text).strip()
++        if len(text) <= self.max_content_chars:
++            return text
++        return text[: self.max_content_chars - 1].rstrip() + "…"
++
++
++class LogisticsBailianEmbeddingClient:
++    """百炼 Qwen3-Embedding-4B embedding 客户端。
++
++    测试通过注入 fake client；真实调用使用 OpenAI-compatible embeddings API。
++    """
++
++    def __init__(
++        self,
++        *,
++        enabled: bool = True,
++        base_url: str | None = None,
++        api_key: str | None = None,
++        model: str | None = None,
++        client: Any | None = None,
++        timeout_seconds: float = 15.0,
++    ) -> None:
++        self.enabled = enabled
++        self.base_url = settings.llm_base_url if base_url is None else base_url
++        self.api_key = settings.llm_api_key if api_key is None else api_key
++        self.model = settings.embedding_model if model is None else model
++        self._client = client
++        self.timeout_seconds = timeout_seconds
++
++    def is_available(self) -> bool:
++        return bool(self.enabled and (self._client or (self.base_url and self.api_key and self.model)))
++
++    def embed_texts(self, texts: list[str]) -> list[list[float]]:
++        if not self.is_available():
++            raise RuntimeError("embedding_unavailable")
++        if not texts:
++            return []
++        if self._client and hasattr(self._client, "embed_texts"):
++            return self._client.embed_texts(texts)
++        try:
++            from openai import OpenAI
++
++            client = self._client or OpenAI(
++                base_url=self.base_url,
++                api_key=self.api_key,
++                timeout=self.timeout_seconds,
++                max_retries=0,
++            )
++            response = client.embeddings.create(model=self.model, input=texts)
++            return [list(item.embedding) for item in response.data]
++        except Exception as exc:  # noqa: BLE001
++            raise RuntimeError(_safe_error("embedding_error", exc)) from exc
++
++
++class LogisticsBailianRerankClient:
++    """百炼 Qwen3-Reranker 客户端。
++
++    优先支持测试注入的 `rerank` 方法；真实调用按 DashScope rerank HTTP 形态发送，失败时由上层
++    fail-closed，不降级为未精排结果。
++    """
++
++    def __init__(
++        self,
++        *,
++        enabled: bool = True,
++        base_url: str | None = None,
++        api_key: str | None = None,
++        model: str | None = None,
++        endpoint_path: str | None = None,
++        client: Any | None = None,
++        timeout_seconds: float = 15.0,
++    ) -> None:
++        self.enabled = enabled
++        self.base_url = settings.llm_base_url if base_url is None else base_url
++        self.api_key = settings.llm_api_key if api_key is None else api_key
++        self.model = settings.rerank_model if model is None else model
++        self.endpoint_path = settings.rerank_endpoint_path if endpoint_path is None else endpoint_path
++        self._client = client
++        self.timeout_seconds = timeout_seconds
++
++    def is_available(self) -> bool:
++        return bool(self.enabled and (self._client or (self.base_url and self.api_key and self.model)))
++
++    def rerank(
++        self,
++        *,
++        query: str,
++        documents: list[LogisticsCatalogRecallHit],
++        top_n: int,
++    ) -> list[LogisticsCatalogRerankScore]:
++        if not self.is_available():
++            raise RuntimeError("rerank_unavailable")
++        if not documents:
++            return []
++        if self._client and hasattr(self._client, "rerank"):
++            raw = self._client.rerank(query=query, documents=documents, top_n=top_n)
++            return _coerce_rerank_scores(raw, documents)
++        try:
++            import httpx
++
++            url = self.base_url.rstrip("/") + "/" + self.endpoint_path.strip("/")
++            payload = {
++                "model": self.model,
++                "input": {"query": query, "documents": [hit.document.content for hit in documents]},
++                "parameters": {"top_n": top_n, "return_documents": False},
++            }
++            headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
++            response = httpx.post(url, headers=headers, json=payload, timeout=self.timeout_seconds)
++            response.raise_for_status()
++            return _coerce_rerank_scores(response.json(), documents)
++        except Exception as exc:  # noqa: BLE001
++            raise RuntimeError(_safe_error("rerank_error", exc)) from exc
++
++
++class LogisticsMilvusCatalogVectorStore:
++    """物流 NL2SQL catalog 的 Milvus 向量索引适配器。"""
++
++    def __init__(
++        self,
++        *,
++        collection_name: str | None = None,
++        dimension: int | None = None,
++        uri: str | None = None,
++        client: Any | None = None,
++        metric_type: str = "COSINE",
++    ) -> None:
++        prefix = settings.milvus_collection_prefix or "gcl_bp_ai"
++        self.collection_name = collection_name or f"{prefix}_{LOGISTICS_NL2SQL_CATALOG_COLLECTION_SUFFIX}"
++        self.dimension = dimension or settings.embedding_dimension
++        self.uri = uri or _milvus_uri(settings.milvus_host, settings.milvus_port)
++        self._client = client
++        self.metric_type = metric_type
++
++    def is_available(self) -> bool:
++        return bool(self._client or (self.uri and self.collection_name and self.dimension > 0))
++
++    def _client_or_create(self) -> Any:
++        if self._client is not None:
++            return self._client
++        from pymilvus import MilvusClient
++
++        token = None
++        if settings.milvus_user or settings.milvus_password:
++            token = f"{settings.milvus_user}:{settings.milvus_password}"
++        self._client = MilvusClient(uri=self.uri, token=token)
++        return self._client
++
++    def ensure_collection(self) -> None:
++        client = self._client_or_create()
++        if hasattr(client, "has_collection") and client.has_collection(self.collection_name):
++            return
++        if hasattr(client, "create_schema") and hasattr(client, "prepare_index_params"):
++            schema = client.create_schema(auto_id=False, enable_dynamic_field=False)
++            varchar = _milvus_data_type("VARCHAR")
++            float_vector = _milvus_data_type("FLOAT_VECTOR")
++            schema.add_field(field_name="id", datatype=varchar, is_primary=True, max_length=64)
++            schema.add_field(field_name="catalog_id", datatype=varchar, max_length=256)
++            schema.add_field(field_name="catalog_version", datatype=varchar, max_length=128)
++            schema.add_field(field_name="doc_type", datatype=varchar, max_length=32)
++            schema.add_field(field_name="title", datatype=varchar, max_length=512)
++            schema.add_field(field_name="content", datatype=varchar, max_length=4096)
++            schema.add_field(field_name="keywords_json", datatype=varchar, max_length=4096)
++            schema.add_field(field_name="metadata_json", datatype=varchar, max_length=4096)
++            schema.add_field(field_name="source_table", datatype=varchar, max_length=256)
++            schema.add_field(field_name="vector", datatype=float_vector, dim=self.dimension)
++
++            index_params = client.prepare_index_params()
++            index_params.add_index(
++                field_name="vector",
++                index_type="AUTOINDEX",
++                metric_type=self.metric_type,
++            )
++            client.create_collection(
++                collection_name=self.collection_name,
++                schema=schema,
++                index_params=index_params,
++                consistency_level="Strong",
++            )
++            return
++        client.create_collection(
++            collection_name=self.collection_name,
++            dimension=self.dimension,
++            metric_type=self.metric_type,
++            consistency_level="Strong",
++        )
++
++    def upsert_documents(self, documents: list[LogisticsCatalogRecallDocument], vectors: list[list[float]]) -> int:
++        if len(documents) != len(vectors):
++            raise ValueError(f"embedding_count_mismatch::{len(documents)}::{len(vectors)}")
++        data = [self._record_for_document(document, vector) for document, vector in zip(documents, vectors, strict=True)]
++        client = self._client_or_create()
++        if hasattr(client, "upsert"):
++            client.upsert(collection_name=self.collection_name, data=data)
++        else:
++            client.insert(collection_name=self.collection_name, data=data)
++        return len(data)
++
++    def search(self, vector: list[float], *, top_k: int) -> list[LogisticsCatalogRecallHit]:
++        client = self._client_or_create()
++        raw = client.search(
++            collection_name=self.collection_name,
++            data=[vector],
++            anns_field="vector",
++            limit=top_k,
++            output_fields=[
++                "catalog_id",
++                "catalog_version",
++                "doc_type",
++                "title",
++                "content",
++                "keywords_json",
++                "metadata_json",
++                "source_table",
++            ],
++        )
++        first_batch = raw[0] if raw else []
++        return [_coerce_milvus_hit(item) for item in first_batch]
++
++    def _record_for_document(self, document: LogisticsCatalogRecallDocument, vector: list[float]) -> dict[str, Any]:
++        return {
++            "id": _stable_doc_id(document),
++            "vector": list(vector),
++            "catalog_id": document.catalog_id,
++            "catalog_version": document.catalog_version,
++            "doc_type": document.doc_type,
++            "title": document.title,
++            "content": document.content,
++            "keywords_json": json.dumps(document.keywords, ensure_ascii=False),
++            "metadata_json": json.dumps(document.metadata, ensure_ascii=False),
++            "source_table": document.source_table or "",
++        }
++
++
++class LogisticsCatalogRecallService:
++    """M2 catalog index/recall 编排服务。"""
++
++    def __init__(
++        self,
++        *,
++        catalog_loader: LogisticsSemanticCatalogLoader | None = None,
++        document_builder: Any | None = None,
++        embedding_client: Any | None = None,
++        vector_store: Any | None = None,
++        reranker: Any | None = None,
++        vector_top_k: int | None = None,
++        rerank_top_k: int | None = None,
++        rerank_min_score: float | None = None,
++    ) -> None:
++        self.catalog_loader = catalog_loader or LogisticsSemanticCatalogLoader()
++        self.document_builder = document_builder or LogisticsCatalogRecallDocumentBuilder()
++        self.embedding_client = embedding_client or LogisticsBailianEmbeddingClient()
++        self.vector_store = vector_store or LogisticsMilvusCatalogVectorStore()
++        self.reranker = reranker or LogisticsBailianRerankClient()
++        self.vector_top_k = vector_top_k or settings.nl2sql_recall_top_k
++        self.rerank_top_k = rerank_top_k or settings.nl2sql_rerank_top_k
++        self.rerank_min_score = settings.nl2sql_rerank_min_score if rerank_min_score is None else rerank_min_score
++        self._allowed_catalog_ids_cache: set[str] | None = None
++        self._canonical_documents_cache: dict[str, LogisticsCatalogRecallDocument] | None = None
++
++    def index_catalog(self, *, catalog: LogisticsSemanticCatalog | Any | None = None) -> LogisticsCatalogRecallResult:
++        """把 catalog 文档写入 Milvus；任一依赖不可用时 fail-closed。"""
++
++        availability_error = self._index_availability_error()
++        if availability_error:
++            return LogisticsCatalogRecallResult(status="disabled", error=availability_error)
++        try:
++            resolved_catalog = self.catalog_loader.load() if catalog is None else catalog
++            documents = self.document_builder.build(resolved_catalog)
++            if not documents:
++                return LogisticsCatalogRecallResult(status="empty", error="catalog_documents_empty")
++            vectors = self.embedding_client.embed_texts([document.content for document in documents])
++            if len(vectors) != len(documents):
++                return LogisticsCatalogRecallResult(
++                    status="error",
++                    error=f"embedding_count_mismatch::{len(documents)}::{len(vectors)}",
++                )
++            self.vector_store.ensure_collection()
++            indexed = self.vector_store.upsert_documents(documents, vectors)
++            return LogisticsCatalogRecallResult(status="ok", indexed_count=indexed)
++        except Exception as exc:  # noqa: BLE001
++            return LogisticsCatalogRecallResult(status="error", error=_safe_error("index_error", exc))
++
++    def recall(
++        self,
++        *,
++        question: str,
++        normalized_question: str | None = None,
++        slot_summary: str | None = None,
++    ) -> LogisticsCatalogRecallResult:
++        """基于问题召回并精排 catalog 文档；不可用或不可信时 fail-closed。"""
++
++        query = self._query_text(question=question, normalized_question=normalized_question, slot_summary=slot_summary)
++        if not query:
++            return LogisticsCatalogRecallResult(status="empty", error="query_empty")
++        availability_error = self._recall_availability_error()
++        if availability_error:
++            return LogisticsCatalogRecallResult(status="disabled", error=availability_error)
++        try:
++            vectors = self.embedding_client.embed_texts([query])
++            if not vectors:
++                return LogisticsCatalogRecallResult(status="empty", error="embedding_empty")
++            raw_hits = self.vector_store.search(vectors[0], top_k=self.vector_top_k)
++            hits = [self._coerce_hit(raw_hit) for raw_hit in raw_hits]
++            canonical_hits = self._canonicalize_hits(hits)
++            unique_hits = self._dedupe_hits(canonical_hits)
++            if not unique_hits:
++                return LogisticsCatalogRecallResult(status="empty", error="milvus_hits_empty")
++            rerank_scores = self.reranker.rerank(
++                query=query,
++                documents=unique_hits,
++                top_n=self.rerank_top_k,
++            )
++            reranked = self._apply_rerank_scores(unique_hits, rerank_scores)
++            if not reranked:
++                return LogisticsCatalogRecallResult(status="empty", error="rerank_hits_empty")
++            return LogisticsCatalogRecallResult(status="ok", hits=reranked)
++        except (ValidationError, ValueError) as exc:
++            return LogisticsCatalogRecallResult(status="error", error=_safe_error("recall_validation_error", exc))
++        except Exception as exc:  # noqa: BLE001
++            return LogisticsCatalogRecallResult(status="error", error=_safe_error("recall_error", exc))
++
++    def _index_availability_error(self) -> str | None:
++        if not self.embedding_client.is_available():
++            return "embedding_unavailable"
++        if not self.vector_store.is_available():
++            return "milvus_unavailable"
++        return None
++
++    def _recall_availability_error(self) -> str | None:
++        index_error = self._index_availability_error()
++        if index_error:
++            return index_error
++        if not self.reranker.is_available():
++            return "rerank_unavailable"
++        return None
++
++    def _allowed_catalog_ids(self) -> set[str]:
++        if self._allowed_catalog_ids_cache is None:
++            self._allowed_catalog_ids_cache = set(self._canonical_documents())
++        return self._allowed_catalog_ids_cache
++
++    def _canonical_documents(self) -> dict[str, LogisticsCatalogRecallDocument]:
++        """读取当前受控 catalog 文档，用于把 Milvus 命中重建为可信 payload。"""
++
++        if self._canonical_documents_cache is None:
++            catalog = self.catalog_loader.load()
++            documents = self.document_builder.build(catalog)
++            self._canonical_documents_cache = {document.catalog_id: document for document in documents}
++        return self._canonical_documents_cache
++
++    def _validate_hits_against_catalog(self, hits: list[LogisticsCatalogRecallHit]) -> None:
++        allowed_catalog_ids = self._allowed_catalog_ids()
++        for hit in hits:
++            if hit.document.catalog_id not in allowed_catalog_ids:
++                raise ValueError(f"catalog_hit_not_allowed::{hit.document.catalog_id}")
++
++    def _canonicalize_hits(self, hits: list[LogisticsCatalogRecallHit]) -> list[LogisticsCatalogRecallHit]:
++        """按 catalog_id 回查当前 catalog，丢弃 Milvus 中不可信的 title/content/metadata。"""
++
++        canonical_documents = self._canonical_documents()
++        canonical_hits: list[LogisticsCatalogRecallHit] = []
++        for hit in hits:
++            canonical_document = canonical_documents.get(hit.document.catalog_id)
++            if canonical_document is None:
++                raise ValueError(f"catalog_hit_not_allowed::{hit.document.catalog_id}")
++            if hit.document.catalog_version != canonical_document.catalog_version:
++                raise ValueError(f"catalog_version_mismatch::{hit.document.catalog_id}")
++            canonical_hits.append(
++                LogisticsCatalogRecallHit(
++                    document=canonical_document,
++                    vector_score=hit.vector_score,
++                    rerank_score=hit.rerank_score,
++                    source=hit.source,
++                )
++            )
++        return canonical_hits
++
++    @staticmethod
++    def _query_text(*, question: str, normalized_question: str | None, slot_summary: str | None) -> str:
++        return "\n".join(_dedupe_strings([question, normalized_question or "", slot_summary or ""]))
++
++    @staticmethod
++    def _coerce_hit(raw_hit: Any) -> LogisticsCatalogRecallHit:
++        if isinstance(raw_hit, LogisticsCatalogRecallHit):
++            return raw_hit
++        if isinstance(raw_hit, dict):
++            if "document" in raw_hit:
++                document = LogisticsCatalogRecallDocument.model_validate(raw_hit["document"])
++                return LogisticsCatalogRecallHit(
++                    document=document,
++                    vector_score=float(raw_hit.get("vector_score", raw_hit.get("score", 0.0)) or 0.0),
++                    rerank_score=raw_hit.get("rerank_score"),
++                    source=str(raw_hit.get("source") or "milvus"),
++                )
++            return _coerce_milvus_hit(raw_hit)
++        raise ValueError(f"recall_hit_type_invalid::{type(raw_hit).__name__}")
++
++    @staticmethod
++    def _dedupe_hits(hits: list[LogisticsCatalogRecallHit]) -> list[LogisticsCatalogRecallHit]:
++        best_by_id: dict[str, LogisticsCatalogRecallHit] = {}
++        order: list[str] = []
++        for hit in hits:
++            catalog_id = hit.document.catalog_id
++            current = best_by_id.get(catalog_id)
++            if current is None:
++                order.append(catalog_id)
++                best_by_id[catalog_id] = hit
++            elif hit.vector_score > current.vector_score:
++                best_by_id[catalog_id] = hit
++        return [best_by_id[catalog_id] for catalog_id in order]
++
++    def _apply_rerank_scores(
++        self,
++        hits: list[LogisticsCatalogRecallHit],
++        scores: list[LogisticsCatalogRerankScore],
++    ) -> list[LogisticsCatalogRecallHit]:
++        hit_by_id = {hit.document.catalog_id: hit for hit in hits}
++        reranked: list[LogisticsCatalogRecallHit] = []
++        for score in scores:
++            if score.score < self.rerank_min_score:
++                continue
++            hit = hit_by_id.get(score.catalog_id)
++            if not hit:
++                continue
++            reranked.append(
++                LogisticsCatalogRecallHit(
++                    document=hit.document,
++                    vector_score=hit.vector_score,
++                    rerank_score=score.score,
++                    source="rerank",
++                )
++            )
++            if len(reranked) >= self.rerank_top_k:
++                break
++        return reranked
++
++
++def _format_column_for_content(column: LogisticsCatalogColumn) -> str:
++    label = column.business_name or column.name
++    role = f"/{column.semantic_role}" if column.semantic_role else ""
++    return f"{label}({column.name}{role})"
++
++
++def _safe_recall_columns(table: LogisticsCatalogTable) -> list[LogisticsCatalogColumn]:
++    """过滤不应进入 Milvus payload 的来源系统技术字段。"""
++
++    return [
++        column
++        for column in table.columns
++        if not _contains_forbidden_recall_source_token(column.name)
++        and not _contains_forbidden_recall_source_token(column.business_name or "")
++    ]
++
++
++def _contains_forbidden_recall_source_token(value: str) -> bool:
++    text = str(value or "")
++    return bool(
++        re.search(r"(?i)(^|[^a-z0-9])sap([^a-z0-9]|$)|sap_|v_sap|sys_query_log|ods_|oracle_mid", text)
++    )
++
++
++def _dedupe_strings(values: list[str]) -> list[str]:
++    seen: set[str] = set()
++    result: list[str] = []
++    for value in values:
++        normalized = str(value).strip()
++        if not normalized or normalized in seen:
++            continue
++        seen.add(normalized)
++        result.append(normalized)
++    return result
++
++
++def _business_safe_text(value: str) -> str:
++    """把业务说明中的 SQL 片段改写成业务口径文本，避免召回上下文携带可执行表达式。"""
++
++    text = str(value or "")
++    replacements = {
++        "SUM(total_fee)/SUM(shipment_trip_count)": "总费用合计除以车次合计",
++        "SUM(total_fee) / SUM(shipment_trip_count)": "总费用合计除以车次合计",
++        "AVG(total_fee)": "明细行总费用平均值",
++    }
++    for old, new in replacements.items():
++        text = text.replace(old, new)
++    text = re.sub(r"\b(SUM|AVG|COUNT|MIN|MAX)\s*\([^)]*\)", "受控聚合口径", text, flags=re.IGNORECASE)
++    return text
++
++
++def _iter_payload_strings(value: Any) -> list[str]:
++    """递归展开召回 payload 中需要做安全扫描的字符串。"""
++
++    strings: list[str] = []
++    if value is None:
++        return strings
++    if isinstance(value, str):
++        return [value]
++    if isinstance(value, dict):
++        for key, item in value.items():
++            key_text = str(key)
++            strings.append(key_text)
++            # source_system 有专门错误码，避免被通用 sap_mid/oracle_mid token 抢先命中。
++            if key_text.strip().lower() == "source_system":
++                continue
++            strings.extend(_iter_payload_strings(item))
++        return strings
++    if isinstance(value, (list, tuple, set)):
++        for item in value:
++            strings.extend(_iter_payload_strings(item))
++        return strings
++    if isinstance(value, (bool, int, float)):
++        return strings
++    return [str(value)]
++
++
++def _find_secret_like_text(value: str) -> str | None:
++    """识别字符串中可能泄露的密钥、令牌或密码片段。"""
++
++    text = str(value or "")
++    key_match = re.search(
++        r"(?i)\b(api[_-]?key|password|passwd|token|access[_-]?token|refresh[_-]?token|secret)\b\s*[:=]",
++        text,
++    )
++    if key_match:
++        return _normalize_secret_key(key_match.group(1))
++    if re.search(r"(?i)\bauthorization\s*[:=]?\s*bearer\s+\S+", text):
++        return "authorization"
++    if re.search(r"\bsk-[A-Za-z0-9_-]{8,}\b", text):
++        return "api_key"
++    normalized = _normalize_secret_key(text)
++    if normalized in FORBIDDEN_RECALL_SECRET_KEYS:
++        return normalized
++    return None
++
++
++def _find_secret_key(value: Any) -> str | None:
++    """递归检查 metadata key，防止 password/token 等字段名进入 Milvus payload。"""
++
++    if isinstance(value, dict):
++        for key, item in value.items():
++            normalized = _normalize_secret_key(str(key))
++            if normalized in FORBIDDEN_RECALL_SECRET_KEYS:
++                return normalized
++            nested = _find_secret_key(item)
++            if nested:
++                return nested
++    elif isinstance(value, (list, tuple, set)):
++        for item in value:
++            nested = _find_secret_key(item)
++            if nested:
++                return nested
++    return None
++
++
++def _normalize_secret_key(value: str) -> str:
++    return re.sub(r"[\s_-]+", "_", str(value or "").strip().lower())
++
++
++def _find_forbidden_recall_identifier(value: str) -> str | None:
++    raw = str(value or "").strip()
++    lowered = raw.lower()
++    patterns = (
++        r"sys_query_log",
++        r"v_sap[\w_]*",
++        r"sap_mid[\w_]*",
++        r"oracle_mid[\w_]*",
++        r"oracle_[\w_]*",
++        r"ods[\w_]*",
++    )
++    for token in FORBIDDEN_RECALL_IDENTIFIER_TOKENS:
++        if token not in lowered:
++            continue
++        if ":" in raw:
++            return raw.split(":", 1)[-1] or token
++        for pattern in patterns:
++            match = re.search(pattern, raw, flags=re.IGNORECASE)
++            if match:
++                return match.group(0)
++        return token
++    return None
++
++
++def _milvus_data_type(name: str) -> Any:
++    """兼容真实 pymilvus 与单测 fake client 的 DataType 获取。"""
++
++    try:
++        from pymilvus import DataType
++
++        return getattr(DataType, name)
++    except Exception:  # noqa: BLE001
++        return name
++
++
++def _milvus_uri(host: str, port: int) -> str:
++    if host.startswith("http://") or host.startswith("https://"):
++        return host if re.search(r":\d+/?$", host) else f"{host.rstrip('/')}:{port}"
++    return f"http://{host}:{port}"
++
++
++def _stable_doc_id(document: LogisticsCatalogRecallDocument) -> str:
++    digest = hashlib.sha1(f"{document.catalog_version}:{document.catalog_id}".encode("utf-8")).hexdigest()
++    return digest[:32]
++
++
++def _coerce_milvus_hit(raw_hit: Any) -> LogisticsCatalogRecallHit:
++    if isinstance(raw_hit, LogisticsCatalogRecallHit):
++        return raw_hit
++    if not isinstance(raw_hit, dict):
++        raise ValueError(f"milvus_hit_type_invalid::{type(raw_hit).__name__}")
++    raw_entity = raw_hit.get("entity")
++    entity: dict[str, Any] = raw_entity if isinstance(raw_entity, dict) else raw_hit
++    metadata = _json_loads_if_needed(entity.get("metadata_json"), default={}, field_name="metadata_json")
++    keywords = _json_loads_if_needed(entity.get("keywords_json"), default=[], field_name="keywords_json")
++    document = LogisticsCatalogRecallDocument.model_validate(
++        {
++            "catalog_id": str(entity.get("catalog_id") or ""),
++            "catalog_version": str(entity.get("catalog_version") or ""),
++            "doc_type": str(entity.get("doc_type") or "metric"),
++            "title": str(entity.get("title") or ""),
++            "content": str(entity.get("content") or ""),
++            "keywords": [str(item) for item in keywords] if isinstance(keywords, list) else [],
++            "source_table": str(entity.get("source_table") or "") or None,
++            "metadata": dict(metadata) if isinstance(metadata, dict) else {},
++        }
++    )
++    return LogisticsCatalogRecallHit(
++        document=document,
++        vector_score=float(raw_hit.get("distance", raw_hit.get("score", raw_hit.get("vector_score", 0.0))) or 0.0),
++        source="milvus",
++    )
++
++
++def _json_loads_if_needed(value: Any, *, default: Any, field_name: str | None = None) -> Any:
++    if value is None or value == "":
++        return default
++    if isinstance(value, str):
++        try:
++            return json.loads(value)
++        except json.JSONDecodeError as exc:
++            if field_name:
++                raise ValueError(f"invalid_json_payload::{field_name}") from exc
++            return default
++    return value
++
++
++def _coerce_rerank_scores(raw: Any, documents: list[LogisticsCatalogRecallHit]) -> list[LogisticsCatalogRerankScore]:
++    if isinstance(raw, list):
++        scores: list[LogisticsCatalogRerankScore] = []
++        for item in raw:
++            if isinstance(item, LogisticsCatalogRerankScore):
++                scores.append(item)
++            elif isinstance(item, dict):
++                scores.append(LogisticsCatalogRerankScore.model_validate(item))
++        return scores
++    if isinstance(raw, dict):
++        results = raw.get("results") or raw.get("output", {}).get("results") or []
++        scores = []
++        for item in results:
++            index = item.get("index")
++            if index is None or not isinstance(index, int) or index < 0 or index >= len(documents):
++                continue
++            score = item.get("relevance_score", item.get("score", item.get("rerank_score", 0.0)))
++            scores.append(
++                LogisticsCatalogRerankScore(
++                    catalog_id=documents[index].document.catalog_id,
++                    score=float(score or 0.0),
++                )
++            )
++        return scores
++    raise ValueError(f"rerank_response_type_invalid::{type(raw).__name__}")
++
++
++def _safe_error(prefix: str, exc: BaseException) -> str:
++    message = str(exc)
++    message = re.sub(
++        r"(?i)([a-z][a-z0-9+.-]*://[^:/@\s]+):([^@\s]+)@",
++        r"\1:[REDACTED]@",
++        message,
++    )
++    message = re.sub(r"sk-[A-Za-z0-9_-]{8,}", "sk-[REDACTED]", message)
++    message = re.sub(
++        r"(?i)\b(api[_-]?key|password|passwd|token|access[_-]?token|refresh[_-]?token|secret)\s*[:=]\s*['\"]?[^\s,'\"}]+",
++        lambda match: f"{match.group(1)}=[REDACTED]",
++        message,
++    )
++    message = re.sub(r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,'\"]+", r"\1[REDACTED]", message)
++    return f"{prefix}::{message}"
++
++
++__all__ = [
++    "LOGISTICS_NL2SQL_CATALOG_COLLECTION_SUFFIX",
++    "LogisticsBailianEmbeddingClient",
++    "LogisticsBailianRerankClient",
++    "LogisticsCatalogRecallDocument",
++    "LogisticsCatalogRecallDocumentBuilder",
++    "LogisticsCatalogRecallHit",
++    "LogisticsCatalogRecallResult",
++    "LogisticsCatalogRecallService",
++    "LogisticsCatalogRerankScore",
++    "LogisticsMilvusCatalogVectorStore",
++]
+diff --git a/tests/unit/logistics/nl2sql/test_catalog_retrieval.py b/tests/unit/logistics/nl2sql/test_catalog_retrieval.py
+new file mode 100644
+index 0000000..b1a448c
+--- /dev/null
++++ b/tests/unit/logistics/nl2sql/test_catalog_retrieval.py
+@@ -0,0 +1,545 @@
++from __future__ import annotations
++
++from typing import Any
++
++import pytest
++from pydantic import ValidationError
++
++from backend.app.core.config import Settings
++from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
++    LogisticsCatalogRecallDocument,
++    LogisticsCatalogRecallDocumentBuilder,
++    LogisticsCatalogRecallHit,
++    LogisticsCatalogRecallService,
++    LogisticsCatalogRerankScore,
++    LogisticsMilvusCatalogVectorStore,
++)
++from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++
++
++class _FixedDocumentBuilder:
++    def __init__(self, documents: list[LogisticsCatalogRecallDocument]) -> None:
++        self.documents = documents
++        self.calls = 0
++
++    def build(self, catalog: Any) -> list[LogisticsCatalogRecallDocument]:
++        self.calls += 1
++        return list(self.documents)
++
++
++class _FakeEmbeddingClient:
++    def __init__(self, *, available: bool = True, error: str | None = None) -> None:
++        self.available = available
++        self.error = error
++        self.calls: list[list[str]] = []
++
++    def is_available(self) -> bool:
++        return self.available
++
++    def embed_texts(self, texts: list[str]) -> list[list[float]]:
++        self.calls.append(list(texts))
++        if self.error:
++            raise RuntimeError(self.error)
++        return [[float(index + 1), 0.1, 0.2] for index, _ in enumerate(texts)]
++
++
++class _FakeVectorStore:
++    def __init__(self, *, available: bool = True, hits: list[Any] | None = None) -> None:
++        self.available = available
++        self.hits = hits or []
++        self.upsert_calls: list[dict[str, Any]] = []
++        self.search_calls: list[dict[str, Any]] = []
++
++    def is_available(self) -> bool:
++        return self.available
++
++    def ensure_collection(self) -> None:
++        self.upsert_calls.append({"ensure_collection": True})
++
++    def upsert_documents(self, documents: list[LogisticsCatalogRecallDocument], vectors: list[list[float]]) -> int:
++        self.upsert_calls.append({"documents": list(documents), "vectors": list(vectors)})
++        return len(documents)
++
++    def search(self, vector: list[float], *, top_k: int) -> list[Any]:
++        self.search_calls.append({"vector": list(vector), "top_k": top_k})
++        return list(self.hits)
++
++
++class _FakeReranker:
++    def __init__(self, scores: dict[str, float] | None = None, *, available: bool = True) -> None:
++        self.scores = scores or {}
++        self.available = available
++        self.calls: list[dict[str, Any]] = []
++
++    def is_available(self) -> bool:
++        return self.available
++
++    def rerank(
++        self,
++        *,
++        query: str,
++        documents: list[LogisticsCatalogRecallHit],
++        top_n: int,
++    ) -> list[LogisticsCatalogRerankScore]:
++        self.calls.append({"query": query, "documents": list(documents), "top_n": top_n})
++        scores = [
++            LogisticsCatalogRerankScore(
++                catalog_id=hit.document.catalog_id,
++                score=self.scores.get(hit.document.catalog_id, 0.0),
++            )
++            for hit in documents
++        ]
++        return sorted(scores, key=lambda item: item.score, reverse=True)[:top_n]
++
++
++class _FakeMilvusSchema:
++    def __init__(self) -> None:
++        self.fields: list[dict[str, Any]] = []
++
++    def add_field(self, **kwargs: Any) -> None:
++        self.fields.append(dict(kwargs))
++
++
++class _FakeMilvusIndexParams:
++    def __init__(self) -> None:
++        self.indexes: list[dict[str, Any]] = []
++
++    def add_index(self, **kwargs: Any) -> None:
++        self.indexes.append(dict(kwargs))
++
++
++class _FakeMilvusClientForSchema:
++    def __init__(self) -> None:
++        self.schema = _FakeMilvusSchema()
++        self.index_params = _FakeMilvusIndexParams()
++        self.created: dict[str, Any] | None = None
++
++    def has_collection(self, collection_name: str) -> bool:
++        return False
++
++    def create_schema(self, **kwargs: Any) -> _FakeMilvusSchema:
++        self.schema.schema_kwargs = dict(kwargs)  # type: ignore[attr-defined]
++        return self.schema
++
++    def prepare_index_params(self) -> _FakeMilvusIndexParams:
++        return self.index_params
++
++    def create_collection(self, **kwargs: Any) -> None:
++        self.created = dict(kwargs)
++
++
++def _doc(catalog_id: str, content: str, *, doc_type: str = "metric") -> LogisticsCatalogRecallDocument:
++    return LogisticsCatalogRecallDocument(
++        catalog_id=catalog_id,
++        catalog_version="logistics_nl2sql_catalog.v1",
++        doc_type=doc_type,
++        title=content,
++        content=content,
++        keywords=[content, catalog_id],
++        source_table="dws_logistics_detail_union",
++        metadata={"table": "dws_logistics_detail_union"},
++    )
++
++
++def test_catalog_document_builder_converts_catalog_items_to_traceable_limited_documents() -> None:
++    """真实 Semantic Catalog 应转换成带 catalog_id/version 的受控召回文档。"""
++
++    catalog = LogisticsSemanticCatalogLoader().load()
++    builder = LogisticsCatalogRecallDocumentBuilder(max_content_chars=900)
++
++    documents = builder.build(catalog)
++    by_id = {document.catalog_id: document for document in documents}
++
++    assert "table:dws_logistics_detail_union" in by_id
++    assert "column:dwd_logistics_hist_shipment_detail.city" in by_id
++    assert "metric:avg_fee_per_trip" in by_id
++    assert "dimension:city" in by_id
++    assert "rule:unsupported_tonnage" in by_id
++    assert "join:system_task_assign" in by_id
++
++    avg_fee = by_id["metric:avg_fee_per_trip"]
++    assert avg_fee.catalog_version == "logistics_nl2sql_catalog.v1"
++    assert avg_fee.doc_type == "metric"
++    assert "平均每车费用" in avg_fee.content
++    assert "SUM(" not in avg_fee.content
++    assert avg_fee.metadata["source_columns"] == ["total_fee", "shipment_trip_count"]
++
++    for document in documents:
++        assert document.catalog_id
++        assert document.catalog_version == "logistics_nl2sql_catalog.v1"
++        assert len(document.content) <= 900
++        assert document.metadata.get("source_system") != "sap_mid"
++        assert "sys_query_log" not in document.catalog_id.lower()
++        assert "ods_" not in document.catalog_id.lower()
++        assert "v_sap_" not in document.catalog_id.lower()
++
++
++def test_catalog_recall_documents_do_not_expose_source_system_or_sql_payloads() -> None:
++    """真实 catalog 生成的 Milvus payload 不得暴露来源系统字段、日志表或 SQL-like 片段。"""
++
++    catalog = LogisticsSemanticCatalogLoader().load()
++    documents = LogisticsCatalogRecallDocumentBuilder().build(catalog)
++    forbidden_tokens = ("sap", "sys_query_log", "ods_", "oracle_mid", "v_sap")
++
++    for document in documents:
++        payload = document.model_dump_json().lower()
++        for token in forbidden_tokens:
++            assert token not in payload
++
++    by_id = {document.catalog_id: document for document in documents}
++    assert "column:dws_logistics_detail_union.sap_order_no" not in by_id
++    assert "=" not in by_id["join:system_task_assign"].model_dump_json()
++
++
++def test_recall_document_rejects_forbidden_tables_sources_and_payloads() -> None:
++    """召回文档层必须 fail-closed，拒绝日志表、ODS、SAP MID/Oracle MID 等非中间库来源。"""
++
++    base = {
++        "catalog_version": "logistics_nl2sql_catalog.v1",
++        "doc_type": "table",
++        "title": "unsafe",
++        "content": "unsafe",
++        "keywords": ["unsafe"],
++        "source_table": "dws_logistics_detail_union",
++        "metadata": {"table": "dws_logistics_detail_union"},
++    }
++
++    with pytest.raises(ValidationError, match="forbidden_recall_identifier::sys_query_log"):
++        LogisticsCatalogRecallDocument(catalog_id="table:sys_query_log", **base)
++
++    with pytest.raises(ValidationError, match="forbidden_recall_identifier::V_SAP_HFFN_EKKO"):
++        LogisticsCatalogRecallDocument(catalog_id="table:V_SAP_HFFN_EKKO", **base)
++
++    with pytest.raises(ValidationError, match="forbidden_recall_identifier::ods_logistic_ship_task"):
++        LogisticsCatalogRecallDocument(catalog_id="table:ods_logistic_ship_task", **base)
++
++    with pytest.raises(ValidationError, match="forbidden_recall_identifier::oracle_mid_logistics"):
++        LogisticsCatalogRecallDocument(catalog_id="table:oracle_mid_logistics", **base)
++
++    with pytest.raises(ValidationError, match="forbidden_recall_identifier::sap_mid_logistics"):
++        LogisticsCatalogRecallDocument(catalog_id="table:sap_mid_logistics", **base)
++
++    with pytest.raises(ValidationError, match="forbidden_source_system::sap_mid"):
++        LogisticsCatalogRecallDocument(
++            catalog_id="table:dws_logistics_detail_union",
++            **{**base, "metadata": {"source_system": "sap_mid"}},
++        )
++
++
++def test_index_catalog_uses_mock_embedding_and_milvus_without_network() -> None:
++    """索引流程应只依赖注入的 embedding 与 Milvus store，方便单测 mock。"""
++
++    docs = [
++        _doc("metric:shipment_mw", "发运量"),
++        _doc("dimension:city", "目的城市", doc_type="dimension"),
++    ]
++    embedding = _FakeEmbeddingClient()
++    store = _FakeVectorStore()
++    service = LogisticsCatalogRecallService(
++        document_builder=_FixedDocumentBuilder(docs),
++        embedding_client=embedding,
++        vector_store=store,
++        reranker=_FakeReranker(),
++    )
++
++    result = service.index_catalog(catalog=object())
++
++    assert result.status == "ok"
++    assert result.indexed_count == 2
++    assert embedding.calls == [["发运量", "目的城市"]]
++    assert store.upsert_calls[0] == {"ensure_collection": True}
++    payload_call = store.upsert_calls[1]
++    assert [document.catalog_id for document in payload_call["documents"]] == ["metric:shipment_mw", "dimension:city"]
++    assert payload_call["vectors"] == [[1.0, 0.1, 0.2], [2.0, 0.1, 0.2]]
++
++
++def test_recall_fail_closes_when_clients_are_missing_and_does_not_call_external_store() -> None:
++    """embedding/Milvus/rerank 任一不可用时，不得尝试外部调用，必须返回 disabled。"""
++
++    embedding = _FakeEmbeddingClient(available=False)
++    store = _FakeVectorStore()
++    reranker = _FakeReranker()
++    service = LogisticsCatalogRecallService(
++        embedding_client=embedding,
++        vector_store=store,
++        reranker=reranker,
++    )
++
++    result = service.recall(question="2025年合肥到广州17.5车均价是多少")
++
++    assert result.status == "disabled"
++    assert "embedding_unavailable" in (result.error or "")
++    assert embedding.calls == []
++    assert store.search_calls == []
++    assert reranker.calls == []
++
++
++def test_recall_searches_mock_milvus_dedupes_reranks_limits_and_preserves_traceability() -> None:
++    """召回流程应对 Milvus 命中去重，再交给 rerank 精排，并保留 catalog_id/version 与分数。"""
++
++    total_fee = _doc("metric:total_fee", "总费用")
++    avg_fee = _doc("metric:avg_fee_per_trip", "平均每车费用")
++    store = _FakeVectorStore(
++        hits=[
++            LogisticsCatalogRecallHit(document=total_fee, vector_score=0.72, source="milvus"),
++            LogisticsCatalogRecallHit(document=avg_fee, vector_score=0.61, source="milvus"),
++            LogisticsCatalogRecallHit(document=avg_fee, vector_score=0.93, source="milvus"),
++        ]
++    )
++    reranker = _FakeReranker({"metric:avg_fee_per_trip": 0.96, "metric:total_fee": 0.21})
++    service = LogisticsCatalogRecallService(
++        embedding_client=_FakeEmbeddingClient(),
++        vector_store=store,
++        reranker=reranker,
++        vector_top_k=5,
++        rerank_top_k=1,
++        rerank_min_score=0.5,
++    )
++
++    result = service.recall(
++        question="合肥到广州均价是多少",
++        normalized_question="合肥 广州 平均每车费用",
++        slot_summary="metric=avg_fee_per_trip",
++    )
++
++    assert result.status == "ok"
++    assert store.search_calls[0]["top_k"] == 5
++    assert "合肥到广州均价是多少" in reranker.calls[0]["query"]
++    assert [hit.document.catalog_id for hit in reranker.calls[0]["documents"]] == [
++        "metric:total_fee",
++        "metric:avg_fee_per_trip",
++    ]
++    assert len(result.hits) == 1
++    hit = result.hits[0]
++    assert hit.document.catalog_id == "metric:avg_fee_per_trip"
++    assert hit.document.catalog_version == "logistics_nl2sql_catalog.v1"
++    assert hit.vector_score == 0.93
++    assert hit.rerank_score == 0.96
++
++
++def test_recall_fail_closes_when_milvus_returns_blacklisted_payload() -> None:
++    """Milvus 命中如果夹带日志表/SAP/ODS 文档，召回链路必须整体 fail-closed，不得交给 rerank。"""
++
++    unsafe_hit = {
++        "document": {
++            "catalog_id": "table:sys_query_log",
++            "catalog_version": "logistics_nl2sql_catalog.v1",
++            "doc_type": "table",
++            "title": "查询日志",
++            "content": "查询日志",
++            "keywords": ["sys_query_log"],
++            "source_table": "sys_query_log",
++            "metadata": {"table": "sys_query_log"},
++        },
++        "vector_score": 0.99,
++        "source": "milvus",
++    }
++    reranker = _FakeReranker({"table:sys_query_log": 1.0})
++    service = LogisticsCatalogRecallService(
++        embedding_client=_FakeEmbeddingClient(),
++        vector_store=_FakeVectorStore(hits=[unsafe_hit]),
++        reranker=reranker,
++    )
++
++    result = service.recall(question="查一下日志表")
++
++    assert result.status == "error"
++    assert "forbidden_recall_identifier::sys_query_log" in (result.error or "")
++    assert result.hits == []
++    assert reranker.calls == []
++
++
++def test_recall_fail_closes_when_milvus_returns_payload_outside_semantic_catalog() -> None:
++    """Milvus collection 被污染时，非当前 Semantic Catalog 白名单的 catalog_id 不得返回。"""
++
++    polluted_hit = LogisticsCatalogRecallHit(
++        document=_doc("metric:invented_metric", "伪造指标"),
++        vector_score=0.99,
++        source="milvus",
++    )
++    reranker = _FakeReranker({"metric:invented_metric": 1.0})
++    service = LogisticsCatalogRecallService(
++        embedding_client=_FakeEmbeddingClient(),
++        vector_store=_FakeVectorStore(hits=[polluted_hit]),
++        reranker=reranker,
++    )
++
++    result = service.recall(question="伪造指标是多少")
++
++    assert result.status == "error"
++    assert "catalog_hit_not_allowed::metric:invented_metric" in (result.error or "")
++    assert result.hits == []
++    assert reranker.calls == []
++
++
++def test_recall_rebuilds_canonical_document_for_allowed_catalog_id_and_drops_polluted_payload() -> None:
++    """同 catalog_id 的 Milvus payload 也不能被信任，返回前必须用当前 catalog 重建 canonical 文档。"""
++
++    secret_key = "password"
++    secret_value = "unit-test-placeholder"
++    polluted_hit = LogisticsCatalogRecallHit.model_construct(
++        document=LogisticsCatalogRecallDocument.model_construct(
++            catalog_id="metric:total_fee",
++            catalog_version="logistics_nl2sql_catalog.v1",
++            doc_type="metric",
++            title=f"被污染的总费用 {secret_key}={secret_value}",
++            content=f"sys_query_log {secret_key}={secret_value}",
++            keywords=["sys_query_log", f"{secret_key}={secret_value}"],
++            source_table="dws_logistics_detail_union",
++            metadata={"table": "dws_logistics_detail_union", secret_key: secret_value},
++        ),
++        vector_score=0.88,
++        source="milvus",
++    )
++    reranker = _FakeReranker({"metric:total_fee": 0.91})
++    service = LogisticsCatalogRecallService(
++        embedding_client=_FakeEmbeddingClient(),
++        vector_store=_FakeVectorStore(hits=[polluted_hit]),
++        reranker=reranker,
++    )
++
++    result = service.recall(question="总运费是多少")
++
++    assert result.status == "ok"
++    assert result.hits[0].document.catalog_id == "metric:total_fee"
++    assert secret_value not in result.hits[0].document.model_dump_json()
++    assert "sys_query_log" not in result.hits[0].document.model_dump_json()
++
++
++def test_recall_fail_closes_stale_catalog_version_and_malformed_milvus_payload() -> None:
++    """过期版本或缺字段/坏 JSON 的 Milvus payload 必须 fail-closed，而不是静默默认。"""
++
++    stale_hit = {
++        "catalog_id": "metric:total_fee",
++        "catalog_version": "old_version",
++        "doc_type": "metric",
++        "title": "总费用",
++        "content": "总费用",
++        "keywords_json": "[]",
++        "metadata_json": "{}",
++        "source_table": "dws_logistics_detail_union",
++        "distance": 0.8,
++    }
++    service = LogisticsCatalogRecallService(
++        embedding_client=_FakeEmbeddingClient(),
++        vector_store=_FakeVectorStore(hits=[stale_hit]),
++        reranker=_FakeReranker({"metric:total_fee": 0.9}),
++    )
++
++    stale_result = service.recall(question="总运费是多少")
++
++    assert stale_result.status == "error"
++    assert "catalog_version_mismatch::metric:total_fee" in (stale_result.error or "")
++
++    malformed_hit = {**stale_hit, "catalog_version": "logistics_nl2sql_catalog.v1", "metadata_json": "{"}
++    malformed_service = LogisticsCatalogRecallService(
++        embedding_client=_FakeEmbeddingClient(),
++        vector_store=_FakeVectorStore(hits=[malformed_hit]),
++        reranker=_FakeReranker({"metric:total_fee": 0.9}),
++    )
++
++    malformed_result = malformed_service.recall(question="总运费是多少")
++
++    assert malformed_result.status == "error"
++    assert "invalid_json_payload::metadata_json" in (malformed_result.error or "")
++
++
++def test_recall_document_metadata_does_not_expose_sql_like_expressions() -> None:
++    """Milvus payload 不应携带 sort_expression 或 join.on 这类 SQL-like 片段。"""
++
++    catalog = LogisticsSemanticCatalogLoader().load()
++    documents = LogisticsCatalogRecallDocumentBuilder().build(catalog)
++    by_id = {document.catalog_id: document for document in documents}
++
++    assert "sort_expression" not in by_id["metric:total_fee"].metadata
++    assert "on" not in by_id["join:system_task_assign"].metadata
++    assert "=" not in by_id["join:system_task_assign"].model_dump_json()
++
++
++def test_safe_recall_document_validation_scans_text_keywords_and_nested_metadata() -> None:
++    """文档校验必须递归扫描所有 payload 字段，阻断黑名单和 secret-like 内容。"""
++
++    base = {
++        "catalog_id": "metric:total_fee",
++        "catalog_version": "logistics_nl2sql_catalog.v1",
++        "doc_type": "metric",
++        "title": "总费用",
++        "content": "总费用",
++        "keywords": ["总费用"],
++        "source_table": "dws_logistics_detail_union",
++        "metadata": {"table": "dws_logistics_detail_union"},
++    }
++
++    with pytest.raises(ValidationError, match="forbidden_recall_identifier::sys_query_log"):
++        LogisticsCatalogRecallDocument(**{**base, "content": "来自 sys_query_log 的污染内容"})
++
++    with pytest.raises(ValidationError, match="forbidden_recall_secret::password"):
++        LogisticsCatalogRecallDocument(
++            **{**base, "metadata": {"nested": {"password": "super-secret"}}}
++        )
++
++
++def test_milvus_collection_schema_declares_string_primary_key_and_vector_index() -> None:
++    """真实 Milvus collection 创建时应显式声明字符串主键和向量索引，避免 upsert 主键类型不匹配。"""
++
++    fake_client = _FakeMilvusClientForSchema()
++    store = LogisticsMilvusCatalogVectorStore(
++        client=fake_client,
++        collection_name="unit_test_catalog",
++        dimension=3,
++    )
++
++    store.ensure_collection()
++
++    id_field = next(field for field in fake_client.schema.fields if field["field_name"] == "id")
++    vector_field = next(field for field in fake_client.schema.fields if field["field_name"] == "vector")
++    assert id_field["is_primary"] is True
++    assert id_field["max_length"] >= 32
++    assert vector_field["dim"] == 3
++    assert fake_client.index_params.indexes[0]["field_name"] == "vector"
++    assert fake_client.index_params.indexes[0]["metric_type"] == "COSINE"
++    assert fake_client.created is not None
++    assert fake_client.created["schema"] is fake_client.schema
++
++
++def test_recall_errors_redact_password_token_and_dsn_like_secrets() -> None:
++    """异常信息返回给调用方前必须防御性脱敏，不能泄露 password/token/DSN。"""
++
++    password_key = "password"
++    token_key = "token"
++    password_value = "unit-test-password"
++    token_value = "abc123456"
++    dsn_pass = "pass123"
++    dsn_scheme = "my" + "sql"
++    dsn = "".join([dsn_scheme, "://", "demo", ":", dsn_pass, "@", "127.0.0.1:3306/db"])
++    service = LogisticsCatalogRecallService(
++        embedding_client=_FakeEmbeddingClient(
++            error=f"{password_key}={password_value} {token_key}={token_value} {dsn}"
++        ),
++        vector_store=_FakeVectorStore(),
++        reranker=_FakeReranker(),
++    )
++
++    result = service.recall(question="合肥到广州均价是多少")
++
++    assert result.status == "error"
++    assert password_value not in (result.error or "")
++    assert token_value not in (result.error or "")
++    assert "pass123" not in (result.error or "")
++    assert f"{password_key}=[REDACTED]" in (result.error or "")
++    assert f"{token_key}=[REDACTED]" in (result.error or "")
++    assert f"{dsn_scheme}://demo:" in (result.error or "")
++    assert "[REDACTED]@127.0.0.1:3306/db" in (result.error or "")
++
++
++def test_settings_declares_m2_embedding_rerank_and_collection_defaults() -> None:
++    """配置层必须显式声明 M2 embedding/rerank/Milvus collection 参数。"""
++
++    settings = Settings()
++
++    assert hasattr(settings, "embedding_model")
++    assert hasattr(settings, "rerank_model")
++    assert settings.embedding_dimension > 0
++    assert settings.milvus_collection_prefix
++    assert settings.nl2sql_recall_top_k > 0
++    assert settings.nl2sql_rerank_top_k > 0
+diff --git a/docs/NL2SQL_LOGISTICS_M2_RECALL_MVP_PLAN.md b/docs/NL2SQL_LOGISTICS_M2_RECALL_MVP_PLAN.md
+new file mode 100644
+index 0000000..ee580f8
+--- /dev/null
++++ b/docs/NL2SQL_LOGISTICS_M2_RECALL_MVP_PLAN.md
+@@ -0,0 +1,137 @@
++# 物流 NL2SQL M2 Milvus 语义召回 MVP 计划
++
++> **For Hermes:** 本计划用于当前看板任务 `t_4a5d380f`。实现必须遵守 TDD：先写失败测试，再补最小实现。
++
++**Goal:** 在不接管正式物流 QA 查询链路的前提下，为物流 NL2SQL shadow SQLPlan 链路提供可索引、可召回、可精排、可审计、fail-closed 的 Semantic Catalog M2 能力。
++
++**Architecture:** M2 只把现有 `Semantic Catalog` 转换为受控召回文档，写入本地 Docker Milvus，并在查询时通过 embedding + Milvus + rerank 返回带 `catalog_id/catalog_version` 的上下文片段。M2 不生成 SQL、不执行 SQL、不查询业务库；后续 M3 SQLPlan 只能通过 `catalog_id` 回查受控 catalog。
++
++**Tech Stack:** Python 3.11、Pydantic v2、PyYAML、pymilvus（requirements 锁定 2.3.5，当前 venv 为 2.5.2，代码需避免使用 2.5 专属 API）、OpenAI-compatible embedding 客户端、百炼 Qwen3-Embedding-4B、百炼 Qwen3-Reranker。
++
++---
++
++## 0. 当前真实代码状态
++
++- 已有 M1 catalog loader：`backend/app/domains/logistics/services/nl2sql/semantic_catalog.py`。
++- 已有 catalog YAML：`backend/app/domains/logistics/config/nl2sql_catalog/{tables,metrics,dimensions,joins,rules}.yaml`。
++- 已有 Query Planner V2 安全边界：`query_planner_v2/prompt_builder.py` 明确禁止 SQL/where/table_name/answer 等字段，`validator.py` 对 query_key/filter/metric/dimension/time/fallback 做 fail-closed。
++- `backend/app/core/config.py` 已有 Milvus/LLM 基础字段，但缺少 M2 使用的 `embedding_model`、`rerank_model`、`embedding_dimension` 等配置；已有 `MILVUS_COLLECTION_PREFIX` property 但字段缺失。
++- 本地 Milvus 可连接：`http://localhost:19530`，当前 collection 为空。
++
++## 1. MVP 文件边界
++
++### 新增
++
++- `backend/app/domains/logistics/services/nl2sql/catalog_retrieval.py`
++  - catalog -> recall document 转换；
++  - embedding client 抽象；
++  - Milvus vector store 抽象；
++  - rerank client 抽象；
++  - recall/index service 编排；
++  - 黑名单与 fail-closed 校验。
++- `tests/unit/logistics/nl2sql/test_catalog_retrieval.py`
++  - focused TDD 单测，全部使用 mock embedding/Milvus/rerank，不访问外网或真实 Milvus。
++- `scripts/reindex_logistics_nl2sql_catalog.py`
++  - 支持 `--dry-run` 仅打印待索引文档数量；真实重建时才连接 embedding/Milvus。
++- `docs/NL2SQL_LOGISTICS_M2_RECALL_MVP_PLAN.md`
++  - 本文档。
++
++### 修改
++
++- `backend/app/core/config.py`
++  - 新增 M2 配置项：`embedding_model`、`embedding_dimension`、`rerank_model`、`rerank_endpoint_path`、`milvus_collection_prefix`、`nl2sql_recall_top_k`、`nl2sql_rerank_top_k`、`nl2sql_rerank_min_score`。
++- `backend/.env.example`
++  - 增加 M2 示例配置，不写真实密钥。
++- `backend/app/domains/logistics/services/nl2sql/__init__.py`
++  - 导出 M2 入口类。
++
++## 2. 召回文档 schema
++
++每个 Milvus payload 必须包含：
++
++- `catalog_id`：稳定 ID，例如 `metric:shipment_mw`、`dimension:city`、`table:dws_logistics_detail_union`、`column:dws_logistics_detail_union.city`。
++- `catalog_version`：来自 YAML 顶层，例如 `logistics_nl2sql_catalog.v1`。
++- `doc_type`：`table | column | metric | dimension | rule | join`。
++- `title`：业务标题。
++- `content`：用于 embedding/rerank 的短文本，限长，不包含可执行 SQL。
++- `keywords`：同义词、业务名、字段名、指标 ID 等。
++- `source_table`：可选表名。
++- `metadata`：受控元信息，例如 `metric_id`、`dimension_id`、`source_columns`、`join_id`；不得放真实密钥、连接串、自由 SQL。
++
++## 3. Collection 命名与 schema
++
++- collection name：`{milvus_collection_prefix}_logistics_nl2sql_catalog`。
++- vector field：`vector`，dimension 从 `embedding_dimension` 读取。
++- scalar fields：`doc_id`、`catalog_id`、`catalog_version`、`doc_type`、`title`、`content`、`keywords_json`、`metadata_json`、`source_table`。
++- index metric：`COSINE`。
++
++## 4. Index / Recall 流程
++
++### Index
++
++1. 加载 `LogisticsSemanticCatalogLoader().load()`；
++2. `LogisticsCatalogRecallDocumentBuilder.build(catalog)` 生成文档；
++3. fail-closed 校验每个文档：禁止 `sys_query_log`、`V_SAP_*`、`ods_*`、`sap_mid`、`oracle_mid` 等非中间库/非白名单来源进入索引；
++4. embedding client 批量生成向量；
++5. Milvus store 创建 collection 并 upsert 文档。
++
++### Recall
++
++1. 输入原始问题、可选标准化问题、可选槽位摘要；
++2. 去重后组合查询文本，生成 embedding；
++3. Milvus topK 检索；
++4. 校验命中 payload，若发现黑名单文档直接 fail-closed；
++5. 按 `catalog_id` 去重，保留最高向量分；
++6. Reranker 对候选文档重排；
++7. 按 `nl2sql_rerank_top_k` 和 `nl2sql_rerank_min_score` 截断；
++8. 返回只包含 catalog 元信息和业务文本的 `LogisticsCatalogRecallResult`。
++
++## 5. 与 SQLPlan / 正式 QA 的边界
++
++- M2 输出不能进入正式 Data QA 执行路径，只能给 shadow SQLPlan 生成链路使用。
++- M2 不接受 LLM 生成的 SQL、where、表名自由输入或计算结果。
++- 后续 SQLPlan 生成必须只引用 `catalog_id`，再由后端从 Semantic Catalog 回查受控表/字段/指标。
++- 用户可见回答不得展示 `catalog_id`、SQL、schema、raw/debug、LLM、planner、query_key。
++
++## 6. TDD 任务拆分
++
++### Task 1: 召回文档转换
++
++- 测试：catalog loader 加载真实 YAML 后，应生成 metric/dimension/rule/table/column/join 文档，且每条有 `catalog_id/catalog_version/doc_type/content`。
++- 实现：`LogisticsCatalogRecallDocument` + `LogisticsCatalogRecallDocumentBuilder`。
++
++### Task 2: 黑名单 fail-closed
++
++- 测试：`sys_query_log`、`V_SAP_HFFN_EKKO`、`ods_logistic_ship_task`、`source_system=sap_mid/oracle_mid` 不能构造成召回文档，也不能作为 Milvus hit 返回。
++- 实现：文档模型 validator + recall hit 解析校验。
++
++### Task 3: mock embedding + mock Milvus index
++
++- 测试：fake embedding 收到文档内容，fake vector store 收到同数量向量与 payload；缺 embedding 配置时不调用 store。
++- 实现：`LogisticsBailianEmbeddingClient`、`LogisticsMilvusCatalogVectorStore`、`LogisticsCatalogRecallService.index_catalog()`。
++
++### Task 4: mock Milvus recall + mock rerank
++
++- 测试：fake vector store 返回重复候选，服务按 `catalog_id` 去重并用 fake reranker 排序、限长、保留 `vector_score/rerank_score`。
++- 实现：`LogisticsBailianRerankClient`、`LogisticsCatalogRecallService.recall()`。
++
++### Task 5: 脚本与配置
++
++- 测试/验证：`--dry-run` 不访问外部服务并能打印文档数量；settings 能读取新增配置。
++- 实现：reindex 脚本、`.env.example`、`config.py`。
++
++## 7. 验证命令
++
++```bash
++backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_catalog_retrieval.py -q
++backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_semantic_catalog.py tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py -q
++backend/.venv/bin/python -m py_compile backend/app/domains/logistics/services/nl2sql/catalog_retrieval.py scripts/reindex_logistics_nl2sql_catalog.py
++backend/.venv/bin/python scripts/reindex_logistics_nl2sql_catalog.py --dry-run
++```
++
++## 8. 验收产物
++
++- `ai/outbox/kanban/t_4a5d380f/test.log`
++- `ai/outbox/kanban/t_4a5d380f/diff.patch`
++- `ai/outbox/kanban/t_4a5d380f/final-acceptance.md`
++- 独立 review JSON/摘要。
+diff --git a/scripts/reindex_logistics_nl2sql_catalog.py b/scripts/reindex_logistics_nl2sql_catalog.py
+new file mode 100644
+index 0000000..85cadef
+--- /dev/null
++++ b/scripts/reindex_logistics_nl2sql_catalog.py
+@@ -0,0 +1,58 @@
++#!/usr/bin/env python
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++from pathlib import Path
++
++PROJECT_ROOT = Path(__file__).resolve().parents[1]
++if str(PROJECT_ROOT) not in sys.path:
++    sys.path.insert(0, str(PROJECT_ROOT))
++
++from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (  # noqa: E402
++    LogisticsCatalogRecallDocumentBuilder,
++    LogisticsCatalogRecallService,
++)
++from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader  # noqa: E402
++
++
++def parse_args() -> argparse.Namespace:
++    parser = argparse.ArgumentParser(description="重建物流 NL2SQL M2 Semantic Catalog Milvus 索引")
++    parser.add_argument("--dry-run", action="store_true", help="只加载 catalog 并打印待索引文档数量，不访问 embedding/Milvus")
++    return parser.parse_args()
++
++
++def main() -> int:
++    args = parse_args()
++    loader = LogisticsSemanticCatalogLoader()
++    catalog = loader.load()
++    builder = LogisticsCatalogRecallDocumentBuilder()
++    documents = builder.build(catalog)
++
++    if args.dry_run:
++        doc_type_counts: dict[str, int] = {}
++        for document in documents:
++            doc_type_counts[document.doc_type] = doc_type_counts.get(document.doc_type, 0) + 1
++        print(
++            json.dumps(
++                {
++                    "status": "dry_run",
++                    "catalog_version": catalog.catalog_version,
++                    "documents": len(documents),
++                    "doc_type_counts": doc_type_counts,
++                },
++                ensure_ascii=False,
++                sort_keys=True,
++            )
++        )
++        return 0
++
++    service = LogisticsCatalogRecallService(catalog_loader=loader, document_builder=builder)
++    result = service.index_catalog(catalog=catalog)
++    print(json.dumps(result.model_dump(exclude={"hits"}), ensure_ascii=False, sort_keys=True))
++    return 0 if result.status == "ok" else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())

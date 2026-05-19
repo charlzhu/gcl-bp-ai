@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "blocking_findings": [],
+  "nonblocking_suggestions": [
+    "进入 M2 前继续将 Oracle 驱动/网络/只读权限、MID schema/owner、SAP_MID source_type 命名兼容、库存及移动类型业务口径作为人工确认门禁。",
+    "M2 首次真实 smoke test 通过后应更新 smoke test 报告，仅记录安全摘要、行数和字段信息，继续禁止输出 host/user/password/DSN 真实值。"
+  ],
+  "summary": "M1 交付的 11 个文档齐全且仅为文档方案，无越界开发、无真实连接信息泄露，Oracle smoke test 如实记录驱动阻塞，并已明确建议进入 M2 与列出风险/人工确认项。"
+}

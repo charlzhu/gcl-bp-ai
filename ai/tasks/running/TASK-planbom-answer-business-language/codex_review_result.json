@@ -1,0 +1,15 @@
+{
+  "passed": false,
+  "security_concerns": [],
+  "logic_errors": [
+    "backend/app/domains/plan_bom/services/answer_presentation_service.py: _answer_mentions_only_existing_values only validates order-like IDs, so the non-stream LLM presentation path can introduce or change counts, quantities, power values, percentages, or spec numbers in presentation.answer without being rejected, violating the criterion that LLM cannot alter numeric facts.",
+    "backend/app/services/business_answer_stream_service.py: stream_answer buffers the entire LLM stream, validates it, and only then yields chunks, so the LLM path is not actually streamed dynamically to the frontend.",
+    "backend/app/services/business_answer_stream_service.py: the /ask/stream LLM prompt still includes compact payload keys such as answer_summary, result_table, display_type, and table_spec rather than a fully public business-language context, so the prompt/context criterion is not fully satisfied."
+  ],
+  "suggestions": [
+    "Reuse the numeric-token and row-binding validation from BusinessAnswerStreamService in PlanBomAnswerPresentationService before accepting LLM answers.",
+    "If real-time streaming is required, stream provisional chunks only through a safe gating strategy or keep deterministic chunked fallback as the only streamed mode until full-answer validation can be reconciled with live deltas.",
+    "Translate streamed prompt context keys to Chinese business labels and omit display/table implementation field names from the LLM-facing payload."
+  ],
+  "summary": "The fix improves deterministic and fallback wording, but it does not fail closed against non-stream LLM numeric fact changes and does not truly stream LLM chunks dynamically."
+}

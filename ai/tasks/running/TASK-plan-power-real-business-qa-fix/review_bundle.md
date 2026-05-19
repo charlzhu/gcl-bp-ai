@@ -1,0 +1,809 @@
+# Review bundle: TASK-plan-power-real-business-qa-fix
+
+## Scope
+- TDD 修复真实业务日志暴露的 Plan BOM 功率 QA 五点：口语配置抽取、线长别名/接线盒、单一目标功率、订单显式配置覆盖、候选澄清展示。
+- 根据两轮 reviewer 阻塞问题，新增负例并收紧单一目标功率抽取，防止订单尾号/年份/型号数字误抽为目标功率。
+- 同步补齐既有 full-suite 前端验收要求的 BusinessChatPage 动态布局 helper；不改变后端业务裁决。
+
+## Reviewer blocker fixes included
+- `订单00104功率预测` and `订单2025-01073功率预测` must stay prediction/no target ratio.
+- `深圳建融-2025-00615功率预测...`、`项目-00615功率预测...`、`NT720功率预测，供应商推荐` must not extract `615/720` as target ratio.
+
+## Changed files in this review only
+- `backend/app/domains/plan_bom/config/material_aliases.json`
+- `backend/app/domains/plan_bom/services/nlu_center_service.py`
+- `backend/app/domains/plan_bom/services/power_config_resolver_service.py`
+- `backend/app/domains/plan_bom/services/qa_service.py`
+- `frontend/src/views/business-chat/BusinessChatPage.vue`
+- `tests/business_acceptance/test_plan_power_real_business_qa_regression.py`
+
+## Known unrelated dirty worktree files excluded from review
+- `backend/app/domains/logistics/services/data_qa_planner.py` and `tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py` were stashed out before final verification/review when present.
+- `ai/eval/runs/run_20260507_001940_full_all/clarification_batch_state.md` and `ai/eval/scripts/cron_batch_recover_plan_power_branch_prompt.md` remain untracked and are not part of this task.
+
+## Git status
+```
+## agent/TASK-plan-power-real-business-qa-fix
+ M backend/app/domains/plan_bom/config/material_aliases.json
+ M backend/app/domains/plan_bom/services/nlu_center_service.py
+ M backend/app/domains/plan_bom/services/power_config_resolver_service.py
+ M backend/app/domains/plan_bom/services/qa_service.py
+ M frontend/src/views/business-chat/BusinessChatPage.vue
+?? ai/eval/runs/run_20260507_001940_full_all/clarification_batch_state.md
+?? ai/eval/scripts/cron_batch_recover_plan_power_branch_prompt.md
+?? ai/tasks/running/TASK-plan-power-real-business-qa-fix/
+?? tests/business_acceptance/test_plan_power_real_business_qa_regression.py
+```
+
+## Diff stat
+```
+.../domains/plan_bom/config/material_aliases.json  |   2 +-
+ .../plan_bom/services/nlu_center_service.py        | 119 +++++++++++++++++++--
+ .../services/power_config_resolver_service.py      |  61 +++++++++++
+ .../app/domains/plan_bom/services/qa_service.py    |  57 ++++++++--
+ .../src/views/business-chat/BusinessChatPage.vue   |  60 +++++++++--
+ 5 files changed, 276 insertions(+), 23 deletions(-)
+ .../test_plan_power_real_business_qa_regression.py | 188 +++++++++++++++++++++
+ 1 file changed, 188 insertions(+)
+```
+
+## Verification highlights
+```
+5 passed in 1.41s
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+FAILED tests/business_acceptance/test_plan_power_docx_question_regression.py::test_docx_power_example_1_nt12_order_recommends_multiple_suppliers[0]
+1 failed, 67 passed, 2 warnings in 21.28s
+FAILED tests/business_acceptance/test_plan_power_real_business_qa_regression.py::test_business_power_question_extracts_spoken_configuration_single_target_and_all_suppliers
+FAILED tests/business_acceptance/test_plan_power_real_business_qa_regression.py::test_business_power_candidate_clarification_lists_candidates_and_name_mismatch
+2 failed, 3 passed in 1.46s
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+FAILED tests/business_acceptance/test_plan_power_real_business_qa_regression.py::test_business_power_question_extracts_spoken_configuration_single_target_and_all_suppliers
+FAILED tests/business_acceptance/test_plan_power_real_business_qa_regression.py::test_business_power_candidate_clarification_lists_candidates_and_name_mismatch
+2 failed, 66 passed, 2 warnings in 18.63s
+5 passed in 1.08s
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+68 passed, 2 warnings in 23.21s
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+FAILED tests/business_acceptance/test_plan_power_frontend_upload_entry.py::test_business_chat_assistant_response_layout_is_adaptive_not_fixed_template
+1 failed, 120 passed, 2 warnings in 25.46s
+1 passed in 0.00s
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+133 passed, 2 warnings in 23.69s
+✓ built in 2.67s
+No findings in targeted changed files.
+No findings in added lines of task diff.
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+121 passed, 2 warnings in 29.70s
+✓ built in 2.40s
+No findings in targeted changed files.
+No findings in added lines of task diff.
+FAILED tests/business_acceptance/test_plan_power_real_business_qa_regression.py::test_order_identifier_power_prediction_does_not_extract_target_power_ratio[\u8ba2\u535500104\u529f\u7387\u9884\u6d4b\uff0c\u7ed9\u51fa\u529f\u7387\u6863\u5206\u5e03\u3002]
+FAILED tests/business_acceptance/test_plan_power_real_business_qa_regression.py::test_order_identifier_power_prediction_does_not_extract_target_power_ratio[\u8ba2\u53552025-01073\u529f\u7387\u9884\u6d4b]
+2 failed in 1.46s
+2 passed in 1.02s
+7 passed in 1.13s
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+70 passed, 2 warnings in 22.04s
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+123 passed, 2 warnings in 26.32s
+✓ built in 2.59s
+No findings in targeted changed files.
+No findings in added lines of task diff.
+FAILED tests/business_acceptance/test_plan_power_real_business_qa_regression.py::test_identifier_digits_in_target_power_range_do_not_become_single_target[\u6df1\u5733\u5efa\u878d-2025-00615\u529f\u7387\u9884\u6d4b\uff0c\u5404\u4e2a\u4f9b\u5e94\u5546\u5382\u5bb6\u4ece\u4ec0\u4e48\u7535\u6c60\u6548\u7387\u53ef\u4ee5\u6ee1\u8db3]
+FAILED tests/business_acceptance/test_plan_power_real_business_qa_regression.py::test_identifier_digits_in_target_power_range_do_not_become_single_target[\u9879\u76ee-00615\u529f\u7387\u9884\u6d4b\uff0c\u5404\u4e2a\u4f9b\u5e94\u5546\u5382\u5bb6\u4ece\u4ec0\u4e48\u7535\u6c60\u6548\u7387\u53ef\u4ee5\u6ee1\u8db3]
+FAILED tests/business_acceptance/test_plan_power_real_business_qa_regression.py::test_identifier_digits_in_target_power_range_do_not_become_single_target[NT720\u529f\u7387\u9884\u6d4b\uff0c\u4f9b\u5e94\u5546\u63a8\u8350]
+3 failed in 1.12s
+3 passed in 0.94s
+10 passed in 1.07s
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+73 passed, 2 warnings in 17.31s
+=============================== warnings summary ===============================
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+134 passed, 2 warnings in 25.60s
+✓ built in 2.39s
+No findings in targeted changed files.
+No findings in added lines of task diff.
+```
+
+## Full task diff
+```diff
+diff --git a/backend/app/domains/plan_bom/config/material_aliases.json b/backend/app/domains/plan_bom/config/material_aliases.json
+index 28b7648..1f0f846 100644
+--- a/backend/app/domains/plan_bom/config/material_aliases.json
++++ b/backend/app/domains/plan_bom/config/material_aliases.json
+@@ -3,7 +3,7 @@
+   "gap_film": ["间隙贴膜", "间隙膜", "间隙胶带", "间隙材料"],
+   "interconnect_bar": ["焊带", "互联条", "互联带"],
+   "busbar": ["汇流条", "汇流带"],
+-  "junction_box": ["接线盒", "线盒", "jbox"],
++  "junction_box": ["接线盒", "线盒", "jbox", "线长", "线缆长度", "线缆", "接线盒线长", "线长搭配"],
+   "poe_film": ["POE胶膜", "POE 胶膜", "POE"],
+   "eva_film": ["EVA胶膜", "EVA 胶膜", "EVA"],
+   "cell": ["电池片", "电池", "电池片方案"],
+diff --git a/backend/app/domains/plan_bom/services/nlu_center_service.py b/backend/app/domains/plan_bom/services/nlu_center_service.py
+index 17d5667..ce3331e 100644
+--- a/backend/app/domains/plan_bom/services/nlu_center_service.py
++++ b/backend/app/domains/plan_bom/services/nlu_center_service.py
+@@ -185,7 +185,24 @@ class PlanBomNluCenterService:
+         ):
+             if slots.get("target_power_ratio") or any(
+                 word in question
+-                for word in ("推荐供应商", "供应商推荐", "推荐电池", "匹配度", "目标功率", "目标比例", "目标", "占比")
++                for word in (
++                    "推荐供应商",
++                    "供应商推荐",
++                    "推荐电池",
++                    "匹配度",
++                    "目标功率",
++                    "目标比例",
++                    "目标",
++                    "占比",
++                    "各家供应商",
++                    "各个供应商",
++                    "供应商厂家",
++                    "各个供应商厂家",
++                    "从什么电池效率",
++                    "需要从什么电池效率",
++                    "电池效率可以满足",
++                    "效率可以满足",
++                )
+             ):
+                 return "plan_power_supplier_recommendation"
+             return "plan_power_prediction"
+@@ -482,9 +499,15 @@ class PlanBomNluCenterService:
+             "供应商推荐",
+             "推荐供应商",
+             "各家供应商",
++            "各个供应商",
++            "供应商厂家",
++            "各个供应商厂家",
+             "哪些家电池",
+             "哪几家电池",
+             "哪个效率",
++            "从什么电池效率",
++            "需要从什么电池效率",
++            "供应需要从什么电池效率",
+             "用供应商",
+             "需要什么样的电池",
+             "电池可以满足",
+@@ -539,6 +562,55 @@ class PlanBomNluCenterService:
+         if half_match:
+             put(half_match.group("p1"), 1)
+             put(half_match.group("p2"), 1)
++        if target:
++            return target
++
++        # 真实业务常把“615 功率 / 单一需求720功率”作为 100% 单一目标档，
++        # 只在功率/效率/供应商语境下采纳，避免把订单号、年份或线长误当成功率目标。
++        power_context_words = (
++            "目标功率",
++            "目标",
++            "需求",
++            "电池效率",
++            "效率段",
++            "供应商",
++            "供应",
++            "满足",
++            "单一需求",
++        )
++        if not any(word in question for word in power_context_words):
++            return target
++        single_patterns = [
++            r"(?:单一需求|单一|目标功率|目标|需求)?\s*(?P<power>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|功率|功率档)",
++            r"(?:功率|目标功率|单一需求)\s*(?P<power>\d{3,4}(?:\.\d+)?)\s*(?:W|w|瓦|档)?",
++        ]
++        for pattern in single_patterns:
++            match = re.search(pattern, question)
++            if not match:
++                continue
++            power_text = match.group("power")
++            try:
++                power_value = float(power_text)
++            except (TypeError, ValueError):
++                continue
++            prefix = question[max(0, match.start("power") - 10) : match.start("power")]
++            previous_char = question[match.start("power") - 1] if match.start("power") > 0 else ""
++            if power_value < 300 or power_value > 900:
++                # 组件目标功率应落在功率模型常见输出区间；104/1073/2025 等订单号或年份片段不能当成功率档。
++                continue
++            if (power_text.startswith("0") and len(power_text) > 3) or previous_char.isdigit():
++                # 订单尾号常写成 00615；正则可能命中其中的 0615/615，必须保持为识别符而不是 615W 目标档。
++                continue
++            if previous_char and (previous_char.isascii() and previous_char.isalnum() or previous_char in "-_/—–"):
++                # NT720、项目-615 这类型号/项目码紧贴数字，不能仅因后面有“功率预测/供应商推荐”就抽成目标功率。
++                continue
++            if any(marker in prefix for marker in ("订单", "单号", "评审", "编号", "项目号")) and not any(
++                marker in prefix for marker in ("目标", "需求", "单一")
++            ):
++                # “订单615功率预测”中的 615 是订单尾号；只有“目标/需求/单一”明确修饰时才可作为目标功率。
++                continue
++            put(power_text, 1)
++            break
+         return target
+ 
+     @staticmethod
+@@ -546,22 +618,51 @@ class PlanBomNluCenterService:
+         """抽取用户直接写在问题中的功率模型配置项。
+ 
+         参数：
+-            question: 用户问题，支持“焊带：0.24+玻璃：双镀+汇流条：...+接线盒：300/200”等 docx 问法。
++            question: 用户问题，支持“0.24焊带+双镀玻璃+300/200线长”、
++                “焊带：0.24+玻璃：双镀+接线盒：300/200”等真实业务口语和结构化问法。
+ 
+         返回：
+             可交给 M4 显式配置解析的配置字典；这里只做文本槽位抽取，不做数值计算。
+         """
+         config: dict[str, str] = {}
+-        extractors = {
+-            "ribbon": r"焊带\s*[:：]?\s*(?P<value>.+?)(?=\+?玻璃|[，,；;。]|$)",
+-            "glass": r"玻璃\s*[:：]?\s*(?P<value>.+?)(?=\+?汇流条|\+?接线盒|[，,；;。]|$)",
+-            "busbar": r"汇流条\s*[:：]?\s*(?P<value>.+?)(?=\+?接线盒|[，,；;。]|$)",
+-            "cable": r"接线盒\s*[:：]?\s*(?P<value>.+?)(?=\s*[，,；;。]|\s*标板|$)",
++
++        def clean(value: str | None) -> str:
++            """清理材料槽位文本，去掉连接符和口语尾词。"""
++            return (value or "").strip().strip("+").strip()
++
++        # 真实业务经常把规格写在材料名前面，例如“0.24焊带”；
++        # 这些前置写法优先于旧的“焊带：0.24”后置写法，避免把“双镀玻璃”误塞到焊带槽位。
++        prefix_extractors = {
++            "ribbon": r"(?P<value>φ?\s*\d+(?:\.\d+)?(?:\s*\+\s*φ?\s*\d+(?:\.\d+)?)*)\s*(?:mm)?\s*焊带",
++            "glass": r"(?P<value>高透|双镀|单镀|透明|白玻|镀膜|非镀膜)\s*玻璃",
++            "busbar": r"(?P<value>\d+(?:\.\d+)?\s*\*\s*\d+(?:\.\d+)?\s*mm?[^，,；;。+]*?)\s*汇流条",
++            "cable": r"(?P<value>\+?\d{2,4}\s*/\s*-?\d{2,4}\s*(?:mm)?\s*(?:线长|线缆长度|线缆|接线盒))",
++        }
++        for key, pattern in prefix_extractors.items():
++            match = re.search(pattern, question, flags=re.IGNORECASE)
++            if match:
++                value = clean(match.group("value"))
++                if value:
++                    config[key] = value
++
++        # 对“高透玻璃+间隙铝膜”这类玻璃+间隙膜组合，保留间隙膜信息给 M4 做确定性 option 归一。
++        if "glass" in config and any(word in question for word in ("间隙铝膜", "间隙膜", "间隙贴膜")):
++            if "间隙" not in config["glass"]:
++                config["glass"] = f"{config['glass']}+间隙铝膜"
++
++        # 兼容结构化后置写法；仅在前置写法没有命中该槽位时使用，避免跨材料贪婪误抽。
++        suffix_extractors = {
++            "ribbon": r"焊带\s*[:：]\s*(?P<value>.+?)(?=\+?玻璃|\+?汇流条|\+?接线盒|\+?线长|[，,；;。]|$)",
++            "glass": r"玻璃\s*[:：]\s*(?P<value>.+?)(?=\+?汇流条|\+?接线盒|\+?线长|[，,；;。]|$)",
++            "busbar": r"汇流条\s*[:：]\s*(?P<value>.+?)(?=\+?接线盒|\+?线长|[，,；;。]|$)",
++            "cable": r"(?:接线盒|线长|线缆长度|线缆)\s*[:：]?\s*(?P<value>\+?\d{2,4}\s*/\s*-?\d{2,4}(?:mm)?)(?=\s*[，,；;。]|\s*标板|$)",
+         }
+-        for key, pattern in extractors.items():
++        for key, pattern in suffix_extractors.items():
++            if key in config:
++                continue
+             match = re.search(pattern, question, flags=re.IGNORECASE)
+             if match:
+-                value = match.group("value").strip().strip("+").strip()
++                value = clean(match.group("value"))
+                 if value:
+                     config[key] = value
+         benchmark = PlanBomNluCenterService._extract_benchmark(question)
+diff --git a/backend/app/domains/plan_bom/services/power_config_resolver_service.py b/backend/app/domains/plan_bom/services/power_config_resolver_service.py
+index abb74ac..ec5d663 100644
+--- a/backend/app/domains/plan_bom/services/power_config_resolver_service.py
++++ b/backend/app/domains/plan_bom/services/power_config_resolver_service.py
+@@ -211,6 +211,7 @@ class PlanBomPowerConfigResolverService:
+         order_name: str | None = None,
+         version_no: str | None = None,
+         benchmark: str | None = None,
++        explicit_configuration: Mapping[str, Any] | None = None,
+     ) -> PowerBomConfigResolution:
+         """解析真实 BOM 对应的功率预测配置。
+ 
+@@ -221,6 +222,7 @@ class PlanBomPowerConfigResolverService:
+             order_name: 订单名称片段；
+             version_no: 指定 BOM 版本号；
+             benchmark: 可选标板基准，若不传则使用 active 模型默认值。
++            explicit_configuration: 用户在订单问题中直接给出的功率配置；用于覆盖 BOM 中缺失线径等可确定配置。
+ 
+         返回：
+             `PowerBomConfigResolution`，包含配置、原始 BOM 追溯、未识别项和候选项。
+@@ -284,6 +286,14 @@ class PlanBomPowerConfigResolverService:
+             else:
+                 resolved[factor_key] = item
+ 
++        self._apply_explicit_configuration_overrides(
++            sheet=sheet,
++            explicit_configuration=explicit_configuration,
++            resolved=resolved,
++            unresolved=unresolved,
++            warnings=warnings,
++        )
++
+         for factor_key, default_rule in (self.mapping.get("model_defaults") or {}).items():
+             if factor_key == "benchmark" and benchmark:
+                 benchmark_value = self._canonical_benchmark(benchmark)
+@@ -321,6 +331,57 @@ class PlanBomPowerConfigResolverService:
+ 
+         return self._build_result(header, model_code_item.value, resolved, unresolved, source_lines, warnings)
+ 
++    def _apply_explicit_configuration_overrides(
++        self,
++        *,
++        sheet: PlanPowerModelSheet,
++        explicit_configuration: Mapping[str, Any] | None,
++        resolved: dict[str, PowerBomResolvedItem],
++        unresolved: list[PowerBomUnresolvedItem],
++        warnings: list[str],
++    ) -> None:
++        """把用户显式给出的功率配置覆盖到订单 BOM 解析结果中。
++
++        参数：
++            sheet: 当前订单命中的功率模型页。
++            explicit_configuration: NLU 从问题原文抽取的 ribbon/glass/cable 等配置。
++            resolved: 已解析配置字典，原地更新。
++            unresolved: 未解析配置列表，原地移除被显式配置解决的项目。
++            warnings: 解析警告列表，原地追加降级说明。
++
++        返回：
++            无返回值。该方法只做 M4 确定性 option 校验，不计算功率数值。
++        """
++        if not explicit_configuration:
++            return
++        for factor_key in ("ribbon", "glass", "busbar", "cable", "cell_size", "supplier", "benchmark"):
++            raw_value = explicit_configuration.get(factor_key)
++            if raw_value is None or self._stringify(raw_value) == "":
++                continue
++            option = self._coerce_explicit_option(sheet, factor_key, self._stringify(raw_value), warnings)
++            # 用户显式给出配置时，其语义优先于 BOM 自动反查；若无法命中真实 option，必须 fail-closed。
++            unresolved[:] = [item for item in unresolved if item.factor_key != factor_key]
++            if option is None:
++                unresolved.append(
++                    PowerBomUnresolvedItem(
++                        factor_key=factor_key,
++                        reason="显式输入配置未命中当前功率模型有效选项，不能用 BOM 或默认值静默替代。",
++                        source_descriptions=[self._stringify(raw_value)],
++                        candidate_options=self._option_labels(sheet.id, factor_key),
++                        strategy="ask_confirmation",
++                    )
++                )
++                resolved.pop(factor_key, None)
++                continue
++            resolved[factor_key] = PowerBomResolvedItem(
++                factor_key=factor_key,
++                value=option.option_label,
++                source="explicit_input",
++                confidence=0.95,
++                source_description=self._stringify(raw_value),
++                rule_id=f"explicit.{factor_key}",
++            )
++
+     def resolve_explicit_configuration(
+         self,
+         *,
+diff --git a/backend/app/domains/plan_bom/services/qa_service.py b/backend/app/domains/plan_bom/services/qa_service.py
+index f7a28a6..87e6ee7 100644
+--- a/backend/app/domains/plan_bom/services/qa_service.py
++++ b/backend/app/domains/plan_bom/services/qa_service.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ import logging
++import re
+ from typing import Any
+ 
+ from backend.app.domains.plan_bom.constants import CORE_MATERIAL_CATEGORIES, MATERIAL_CATEGORY_LABELS
+@@ -374,7 +375,11 @@ class PlanBomQaService:
+         if nlu.slots.get("supplier_name") and "supplier" not in explicit_configuration:
+             explicit_configuration["supplier"] = nlu.slots.get("supplier_name")
+         if tail:
+-            resolution = self.power_config_resolver.resolve(order_no=tail, benchmark=benchmark)
++            resolution = self.power_config_resolver.resolve(
++                order_no=tail,
++                benchmark=benchmark,
++                explicit_configuration=explicit_configuration,
++            )
+         else:
+             resolution = self.power_config_resolver.resolve_explicit_configuration(
+                 model_code=nlu.slots.get("model"),
+@@ -394,7 +399,10 @@ class PlanBomQaService:
+                         severity="warning",
+                     ),
+                     nlu=nlu,
+-                    answer_summary=self._power_resolution_clarification_summary(resolution_payload),
++                    answer_summary=self._power_resolution_clarification_summary(
++                        resolution_payload,
++                        question=question,
++                    ),
+                     raw_result={"bom_config_resolution": resolution_payload},
+                     warnings=["M4 配置解析未完全 resolved，已停止调用 M3 计算，避免编造功率预测。"],
+                 )
+@@ -611,15 +619,52 @@ class PlanBomQaService:
+         return "；".join(pairs) if pairs else "无可展示配置"
+ 
+     @staticmethod
+-    def _power_resolution_clarification_summary(resolution_payload: dict[str, Any]) -> str:
+-        """为 M4 candidate / partial 状态生成追问摘要。"""
++    def _power_resolution_clarification_summary(resolution_payload: dict[str, Any], *, question: str = "") -> str:
++        """为 M4 candidate / partial 状态生成追问摘要。
++
++        参数：
++            resolution_payload: M4 配置解析追溯。
++            question: 用户原始问题；用于提示候选名称与用户输入项目/客户名不一致。
++
++        返回：
++            面向业务用户的追问摘要，候选态会列出受控候选名称。
++        """
+         if resolution_payload.get("status") == CANDIDATE_REQUIRED_STATUS:
+-            count = resolution_payload.get("candidate_total_count") or len(resolution_payload.get("candidates") or [])
+-            return f"当前订单条件命中 {count} 个 BOM 候选，请先确认订单或文件实例后再做功率预测。"
++            candidates = resolution_payload.get("candidates") or []
++            count = resolution_payload.get("candidate_total_count") or len(candidates)
++            candidate_labels = []
++            for index, candidate in enumerate(candidates[:5], start=1):
++                order_name = candidate.get("order_name") or "未命名 BOM"
++                order_no = candidate.get("order_no") or "未知订单号"
++                version_no = candidate.get("version_no") or "未知版本"
++                candidate_labels.append(f"{index}. {order_name}（{order_no}，版本 {version_no}）")
++            candidate_text = "；".join(candidate_labels) if candidate_labels else "暂无可展示候选"
++            mismatch_text = PlanBomQaService._candidate_name_mismatch_text(question, candidates)
++            return (
++                f"当前订单条件命中 {count} 个 BOM 候选，请先确认订单或文件实例后再做功率预测。"
++                f"候选包括：{candidate_text}。{mismatch_text}"
++            )
+         unresolved = resolution_payload.get("unresolved_items") or []
+         labels = [str(item.get("factor_key")) for item in unresolved if item.get("factor_key")]
+         return f"当前 BOM 配置仍有未确认项：{', '.join(labels) if labels else '未知配置'}。请确认后再执行功率预测。"
+ 
++    @staticmethod
++    def _candidate_name_mismatch_text(question: str, candidates: list[dict[str, Any]]) -> str:
++        """识别用户输入的订单前缀是否未出现在候选 BOM 名称中。"""
++        if not question or not candidates:
++            return ""
++        # 业务常写“客户/项目—00106”；尾号候选过多时，将破折号前的项目词与候选名做只读比对。
++        match = re.search(r"(?P<token>[\u4e00-\u9fa5A-Za-z0-9/\-]+)\s*[—-]\s*\d{5}", question)
++        if not match:
++            return ""
++        token = match.group("token").strip()
++        if not token or token.upper().startswith("GCL"):
++            return ""
++        candidate_text = " ".join(str(candidate.get("order_name") or "") + " " + str(candidate.get("order_no") or "") for candidate in candidates)
++        if token in candidate_text:
++            return ""
++        return f"你输入的“{token}”未匹配当前候选名称，请确认是否为同一订单/项目。"
++
+     def _resolve_core_material_categories(
+         self,
+         *,
+diff --git a/frontend/src/views/business-chat/BusinessChatPage.vue b/frontend/src/views/business-chat/BusinessChatPage.vue
+index 3475e1b..33a14fe 100644
+--- a/frontend/src/views/business-chat/BusinessChatPage.vue
++++ b/frontend/src/views/business-chat/BusinessChatPage.vue
+@@ -68,7 +68,7 @@
+ 
+             <div
+               v-if="message.presentation"
+-              :class="['result', `result--${resolveResultTone(message.status)}`]"
++              :class="['result', `result--${resolveResultTone(message.status)}`, resolveAssistantResultLayout(message)]"
+               data-testid="assistant-result"
+             >
+               <div class="result-hero">
+@@ -82,9 +82,12 @@
+                   <span v-if="message.presentation.displayType" class="display-badge">
+                     {{ formatDisplayTypeLabel(message.presentation.displayType) }}
+                   </span>
++                  <span class="display-badge display-badge--layout">
++                    {{ resolveAssistantReplyKicker(message) }}
++                  </span>
+                 </div>
+                 <div v-if="message.presentation.title" class="result-title" data-testid="result-title">{{ message.presentation.title }}</div>
+-                <p v-if="message.presentation.answer" class="result-answer" data-testid="result-answer">{{ message.presentation.answer }}</p>
++                <p v-if="message.presentation.answer" class="result-answer assistant-prose" data-testid="result-answer">{{ message.presentation.answer }}</p>
+                 <div v-if="buildResultSummaryItems(message).length" class="result-summary-strip">
+                   <span
+                     v-for="item in buildResultSummaryItems(message)"
+@@ -204,7 +207,7 @@
+                 </svg>
+               </div>
+ 
+-              <div v-if="message.presentation.cards.length" class="metric-grid" data-testid="result-cards">
++              <div v-if="shouldShowMetricCards(message)" class="metric-grid" data-testid="result-cards">
+                 <div v-for="card in message.presentation.cards" :key="card.label" class="metric-card">
+                   <div class="metric-accent" />
+                   <div class="metric-body">
+@@ -215,13 +218,13 @@
+                 </div>
+               </div>
+ 
+-              <div v-if="message.presentation.table" class="result-table-card">
++              <div v-if="shouldShowResultTable(message)" class="result-table-card">
+                 <div class="result-table-card__head">
+                   <span>明细数据</span>
+-                  <em>{{ message.presentation.table.rows.length }} 行</em>
++                  <em>{{ message.presentation.table?.rows.length || 0 }} 行</em>
+                 </div>
+                 <el-table
+-                  :data="message.presentation.table.rows"
++                  :data="message.presentation.table?.rows || []"
+                   size="small"
+                   border
+                   class="result-table"
+@@ -230,7 +233,7 @@
+                   empty-text="暂无明细数据"
+                 >
+                   <el-table-column
+-                    v-for="column in message.presentation.table.columns"
++                    v-for="column in message.presentation.table?.columns || []"
+                     :key="column"
+                     :prop="column"
+                     :label="column"
+@@ -385,6 +388,8 @@ interface ResultSummaryItem {
+   value: string
+ }
+ 
++type AssistantResultLayoutClass = 'ai-response-card--narrative' | 'ai-response-card--data' | 'ai-response-card--chart'
++
+ const pieChartColors = ['#2f7a4a', '#60a5fa', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316', '#64748b']
+ 
+ const question = ref('')
+@@ -1334,6 +1339,34 @@ function buildResultSummaryItems(message: BusinessChatMessage): ResultSummaryIte
+   return items
+ }
+ 
++/** 判断助手回复应采用叙事、数据还是图表布局；只控制 UI 层，不改变后端业务结果。 */
++function resolveAssistantResultLayout(message: BusinessChatMessage): AssistantResultLayoutClass {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  if (presentation?.chart) return 'ai-response-card--chart'
++  if (presentation?.table?.rows.length || presentation?.cards.length) return 'ai-response-card--data'
++  return 'ai-response-card--narrative'
++}
++
++/** 指标卡只在后端返回卡片且当前布局需要数据摘要时展示。 */
++function shouldShowMetricCards(message: BusinessChatMessage): boolean {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return Boolean(presentation?.cards.length)
++}
++
++/** 表格只在后端返回有效列和行时展示，避免空表占据叙事型回答空间。 */
++function shouldShowResultTable(message: BusinessChatMessage): boolean {
++  const presentation = message.presentation as UnifiedResult | null | undefined
++  return Boolean(presentation?.table?.columns.length && presentation.table.rows.length)
++}
++
++/** 根据回答布局生成轻量提示词，不参与业务判断。 */
++function resolveAssistantReplyKicker(message: BusinessChatMessage): string {
++  const layout = resolveAssistantResultLayout(message)
++  if (layout === 'ai-response-card--chart') return '图表视图'
++  if (layout === 'ai-response-card--data') return '数据视图'
++  return '文字说明'
++}
++
+ /** 展示类型中文化，便于把后端 display_type 作为轻量徽标呈现。 */
+ function formatDisplayTypeLabel(displayType?: string) {
+   const mapping: Record<string, string> = {
+@@ -1646,6 +1679,15 @@ onBeforeUnmount(() => {
+   animation: fadeIn 0.3s ease-out;
+ }
+ 
++.ai-response-card--narrative {
++  max-width: 780px;
++}
++
++.ai-response-card--data,
++.ai-response-card--chart {
++  max-width: 100%;
++}
++
+ .result-hero {
+   display: grid;
+   gap: 8px;
+@@ -1715,6 +1757,10 @@ onBeforeUnmount(() => {
+   word-break: break-word;
+ }
+ 
++.assistant-prose {
++  white-space: pre-wrap;
++}
++
+ .result-summary-strip {
+   display: flex;
+   flex-wrap: wrap;
+diff --git a/tests/business_acceptance/test_plan_power_real_business_qa_regression.py b/tests/business_acceptance/test_plan_power_real_business_qa_regression.py
+new file mode 100644
+index 0000000..e4b7cba
+--- /dev/null
++++ b/tests/business_acceptance/test_plan_power_real_business_qa_regression.py
+@@ -0,0 +1,188 @@
++from __future__ import annotations
++
++import pytest
++
++from backend.app.db.session import SessionLocal
++from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
++from backend.app.domains.plan_bom.services.answer_presentation_service import PlanBomAnswerPresentationService
++from backend.app.domains.plan_bom.services.nlu_center_service import PlanBomNluCenterService
++from backend.app.domains.plan_bom.services.power_config_resolver_service import PlanBomPowerConfigResolverService
++from backend.app.domains.plan_bom.services.power_prediction_engine import PowerPredictionEngine
++from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService
++from backend.app.domains.plan_bom.services.qa_service import PlanBomQaService
++from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
++
++
++@pytest.fixture()
++def live_plan_bom_qa_service():
++    """连接当前真实库并构造与 API 依赖一致的计划 BOM QA 服务。"""
++
++    session = SessionLocal()
++    try:
++        repository = PlanBomQueryRepository(session)
++        engine = PowerPredictionEngine(session)
++        yield PlanBomQaService(
++            repository=repository,
++            query_service=PlanBomQueryService(repository=repository),
++            nlu_service=PlanBomNluCenterService(repository=repository),
++            presentation_service=PlanBomAnswerPresentationService(),
++            power_config_resolver=PlanBomPowerConfigResolverService(session, repository=repository),
++            power_prediction_engine=engine,
++            power_recommendation_service=PowerRecommendationService(session, engine=engine),
++        )
++    finally:
++        session.close()
++
++
++def _row_categories(response) -> set[str]:
++    """返回 QA 表格中的材料类别集合，用于断言真实业务材料覆盖。"""
++
++    return {str(row.get("material_category") or "") for row in response.result_table.rows}
++
++
++def test_business_power_question_extracts_spoken_configuration_single_target_and_all_suppliers(live_plan_bom_qa_service):
++    """真实业务问法给出 300/200 线长和单一 615 功率时，应直接给出各供应商效率推荐。"""
++
++    question = "NT12R/66GDF（深圳建融-2025-01073）0.24焊带+双镀玻璃+300/200线长，北德基准，615功率，各个供应商厂家从什么电池效率可以满足"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q2")
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.nlu.slots["target_power_ratio"] == {"615": 1.0}
++    assert response.nlu.slots["explicit_power_configuration"]["ribbon"] == "0.24"
++    assert response.nlu.slots["explicit_power_configuration"]["glass"] == "双镀"
++    assert response.nlu.slots["explicit_power_configuration"]["cable"] == "300/200线长"
++
++    resolution = response.raw_result["bom_config_resolution"]
++    assert resolution["status"] == "resolved"
++    assert resolution["resolved_config"]["cable"]["value"] == "+300/-200mm（4mm²）"
++    assert resolution["unresolved_items"] == []
++    assert response.result_table.rows
++    assert {row["目标功率档"] for row in response.result_table.rows} == {"615W"}
++    assert len({row["供应商"] for row in response.result_table.rows}) >= 2
++    assert all(row["建议效率段"] for row in response.result_table.rows)
++
++
++def test_business_power_question_extracts_single_supplier_efficiency_requirement(live_plan_bom_qa_service):
++    """真实业务问法指定芜湖供应时，应只返回芜湖的 615W 满足效率段，不应追问线缆长度。"""
++
++    question = "NT12R/66GDF（深圳建融-2025-01073）0.24焊带+双镀玻璃+300/200线长，北德基准，615功率，芜湖供应需要从什么电池效率可以满足"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q3")
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.nlu.slots["supplier_name"] == "芜湖"
++    assert response.nlu.slots["target_power_ratio"] == {"615": 1.0}
++    assert response.raw_result["bom_config_resolution"]["resolved_config"]["cable"]["value"] == "+300/-200mm（4mm²）"
++    assert {row["供应商"] for row in response.result_table.rows} == {"芜湖"}
++    assert {row["目标功率档"] for row in response.result_table.rows} == {"615W"}
++    assert all(row["建议效率段"] for row in response.result_table.rows)
++
++
++def test_business_power_candidate_clarification_lists_candidates_and_name_mismatch(live_plan_bom_qa_service):
++    """订单尾号命中多个 BOM 时，追问应列出候选并提示用户输入的项目/客户名未命中候选。"""
++
++    question = "创维210N—00106，0.24+0.26焊带+高透玻璃+间隙铝膜+300/200线长，计量院基准，单一需求720功率，各个供应商厂家从什么电池效率可以满足"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q1")
++
++    assert response.classification == "B"
++    assert response.status.code == "CLARIFICATION_REQUIRED"
++    assert response.nlu.intent == "plan_power_supplier_recommendation"
++    assert response.nlu.slots["target_power_ratio"] == {"720": 1.0}
++    assert response.nlu.slots["explicit_power_configuration"]["ribbon"] == "0.24+0.26"
++    assert response.nlu.slots["explicit_power_configuration"]["glass"] == "高透+间隙铝膜"
++    assert response.nlu.slots["explicit_power_configuration"]["cable"] == "300/200线长"
++
++    answer_text = f"{response.answer_summary}\n{response.presentation.answer if response.presentation else ''}"
++    assert "江苏汉腾" in answer_text
++    assert "石家庄科林" in answer_text
++    assert "创维210N" in answer_text
++    assert "未匹配" in answer_text or "不一致" in answer_text
++
++
++@pytest.mark.parametrize(
++    "question",
++    [
++        "订单00104功率预测，给出功率档分布。",
++        "订单2025-01073功率预测",
++    ],
++)
++def test_order_identifier_power_prediction_does_not_extract_target_power_ratio(live_plan_bom_qa_service, question: str):
++    """订单号/评审号中的数字不能被误当成单一目标功率。
++
++    参数：
++        live_plan_bom_qa_service: 真实库 QA 服务 fixture。
++        question: 仅要求功率预测的订单类问题。
++    返回值：
++        无；通过断言验证 NLU 不抽目标功率比例，也不把预测问题误路由到供应商推荐。
++    业务逻辑：`615功率` 是目标档，但 `订单00104功率预测` 里的 `00104` 是订单尾号；
++        抽错会触发 M3 推荐并返回“104W 不在模型输出范围内”的误导结果。
++    """
++
++    nlu = live_plan_bom_qa_service.nlu_service.understand(question, use_llm=False)
++
++    assert nlu.intent == "plan_power_prediction"
++    assert nlu.slots["target_power_ratio"] == {}
++
++
++@pytest.mark.parametrize(
++    "question",
++    [
++        "深圳建融-2025-00615功率预测，各个供应商厂家从什么电池效率可以满足",
++        "项目-00615功率预测，各个供应商厂家从什么电池效率可以满足",
++        "NT720功率预测，供应商推荐",
++    ],
++)
++def test_identifier_digits_in_target_power_range_do_not_become_single_target(live_plan_bom_qa_service, question: str):
++    """300-900 范围内的订单尾号/型号数字也不能被误抽为目标功率。
++
++    参数：
++        live_plan_bom_qa_service: 真实库 QA 服务 fixture。
++        question: 包含 `00615`、`NT720` 等容易被误当目标功率的识别符问题。
++    返回值：
++        无；通过断言验证识别符数字不会填充 target_power_ratio。
++    业务逻辑：真实业务项目名和订单尾号可能刚好落在 615/720 等功率范围，
++        只有与识别符脱离、或有“目标/需求/单一”明确修饰的数字才可作为目标功率。
++    """
++
++    nlu = live_plan_bom_qa_service.nlu_service.understand(question, use_llm=False)
++
++    assert nlu.slots["target_power_ratio"] == {}
++    assert "target_power_ratio" in nlu.missing_slots
++
++
++def test_line_length_material_query_includes_junction_box_in_narrative_answer(live_plan_bom_qa_service):
++    """业务问“线长”时应把它映射到接线盒/线缆材料，不能只返回玻璃、焊带、汇流条。"""
++
++    question = "NT12R/66GDF（深圳建融-2025-01073）玻璃焊带线长汇流条是什么搭配并描述"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q4")
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert "junction_box" in response.nlu.slots["material_category"]
++    assert len(response.result_table.rows) == 11
++    assert "接线盒" in _row_categories(response)
++    assert any("+300/-200mm" in str(row.get("description")) for row in response.result_table.rows)
++
++
++def test_line_length_material_query_includes_junction_box_in_export_table(live_plan_bom_qa_service):
++    """业务要求生成表格/导出版本时，“线长”同样必须包含接线盒行。"""
++
++    question = "NT12R/66GDF（深圳建融-2025-01073）玻璃焊带线长汇流条是什么搭配并生成表格可导出版本"
++
++    response = live_plan_bom_qa_service.ask(question, use_llm=False, trace_id="real-business-q5")
++
++    assert response.classification == "A"
++    assert response.status.code == "OK"
++    assert response.nlu.slots["need_table"] is True
++    assert response.nlu.slots["need_excel"] is True
++    assert "junction_box" in response.nlu.slots["material_category"]
++    assert len(response.result_table.rows) == 11
++    assert "接线盒" in _row_categories(response)
++    assert any("+300/-200mm" in str(row.get("description")) for row in response.result_table.rows)
+
+```

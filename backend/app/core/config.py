@@ -8,6 +8,38 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sqlalchemy.engine import URL
 
 
+_BAILIAN_EMBEDDING_MODEL_ALIASES = {
+    "qwen3-embedding-4b": "text-embedding-v4",
+    "qwen3_embedding_4b": "text-embedding-v4",
+}
+_BAILIAN_RERANK_MODEL_ALIASES = {
+    "qwen3-reranker": "gte-rerank-v2",
+    "qwen3_reranker": "gte-rerank-v2",
+}
+
+
+def _normalize_provider_model_alias(value: object, aliases: dict[str, str]) -> object:
+    """归一化百炼 provider 模型名。
+
+    参数：
+        value: 用户在环境变量中填写的模型名。
+        aliases: 旧规划名到当前真实 provider 模型名的映射。
+    返回：
+        若命中兼容映射则返回真实模型名，否则返回去空白后的原值。
+    业务逻辑：
+        早期 NL2SQL 规划文档中使用过 Qwen3-Embedding-4B / Qwen3-Reranker
+        这类能力描述名；真实百炼 OpenAI/DashScope 接口当前使用 text-embedding-v4
+        与 gte-rerank-v2。这里只做模型名兼容，不触碰密钥或连接配置。
+    """
+
+    if value is None:
+        return value
+    if isinstance(value, str):
+        normalized = value.strip()
+        return aliases.get(normalized.lower(), normalized)
+    return value
+
+
 class Settings(BaseSettings):
     app_host: str = "0.0.0.0"
     app_name: str = "gcl-bp-ai"
@@ -38,6 +70,17 @@ class Settings(BaseSettings):
     milvus_port: int = 19530
     milvus_user: str = ""
     milvus_password: str = ""
+    milvus_collection_prefix: str = "gcl_bp_ai"
+    embedding_model: str = ""
+    embedding_dimension: int = 1024
+    rerank_model: str = ""
+    rerank_endpoint_path: str = "/api/v1/services/rerank/text-rerank/text-rerank"
+    nl2sql_recall_top_k: int = 12
+    nl2sql_rerank_top_k: int = 6
+    nl2sql_rerank_min_score: float = 0.0
+    llm_http_proxy: str = ""
+    llm_https_proxy: str = ""
+    llm_all_proxy: str = ""
     source_mysql_host: str = "10.76.13.161"
     source_mysql_port: int = 19531
     source_mysql_db: str = "jyjh_db"
@@ -80,6 +123,20 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @field_validator("embedding_model", mode="before")
+    @classmethod
+    def _normalize_embedding_model(cls, value: object) -> object:
+        """兼容旧规划中的 embedding 模型描述名，收敛到当前百炼真实模型名。"""
+
+        return _normalize_provider_model_alias(value, _BAILIAN_EMBEDDING_MODEL_ALIASES)
+
+    @field_validator("rerank_model", mode="before")
+    @classmethod
+    def _normalize_rerank_model(cls, value: object) -> object:
+        """兼容旧规划中的 rerank 模型描述名，收敛到当前百炼真实模型名。"""
+
+        return _normalize_provider_model_alias(value, _BAILIAN_RERANK_MODEL_ALIASES)
 
     @field_validator("logistics_query_planner_v2_mode", mode="before")
     @classmethod
@@ -360,6 +417,46 @@ class Settings(BaseSettings):
     @property
     def MILVUS_COLLECTION_PREFIX(self) -> str:
         return self.milvus_collection_prefix
+
+    @property
+    def EMBEDDING_MODEL(self) -> str:
+        return self.embedding_model
+
+    @property
+    def EMBEDDING_DIMENSION(self) -> int:
+        return self.embedding_dimension
+
+    @property
+    def RERANK_MODEL(self) -> str:
+        return self.rerank_model
+
+    @property
+    def RERANK_ENDPOINT_PATH(self) -> str:
+        return self.rerank_endpoint_path
+
+    @property
+    def NL2SQL_RECALL_TOP_K(self) -> int:
+        return self.nl2sql_recall_top_k
+
+    @property
+    def NL2SQL_RERANK_TOP_K(self) -> int:
+        return self.nl2sql_rerank_top_k
+
+    @property
+    def NL2SQL_RERANK_MIN_SCORE(self) -> float:
+        return self.nl2sql_rerank_min_score
+
+    @property
+    def LLM_HTTP_PROXY(self) -> str:
+        return self.llm_http_proxy
+
+    @property
+    def LLM_HTTPS_PROXY(self) -> str:
+        return self.llm_https_proxy
+
+    @property
+    def LLM_ALL_PROXY(self) -> str:
+        return self.llm_all_proxy
 
     @property
     def SOURCE_MYSQL_HOST(self) -> str:

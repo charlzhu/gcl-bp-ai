@@ -1,0 +1,21 @@
+You are an independent code reviewer. Work in read-only mode.
+
+Read:
+1) ai/tasks/running/TASK-planbom-answer-business-language/review_bundle.md
+2) ai/tasks/running/TASK-planbom-answer-business-language/diff.patch
+3) Relevant source files listed in the bundle if needed.
+
+Do not inspect unrelated dirty worktree files. Do not modify files.
+
+Evaluate whether the Plan BOM answer presentation fix satisfies the review criteria in the bundle.
+
+Return ONLY valid JSON with this shape:
+{
+  "passed": true or false,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [],
+  "summary": "one sentence verdict"
+}
+
+Fail closed: security_concerns or logic_errors non-empty => passed=false.
