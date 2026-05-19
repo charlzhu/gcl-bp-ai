@@ -1,0 +1,23 @@
+{
+  "finding_count": 0,
+  "findings": [],
+  "pattern_count": 5,
+  "scan_scope": [
+    "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+    "tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py"
+  ],
+  "checks": [
+    {
+      "name": "git_diff_check",
+      "command": "git diff --check -- backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py",
+      "status": "PASS",
+      "log": "ai/outbox/kanban/t_3d0c55ce/static-scan.log"
+    },
+    {
+      "name": "secret_keyword_review",
+      "status": "PASS",
+      "note": "命中项均为配置变量名、fail-closed 域路由关键字或测试断言，不包含真实 host/user/password/DSN/API key。"
+    }
+  ],
+  "high_risk_findings": 0
+}

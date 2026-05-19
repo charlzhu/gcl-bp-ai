@@ -1,0 +1,52 @@
+{
+  "executed_at": "2026-05-19 19:15:55 CST",
+  "scope": "read_only_oracle_smoke",
+  "security": {
+    "no_oracle_writes": true,
+    "no_unbounded_table_export": true,
+    "sample_values_redacted": true,
+    "connection_values_redacted": true
+  },
+  "config_presence": {
+    "SAP_ORACLE_HOST": "present",
+    "SAP_ORACLE_PORT": "present",
+    "SAP_ORACLE_SERVICE": "present",
+    "SAP_ORACLE_USER": "present",
+    "SAP_ORACLE_PASSWORD": "present",
+    "SAP_ORACLE_OWNER": "present"
+  },
+  "dependency": {
+    "oracledb_import": {
+      "status": "pass",
+      "version": "4.0.0"
+    },
+    "cx_Oracle_import": {
+      "status": "missing_not_used"
+    }
+  },
+  "tcp_connect": {
+    "status": "fail"
+  },
+  "connection_status": "fail",
+  "attempts": [
+    {
+      "mode": "thick",
+      "status": "fail",
+      "elapsed_ms": 60,
+      "client_init": {
+        "status": "fail",
+        "candidate_count": 0,
+        "codes": [
+          "DPI-1047"
+        ]
+      }
+    }
+  ],
+  "select_1_from_dual": "not_executed_no_oracle_session",
+  "view_columns": "not_executed_no_oracle_session",
+  "view_counts": "not_executed_no_oracle_session",
+  "view_samples": "not_executed_no_oracle_session",
+  "status": "blocked",
+  "m2_ready": false,
+  "blocker": "TCP connectivity failed before SQL probe; local thick client probe codes=['DPI-1047']"
+}

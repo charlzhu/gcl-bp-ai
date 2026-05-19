@@ -1,0 +1,96 @@
+{
+  "candidate_catalog_ref_ids": [
+    "dimension:biz_year",
+    "example:m9_example_carrier_mw_ranking",
+    "example:m9_example_yearly_mw_breakdown",
+    "metric:row_count",
+    "metric:shipment_mw",
+    "rule:default_time_range",
+    "rule:unsupported_tonnage",
+    "table:dwd_logistics_hist_shipment_detail",
+    "table:dws_logistics_detail_union"
+  ],
+  "candidate_top_keys": [
+    "catalog_refs",
+    "catalog_version",
+    "clarification_questions",
+    "confidence",
+    "domain",
+    "plan",
+    "schema_version",
+    "strategy",
+    "unsupported_reason"
+  ],
+  "elapsed_ms": 12624,
+  "generation_error_codes": [],
+  "generation_error_message": null,
+  "generation_status": "ok",
+  "llm_model_name_present": true,
+  "plan_summary": {
+    "business_rules": [],
+    "dimensions": [
+      "biz_year"
+    ],
+    "explicit_year_buckets": [
+      2023,
+      2024,
+      2025
+    ],
+    "filters": [
+      {
+        "dimension": "biz_year",
+        "operator": "in",
+        "source": "user_explicit",
+        "values": [
+          2023,
+          2024,
+          2025
+        ]
+      }
+    ],
+    "group_by": [
+      "biz_year"
+    ],
+    "joins": [],
+    "limit": null,
+    "metrics": [
+      "shipment_mw",
+      "row_count"
+    ],
+    "order_by": [],
+    "query_type": "aggregate",
+    "requested_unit": "MW",
+    "tables": [
+      "dws_logistics_detail_union"
+    ]
+  },
+  "question": "2023年到2025年每年发运量分别是多少？",
+  "recall_error": null,
+  "recall_hit_ids": [
+    "example:m9_example_yearly_mw_breakdown",
+    "table:dwd_logistics_hist_shipment_detail",
+    "metric:shipment_mw",
+    "example:m9_example_carrier_mw_ranking",
+    "rule:unsupported_tonnage",
+    "rule:default_time_range"
+  ],
+  "recall_status": "ok",
+  "rewrite": {
+    "default_years": [],
+    "normalized_question": "2023年到2025年每年发运量分别是多少？",
+    "normalized_terms": {},
+    "original_question": "2023年到2025年每年发运量分别是多少？",
+    "removed_constraints": [],
+    "requested_unit": "MW",
+    "unsupported_flags": []
+  },
+  "route": {
+    "domain": "logistics",
+    "mode": "shadow",
+    "reason_code": null,
+    "should_process": true,
+    "source_system": "middle_db"
+  },
+  "validation_errors": [],
+  "validation_ok": true
+}

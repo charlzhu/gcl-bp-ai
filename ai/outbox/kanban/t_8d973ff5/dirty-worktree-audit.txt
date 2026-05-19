@@ -1,0 +1,87 @@
+# t_8d973ff5 dirty worktree audit
+
+生成时间：2026-05-19 17:50:16 CST
+状态：BLOCKED / do not submit
+
+## 1. 当前分支与 HEAD
+
+```text
+current_branch = feature/m15-sap-mid-oracle-smoke-t_2c15aff8
+required_branch = feature/nl2sql-m9-sqlplan-shadow-mvp
+head = 0b14a71 NL2SQL M9 文档保存
+staged = none
+```
+
+结论：当前分支不满足任务要求，且任务禁止 worker 自行切分支。
+
+## 2. 当前 dirty status
+
+只读 `git status --short --branch` 显示：
+
+```text
+## feature/m15-sap-mid-oracle-smoke-t_2c15aff8
+ M ai/outbox/kanban/t_2c15aff8/diff.patch
+ M ai/outbox/kanban/t_2c15aff8/final-acceptance.md
+ M ai/outbox/kanban/t_7895e090/m8-shadow-eval-records.jsonl
+ M ai/outbox/kanban/t_m9_nl2sql_shadow/m9-shadow-sqlplan-generation-records.jsonl
+ M backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py
+ M backend/requirements.txt
+ M docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md
+ M tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py
+?? .worktrees/
+?? ai/outbox/kanban/t_2c15aff8/debug-write-check.txt
+?? ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json
+?? ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json
+?? ai/outbox/kanban/t_3d0c55ce/
+?? ai/outbox/kanban/t_8d973ff5/
+```
+
+本文件写入后，`ai/outbox/kanban/t_8d973ff5/` 仍属于本轮 blocked handoff 产物。
+
+## 3. M9 可能相关但未确认可提交的 dirty 项
+
+以下文件可能与 M9 相关，但当前分支前提不满足，且没有最新 live gate/reviewer，因此本轮不生成可提交 scoped diff：
+
+- `ai/outbox/kanban/t_m9_nl2sql_shadow/m9-shadow-sqlplan-generation-records.jsonl`
+- `backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py`
+- `tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py`
+
+## 4. 默认禁止/非 M9 dirty 项
+
+以下 dirty 项按任务正文默认禁止混入 M9 scoped diff，或明显属于 SAP MID / M15 / 其他任务：
+
+- `ai/outbox/kanban/t_2c15aff8/diff.patch`
+- `ai/outbox/kanban/t_2c15aff8/final-acceptance.md`
+- `ai/outbox/kanban/t_2c15aff8/debug-write-check.txt`
+- `ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json`
+- `ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json`
+- `ai/outbox/kanban/t_7895e090/m8-shadow-eval-records.jsonl`
+- `backend/requirements.txt`
+- `docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md`
+- `ai/outbox/kanban/t_3d0c55ce/`
+- `.worktrees/`
+
+## 5. worktree/branch 检查
+
+`git worktree list --porcelain` 显示：
+
+- 主工作区：`/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai`，分支 `feature/m15-sap-mid-oracle-smoke-t_2c15aff8`。
+- `.worktrees/nl2sql-m9-1-hardening-v2`：分支 `feature/nl2sql-m9-1-yearly-mw-hardening-v2`，不是任务指定 `feature/nl2sql-m9-sqlplan-shadow-mvp`。
+- 本地/远端可见 `*nl2sql-m9*` 分支中没有任务指定分支。
+
+## 6. staged 检查
+
+`git diff --cached --name-status` 输出为空，本轮未 stage。
+
+## 7. scoped diff 结论
+
+本轮不生成可提交 scoped diff。原因：
+
+1. 分支前提不满足。
+2. 任务禁止自行切分支。
+3. 必读 `t_0b20b27f` 三个交接产物缺失。
+4. 当前 dirty worktree 混有 M9、SAP MID/M15 与其他任务文件。
+
+当前提交建议：`BLOCKED / do not submit`。
+
+禁止执行：`git add -A`、`git add .`、commit、push、deploy。

@@ -1,0 +1,464 @@
+diff --git a/backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py b/backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py
+index e276010..cf8a934 100644
+--- a/backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py
++++ b/backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py
+@@ -6,7 +6,7 @@ import time
+ from collections import Counter
+ from copy import deepcopy
+ from pathlib import Path
+-from typing import Any, Literal
++from typing import Any, Literal, TypeGuard
+ from uuid import uuid4
+ 
+ from pydantic import BaseModel, ConfigDict, Field
+@@ -356,6 +356,14 @@ class LogisticsSqlPlanGenerator:
+             rule_text = rule.strip()
+             if _is_empty_rule_placeholder(rule_text):
+                 continue
++            if rule_text == "default_time_range" and _should_drop_default_time_rule_for_explicit_years(
++                original_question=original_question,
++                normalized_question=normalized_question,
++                plan=plan,
++            ):
++                # 业务逻辑：用户已显式给出 2023-2025 等年份时，provider 可能从默认时间示例误抄 default_time_range。
++                # 只有在年份过滤与 explicit_year_buckets 完全一致、且不是默认 2023-2026 时才移除，避免把真实默认时间查询改错。
++                continue
+             cleaned_rules.append(rule_text)
+ 
+         if self._should_apply_default_time_rule(
+@@ -370,6 +378,7 @@ class LogisticsSqlPlanGenerator:
+                 plan["explicit_year_buckets"] = list(DEFAULT_LOGISTICS_YEARS)
+         _normalize_explicit_year_buckets_from_filters(plan)
+         plan["business_rules"] = cleaned_rules
++        self._normalize_single_table_plan_tables(plan)
+ 
+         refs_by_id: dict[str, dict[str, str]] = {}
+         for catalog_id in sorted(recalled_ids):
+@@ -416,6 +425,119 @@ class LogisticsSqlPlanGenerator:
+                 refs.add(f"dimension:{dimension_id.strip()}")
+         return refs
+ 
++    def _normalize_single_table_plan_tables(self, plan: dict[str, Any]) -> None:
++        """在无 join 的单服务表计划中移除 provider 误混入的未引用表。
++
++        参数：
++            plan: provider 输出的 plan dict，会被原地安全归一。
++        返回：
++            无返回值；仅当所有指标/维度引用都能证明落在同一张表时修改 plan.tables。
++        业务逻辑：
++            live provider 可能因为召回到原始历史明细表，就把它和统一服务表一起写入 tables。
++            如果当前 plan 没有 join，且 metrics/dimensions/group_by/filter/order_by 引用的 catalog
++            全部指向同一张服务表，则多余表只是召回噪声，可以收敛成单表；否则保持原样交给 validator fail-closed。
++        """
++
++        raw_tables = plan.get("tables")
++        if not _is_non_empty_string_list(raw_tables):
++            # 业务逻辑：tables 形态不标准时不得在 generator 层“修好”，必须保留给 schema/validator fail-closed。
++            return
++        tables = _dedupe_string_items(raw_tables)
++        if len(tables) <= 1:
++            return
++        if not _is_empty_list_or_none(plan.get("joins")):
++            # 业务逻辑：任何非空或非 list 的 joins 都不是“无 join”；不允许在有 join 语义时裁剪表。
++            return
++        referenced_tables = self._collect_plan_referenced_tables(plan)
++        if referenced_tables is None or len(referenced_tables) != 1:
++            return
++        primary_table = next(iter(referenced_tables))
++        if primary_table in set(tables):
++            plan["tables"] = [primary_table]
++
++    def _collect_plan_referenced_tables(self, plan: dict[str, Any]) -> set[str] | None:
++        """收集 plan 中指标和维度通过 canonical catalog 指向的表。
++
++        参数：
++            plan: provider 输出的 plan dict。
++        返回：
++            表名集合；若存在未知指标/维度则返回 None，表示不能安全裁剪 tables。
++        """
++
++        referenced_tables: set[str] = set()
++        if not _is_optional_string_list(plan.get("metrics")):
++            return None
++        if not _is_optional_string_list(plan.get("dimensions")):
++            return None
++        if not _is_optional_string_list(plan.get("group_by")):
++            return None
++        metric_ids = _dedupe_string_items(plan.get("metrics"))
++        dimension_ids = _dedupe_string_items(plan.get("dimensions")) + _dedupe_string_items(plan.get("group_by"))
++
++        raw_filters = plan.get("filters")
++        if raw_filters is None:
++            raw_filters = []
++        elif not isinstance(raw_filters, list):
++            return None
++        for item in raw_filters:
++            if not isinstance(item, dict):
++                return None
++            dimension_id = item.get("dimension")
++            if not _is_non_empty_string(dimension_id):
++                return None
++            dimension_ids.append(dimension_id.strip())
++
++        raw_order_by = plan.get("order_by")
++        if raw_order_by is None:
++            raw_order_by = []
++        elif not isinstance(raw_order_by, list):
++            return None
++        for item in raw_order_by:
++            if not isinstance(item, dict):
++                return None
++            metric_id = item.get("metric")
++            dimension_id = item.get("dimension")
++            if metric_id is not None and not _is_non_empty_string(metric_id):
++                return None
++            if dimension_id is not None and not _is_non_empty_string(dimension_id):
++                return None
++            has_metric = _is_non_empty_string(metric_id)
++            has_dimension = _is_non_empty_string(dimension_id)
++            if has_metric == has_dimension:
++                return None
++            if has_metric:
++                metric_ids.append(metric_id.strip())
++            if has_dimension:
++                dimension_ids.append(dimension_id.strip())
++
++        for metric_id in _dedupe_string_items(metric_ids):
++            table_name = self._lookup_metric_table(metric_id)
++            if not table_name:
++                return None
++            referenced_tables.add(table_name)
++        for dimension_id in _dedupe_string_items(dimension_ids):
++            table_name = self._lookup_dimension_table(dimension_id)
++            if not table_name:
++                return None
++            referenced_tables.add(table_name)
++        return referenced_tables
++
++    def _lookup_metric_table(self, metric_id: str) -> str | None:
++        """按 metric_id 查询 canonical 指标所属表；未知指标返回 None。"""
++
++        for metric in self.catalog.metrics:
++            if metric.metric_id == metric_id and metric.table:
++                return metric.table
++        return None
++
++    def _lookup_dimension_table(self, dimension_id: str) -> str | None:
++        """按 dimension_id 查询 canonical 维度所属表；未知维度返回 None。"""
++
++        for dimension in self.catalog.dimensions:
++            if dimension.dimension_id == dimension_id and dimension.table:
++                return dimension.table
++        return None
++
+     def _expand_recalled_catalog_dependencies(self, recalled_ids: set[str]) -> set[str]:
+         """展开本次召回命中在 canonical catalog 中声明的安全依赖。
+ 
+@@ -1119,6 +1241,110 @@ def _string_items(value: Any) -> list[str]:
+     return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+ 
+ 
++def _is_non_empty_string(value: Any) -> TypeGuard[str]:
++    """判断 provider 输出值是否为非空字符串。
++
++    参数：
++        value: 任意 provider 输出字段值。
++    返回：
++        True 表示该值是去空白后仍非空的字符串；False 表示该值不能作为 catalog 引用。
++    """
++
++    return isinstance(value, str) and bool(value.strip())
++
++
++def _is_non_empty_string_list(value: Any) -> bool:
++    """判断值是否为非空字符串列表。
++
++    参数：
++        value: provider 输出的任意字段。
++    返回：
++        True 表示是 `list[str]` 且每项去空白后非空；False 表示必须保持原样交由 validator 拦截。
++    """
++
++    return isinstance(value, list) and bool(value) and all(isinstance(item, str) and item.strip() for item in value)
++
++
++def _is_optional_string_list(value: Any) -> bool:
++    """判断可选字段是否为字符串列表或未提供。
++
++    参数：
++        value: provider 输出的任意字段。
++    返回：
++        True 表示字段缺省/None 或为有效 `list[str]`；False 表示字段形态异常，不能用于归一化判断。
++    """
++
++    return value is None or _is_non_empty_string_list(value) or value == []
++
++
++def _is_empty_list_or_none(value: Any) -> bool:
++    """判断字段是否明确表示空列表或未提供。
++
++    参数：
++        value: provider 输出的任意字段。
++    返回：
++        True 表示 None 或空 list；False 表示存在 join/异常形态，应 fail-closed 不做归一化。
++    """
++
++    return value is None or value == []
++
++
++def _dedupe_string_items(value: Any) -> list[str]:
++    """按出现顺序去重字符串数组，用于安全归一 provider 重复项。
++
++    参数：
++        value: 任意 provider 输出值，通常是 list[str]。
++    返回：
++        去重后的非空字符串列表；非字符串项不在这里修复，继续由后续 schema/validator 拦截。
++    """
++
++    seen: set[str] = set()
++    items: list[str] = []
++    for item in _string_items(value):
++        if item in seen:
++            continue
++        seen.add(item)
++        items.append(item)
++    return items
++
++
++def _should_drop_default_time_rule_for_explicit_years(
++    *,
++    original_question: str,
++    normalized_question: str,
++    plan: dict[str, Any],
++) -> bool:
++    """判断显式年份问题中误带的 default_time_range 是否可以安全移除。
++
++    参数：
++        original_question: 用户原始问题。
++        normalized_question: Query Rewrite 后的问题。
++        plan: provider 输出的 plan dict。
++    返回：
++        True 表示可移除 default_time_range；False 表示保持原样交给 validator。
++    业务逻辑：
++        default_time_range 仅代表无显式时间时默认 2023-2026。若用户已明确问 2023-2025，且
++        plan.filters 与 explicit_year_buckets 完全一致、并且不是默认全集，说明该规则是从召回示例误抄，
++        可以移除；否则不做推断，保持 fail-closed。
++    """
++
++    if not (_has_explicit_year(original_question) or _has_explicit_year(normalized_question)):
++        return False
++    filter_years = _extract_plan_biz_years(plan)
++    if not filter_years or filter_years == DEFAULT_LOGISTICS_YEARS:
++        return False
++    buckets = plan.get("explicit_year_buckets")
++    if not isinstance(buckets, list) or not buckets:
++        return False
++    bucket_years: list[int] = []
++    for value in buckets:
++        year = _coerce_year_value(value)
++        if year is None:
++            return False
++        bucket_years.append(year)
++    return sorted(set(bucket_years)) == filter_years
++
++
+ def _is_empty_rule_placeholder(value: str) -> bool:
+     """识别 LLM 对空业务规则数组的常见字符串化占位。"""
+ 
+diff --git a/tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py b/tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py
+index ff02423..bf78a9b 100644
+--- a/tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py
++++ b/tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py
+@@ -336,6 +336,145 @@ def test_sqlplan_generator_keeps_unsafe_explicit_year_buckets_fail_closed() -> N
+         assert result.error_codes
+ 
+ 
++def test_sqlplan_generator_normalizes_live_yearly_breakdown_provider_drift() -> None:
++    """真实 provider 对多年拆分偶发混入原始表和默认时间规则时，只做可证明安全的收敛归一。"""
++
++    provider_candidate = _valid_candidate(
++        catalog_refs=[
++            {"catalog_id": "example:m9_example_yearly_mw_breakdown", "catalog_version": CATALOG_VERSION},
++            {"catalog_id": "table:dwd_logistics_hist_shipment_detail", "catalog_version": CATALOG_VERSION},
++            {"catalog_id": "rule:default_time_range", "catalog_version": CATALOG_VERSION},
++        ],
++        plan={
++            "query_type": "aggregate",
++            "tables": ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"],
++            "joins": [],
++            "metrics": ["shipment_mw", "row_count"],
++            "dimensions": ["biz_year"],
++            "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025], "source": "user_explicit"}],
++            "group_by": ["biz_year"],
++            "order_by": [{"dimension": "biz_year", "direction": "asc"}],
++            "business_rules": ["default_time_range"],
++            "explicit_year_buckets": [2023, 2024, 2025],
++            "requested_unit": "MW",
++            "limit": 20,
++        },
++    )
++    client = _FakeChatClient(json.dumps(provider_candidate, ensure_ascii=False))
++    generator = LogisticsSqlPlanGenerator(client=client, enabled=True, model="fake-deepseek")
++
++    result = generator.generate(
++        original_question="2023年到2025年每年发运量分别是多少？",
++        normalized_question="2023年到2025年每年发运量分别是多少？",
++        route=LogisticsNl2SqlDomainRouter().route("2023年到2025年每年发运量分别是多少？"),
++        recall_result=_recall_by_ids(
++            {
++                "example:m9_example_yearly_mw_breakdown",
++                "table:dwd_logistics_hist_shipment_detail",
++                "metric:shipment_mw",
++                "rule:default_time_range",
++            }
++        ),
++    )
++
++    assert result.status == "ok", result.error_codes
++    assert result.validation_result is not None and result.validation_result.ok is True
++    assert result.candidate is not None
++    assert result.candidate["plan"]["tables"] == ["dws_logistics_detail_union"]
++    assert result.candidate["plan"]["business_rules"] == []
++    assert result.candidate["plan"]["explicit_year_buckets"] == [2023, 2024, 2025]
++
++
++def test_sqlplan_generator_does_not_single_table_normalize_structured_joins() -> None:
++    """结构化非空 joins 不是“无 join”，必须保持原样交给 validator fail-closed。"""
++
++    generator = LogisticsSqlPlanGenerator(client=_FakeChatClient("{}"), enabled=True, model="fake-deepseek")
++    plan = {
++        "tables": ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"],
++        "joins": [
++            {
++                "left_table": "dws_logistics_detail_union",
++                "right_table": "dwd_logistics_hist_shipment_detail",
++                "on": "dws_logistics_detail_union.biz_year = dwd_logistics_hist_shipment_detail.biz_year",
++            }
++        ],
++        "metrics": ["shipment_mw", "row_count"],
++        "dimensions": ["biz_year"],
++        "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025], "source": "user_explicit"}],
++        "group_by": ["biz_year"],
++        "order_by": [{"dimension": "biz_year", "direction": "asc"}],
++    }
++
++    generator._normalize_single_table_plan_tables(plan)
++
++    assert plan["tables"] == ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"]
++
++
++def test_sqlplan_generator_does_not_single_table_normalize_invalid_table_items() -> None:
++    """tables 中存在非字符串项时不得静默清理，必须保持原样让 schema/validator 拦截。"""
++
++    generator = LogisticsSqlPlanGenerator(client=_FakeChatClient("{}"), enabled=True, model="fake-deepseek")
++    plan = {
++        "tables": ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail", {"table": "unexpected"}],
++        "joins": [],
++        "metrics": ["shipment_mw", "row_count"],
++        "dimensions": ["biz_year"],
++        "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025], "source": "user_explicit"}],
++        "group_by": ["biz_year"],
++        "order_by": [{"dimension": "biz_year", "direction": "asc"}],
++    }
++
++    generator._normalize_single_table_plan_tables(plan)
++
++    assert plan["tables"] == ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail", {"table": "unexpected"}]
++
++
++def test_sqlplan_generator_does_not_single_table_normalize_malformed_filters() -> None:
++    """filters 形态异常或缺失有效维度引用时，不能把多表计划收敛成单表。"""
++
++    generator = LogisticsSqlPlanGenerator(client=_FakeChatClient("{}"), enabled=True, model="fake-deepseek")
++    malformed_filter_values = [
++        {},
++        "",
++        False,
++        [{}],
++        [{"dimension": "  ", "operator": "in", "values": [2023]}],
++        [{"dimension": 123, "operator": "in", "values": [2023]}],
++        [{"dimension": "unknown_dimension", "operator": "in", "values": [2023]}],
++    ]
++    for filters in malformed_filter_values:
++        plan = _single_table_normalization_plan()
++        plan["filters"] = filters
++
++        generator._normalize_single_table_plan_tables(plan)
++
++        assert plan["tables"] == ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"], filters
++
++
++def test_sqlplan_generator_does_not_single_table_normalize_malformed_order_by() -> None:
++    """order_by 形态异常、缺失引用或多引用时，不能把多表计划收敛成单表。"""
++
++    generator = LogisticsSqlPlanGenerator(client=_FakeChatClient("{}"), enabled=True, model="fake-deepseek")
++    malformed_order_by_values = [
++        {},
++        "",
++        False,
++        [{}],
++        [{"metric": "  ", "direction": "desc"}],
++        [{"dimension": 123, "direction": "asc"}],
++        [{"metric": "unknown_metric", "direction": "desc"}],
++        [{"dimension": "unknown_dimension", "direction": "asc"}],
++        [{"metric": "shipment_mw", "dimension": "biz_year", "direction": "desc"}],
++    ]
++    for order_by in malformed_order_by_values:
++        plan = _single_table_normalization_plan()
++        plan["order_by"] = order_by
++
++        generator._normalize_single_table_plan_tables(plan)
++
++        assert plan["tables"] == ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"], order_by
++
++
+ def test_sqlplan_generator_expands_dependencies_declared_by_recalled_example() -> None:
+     """命中 canonical 示例时，可展开示例声明的依赖；这锁定真实 provider gate 的 missing catalog_ref 修复。"""
+ 
+@@ -574,6 +713,26 @@ def test_m9_shadow_runner_writes_redacted_artifacts_for_fake_success(tmp_path) -
+     assert "正式物流 QA 主链路" not in payload
+ 
+ 
++def _single_table_normalization_plan() -> dict:
++    """构造单表归一化 guard 测试使用的多表噪声计划。
++
++    返回：
++        包含统一服务表和历史明细噪声表的 provider plan；默认引用均落在统一服务表。
++    业务逻辑：
++        该 helper 只用于验证 generator 在异常字段形态下保持原样，避免把 malformed plan 静默修正。
++    """
++
++    return {
++        "tables": ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"],
++        "joins": [],
++        "metrics": ["shipment_mw", "row_count"],
++        "dimensions": ["biz_year"],
++        "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025], "source": "user_explicit"}],
++        "group_by": ["biz_year"],
++        "order_by": [{"dimension": "biz_year", "direction": "asc"}],
++    }
++
++
+ def _valid_candidate(**overrides) -> dict:
+     candidate = {
+         "schema_version": "logistics_sqlplan_candidate.v1",
+@@ -610,6 +769,19 @@ def _valid_candidate(**overrides) -> dict:
+     return _deep_merge(candidate, overrides)
+ 
+ 
++def _recall_by_ids(catalog_ids: set[str]) -> LogisticsCatalogRecallResult:
++    """按指定 catalog_id 构造召回结果，用于复现 live provider gate 的局部命中形态。"""
++
++    catalog = LogisticsSemanticCatalogLoader().load()
++    docs = LogisticsCatalogRecallDocumentBuilder().build(catalog)
++    hits = [
++        LogisticsCatalogRecallHit(document=document, vector_score=0.88, rerank_score=0.96, source="rerank")
++        for document in docs
++        if document.catalog_id in catalog_ids
++    ]
++    return LogisticsCatalogRecallResult(status="ok", hits=hits)
++
++
+ def _recall_ok() -> LogisticsCatalogRecallResult:
+     catalog = LogisticsSemanticCatalogLoader().load()
+     docs = LogisticsCatalogRecallDocumentBuilder().build(catalog)

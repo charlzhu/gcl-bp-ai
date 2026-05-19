@@ -3,6 +3,7 @@ uvicorn[standard]==0.30.6
 
 sqlalchemy==2.0.35
 pymysql==1.1.1
+oracledb==4.0.0
 cryptography==42.0.8
 alembic==1.13.3
 

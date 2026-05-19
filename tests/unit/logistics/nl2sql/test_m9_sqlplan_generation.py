@@ -336,6 +336,145 @@ def test_sqlplan_generator_keeps_unsafe_explicit_year_buckets_fail_closed() -> N
         assert result.error_codes
 
 
+def test_sqlplan_generator_normalizes_live_yearly_breakdown_provider_drift() -> None:
+    """真实 provider 对多年拆分偶发混入原始表和默认时间规则时，只做可证明安全的收敛归一。"""
+
+    provider_candidate = _valid_candidate(
+        catalog_refs=[
+            {"catalog_id": "example:m9_example_yearly_mw_breakdown", "catalog_version": CATALOG_VERSION},
+            {"catalog_id": "table:dwd_logistics_hist_shipment_detail", "catalog_version": CATALOG_VERSION},
+            {"catalog_id": "rule:default_time_range", "catalog_version": CATALOG_VERSION},
+        ],
+        plan={
+            "query_type": "aggregate",
+            "tables": ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"],
+            "joins": [],
+            "metrics": ["shipment_mw", "row_count"],
+            "dimensions": ["biz_year"],
+            "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025], "source": "user_explicit"}],
+            "group_by": ["biz_year"],
+            "order_by": [{"dimension": "biz_year", "direction": "asc"}],
+            "business_rules": ["default_time_range"],
+            "explicit_year_buckets": [2023, 2024, 2025],
+            "requested_unit": "MW",
+            "limit": 20,
+        },
+    )
+    client = _FakeChatClient(json.dumps(provider_candidate, ensure_ascii=False))
+    generator = LogisticsSqlPlanGenerator(client=client, enabled=True, model="fake-deepseek")
+
+    result = generator.generate(
+        original_question="2023年到2025年每年发运量分别是多少？",
+        normalized_question="2023年到2025年每年发运量分别是多少？",
+        route=LogisticsNl2SqlDomainRouter().route("2023年到2025年每年发运量分别是多少？"),
+        recall_result=_recall_by_ids(
+            {
+                "example:m9_example_yearly_mw_breakdown",
+                "table:dwd_logistics_hist_shipment_detail",
+                "metric:shipment_mw",
+                "rule:default_time_range",
+            }
+        ),
+    )
+
+    assert result.status == "ok", result.error_codes
+    assert result.validation_result is not None and result.validation_result.ok is True
+    assert result.candidate is not None
+    assert result.candidate["plan"]["tables"] == ["dws_logistics_detail_union"]
+    assert result.candidate["plan"]["business_rules"] == []
+    assert result.candidate["plan"]["explicit_year_buckets"] == [2023, 2024, 2025]
+
+
+def test_sqlplan_generator_does_not_single_table_normalize_structured_joins() -> None:
+    """结构化非空 joins 不是“无 join”，必须保持原样交给 validator fail-closed。"""
+
+    generator = LogisticsSqlPlanGenerator(client=_FakeChatClient("{}"), enabled=True, model="fake-deepseek")
+    plan = {
+        "tables": ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"],
+        "joins": [
+            {
+                "left_table": "dws_logistics_detail_union",
+                "right_table": "dwd_logistics_hist_shipment_detail",
+                "on": "dws_logistics_detail_union.biz_year = dwd_logistics_hist_shipment_detail.biz_year",
+            }
+        ],
+        "metrics": ["shipment_mw", "row_count"],
+        "dimensions": ["biz_year"],
+        "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025], "source": "user_explicit"}],
+        "group_by": ["biz_year"],
+        "order_by": [{"dimension": "biz_year", "direction": "asc"}],
+    }
+
+    generator._normalize_single_table_plan_tables(plan)
+
+    assert plan["tables"] == ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"]
+
+
+def test_sqlplan_generator_does_not_single_table_normalize_invalid_table_items() -> None:
+    """tables 中存在非字符串项时不得静默清理，必须保持原样让 schema/validator 拦截。"""
+
+    generator = LogisticsSqlPlanGenerator(client=_FakeChatClient("{}"), enabled=True, model="fake-deepseek")
+    plan = {
+        "tables": ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail", {"table": "unexpected"}],
+        "joins": [],
+        "metrics": ["shipment_mw", "row_count"],
+        "dimensions": ["biz_year"],
+        "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025], "source": "user_explicit"}],
+        "group_by": ["biz_year"],
+        "order_by": [{"dimension": "biz_year", "direction": "asc"}],
+    }
+
+    generator._normalize_single_table_plan_tables(plan)
+
+    assert plan["tables"] == ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail", {"table": "unexpected"}]
+
+
+def test_sqlplan_generator_does_not_single_table_normalize_malformed_filters() -> None:
+    """filters 形态异常或缺失有效维度引用时，不能把多表计划收敛成单表。"""
+
+    generator = LogisticsSqlPlanGenerator(client=_FakeChatClient("{}"), enabled=True, model="fake-deepseek")
+    malformed_filter_values = [
+        {},
+        "",
+        False,
+        [{}],
+        [{"dimension": "  ", "operator": "in", "values": [2023]}],
+        [{"dimension": 123, "operator": "in", "values": [2023]}],
+        [{"dimension": "unknown_dimension", "operator": "in", "values": [2023]}],
+    ]
+    for filters in malformed_filter_values:
+        plan = _single_table_normalization_plan()
+        plan["filters"] = filters
+
+        generator._normalize_single_table_plan_tables(plan)
+
+        assert plan["tables"] == ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"], filters
+
+
+def test_sqlplan_generator_does_not_single_table_normalize_malformed_order_by() -> None:
+    """order_by 形态异常、缺失引用或多引用时，不能把多表计划收敛成单表。"""
+
+    generator = LogisticsSqlPlanGenerator(client=_FakeChatClient("{}"), enabled=True, model="fake-deepseek")
+    malformed_order_by_values = [
+        {},
+        "",
+        False,
+        [{}],
+        [{"metric": "  ", "direction": "desc"}],
+        [{"dimension": 123, "direction": "asc"}],
+        [{"metric": "unknown_metric", "direction": "desc"}],
+        [{"dimension": "unknown_dimension", "direction": "asc"}],
+        [{"metric": "shipment_mw", "dimension": "biz_year", "direction": "desc"}],
+    ]
+    for order_by in malformed_order_by_values:
+        plan = _single_table_normalization_plan()
+        plan["order_by"] = order_by
+
+        generator._normalize_single_table_plan_tables(plan)
+
+        assert plan["tables"] == ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"], order_by
+
+
 def test_sqlplan_generator_expands_dependencies_declared_by_recalled_example() -> None:
     """命中 canonical 示例时，可展开示例声明的依赖；这锁定真实 provider gate 的 missing catalog_ref 修复。"""
 
@@ -574,6 +713,26 @@ def test_m9_shadow_runner_writes_redacted_artifacts_for_fake_success(tmp_path) -
     assert "正式物流 QA 主链路" not in payload
 
 
+def _single_table_normalization_plan() -> dict:
+    """构造单表归一化 guard 测试使用的多表噪声计划。
+
+    返回：
+        包含统一服务表和历史明细噪声表的 provider plan；默认引用均落在统一服务表。
+    业务逻辑：
+        该 helper 只用于验证 generator 在异常字段形态下保持原样，避免把 malformed plan 静默修正。
+    """
+
+    return {
+        "tables": ["dws_logistics_detail_union", "dwd_logistics_hist_shipment_detail"],
+        "joins": [],
+        "metrics": ["shipment_mw", "row_count"],
+        "dimensions": ["biz_year"],
+        "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025], "source": "user_explicit"}],
+        "group_by": ["biz_year"],
+        "order_by": [{"dimension": "biz_year", "direction": "asc"}],
+    }
+
+
 def _valid_candidate(**overrides) -> dict:
     candidate = {
         "schema_version": "logistics_sqlplan_candidate.v1",
@@ -608,6 +767,19 @@ def _valid_candidate(**overrides) -> dict:
         "confidence": 0.93,
     }
     return _deep_merge(candidate, overrides)
+
+
+def _recall_by_ids(catalog_ids: set[str]) -> LogisticsCatalogRecallResult:
+    """按指定 catalog_id 构造召回结果，用于复现 live provider gate 的局部命中形态。"""
+
+    catalog = LogisticsSemanticCatalogLoader().load()
+    docs = LogisticsCatalogRecallDocumentBuilder().build(catalog)
+    hits = [
+        LogisticsCatalogRecallHit(document=document, vector_score=0.88, rerank_score=0.96, source="rerank")
+        for document in docs
+        if document.catalog_id in catalog_ids
+    ]
+    return LogisticsCatalogRecallResult(status="ok", hits=hits)
 
 
 def _recall_ok() -> LogisticsCatalogRecallResult:
