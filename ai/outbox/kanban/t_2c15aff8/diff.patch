@@ -1,5 +1,5 @@
 diff --git a/backend/requirements.txt b/backend/requirements.txt
-index 078d599..a1e000b 100644
+index 9169b57..b50aac3 100644
 --- a/backend/requirements.txt
 +++ b/backend/requirements.txt
 @@ -3,6 +3,7 @@ uvicorn[standard]==0.30.6
@@ -11,113 +11,1560 @@ index 078d599..a1e000b 100644
  alembic==1.13.3
  
 diff --git a/docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md b/docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md
-new file mode 100644
-index 0000000..2afdddd
---- /dev/null
+index 2afdddd..349fdc5 100644
+--- a/docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md
 +++ b/docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md
-@@ -0,0 +1,105 @@
-+# SAP MID Oracle 只读 Smoke Test 报告（M1.5）
+@@ -1,11 +1,21 @@
+ # SAP MID Oracle 只读 Smoke Test 报告（M1.5）
+ 
+-执行时间：2026-05-14 18:08:20 CST
+-范围：只读 smoke test；不导出大表；不写 Oracle；不记录真实 host/user/password/DSN/login user。
++执行时间：2026-05-19 19:15:55 CST
++范围：只读 smoke test；不导出大表；不写 Oracle；不记录真实 host/service/user/password/DSN/login user。
 +
-+执行时间：2026-05-14 18:08:20 CST
-+范围：只读 smoke test；不导出大表；不写 Oracle；不记录真实 host/user/password/DSN/login user。
++本次复测产物：
 +
-+## 1. 是否读取到 SAP_ORACLE_* 配置
++- `ai/outbox/kanban/t_2c15aff8/test.log`
++- `ai/outbox/kanban/t_2c15aff8/pip-check.log`
++- `ai/outbox/kanban/t_2c15aff8/py-compile.status`
++- `ai/outbox/kanban/t_2c15aff8/secret-scan.log`
++- `ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json`
++- `ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json`
++- `ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json`
+ 
+ ## 1. 是否读取到 SAP_ORACLE_* 配置
+ 
+-读取方式：仅检查 `backend/.env` 中配置项存在性，不输出真实值。
++读取方式：仅检查 `backend/.env` 与进程环境变量中的配置项存在性，不输出真实值。
+ 
+ | 配置项 | 存在性 |
+ |---|---|
+@@ -23,29 +33,30 @@
+ | `backend/.venv` 导入 `oracledb` | 通过 |
+ | `oracledb` 版本 | 4.0.0 |
+ | `backend/.venv` 导入 `cx_Oracle` | 未安装；本轮不采用 |
+-| 项目依赖锁定 | 已在 `backend/requirements.txt` 增加 `oracledb==4.0.0` |
++| 项目依赖锁定 | 已在 `backend/requirements.txt` 保持 `oracledb==4.0.0` |
+ 
+-说明：本轮已解除上一版报告中的“Python driver 不可导入”阻塞，但连接仍受 Oracle thick client / 数据库版本兼容性阻塞，见第 3 节。
++说明：Python driver 已可导入，依赖文件已包含 `oracledb==4.0.0`。当前阻塞不再是 Python 包缺失，而是尚未建立 Oracle 会话。
+ 
+ ## 3. 是否成功连接 Oracle
+ 
+ 未成功建立 Oracle 会话。
+ 
+-已验证项：
++最新复测结果：
+ 
+ 1. `backend/.env` 中 `SAP_ORACLE_*` 必填项均存在。
+-2. TCP 层到配置的 host/port 可连通；报告不记录真实 host/port。
+-3. 使用 `python-oracledb` thin/default 模式发起连接，失败。
+-4. 尝试初始化 thick 模式默认 Oracle Client，失败，因为本机未发现 `libclntsh.dylib`。
++2. TCP 层到配置 host/port 的 10 秒连通性探针未通过；报告不记录真实 host/port。
++3. 因 TCP 探针未通过，本轮未继续发起 thin/default Oracle SQL 会话，避免输出连接细节或长时间阻塞。
++4. 单独执行 thick-mode Oracle Client 可用性探针，仍未发现可用 64-bit Oracle Client 动态库 `libclntsh.dylib`。
+ 
+ 安全错误摘要（已脱敏）：
+ 
+-| 阶段 | 错误类型 | 摘要 |
++| 阶段 | 结果 | 摘要 |
+ |---|---|---|
+-| thin/default 连接 | `OperationalError` / `NotSupportedError` | `DPY-3010: connections to this database server version are not supported by python-oracledb in thin mode` |
+-| thick client 初始化 | `DatabaseError` | `DPI-1047: Cannot locate a 64-bit Oracle Client library: libclntsh.dylib` |
++| TCP host/port 探针 | `未通过` | `10 秒 TCP 探针超时` |
++| thin/default 连接 | 未执行 | TCP 探针未通过，未进入 Oracle SQL session |
++| thick client 初始化探针 | `未通过` | `DPI-1047: Cannot locate a 64-bit Oracle Client library: libclntsh.dylib`；候选尝试 5 次 |
+ 
+-判断：当前 Oracle 服务器版本不支持 `python-oracledb` thin 模式；需要安装并配置 Oracle Instant Client / thick 模式后再重跑 smoke test，或由 DBA 提供 thin 模式兼容的 Oracle 服务端/连接方式。
++判断：最新复测首先被网络/TCP 层阻塞；即使网络恢复，当前本机仍缺少 thick 模式所需 Oracle Instant Client / `libclntsh.dylib`。需要先恢复到配置 host/port 的 TCP 连通性，并安装/配置与本机架构匹配的 Oracle Instant Client，或由 DBA 提供 thin 模式兼容的 Oracle 服务端/连接方式后再重跑 smoke test。
+ 
+ ## 4. 是否成功执行 SELECT 1 FROM dual
+ 
+@@ -68,7 +79,7 @@
+ 
+ 未执行。
+ 
+-原因：Oracle 会话未建立。未对任何 Oracle 大表做全量导出，也未执行 `SELECT *` 无限制查询。
++原因：Oracle 会话未建立。未对任何 Oracle 大表做全量导出，也未执行无 `ROWNUM` 上限的数据抽样。
+ 
+ ## 7. 是否能做 count 验证
+ 
+@@ -79,9 +90,9 @@
+ ## 8. 网络 / 权限 / 驱动问题
+ 
+ 1. 驱动：`oracledb==4.0.0` 已可导入，并已写入项目依赖文件。
+-2. Python thin 模式：阻塞。当前 Oracle 服务端版本不被 `python-oracledb` thin 模式支持。
+-3. Oracle Client thick 模式：阻塞。本机未定位到 64-bit Oracle Client 动态库 `libclntsh.dylib`。
+-4. 网络：TCP host/port 连通，但这不等于 Oracle 会话成功。
++2. 网络：最新 TCP host/port 探针超时，尚未进入 Oracle 登录/SQL 阶段。
++3. Python thin 模式：本轮未执行，因为 TCP 探针未通过；上一轮曾观测到服务端版本不支持 thin 模式（DPY-3010/DPY-6005），但最新结论以本轮 TCP 阻塞为准。
++4. Oracle Client thick 模式：阻塞。本机未定位到 64-bit Oracle Client 动态库 `libclntsh.dylib`。
+ 5. 权限：未验证。连接建立前无法确认只读账号是否可访问 `all_views`、`all_tab_columns` 以及两个白名单视图。
+ 
+ ## 9. M2 进入条件判断
+@@ -95,11 +106,13 @@
+ 3. 两个白名单视图字段结构 live 验证
+ 4. 两个白名单视图 `COUNT(*)`
+ 5. 两个白名单视图 `ROWNUM <= 5` 小样本读取
++6. 只读账号权限和查询边界确认
+ 
+ ## 10. 后续建议
+ 
+-1. 安装与当前 macOS 架构匹配的 Oracle Instant Client，并确保 `python-oracledb` thick 模式可定位 `libclntsh.dylib`。
+-2. 重跑只读 smoke test，优先验证 `SELECT 1 FROM dual`。
+-3. 连接通过后，再按白名单顺序验证字段结构、count 和 `ROWNUM <= 5` 小样本。
+-4. 后续报告继续只记录存在性、行数、字段名、字段类型和脱敏错误摘要，不记录真实 host/user/password/DSN/login user。
+-5. 在上述 smoke test 通过前，不进入 M2 正式同步开发，不把用户问答链路直接接到 Oracle MID。
++1. 先确认当前机器/网络到 `SAP_ORACLE_*` 配置 host/port 的 TCP 连通性，必要时检查 VPN、内网、白名单或防火墙。
++2. 安装与当前 macOS `arm64` 架构匹配的 Oracle Instant Client，并确保 `python-oracledb` thick 模式可定位 `libclntsh.dylib`。
++3. 网络与客户端准备完成后，重跑只读 smoke test，优先验证 `SELECT 1 FROM dual`。
++4. 连接通过后，再按白名单顺序验证字段结构、count 和 `ROWNUM <= 5` 小样本。
++5. 后续报告继续只记录存在性、行数、字段名、字段类型和脱敏错误摘要，不记录真实 host/user/password/DSN/login user。
++6. 在上述 smoke test 通过前，不进入 M2 正式同步开发，不把用户问答链路直接接到 Oracle MID。
+
+diff --git a/tmp/hermes/sap_mid_oracle_smoke.py b/tmp/hermes/sap_mid_oracle_smoke.py
+new file mode 100644
+index 0000000..e95b79c
+--- /dev/null
++++ b/tmp/hermes/sap_mid_oracle_smoke.py
+@@ -0,0 +1,569 @@
++from __future__ import annotations
 +
-+读取方式：仅检查 `backend/.env` 中配置项存在性，不输出真实值。
++import contextlib
++import glob
++import importlib.util
++import json
++import os
++import re
++import socket
++import subprocess
++import sys
++import time
++from datetime import datetime
++from pathlib import Path
++from typing import Any
 +
-+| 配置项 | 存在性 |
++ROOT = Path(__file__).resolve().parents[2]
++OUTDIR = ROOT / "ai" / "outbox" / "kanban" / "t_2c15aff8"
++RESULT_PATH = OUTDIR / "oracle_smoke_safe_result.json"
++SANITIZED_PATH = OUTDIR / "smoke-result-sanitized.json"
++VIEW_NAMES = ["V_HF_SAP_INOUT_DAILY", "V_SAP_HFFN_CRKLSZ"]
++REQUIRED_KEYS = [
++    "SAP_ORACLE_HOST",
++    "SAP_ORACLE_PORT",
++    "SAP_ORACLE_SERVICE",
++    "SAP_ORACLE_USER",
++    "SAP_ORACLE_PASSWORD",
++    "SAP_ORACLE_OWNER",
++]
++SENSITIVE_KEYS = {
++    "SAP_ORACLE_HOST",
++    "SAP_ORACLE_SERVICE",
++    "SAP_ORACLE_USER",
++    "SAP_ORACLE_PASSWORD",
++}
++IDENTIFIER_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,127}$")
++ERROR_CODE_RE = re.compile(r"\b(?:DPY|DPI|ORA)-\d{4,5}\b")
++
++
++def now_cst() -> str:
++    """返回用于报告的本地时间字符串。"""
++    return time.strftime("%Y-%m-%d %H:%M:%S %Z")
++
++
++def read_env_file() -> dict[str, str]:
++    """读取 backend/.env 中的 Oracle 配置；只在内存使用，绝不打印真实值。"""
++    values: dict[str, str] = {}
++    env_path = ROOT / "backend" / ".env"
++    if env_path.exists():
++        for raw_line in env_path.read_text(encoding="utf-8", errors="ignore").splitlines():
++            line = raw_line.strip()
++            if not line or line.startswith("#") or "=" not in line:
++                continue
++            key, value = line.split("=", 1)
++            key = key.strip()
++            if key in REQUIRED_KEYS:
++                values[key] = value.strip().strip('"').strip("'")
++    for key in REQUIRED_KEYS:
++        if os.environ.get(key):
++            values[key] = os.environ[key]
++    return values
++
++
++def safe_codes(exc: BaseException | str) -> list[str]:
++    """从异常文本中提取 Oracle/python-oracledb 错误码，避免输出连接串。"""
++    return sorted(set(ERROR_CODE_RE.findall(str(exc))))
++
++
++def safe_error_summary(exc: BaseException) -> dict[str, Any]:
++    """只输出错误类型和错误码；不输出 host/user/password/DSN。"""
++    return {
++        "error_type": type(exc).__name__,
++        "codes": safe_codes(exc),
++    }
++
++
++def safe_bool_presence(values: dict[str, str]) -> dict[str, str]:
++    """将配置值脱敏为 present/missing。"""
++    return {key: "present" if values.get(key) else "missing" for key in REQUIRED_KEYS}
++
++
++def valid_identifier(name: str | None) -> bool:
++    """校验 Oracle owner/view 标识符，禁止拼接异常输入。"""
++    return bool(name and IDENTIFIER_RE.fullmatch(name))
++
++
++def child_payload(mode: str) -> dict[str, Any]:
++    """子进程执行单一连接模式，避免 thin/thick 模式互相污染。"""
++    values = read_env_file()
++    started = time.perf_counter()
++    try:
++        import oracledb  # type: ignore[import-not-found]
++
++        host = values["SAP_ORACLE_HOST"]
++        port = int(values.get("SAP_ORACLE_PORT") or "1521")
++        dsn = oracledb.makedsn(host, port, service_name=values["SAP_ORACLE_SERVICE"])
++        if mode == "thick":
++            init_info = init_thick_client(oracledb)
++            if not init_info.get("ok"):
++                return {
++                    "mode": mode,
++                    "ok": False,
++                    "elapsed_ms": elapsed_ms(started),
++                    "client_init": init_info,
++                }
++        conn = oracledb.connect(
++            user=values["SAP_ORACLE_USER"],
++            password=values["SAP_ORACLE_PASSWORD"],
++            dsn=dsn,
++        )
++        try:
++            checks = run_readonly_checks(conn, values)
++        finally:
++            with contextlib.suppress(Exception):
++                conn.close()
++        ok = bool(checks.get("select_1_from_dual", {}).get("ok")) and all(
++            item.get("ok") for item in checks.get("view_counts", {}).values()
++        ) and all(item.get("ok") for item in checks.get("view_samples", {}).values())
++        return {
++            "mode": mode,
++            "ok": ok,
++            "elapsed_ms": elapsed_ms(started),
++            "sql_checks": checks,
++            "client_init": {"ok": True} if mode == "thick" else None,
++        }
++    except Exception as exc:  # noqa: BLE001
++        return {
++            "mode": mode,
++            "ok": False,
++            "elapsed_ms": elapsed_ms(started),
++            **safe_error_summary(exc),
++        }
++
++
++def elapsed_ms(started: float) -> int:
++    """计算毫秒耗时。"""
++    return int((time.perf_counter() - started) * 1000)
++
++
++def init_thick_client(oracledb: Any) -> dict[str, Any]:
++    """尝试初始化 thick 模式；候选路径只用于内部，不写入报告。"""
++    attempts: list[dict[str, Any]] = []
++    candidates = thick_client_candidates()
++    attempt_specs: list[tuple[str, str | None]] = [("default", None)]
++    attempt_specs.extend(("candidate", candidate) for candidate in candidates)
++    for attempt_no, (source, lib_dir) in enumerate(attempt_specs, start=1):
++        try:
++            if lib_dir:
++                oracledb.init_oracle_client(lib_dir=lib_dir)
++            else:
++                oracledb.init_oracle_client()
++            return {
++                "ok": True,
++                "attempt_no": attempt_no,
++                "source": source,
++                "candidate_count": len(candidates),
++            }
++        except Exception as exc:  # noqa: BLE001
++            attempts.append(
++                {
++                    "attempt_no": attempt_no,
++                    "source": source,
++                    "ok": False,
++                    **safe_error_summary(exc),
++                }
++            )
++    return {"ok": False, "candidate_count": len(candidates), "attempts": attempts}
++
++
++def thick_client_candidates() -> list[str]:
++    """查找可能的 Oracle Instant Client 目录；不返回到终端输出。"""
++    raw_candidates: list[str] = []
++    for key in ("SAP_ORACLE_CLIENT_LIB_DIR", "ORACLE_CLIENT_LIB_DIR"):
++        if os.environ.get(key):
++            raw_candidates.append(os.environ[key])
++    if os.environ.get("ORACLE_HOME"):
++        raw_candidates.append(str(Path(os.environ["ORACLE_HOME"]) / "lib"))
++    raw_candidates.extend(glob.glob("/opt/oracle/instantclient*"))
++    raw_candidates.extend(glob.glob(str(Path.home() / "instantclient*")))
++    raw_candidates.extend(glob.glob(str(Path.home() / "Downloads" / "instantclient*")))
++    raw_candidates.extend(["/opt/homebrew/lib", "/usr/local/lib"])
++
++    found: list[str] = []
++    seen: set[str] = set()
++    for candidate in raw_candidates:
++        if not candidate:
++            continue
++        path = Path(candidate).expanduser()
++        key = str(path)
++        if key in seen or not path.exists() or not path.is_dir():
++            continue
++        seen.add(key)
++        if (path / "libclntsh.dylib").exists() or list(path.glob("libclntsh.dylib*")):
++            found.append(key)
++    return found
++
++
++def run_readonly_checks(conn: Any, values: dict[str, str]) -> dict[str, Any]:
++    """执行只读 smoke SQL：dual、连接摘要、字段结构、count、小样本。"""
++    owner = values.get("SAP_ORACLE_OWNER", "")
++    checks: dict[str, Any] = {
++        "owner_identifier_valid": valid_identifier(owner),
++        "select_1_from_dual": None,
++        "session_summary": None,
++        "views_registered": None,
++        "columns": None,
++        "view_counts": {},
++        "view_samples": {},
++    }
++    if not checks["owner_identifier_valid"]:
++        checks["owner_error"] = "SAP_ORACLE_OWNER is not a safe Oracle identifier"
++        return checks
++
++    cur = conn.cursor()
++    try:
++        cur.execute("SELECT 1 FROM dual")
++        row = cur.fetchone()
++        checks["select_1_from_dual"] = {"ok": bool(row and row[0] == 1), "row_count": 1}
++
++        cur.execute(
++            "SELECT SYS_CONTEXT('USERENV', 'SERVICE_NAME'), "
++            "SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA'), USER FROM dual"
++        )
++        session_row = cur.fetchone()
++        checks["session_summary"] = {
++            "ok": session_row is not None,
++            "service_name_present": bool(session_row and session_row[0]),
++            "current_schema_present": bool(session_row and session_row[1]),
++            "login_user_redacted": bool(session_row and session_row[2]),
++        }
++
++        cur.execute(
++            "SELECT owner, view_name FROM all_views "
++            "WHERE view_name IN (:v1, :v2) ORDER BY owner, view_name",
++            v1=VIEW_NAMES[0],
++            v2=VIEW_NAMES[1],
++        )
++        views = cur.fetchall()
++        checks["views_registered"] = {
++            "ok": len(views) >= 2,
++            "row_count": len(views),
++            "view_names": [row[1] for row in views],
++            "owners_redacted": True,
++        }
++
++        cur.execute(
++            "SELECT owner, table_name, column_name, data_type, data_length, nullable "
++            "FROM all_tab_columns "
++            "WHERE owner = :owner AND table_name IN (:v1, :v2) "
++            "ORDER BY table_name, column_id",
++            owner=owner.upper(),
++            v1=VIEW_NAMES[0],
++            v2=VIEW_NAMES[1],
++        )
++        column_rows = cur.fetchall()
++        columns_by_view: dict[str, list[dict[str, Any]]] = {view: [] for view in VIEW_NAMES}
++        for _owner, table_name, column_name, data_type, data_length, nullable in column_rows:
++            columns_by_view.setdefault(table_name, []).append(
++                {
++                    "column_name": column_name,
++                    "data_type": data_type,
++                    "data_length": data_length,
++                    "nullable": nullable,
++                }
++            )
++        checks["columns"] = {
++            "ok": all(len(columns_by_view.get(view, [])) > 0 for view in VIEW_NAMES),
++            "column_count_by_view": {view: len(columns_by_view.get(view, [])) for view in VIEW_NAMES},
++            "columns_by_view": columns_by_view,
++        }
++
++        for view in VIEW_NAMES:
++            if not valid_identifier(view):
++                checks["view_counts"][view] = {"ok": False, "error": "invalid view identifier"}
++                checks["view_samples"][view] = {"ok": False, "error": "invalid view identifier"}
++                continue
++            qualified = f"{owner}.{view}"
++            try:
++                cur.execute(f"SELECT COUNT(*) FROM {qualified}")
++                count_row = cur.fetchone()
++                checks["view_counts"][view] = {"ok": True, "count": int(count_row[0])}
++            except Exception as exc:  # noqa: BLE001
++                checks["view_counts"][view] = {"ok": False, **safe_error_summary(exc)}
++            try:
++                cur.execute(f"SELECT * FROM {qualified} WHERE ROWNUM <= 5")
++                sample_rows = cur.fetchall()
++                checks["view_samples"][view] = {
++                    "ok": True,
++                    "row_count": len(sample_rows),
++                    "column_count": len(cur.description or []),
++                    "column_names": [desc[0] for desc in (cur.description or [])],
++                    "sample_values_redacted": True,
++                }
++            except Exception as exc:  # noqa: BLE001
++                checks["view_samples"][view] = {"ok": False, **safe_error_summary(exc)}
++    finally:
++        with contextlib.suppress(Exception):
++            cur.close()
++    return checks
++
++
++def run_child(mode: str) -> dict[str, Any]:
++    """用子进程执行 thin/thick，保证模式独立。"""
++    env = os.environ.copy()
++    env["HERMES_ORACLE_SMOKE_CHILD"] = mode
++    proc = subprocess.run(
++        [sys.executable, str(Path(__file__).resolve())],
++        cwd=str(ROOT),
++        env=env,
++        capture_output=True,
++        text=True,
++        timeout=90,
++        check=False,
++    )
++    if proc.returncode != 0:
++        return {"mode": mode, "ok": False, "child_returncode": proc.returncode, "codes": safe_codes(proc.stderr)}
++    try:
++        return json.loads(proc.stdout)
++    except json.JSONDecodeError:
++        return {"mode": mode, "ok": False, "child_json_error": True, "codes": safe_codes(proc.stderr + proc.stdout)}
++
++
++def tcp_probe(values: dict[str, str]) -> dict[str, Any] | None:
++    """只做 TCP 连通性检查，不输出地址。"""
++    if not values.get("SAP_ORACLE_HOST") or not values.get("SAP_ORACLE_PORT"):
++        return None
++    timeout_seconds = float(os.environ.get("HERMES_ORACLE_TCP_TIMEOUT_SECONDS", "10"))
++    started = time.perf_counter()
++    try:
++        with socket.create_connection((values["SAP_ORACLE_HOST"], int(values["SAP_ORACLE_PORT"])), timeout=timeout_seconds):
++            return {"ok": True, "elapsed_ms": elapsed_ms(started), "timeout_seconds": timeout_seconds}
++    except Exception as exc:  # noqa: BLE001
++        return {"ok": False, "elapsed_ms": elapsed_ms(started), "timeout_seconds": timeout_seconds, **safe_error_summary(exc)}
++
++
++def summarize_attempts(attempts: list[dict[str, Any]]) -> dict[str, Any]:
++    """生成给终端/报告使用的脱敏摘要。"""
++    connected = next((attempt for attempt in attempts if attempt.get("ok")), None)
++    if connected:
++        sql_checks = connected.get("sql_checks") or {}
++        m2_ready = bool(
++            sql_checks.get("select_1_from_dual", {}).get("ok")
++            and sql_checks.get("columns", {}).get("ok")
++            and all(item.get("ok") for item in sql_checks.get("view_counts", {}).values())
++            and all(item.get("ok") for item in sql_checks.get("view_samples", {}).values())
++        )
++        return {
++            "status": "passed" if m2_ready else "partial",
++            "m2_ready": m2_ready,
++            "connection_status": "pass",
++            "successful_mode": connected.get("mode"),
++            "sql_checks": sql_checks,
++            "block_reason": None if m2_ready else "Oracle session established but one or more required readonly SQL checks failed",
++        }
++    thin_codes = next((attempt.get("codes") for attempt in attempts if attempt.get("mode") == "thin"), []) or []
++    thick = next((attempt for attempt in attempts if attempt.get("mode") == "thick"), {})
++    thick_codes = thick.get("codes") or []
++    if thick.get("client_init") and not thick["client_init"].get("ok"):
++        thick_codes = sorted(
++            set(
++                code
++                for item in thick["client_init"].get("attempts", [])
++                for code in item.get("codes", [])
++            )
++        )
++    return {
++        "status": "blocked",
++        "m2_ready": False,
++        "connection_status": "fail",
++        "sql_checks": None,
++        "block_reason": "Oracle session was not established; "
++        f"thin codes={thin_codes or ['unknown']}; thick codes={thick_codes or ['unknown']}",
++    }
++
++
++def write_outputs(result: dict[str, Any]) -> None:
++    """写入完整脱敏 JSON 与面向汇报的简版 JSON。"""
++    OUTDIR.mkdir(parents=True, exist_ok=True)
++    RESULT_PATH.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
++    sanitized = {
++        "executed_at": result["executed_at"],
++        "scope": "read_only_oracle_smoke",
++        "security": result["security"],
++        "config_presence": result["config_presence"],
++        "dependency": {
++            "oracledb_import": {
++                "status": "pass" if result["dependency"].get("oracledb_importable") else "missing",
++                "version": result["dependency"].get("oracledb_version"),
++            },
++            "cx_Oracle_import": {
++                "status": "present" if result["dependency"].get("cx_Oracle_importable") else "missing_not_used"
++            },
++        },
++        "tcp_connect": {"status": "pass" if result.get("network_probe", {}).get("ok") else "fail"},
++        "connection_status": result["connection_status"],
++        "attempts": [sanitize_attempt_for_report(item) for item in result.get("connection_attempts", [])],
++        "select_1_from_dual": summarize_sql_check(result, "select_1_from_dual"),
++        "view_columns": summarize_columns(result),
++        "view_counts": summarize_view_dict(result, "view_counts"),
++        "view_samples": summarize_view_dict(result, "view_samples"),
++        "status": result["status"],
++        "m2_ready": result["m2_ready"],
++        "blocker": result.get("block_reason"),
++    }
++    SANITIZED_PATH.write_text(json.dumps(sanitized, ensure_ascii=False, indent=2), encoding="utf-8")
++
++
++def sanitize_attempt_for_report(item: dict[str, Any]) -> dict[str, Any]:
++    """压缩连接尝试详情，保留错误码但去掉路径和连接元信息。"""
++    data = {
++        "mode": item.get("mode"),
++        "status": "pass" if item.get("ok") else "fail",
++        "elapsed_ms": item.get("elapsed_ms"),
++    }
++    if item.get("codes"):
++        data["codes"] = item.get("codes")
++    if item.get("client_init"):
++        init = item["client_init"]
++        data["client_init"] = {
++            "status": "pass" if init.get("ok") else "fail",
++            "candidate_count": init.get("candidate_count", 0),
++            "codes": sorted(set(code for attempt in init.get("attempts", []) for code in attempt.get("codes", []))),
++        }
++    return data
++
++
++def sql_checks(result: dict[str, Any]) -> dict[str, Any]:
++    """获取成功连接模式下的 SQL 检查结果。"""
++    for attempt in result.get("connection_attempts", []):
++        if attempt.get("sql_checks"):
++            return attempt["sql_checks"]
++    return {}
++
++
++def summarize_sql_check(result: dict[str, Any], key: str) -> str:
++    """将 SQL 检查状态转为报告短语。"""
++    checks = sql_checks(result)
++    if not checks:
++        return "not_executed_no_oracle_session"
++    item = checks.get(key)
++    if not item:
++        return "not_executed"
++    return "pass" if item.get("ok") else "fail"
++
++
++def summarize_columns(result: dict[str, Any]) -> Any:
++    """字段结构验证摘要。"""
++    checks = sql_checks(result)
++    if not checks:
++        return "not_executed_no_oracle_session"
++    columns = checks.get("columns") or {}
++    return {
++        "status": "pass" if columns.get("ok") else "fail",
++        "column_count_by_view": columns.get("column_count_by_view", {}),
++    }
++
++
++def summarize_view_dict(result: dict[str, Any], key: str) -> Any:
++    """count / sample 的逐视图验证摘要。"""
++    checks = sql_checks(result)
++    if not checks:
++        return "not_executed_no_oracle_session"
++    items = checks.get(key) or {}
++    summary: dict[str, Any] = {}
++    for view, item in items.items():
++        view_summary = {"status": "pass" if item.get("ok") else "fail"}
++        if "count" in item:
++            view_summary["count"] = item["count"]
++        if "row_count" in item:
++            view_summary["row_count"] = item["row_count"]
++        if "column_count" in item:
++            view_summary["column_count"] = item["column_count"]
++        if item.get("codes"):
++            view_summary["codes"] = item["codes"]
++        summary[view] = view_summary
++    return summary
++
++
++def main() -> int:
++    child_mode = os.environ.get("HERMES_ORACLE_SMOKE_CHILD")
++    if child_mode:
++        print(json.dumps(child_payload(child_mode), ensure_ascii=False))
++        return 0
++
++    values = read_env_file()
++    missing = [key for key in REQUIRED_KEYS if not values.get(key)]
++    dependency = {
++        "oracledb_importable": importlib.util.find_spec("oracledb") is not None,
++        "cx_Oracle_importable": importlib.util.find_spec("cx_Oracle") is not None,
++        "oracledb_version": None,
++    }
++    if dependency["oracledb_importable"]:
++        import oracledb  # type: ignore[import-not-found]
++
++        dependency["oracledb_version"] = getattr(oracledb, "__version__", None)
++
++    result: dict[str, Any] = {
++        "executed_at": now_cst(),
++        "scope": "read-only SAP MID Oracle smoke test; no Oracle writes; no unbounded table export; no real host/user/password/DSN output",
++        "required_config_keys": REQUIRED_KEYS,
++        "config_presence": safe_bool_presence(values),
++        "dependency": dependency,
++        "network_probe": None,
++        "connection_attempts": [],
++        "security": {
++            "no_oracle_writes": True,
++            "no_unbounded_table_export": True,
++            "sample_values_redacted": True,
++            "connection_values_redacted": True,
++        },
++        "status": "blocked",
++        "m2_ready": False,
++        "connection_status": "not_attempted",
++        "block_reason": None,
++        "owner_identifier_valid": valid_identifier(values.get("SAP_ORACLE_OWNER")),
++    }
++
++    if missing:
++        result["block_reason"] = "missing config keys: " + ", ".join(missing)
++    elif not dependency["oracledb_importable"]:
++        result["block_reason"] = "Oracle Python driver oracledb is not importable"
++    elif not result["owner_identifier_valid"]:
++        result["block_reason"] = "SAP_ORACLE_OWNER is missing or not a safe Oracle identifier"
++    else:
++        result["network_probe"] = tcp_probe(values)
++        if not result["network_probe"] or not result["network_probe"].get("ok"):
++            # 即使网络当前不可达，也单独探测本机 thick client，便于区分网络阻塞与本机驱动阻塞。
++            thick_probe = run_child("thick")
++            result["connection_attempts"] = [thick_probe]
++            thick_codes = thick_probe.get("codes") or []
++            if thick_probe.get("client_init") and not thick_probe["client_init"].get("ok"):
++                thick_codes = sorted(
++                    set(
++                        code
++                        for item in thick_probe["client_init"].get("attempts", [])
++                        for code in item.get("codes", [])
++                    )
++                )
++            result["block_reason"] = (
++                "TCP connectivity failed before SQL probe; "
++                f"local thick client probe codes={thick_codes or ['unknown']}"
++            )
++            result["connection_status"] = "fail"
++        else:
++            attempts = [run_child("thin"), run_child("thick")]
++            result["connection_attempts"] = attempts
++            summary = summarize_attempts(attempts)
++            result.update(summary)
++
++    write_outputs(result)
++    network_probe = result.get("network_probe")
++    terminal_summary = {
++        "status": result["status"],
++        "m2_ready": result["m2_ready"],
++        "config_presence": result["config_presence"],
++        "oracledb_importable": dependency["oracledb_importable"],
++        "oracledb_version": dependency.get("oracledb_version"),
++        "tcp_ok": network_probe.get("ok") if isinstance(network_probe, dict) else None,
++        "connection_status": result["connection_status"],
++        "block_reason": result.get("block_reason"),
++        "result_path": str(RESULT_PATH.relative_to(ROOT)),
++        "sanitized_path": str(SANITIZED_PATH.relative_to(ROOT)),
++    }
++    print(json.dumps(terminal_summary, ensure_ascii=False, indent=2))
++    return 0 if result["m2_ready"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+diff --git a/tmp/hermes/sap_mid_oracle_client_probe.py b/tmp/hermes/sap_mid_oracle_client_probe.py
+new file mode 100644
+index 0000000..bfb0513
+--- /dev/null
++++ b/tmp/hermes/sap_mid_oracle_client_probe.py
+@@ -0,0 +1,113 @@
++from __future__ import annotations
++
++import importlib.util
++import json
++import os
++import re
++import time
++from pathlib import Path
++from typing import Any
++
++ROOT = Path(__file__).resolve().parents[2]
++OUT_DIR = ROOT / "ai" / "outbox" / "kanban" / "t_2c15aff8"
++OUT_DIR.mkdir(parents=True, exist_ok=True)
++OUT_PATH = OUT_DIR / "oracle_client_probe_safe_result.json"
++OPTIONAL_KEYS = ["ORACLE_CLIENT_LIB_DIR", "SAP_ORACLE_CLIENT_LIB_DIR"]
++
++
++def read_env_file(path: Path) -> dict[str, str]:
++    """读取可能的 Oracle Client 目录配置；只在内存中使用，不输出真实路径。"""
++    values: dict[str, str] = {}
++    if not path.exists():
++        return values
++    for raw in path.read_text(encoding="utf-8", errors="ignore").splitlines():
++        line = raw.strip()
++        if not line or line.startswith("#") or "=" not in line:
++            continue
++        key, value = line.split("=", 1)
++        key = key.strip()
++        value = value.strip().strip('"').strip("'")
++        if key in OPTIONAL_KEYS and value:
++            values[key] = value
++    return values
++
++
++def load_optional_config() -> dict[str, str]:
++    """合并 backend/.env 与进程环境变量中的 Oracle Client 目录配置。"""
++    values = read_env_file(ROOT / "backend" / ".env")
++    for key in OPTIONAL_KEYS:
++        if os.environ.get(key):
++            values[key] = os.environ[key]
++    return values
++
++
++ERROR_CODE_RE = re.compile(r"\b(?:DPY|DPI|ORA)-\d{4,5}\b")
++
++
++def safe_error(exc: BaseException) -> dict[str, object]:
++    """生成脱敏错误摘要；只保留错误类型和 Oracle 错误码，不输出路径/连接细节。"""
++    return {"error_type": type(exc).__name__, "codes": sorted(set(ERROR_CODE_RE.findall(str(exc))))}
++
++
++def candidate_client_dirs(cfg: dict[str, str]) -> list[str | None]:
++    """生成 thick 模式候选目录；结果中不记录真实路径。"""
++    seen: set[str | None] = set()
++    candidates: list[str | None] = []
++    for key in OPTIONAL_KEYS:
++        val = cfg.get(key)
++        if val and val not in seen:
++            seen.add(val)
++            candidates.append(val)
++    for val in [None, "/opt/oracle/instantclient", "/opt/homebrew/opt/instantclient/lib", "/opt/homebrew/lib", "/usr/local/lib"]:
++        if val not in seen:
++            seen.add(val)
++            candidates.append(val)
++    return candidates
++
++
++def main() -> int:
++    cfg = load_optional_config()
++    payload: dict[str, Any] = {
++        "executed_at": time.strftime("%Y-%m-%d %H:%M:%S %Z"),
++        "scope": "Oracle Client thick-mode availability probe only; no database connection; no host/user/password/DSN output",
++        "oracledb_importable": importlib.util.find_spec("oracledb") is not None,
++        "oracledb_version": None,
++        "optional_client_config_presence": {key: ("present" if cfg.get(key) else "missing") for key in OPTIONAL_KEYS},
++        "attempts": [],
++        "thick_client_available": False,
++        "status": "blocked",
++    }
++    if not payload["oracledb_importable"]:
++        payload["status"] = "blocked_oracledb_missing"
++        OUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
++        print(json.dumps({"status": payload["status"], "thick_client_available": False, "result_path": str(OUT_PATH.relative_to(ROOT))}, ensure_ascii=False))
++        return 2
++
++    import oracledb  # type: ignore[import-not-found]
++
++    payload["oracledb_version"] = getattr(oracledb, "__version__", "unknown")
++    for idx, lib_dir in enumerate(candidate_client_dirs(cfg), start=1):
++        try:
++            if lib_dir:
++                oracledb.init_oracle_client(lib_dir=lib_dir)
++            else:
++                oracledb.init_oracle_client()
++            payload["attempts"].append({"attempt": idx, "lib_dir_redacted": bool(lib_dir), "ok": True})
++            payload["thick_client_available"] = True
++            payload["status"] = "passed"
++            break
++        except Exception as exc:  # noqa: BLE001
++            payload["attempts"].append({"attempt": idx, "lib_dir_redacted": bool(lib_dir), "ok": False, **safe_error(exc)})
++    OUT_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
++    print(json.dumps({
++        "status": payload["status"],
++        "oracledb_version": payload["oracledb_version"],
++        "thick_client_available": payload["thick_client_available"],
++        "attempt_count": len(payload["attempts"]),
++        "result_path": str(OUT_PATH.relative_to(ROOT)),
++    }, ensure_ascii=False))
++    return 0 if payload["thick_client_available"] else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+diff --git a/tmp/hermes/m15_secret_scan.py b/tmp/hermes/m15_secret_scan.py
+new file mode 100644
+index 0000000..3978d67
+--- /dev/null
++++ b/tmp/hermes/m15_secret_scan.py
+@@ -0,0 +1,113 @@
++"""Secret leak scanner for M1.5 smoke-test artifacts.
++
++读取 backend/.env 中敏感连接值，但只输出是否命中，不输出真实值。
++短值（例如很短的 service 名）不做裸值全文匹配，避免把普通词误判为泄漏；
++此类值仍会参与 host/service、host:port/service 等组合片段扫描。
++"""
++from __future__ import annotations
++
++import json
++import sys
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[2]
++ENV_PATH = ROOT / "backend" / ".env"
++SENSITIVE_KEYS = [
++    "SAP_ORACLE_HOST",
++    "SAP_ORACLE_PORT",
++    "SAP_ORACLE_SERVICE",
++    "SAP_ORACLE_USER",
++    "SAP_ORACLE_PASSWORD",
++    "SAP_ORACLE_OWNER",
++]
++RAW_LITERAL_KEYS = {
++    "SAP_ORACLE_HOST",
++    "SAP_ORACLE_SERVICE",
++    "SAP_ORACLE_USER",
++    "SAP_ORACLE_PASSWORD",
++}
++MIN_LITERAL_LENGTH = 4
++
++
++def load_config_values() -> dict[str, str]:
++    values: dict[str, str] = {}
++    if not ENV_PATH.exists():
++        return values
++    for raw in ENV_PATH.read_text(encoding="utf-8", errors="replace").splitlines():
++        line = raw.strip()
++        if not line or line.startswith("#") or "=" not in line:
++            continue
++        key, value = line.split("=", 1)
++        key = key.strip()
++        value = value.strip().strip('"').strip("'")
++        if key in SENSITIVE_KEYS:
++            values[key] = value
++    return values
++
++
++def build_needles(values: dict[str, str]) -> tuple[dict[str, str], dict[str, str]]:
++    literal_needles: dict[str, str] = {}
++    for key in RAW_LITERAL_KEYS:
++        value = values.get(key, "")
++        if len(value) >= MIN_LITERAL_LENGTH:
++            literal_needles[f"literal:{key}"] = value
++
++    host = values.get("SAP_ORACLE_HOST", "")
++    port = values.get("SAP_ORACLE_PORT", "")
++    service = values.get("SAP_ORACLE_SERVICE", "")
++    user = values.get("SAP_ORACLE_USER", "")
++    password = values.get("SAP_ORACLE_PASSWORD", "")
++    compound_needles: dict[str, str] = {}
++    if host and port:
++        compound_needles["compound:host_port"] = f"{host}:{port}"
++    if host and service:
++        compound_needles["compound:host_service"] = f"{host}/{service}"
++    if host and port and service:
++        compound_needles["compound:host_port_service"] = f"{host}:{port}/{service}"
++    if user and password:
++        compound_needles["compound:user_password_pair"] = f"{user}/{password}"
++    return literal_needles, compound_needles
++
++
++def main(argv: list[str]) -> int:
++    values = load_config_values()
++    literal_needles, compound_needles = build_needles(values)
++    hits: list[dict[str, str]] = []
++    scanned_files = 0
++    for file_arg in argv[1:]:
++        path = Path(file_arg)
++        if not path.is_absolute():
++            path = ROOT / path
++        if not path.exists() or not path.is_file():
++            continue
++        scanned_files += 1
++        text = path.read_text(encoding="utf-8", errors="replace")
++        for label, value in {**literal_needles, **compound_needles}.items():
++            if value and value in text:
++                kind, key = label.split(":", 1)
++                hits.append({"file": str(path.relative_to(ROOT)), "kind": kind, "key": key})
++
++    literal_scan_status = {}
++    for key in sorted(RAW_LITERAL_KEYS):
++        value = values.get(key, "")
++        if not value:
++            literal_scan_status[key] = "missing_or_empty"
++        elif len(value) < MIN_LITERAL_LENGTH:
++            literal_scan_status[key] = "skipped_short_value_compound_only"
++        else:
++            literal_scan_status[key] = "checked"
++
++    result = {
++        "files_scanned": scanned_files,
++        "sensitive_keys_present": sorted(key for key, value in values.items() if value),
++        "literal_scan_status": literal_scan_status,
++        "compound_fragments_checked": sorted(compound_needles.keys()),
++        "secret_hits": hits,
++        "status": "pass" if not hits else "fail",
++    }
++    print(json.dumps(result, ensure_ascii=False, indent=2))
++    return 0 if not hits else 1
++
++
++if __name__ == "__main__":
++    raise SystemExit(main(sys.argv))
+
+diff --git a/tmp/hermes/run_m15_acceptance.py b/tmp/hermes/run_m15_acceptance.py
+new file mode 100644
+index 0000000..80a89d7
+--- /dev/null
++++ b/tmp/hermes/run_m15_acceptance.py
+@@ -0,0 +1,80 @@
++#!/usr/bin/env python3
++"""Run M1.5 SAP MID Oracle smoke acceptance checks and write sanitized logs."""
++from __future__ import annotations
++
++import os
++import subprocess
++import time
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[2]
++OUTDIR = ROOT / "ai" / "outbox" / "kanban" / "t_2c15aff8"
++TEST_LOG = OUTDIR / "test.log"
++PIP_CHECK_LOG = OUTDIR / "pip-check.log"
++CLIENT_STDOUT_LOG = OUTDIR / "client-probe.stdout.log"
++
++
++def run(cmd: list[str], *, env: dict[str, str] | None = None, timeout: int = 180) -> subprocess.CompletedProcess[str]:
++    return subprocess.run(cmd, cwd=str(ROOT), env=env, text=True, capture_output=True, timeout=timeout, check=False)
++
++
++def append_command_log(lines: list[str], title: str, cmd: list[str], proc: subprocess.CompletedProcess[str]) -> None:
++    display = " ".join(cmd)
++    lines.extend([
++        "",
++        f"## {title}",
++        f"command: {display}",
++        f"exit_code: {proc.returncode}",
++        "stdout:",
++        proc.stdout.rstrip() or "(empty)",
++        "stderr:",
++        proc.stderr.rstrip() or "(empty)",
++    ])
++
++
++def main() -> int:
++    OUTDIR.mkdir(parents=True, exist_ok=True)
++    branch = run(["git", "branch", "--show-current"], timeout=30).stdout.strip()
++    status = run(["git", "status", "--short", "--", "backend/requirements.txt", "docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md", "ai/outbox/kanban/t_2c15aff8"], timeout=30).stdout.rstrip()
++    lines: list[str] = [
++        "## M1.5 SAP MID Oracle read-only smoke rerun",
++        f"executed_at: {time.strftime('%Y-%m-%d %H:%M:%S %Z')}",
++        f"branch: {branch or '(unknown)'}",
++        "scope: read-only smoke only; no Oracle writes; no unbounded table export; no raw host/user/password/DSN output.",
++        "scoped_git_status_before_checks:",
++        status or "(clean for scoped paths)",
++    ]
++
++    env = os.environ.copy()
++    env["HERMES_ORACLE_TCP_TIMEOUT_SECONDS"] = "10"
++    smoke_cmd = ["backend/.venv/bin/python", "tmp/hermes/sap_mid_oracle_smoke.py"]
++    smoke = run(smoke_cmd, env=env, timeout=150)
++    append_command_log(lines, "read-only Oracle smoke probe", smoke_cmd, smoke)
++
++    client_cmd = ["backend/.venv/bin/python", "tmp/hermes/sap_mid_oracle_client_probe.py"]
++    client = run(client_cmd, timeout=120)
++    CLIENT_STDOUT_LOG.write_text(client.stdout, encoding="utf-8")
++    append_command_log(lines, "thick-mode Oracle Client probe", client_cmd, client)
++
++    pip_cmd = ["backend/.venv/bin/python", "-m", "pip", "check"]
++    pip = run(pip_cmd, timeout=120)
++    PIP_CHECK_LOG.write_text((pip.stdout + pip.stderr), encoding="utf-8")
++    append_command_log(lines, "pip dependency consistency check", pip_cmd, pip)
++
++    lines.extend([
++        "",
++        "## Result interpretation",
++        "- Smoke probe exit_code=0 means all required M1.5 SQL checks passed; exit_code=2 means M2 remains blocked and details are in sanitized JSON.",
++        "- pip check is recorded for environment visibility; current known conflicts are unrelated to oracledb unless the log says otherwise.",
++        "- All outputs above are produced by scripts that redact connection values and only report key presence/error codes.",
++    ])
++    TEST_LOG.write_text("\n".join(lines) + "\n", encoding="utf-8")
++    print(f"wrote {TEST_LOG.relative_to(ROOT)}")
++    print(f"smoke_rc={smoke.returncode}")
++    print(f"client_probe_rc={client.returncode}")
++    print(f"pip_check_rc={pip.returncode}")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+diff --git a/tmp/hermes/generate_m15_diff.py b/tmp/hermes/generate_m15_diff.py
+new file mode 100644
+index 0000000..e3ed50a
+--- /dev/null
++++ b/tmp/hermes/generate_m15_diff.py
+@@ -0,0 +1,63 @@
++#!/usr/bin/env python3
++"""Generate a task-scoped diff patch for M1.5 artifacts without touching unrelated dirty files."""
++from __future__ import annotations
++
++import subprocess
++from pathlib import Path
++
++ROOT = Path(__file__).resolve().parents[2]
++OUT = ROOT / "ai" / "outbox" / "kanban" / "t_2c15aff8" / "diff.patch"
++TRACKED = [
++    "backend/requirements.txt",
++    "docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md",
++]
++UNTRACKED_OR_ARTIFACTS = [
++    "tmp/hermes/sap_mid_oracle_smoke.py",
++    "tmp/hermes/sap_mid_oracle_client_probe.py",
++    "tmp/hermes/m15_secret_scan.py",
++    "tmp/hermes/run_m15_acceptance.py",
++    "tmp/hermes/generate_m15_diff.py",
++    "ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json",
++    "ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json",
++    "ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json",
++    "ai/outbox/kanban/t_2c15aff8/client-probe.stdout.log",
++    "ai/outbox/kanban/t_2c15aff8/pip-check.log",
++    "ai/outbox/kanban/t_2c15aff8/py-compile.log",
++    "ai/outbox/kanban/t_2c15aff8/py-compile.status",
++    "ai/outbox/kanban/t_2c15aff8/secret-scan.log",
++    "ai/outbox/kanban/t_2c15aff8/secret-scan.stdout.log",
++    "ai/outbox/kanban/t_2c15aff8/secret-scan.status",
++    "ai/outbox/kanban/t_2c15aff8/test.log",
++    "ai/outbox/kanban/t_2c15aff8/final-acceptance.md",
++]
++
++
++def run(args: list[str]) -> subprocess.CompletedProcess[str]:
++    return subprocess.run(args, cwd=str(ROOT), text=True, capture_output=True, check=False)
++
++
++def main() -> int:
++    parts: list[str] = []
++    tracked_existing = [p for p in TRACKED if (ROOT / p).exists()]
++    if tracked_existing:
++        proc = run(["git", "diff", "--", *tracked_existing])
++        parts.append(proc.stdout)
++        if proc.returncode not in (0, 1):
++            parts.append(f"\n# git diff returned {proc.returncode}\n{proc.stderr}\n")
++    for rel in UNTRACKED_OR_ARTIFACTS:
++        path = ROOT / rel
++        if not path.exists() or not path.is_file():
++            continue
++        proc = run(["git", "diff", "--no-index", "--", "/dev/null", rel])
++        if proc.stdout:
++            parts.append(proc.stdout)
++        elif proc.stderr:
++            parts.append(f"\n# no-index stderr for {rel}:\n{proc.stderr}\n")
++    OUT.write_text("\n".join(part for part in parts if part), encoding="utf-8")
++    print(f"diff_path={OUT.relative_to(ROOT)}")
++    print(f"diff_bytes={OUT.stat().st_size}")
++    return 0
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json b/ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json
+new file mode 100644
+index 0000000..025396d
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json
+@@ -0,0 +1,65 @@
++{
++  "executed_at": "2026-05-19 19:15:55 CST",
++  "scope": "read-only SAP MID Oracle smoke test; no Oracle writes; no unbounded table export; no real host/user/password/DSN output",
++  "required_config_keys": [
++    "SAP_ORACLE_HOST",
++    "SAP_ORACLE_PORT",
++    "SAP_ORACLE_SERVICE",
++    "SAP_ORACLE_USER",
++    "SAP_ORACLE_PASSWORD",
++    "SAP_ORACLE_OWNER"
++  ],
++  "config_presence": {
++    "SAP_ORACLE_HOST": "present",
++    "SAP_ORACLE_PORT": "present",
++    "SAP_ORACLE_SERVICE": "present",
++    "SAP_ORACLE_USER": "present",
++    "SAP_ORACLE_PASSWORD": "present",
++    "SAP_ORACLE_OWNER": "present"
++  },
++  "dependency": {
++    "oracledb_importable": true,
++    "cx_Oracle_importable": false,
++    "oracledb_version": "4.0.0"
++  },
++  "network_probe": {
++    "ok": false,
++    "elapsed_ms": 10005,
++    "timeout_seconds": 10.0,
++    "error_type": "TimeoutError",
++    "codes": []
++  },
++  "connection_attempts": [
++    {
++      "mode": "thick",
++      "ok": false,
++      "elapsed_ms": 60,
++      "client_init": {
++        "ok": false,
++        "candidate_count": 0,
++        "attempts": [
++          {
++            "attempt_no": 1,
++            "source": "default",
++            "ok": false,
++            "error_type": "DatabaseError",
++            "codes": [
++              "DPI-1047"
++            ]
++          }
++        ]
++      }
++    }
++  ],
++  "security": {
++    "no_oracle_writes": true,
++    "no_unbounded_table_export": true,
++    "sample_values_redacted": true,
++    "connection_values_redacted": true
++  },
++  "status": "blocked",
++  "m2_ready": false,
++  "connection_status": "fail",
++  "block_reason": "TCP connectivity failed before SQL probe; local thick client probe codes=['DPI-1047']",
++  "owner_identifier_valid": true
++}
+\ No newline at end of file
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json b/ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json
+new file mode 100644
+index 0000000..3c14288
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json
+@@ -0,0 +1,52 @@
++{
++  "executed_at": "2026-05-19 19:15:55 CST",
++  "scope": "read_only_oracle_smoke",
++  "security": {
++    "no_oracle_writes": true,
++    "no_unbounded_table_export": true,
++    "sample_values_redacted": true,
++    "connection_values_redacted": true
++  },
++  "config_presence": {
++    "SAP_ORACLE_HOST": "present",
++    "SAP_ORACLE_PORT": "present",
++    "SAP_ORACLE_SERVICE": "present",
++    "SAP_ORACLE_USER": "present",
++    "SAP_ORACLE_PASSWORD": "present",
++    "SAP_ORACLE_OWNER": "present"
++  },
++  "dependency": {
++    "oracledb_import": {
++      "status": "pass",
++      "version": "4.0.0"
++    },
++    "cx_Oracle_import": {
++      "status": "missing_not_used"
++    }
++  },
++  "tcp_connect": {
++    "status": "fail"
++  },
++  "connection_status": "fail",
++  "attempts": [
++    {
++      "mode": "thick",
++      "status": "fail",
++      "elapsed_ms": 60,
++      "client_init": {
++        "status": "fail",
++        "candidate_count": 0,
++        "codes": [
++          "DPI-1047"
++        ]
++      }
++    }
++  ],
++  "select_1_from_dual": "not_executed_no_oracle_session",
++  "view_columns": "not_executed_no_oracle_session",
++  "view_counts": "not_executed_no_oracle_session",
++  "view_samples": "not_executed_no_oracle_session",
++  "status": "blocked",
++  "m2_ready": false,
++  "blocker": "TCP connectivity failed before SQL probe; local thick client probe codes=['DPI-1047']"
++}
+\ No newline at end of file
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json b/ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json
+new file mode 100644
+index 0000000..03b5a85
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json
+@@ -0,0 +1,59 @@
++{
++  "executed_at": "2026-05-19 19:16:06 CST",
++  "scope": "Oracle Client thick-mode availability probe only; no database connection; no host/user/password/DSN output",
++  "oracledb_importable": true,
++  "oracledb_version": "4.0.0",
++  "optional_client_config_presence": {
++    "ORACLE_CLIENT_LIB_DIR": "missing",
++    "SAP_ORACLE_CLIENT_LIB_DIR": "missing"
++  },
++  "attempts": [
++    {
++      "attempt": 1,
++      "lib_dir_redacted": false,
++      "ok": false,
++      "error_type": "DatabaseError",
++      "codes": [
++        "DPI-1047"
++      ]
++    },
++    {
++      "attempt": 2,
++      "lib_dir_redacted": true,
++      "ok": false,
++      "error_type": "DatabaseError",
++      "codes": [
++        "DPI-1047"
++      ]
++    },
++    {
++      "attempt": 3,
++      "lib_dir_redacted": true,
++      "ok": false,
++      "error_type": "DatabaseError",
++      "codes": [
++        "DPI-1047"
++      ]
++    },
++    {
++      "attempt": 4,
++      "lib_dir_redacted": true,
++      "ok": false,
++      "error_type": "DatabaseError",
++      "codes": [
++        "DPI-1047"
++      ]
++    },
++    {
++      "attempt": 5,
++      "lib_dir_redacted": true,
++      "ok": false,
++      "error_type": "DatabaseError",
++      "codes": [
++        "DPI-1047"
++      ]
++    }
++  ],
++  "thick_client_available": false,
++  "status": "blocked"
++}
+\ No newline at end of file
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/client-probe.stdout.log b/ai/outbox/kanban/t_2c15aff8/client-probe.stdout.log
+new file mode 100644
+index 0000000..e3a8b5e
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/client-probe.stdout.log
+@@ -0,0 +1 @@
++{"status": "blocked", "oracledb_version": "4.0.0", "thick_client_available": false, "attempt_count": 5, "result_path": "ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json"}
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/pip-check.log b/ai/outbox/kanban/t_2c15aff8/pip-check.log
+new file mode 100644
+index 0000000..6d716f1
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/pip-check.log
+@@ -0,0 +1,3 @@
++s3fs 2024.6.1 has requirement fsspec==2024.6.1.*, but you have fsspec 2026.2.0.
++streamlit 1.37.1 has requirement packaging<25,>=20, but you have packaging 26.0.
++streamlit 1.37.1 has requirement pillow<11,>=7.1.0, but you have pillow 12.1.1.
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/py-compile.log b/ai/outbox/kanban/t_2c15aff8/py-compile.log
+new file mode 100644
+index 0000000..e69de29
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/py-compile.status b/ai/outbox/kanban/t_2c15aff8/py-compile.status
+new file mode 100644
+index 0000000..9528778
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/py-compile.status
+@@ -0,0 +1 @@
++py_compile_rc=0
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/secret-scan.log b/ai/outbox/kanban/t_2c15aff8/secret-scan.log
+new file mode 100644
+index 0000000..462705d
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/secret-scan.log
+@@ -0,0 +1,25 @@
++{
++  "files_scanned": 16,
++  "sensitive_keys_present": [
++    "SAP_ORACLE_HOST",
++    "SAP_ORACLE_OWNER",
++    "SAP_ORACLE_PASSWORD",
++    "SAP_ORACLE_PORT",
++    "SAP_ORACLE_SERVICE",
++    "SAP_ORACLE_USER"
++  ],
++  "literal_scan_status": {
++    "SAP_ORACLE_HOST": "checked",
++    "SAP_ORACLE_PASSWORD": "checked",
++    "SAP_ORACLE_SERVICE": "skipped_short_value_compound_only",
++    "SAP_ORACLE_USER": "checked"
++  },
++  "compound_fragments_checked": [
++    "compound:host_port",
++    "compound:host_port_service",
++    "compound:host_service",
++    "compound:user_password_pair"
++  ],
++  "secret_hits": [],
++  "status": "pass"
++}
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/secret-scan.stdout.log b/ai/outbox/kanban/t_2c15aff8/secret-scan.stdout.log
+new file mode 100644
+index 0000000..e69de29
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/secret-scan.status b/ai/outbox/kanban/t_2c15aff8/secret-scan.status
+new file mode 100644
+index 0000000..d46127d
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/secret-scan.status
+@@ -0,0 +1 @@
++secret_scan_rc=0
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/test.log b/ai/outbox/kanban/t_2c15aff8/test.log
+new file mode 100644
+index 0000000..b6b3f8d
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/test.log
+@@ -0,0 +1,63 @@
++## M1.5 SAP MID Oracle read-only smoke rerun
++executed_at: 2026-05-19 19:15:55 CST
++branch: feature/m15-sap-mid-oracle-smoke-t_2c15aff8
++scope: read-only smoke only; no Oracle writes; no unbounded table export; no raw host/user/password/DSN output.
++scoped_git_status_before_checks:
++ M ai/outbox/kanban/t_2c15aff8/diff.patch
++ M ai/outbox/kanban/t_2c15aff8/final-acceptance.md
++ M backend/requirements.txt
++ M docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md
++?? ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json
++?? ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json
++?? ai/outbox/kanban/t_2c15aff8/py-compile.status
++?? ai/outbox/kanban/t_2c15aff8/secret-scan.status
++?? ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json
++
++## read-only Oracle smoke probe
++command: backend/.venv/bin/python tmp/hermes/sap_mid_oracle_smoke.py
++exit_code: 2
++stdout:
++{
++  "status": "blocked",
++  "m2_ready": false,
++  "config_presence": {
++    "SAP_ORACLE_HOST": "present",
++    "SAP_ORACLE_PORT": "present",
++    "SAP_ORACLE_SERVICE": "present",
++    "SAP_ORACLE_USER": "present",
++    "SAP_ORACLE_PASSWORD": "present",
++    "SAP_ORACLE_OWNER": "present"
++  },
++  "oracledb_importable": true,
++  "oracledb_version": "4.0.0",
++  "tcp_ok": false,
++  "connection_status": "fail",
++  "block_reason": "TCP connectivity failed before SQL probe; local thick client probe codes=['DPI-1047']",
++  "result_path": "ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json",
++  "sanitized_path": "ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json"
++}
++stderr:
++(empty)
++
++## thick-mode Oracle Client probe
++command: backend/.venv/bin/python tmp/hermes/sap_mid_oracle_client_probe.py
++exit_code: 2
++stdout:
++{"status": "blocked", "oracledb_version": "4.0.0", "thick_client_available": false, "attempt_count": 5, "result_path": "ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json"}
++stderr:
++(empty)
++
++## pip dependency consistency check
++command: backend/.venv/bin/python -m pip check
++exit_code: 1
++stdout:
++s3fs 2024.6.1 has requirement fsspec==2024.6.1.*, but you have fsspec 2026.2.0.
++streamlit 1.37.1 has requirement packaging<25,>=20, but you have packaging 26.0.
++streamlit 1.37.1 has requirement pillow<11,>=7.1.0, but you have pillow 12.1.1.
++stderr:
++(empty)
++
++## Result interpretation
++- Smoke probe exit_code=0 means all required M1.5 SQL checks passed; exit_code=2 means M2 remains blocked and details are in sanitized JSON.
++- pip check is recorded for environment visibility; current known conflicts are unrelated to oracledb unless the log says otherwise.
++- All outputs above are produced by scripts that redact connection values and only report key presence/error codes.
+
+diff --git a/ai/outbox/kanban/t_2c15aff8/final-acceptance.md b/ai/outbox/kanban/t_2c15aff8/final-acceptance.md
+new file mode 100644
+index 0000000..b1e0f59
+--- /dev/null
++++ b/ai/outbox/kanban/t_2c15aff8/final-acceptance.md
+@@ -0,0 +1,123 @@
++# M1.5 SAP MID Oracle 只读 smoke test 验收记录
++
++任务：t_2c15aff8
++验收记录时间：2026-05-19 19:16:22 CST
++最新 smoke 执行时间：2026-05-19 19:15:55 CST
++分支：feature/m15-sap-mid-oracle-smoke-t_2c15aff8
++范围：只处理 Oracle Python 驱动与 SAP MID 只读 smoke test；未进入 M2 正式同步开发。
++
++## 修改文件与交付产物
++
++1. `backend/requirements.txt`
++   - 补齐并保持 `oracledb==4.0.0`，将当前可导入的 Oracle Python 驱动写入项目依赖锁定。
++2. `docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md`
++   - 按最新 M1.5 smoke 结果刷新：驱动已补齐，但最新 TCP 探针超时，且 thick 模式 Oracle Client 仍缺失。
++3. `tmp/hermes/sap_mid_oracle_smoke.py`
++   - 固定脱敏只读 smoke 脚本，只输出配置存在性、错误码、行数/字段摘要，不输出真实连接值。
++4. `tmp/hermes/sap_mid_oracle_client_probe.py`
++   - 固定 thick-mode Oracle Client 可用性探针，不连接数据库，不输出真实路径/连接值。
++5. `tmp/hermes/m15_secret_scan.py`
++   - 固定敏感值扫描脚本，扫描 host/user/password 原始值和 host/service、host:port/service、user/password 等组合片段是否泄露到本任务交付文件；短 service 裸值不做全文匹配，避免普通短词误判。
++6. `tmp/hermes/run_m15_acceptance.py`
++   - 固定验收执行脚本，记录 smoke/client/pip check 输出和退出码。
++7. `tmp/hermes/generate_m15_diff.py`
++   - 固定任务范围 diff 生成脚本，只收集 M1.5 相关文件，避免混入当前工作树中无关脏文件。
++8. `ai/outbox/kanban/t_2c15aff8/test.log`
++   - 记录本轮脱敏 smoke、thick client 探针、pip check 及退出码。
++9. `ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json`
++   - 保存本轮完整脱敏探针 JSON 结果，不包含真实 host/service/user/password/DSN。
++10. `ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json`
++    - 保存本轮摘要级脱敏探针结果。
++11. `ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json`
++    - 保存 thick-mode Oracle Client 可用性脱敏探针结果。
++12. `ai/outbox/kanban/t_2c15aff8/pip-check.log`
++    - 保存 `pip check` 原始输出。
++13. `ai/outbox/kanban/t_2c15aff8/py-compile.status` / `py-compile.log`
++    - 保存 helper 脚本语法编译结果。
++14. `ai/outbox/kanban/t_2c15aff8/secret-scan.log` / `secret-scan.status`
++    - 保存敏感值扫描结果。
++15. `ai/outbox/kanban/t_2c15aff8/diff.patch`
++    - 保存本任务范围 diff。
++16. `ai/outbox/kanban/t_2c15aff8/final-acceptance.md`
++    - 本验收记录。
++
++## 已读取/核对的任务资料
++
++- `docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md`
++- `docs/NEXT_TASK.md`
++- `docs/HANDOFF.md`
++- `AGENTS.md`
++- `README_WORKSPACE.md`
++- `docs/PLATFORM_OVERALL_ARCHITECTURE_AND_ROADMAP.md`
++- `docs/CURRENT_STATUS.md`
++- `ai/protocols/company_task_protocol.md`
++- `ai/company/roles/technical_manager.md`
++- `ai/hermes_skills/company-code-builder/SKILL.md`
++- `ai/inbox/requirement.md`
++- `ai/inbox/attachments_manifest.md`
++- `docs/MATERIAL_MANAGEMENT_SAP_MID_DATA_ASSET_AUDIT.md`
++- `docs/MATERIAL_MANAGEMENT_MIDDLE_DB_MODEL_PLAN.md`
++- `docs/SAP_MID_SYNC_DESIGN.md`
++- `docs/MATERIAL_MANAGEMENT_AI_QUERY_PLAN.md`
++- `docs/PLAN_BOM_SAP_DATA_SOURCE_MIGRATION_PLAN.md`
++- `docs/FRONTEND_MATERIAL_MANAGEMENT_ADAPTATION_PLAN.md`
++- `docs/SAP_MID_INTEGRATION_ROADMAP.md`
++
++## 实测结果
++
++| 检查项 | 结果 |
 +|---|---|
-+| SAP_ORACLE_HOST | present |
-+| SAP_ORACLE_PORT | present |
-+| SAP_ORACLE_SERVICE | present |
-+| SAP_ORACLE_USER | present |
-+| SAP_ORACLE_PASSWORD | present |
-+| SAP_ORACLE_OWNER | present |
++| 当前分支 | `feature/m15-sap-mid-oracle-smoke-t_2c15aff8` |
++| `backend/.venv` 导入 `oracledb` | 通过，版本 4.0.0 |
++| `backend/.venv` 导入 `cx_Oracle` | 未安装，本轮不采用 |
++| `backend/requirements.txt` 锁定 `oracledb==4.0.0` | 通过 |
++| `backend/.env` 必填 `SAP_ORACLE_*` 存在性 | 通过，6/6 present |
++| TCP 到配置 host/port 连通性 | 未通过；10 秒探针超时；未记录真实 host/port |
++| `python-oracledb` thin/default 连接 Oracle | 未执行；最新 TCP 探针未通过，未进入 Oracle SQL session |
++| `python-oracledb` thick client 初始化 | 未通过，`DPI-1047`：未定位到 64-bit Oracle Client 动态库 `libclntsh.dylib`；候选尝试 5 次 |
++| `SELECT 1 FROM dual` | 未执行成功；Oracle 会话未建立 |
++| 两个白名单视图字段结构、COUNT、`ROWNUM <= 5` 小样本 | 未执行；Oracle 会话未建立 |
++| helper 脚本 `py_compile` | 通过，`py_compile_rc=0` |
++| `pip check` | 未通过；命中当前环境已有 s3fs/fsspec 与 streamlit packaging/pillow 依赖冲突，未出现 oracledb 冲突 |
++| 敏感值扫描 | 通过；host/user/password 裸值已检查；service 因短值仅做组合片段检查；host:port、host/service、host:port/service、user/password 组合均无命中 |
 +
-+## 2. Oracle Python 驱动状态
++## Review / 修复记录
 +
-+| 项目 | 结果 |
-+|---|---|
-+| `backend/.venv` 导入 `oracledb` | 通过 |
-+| `oracledb` 版本 | 4.0.0 |
-+| `backend/.venv` 导入 `cx_Oracle` | 未安装；本轮不采用 |
-+| 项目依赖锁定 | 已在 `backend/requirements.txt` 增加 `oracledb==4.0.0` |
++- 独立 review 初审结论：未发现写库/无界导出代码，但指出两个阻塞项：`m15_secret_scan.py` 与 `sap_mid_secret_scan.py` 路径引用不一致、service/DSN 扫描证据不完整。
++- 已修复：`generate_m15_diff.py` 已改为纳入 `tmp/hermes/m15_secret_scan.py`；`final-acceptance.md` 已同步正确脚本名；`m15_secret_scan.py` 已补充 service/port/owner 的存在性记录，并补充 host/service、host:port/service 等组合片段扫描。
++- 修复后已重新执行 smoke、py_compile、secret scan；独立复审通过：`passed=true`，无 `security_concerns`，无 `logic_errors`；建议在网络连通性和 Oracle Instant Client/libclntsh 修复后，再重跑只读 smoke test 并同步重跑 secret scan。
 +
-+说明：本轮已解除上一版报告中的“Python driver 不可导入”阻塞，但连接仍受 Oracle thick client / 数据库版本兼容性阻塞，见第 3 节。
++## M2 进入条件判断
 +
-+## 3. 是否成功连接 Oracle
++当前不满足进入 M2 条件。
 +
-+未成功建立 Oracle 会话。
++已完成：
 +
-+已验证项：
++- Python 驱动 `oracledb` 可导入。
++- 项目依赖文件已锁定 `oracledb==4.0.0`。
++- `SAP_ORACLE_*` 配置存在性已确认。
++- 只读 smoke、thick client 探针、脱敏扫描和验收产物已形成。
 +
-+1. `backend/.env` 中 `SAP_ORACLE_*` 必填项均存在。
-+2. TCP 层到配置的 host/port 可连通；报告不记录真实 host/port。
-+3. 使用 `python-oracledb` thin/default 模式发起连接，失败。
-+4. 尝试初始化 thick 模式默认 Oracle Client，失败，因为本机未发现 `libclntsh.dylib`。
++仍阻塞：
 +
-+安全错误摘要（已脱敏）：
++- 最新 TCP host/port 探针超时，Oracle SQL 会话未建立。
++- 本机未配置 Oracle Instant Client thick 模式所需 `libclntsh.dylib`。
++- 因会话未建立，尚未完成 `SELECT 1`、连接身份/schema 摘要、字段结构、count、小样本验证。
++- 只读账号权限和查询边界尚未验证。
 +
-+| 阶段 | 错误类型 | 摘要 |
-+|---|---|---|
-+| thin/default 连接 | `OperationalError` / `NotSupportedError` | `DPY-3010: connections to this database server version are not supported by python-oracledb in thin mode` |
-+| thick client 初始化 | `DatabaseError` | `DPI-1047: Cannot locate a 64-bit Oracle Client library: libclntsh.dylib` |
++## 安全边界
 +
-+判断：当前 Oracle 服务器版本不支持 `python-oracledb` thin 模式；需要安装并配置 Oracle Instant Client / thick 模式后再重跑 smoke test，或由 DBA 提供 thin 模式兼容的 Oracle 服务端/连接方式。
++- 未输出真实 host/user/password/DSN/login user。
++- service 裸值因当前值过短不做全文匹配，避免普通短词误判；改以 host/service、host:port/service 等组合片段扫描证明未输出完整 DSN/连接串。
++- 未写 Oracle。
++- 未全量导出大表。
++- 未把用户问答链路接到 Oracle MID。
++- 未进入 M2 正式开发。
++- 未自动 commit / push / deploy。
++- 本轮未触碰当前工作树中与本任务无关的既有脏文件。
 +
-+## 4. 是否成功执行 SELECT 1 FROM dual
++## 当前能力判断
 +
-+未执行成功。
-+
-+原因：Oracle 会话未建立，`SELECT 1 FROM dual` 无法进入执行阶段。
-+
-+## 5. 是否能读取白名单视图字段结构
-+
-+未通过 live Oracle 读取。
-+
-+计划验证对象：
-+
-+1. `V_HF_SAP_INOUT_DAILY`
-+2. `V_SAP_HFFN_CRKLSZ`
-+
-+原因：Oracle 会话未建立，无法查询 `all_views` / `all_tab_columns`。
-+
-+## 6. 是否能对重点视图做 ROWNUM <= 5 抽样
-+
-+未执行。
-+
-+原因：Oracle 会话未建立。未对任何 Oracle 大表做全量导出，也未执行 `SELECT *` 无限制查询。
-+
-+## 7. 是否能做 count 验证
-+
-+未执行。
-+
-+原因：Oracle 会话未建立，无法执行两个白名单视图的 `COUNT(*)`。
-+
-+## 8. 网络 / 权限 / 驱动问题
-+
-+1. 驱动：`oracledb==4.0.0` 已可导入，并已写入项目依赖文件。
-+2. Python thin 模式：阻塞。当前 Oracle 服务端版本不被 `python-oracledb` thin 模式支持。
-+3. Oracle Client thick 模式：阻塞。本机未定位到 64-bit Oracle Client 动态库 `libclntsh.dylib`。
-+4. 网络：TCP host/port 连通，但这不等于 Oracle 会话成功。
-+5. 权限：未验证。连接建立前无法确认只读账号是否可访问 `all_views`、`all_tab_columns` 以及两个白名单视图。
-+
-+## 9. M2 进入条件判断
-+
-+当前不满足进入 M2 正式同步开发的条件。
-+
-+原因：虽然 Python 驱动已补齐并锁定，但 Oracle 只读连接 smoke test 仍未通过，且未完成以下 M2 前置验证：
-+
-+1. `SELECT 1 FROM dual`
-+2. 当前连接身份 / schema 摘要读取
-+3. 两个白名单视图字段结构 live 验证
-+4. 两个白名单视图 `COUNT(*)`
-+5. 两个白名单视图 `ROWNUM <= 5` 小样本读取
-+
-+## 10. 后续建议
-+
-+1. 安装与当前 macOS 架构匹配的 Oracle Instant Client，并确保 `python-oracledb` thick 模式可定位 `libclntsh.dylib`。
-+2. 重跑只读 smoke test，优先验证 `SELECT 1 FROM dual`。
-+3. 连接通过后，再按白名单顺序验证字段结构、count 和 `ROWNUM <= 5` 小样本。
-+4. 后续报告继续只记录存在性、行数、字段名、字段类型和脱敏错误摘要，不记录真实 host/user/password/DSN/login user。
-+5. 在上述 smoke test 通过前，不进入 M2 正式同步开发，不把用户问答链路直接接到 Oracle MID。
++- 当前仓库已具备：物管 SAP MID M1 文档与 M1.5 Python 驱动可导入基础。
++- 当前仓库未具备：稳定可达的 Oracle 网络连接、可建立的 Oracle 会话、live 字段/COUNT/小样本验证、M2 同步开发前置放行。
++- 本轮任务与当前仓库状态一致：继续处理 M2 前置 Oracle smoke 阻塞，不进入 M2 正式开发。

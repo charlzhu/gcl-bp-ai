@@ -6,7 +6,7 @@ import time
 from collections import Counter
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, TypeGuard
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -356,6 +356,14 @@ class LogisticsSqlPlanGenerator:
             rule_text = rule.strip()
             if _is_empty_rule_placeholder(rule_text):
                 continue
+            if rule_text == "default_time_range" and _should_drop_default_time_rule_for_explicit_years(
+                original_question=original_question,
+                normalized_question=normalized_question,
+                plan=plan,
+            ):
+                # 业务逻辑：用户已显式给出 2023-2025 等年份时，provider 可能从默认时间示例误抄 default_time_range。
+                # 只有在年份过滤与 explicit_year_buckets 完全一致、且不是默认 2023-2026 时才移除，避免把真实默认时间查询改错。
+                continue
             cleaned_rules.append(rule_text)
 
         if self._should_apply_default_time_rule(
@@ -370,6 +378,7 @@ class LogisticsSqlPlanGenerator:
                 plan["explicit_year_buckets"] = list(DEFAULT_LOGISTICS_YEARS)
         _normalize_explicit_year_buckets_from_filters(plan)
         plan["business_rules"] = cleaned_rules
+        self._normalize_single_table_plan_tables(plan)
 
         refs_by_id: dict[str, dict[str, str]] = {}
         for catalog_id in sorted(recalled_ids):
@@ -415,6 +424,119 @@ class LogisticsSqlPlanGenerator:
             if isinstance(dimension_id, str) and dimension_id.strip():
                 refs.add(f"dimension:{dimension_id.strip()}")
         return refs
+
+    def _normalize_single_table_plan_tables(self, plan: dict[str, Any]) -> None:
+        """在无 join 的单服务表计划中移除 provider 误混入的未引用表。
+
+        参数：
+            plan: provider 输出的 plan dict，会被原地安全归一。
+        返回：
+            无返回值；仅当所有指标/维度引用都能证明落在同一张表时修改 plan.tables。
+        业务逻辑：
+            live provider 可能因为召回到原始历史明细表，就把它和统一服务表一起写入 tables。
+            如果当前 plan 没有 join，且 metrics/dimensions/group_by/filter/order_by 引用的 catalog
+            全部指向同一张服务表，则多余表只是召回噪声，可以收敛成单表；否则保持原样交给 validator fail-closed。
+        """
+
+        raw_tables = plan.get("tables")
+        if not _is_non_empty_string_list(raw_tables):
+            # 业务逻辑：tables 形态不标准时不得在 generator 层“修好”，必须保留给 schema/validator fail-closed。
+            return
+        tables = _dedupe_string_items(raw_tables)
+        if len(tables) <= 1:
+            return
+        if not _is_empty_list_or_none(plan.get("joins")):
+            # 业务逻辑：任何非空或非 list 的 joins 都不是“无 join”；不允许在有 join 语义时裁剪表。
+            return
+        referenced_tables = self._collect_plan_referenced_tables(plan)
+        if referenced_tables is None or len(referenced_tables) != 1:
+            return
+        primary_table = next(iter(referenced_tables))
+        if primary_table in set(tables):
+            plan["tables"] = [primary_table]
+
+    def _collect_plan_referenced_tables(self, plan: dict[str, Any]) -> set[str] | None:
+        """收集 plan 中指标和维度通过 canonical catalog 指向的表。
+
+        参数：
+            plan: provider 输出的 plan dict。
+        返回：
+            表名集合；若存在未知指标/维度则返回 None，表示不能安全裁剪 tables。
+        """
+
+        referenced_tables: set[str] = set()
+        if not _is_optional_string_list(plan.get("metrics")):
+            return None
+        if not _is_optional_string_list(plan.get("dimensions")):
+            return None
+        if not _is_optional_string_list(plan.get("group_by")):
+            return None
+        metric_ids = _dedupe_string_items(plan.get("metrics"))
+        dimension_ids = _dedupe_string_items(plan.get("dimensions")) + _dedupe_string_items(plan.get("group_by"))
+
+        raw_filters = plan.get("filters")
+        if raw_filters is None:
+            raw_filters = []
+        elif not isinstance(raw_filters, list):
+            return None
+        for item in raw_filters:
+            if not isinstance(item, dict):
+                return None
+            dimension_id = item.get("dimension")
+            if not _is_non_empty_string(dimension_id):
+                return None
+            dimension_ids.append(dimension_id.strip())
+
+        raw_order_by = plan.get("order_by")
+        if raw_order_by is None:
+            raw_order_by = []
+        elif not isinstance(raw_order_by, list):
+            return None
+        for item in raw_order_by:
+            if not isinstance(item, dict):
+                return None
+            metric_id = item.get("metric")
+            dimension_id = item.get("dimension")
+            if metric_id is not None and not _is_non_empty_string(metric_id):
+                return None
+            if dimension_id is not None and not _is_non_empty_string(dimension_id):
+                return None
+            has_metric = _is_non_empty_string(metric_id)
+            has_dimension = _is_non_empty_string(dimension_id)
+            if has_metric == has_dimension:
+                return None
+            if has_metric:
+                metric_ids.append(metric_id.strip())
+            if has_dimension:
+                dimension_ids.append(dimension_id.strip())
+
+        for metric_id in _dedupe_string_items(metric_ids):
+            table_name = self._lookup_metric_table(metric_id)
+            if not table_name:
+                return None
+            referenced_tables.add(table_name)
+        for dimension_id in _dedupe_string_items(dimension_ids):
+            table_name = self._lookup_dimension_table(dimension_id)
+            if not table_name:
+                return None
+            referenced_tables.add(table_name)
+        return referenced_tables
+
+    def _lookup_metric_table(self, metric_id: str) -> str | None:
+        """按 metric_id 查询 canonical 指标所属表；未知指标返回 None。"""
+
+        for metric in self.catalog.metrics:
+            if metric.metric_id == metric_id and metric.table:
+                return metric.table
+        return None
+
+    def _lookup_dimension_table(self, dimension_id: str) -> str | None:
+        """按 dimension_id 查询 canonical 维度所属表；未知维度返回 None。"""
+
+        for dimension in self.catalog.dimensions:
+            if dimension.dimension_id == dimension_id and dimension.table:
+                return dimension.table
+        return None
 
     def _expand_recalled_catalog_dependencies(self, recalled_ids: set[str]) -> set[str]:
         """展开本次召回命中在 canonical catalog 中声明的安全依赖。
@@ -1117,6 +1239,110 @@ def _string_items(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _is_non_empty_string(value: Any) -> TypeGuard[str]:
+    """判断 provider 输出值是否为非空字符串。
+
+    参数：
+        value: 任意 provider 输出字段值。
+    返回：
+        True 表示该值是去空白后仍非空的字符串；False 表示该值不能作为 catalog 引用。
+    """
+
+    return isinstance(value, str) and bool(value.strip())
+
+
+def _is_non_empty_string_list(value: Any) -> bool:
+    """判断值是否为非空字符串列表。
+
+    参数：
+        value: provider 输出的任意字段。
+    返回：
+        True 表示是 `list[str]` 且每项去空白后非空；False 表示必须保持原样交由 validator 拦截。
+    """
+
+    return isinstance(value, list) and bool(value) and all(isinstance(item, str) and item.strip() for item in value)
+
+
+def _is_optional_string_list(value: Any) -> bool:
+    """判断可选字段是否为字符串列表或未提供。
+
+    参数：
+        value: provider 输出的任意字段。
+    返回：
+        True 表示字段缺省/None 或为有效 `list[str]`；False 表示字段形态异常，不能用于归一化判断。
+    """
+
+    return value is None or _is_non_empty_string_list(value) or value == []
+
+
+def _is_empty_list_or_none(value: Any) -> bool:
+    """判断字段是否明确表示空列表或未提供。
+
+    参数：
+        value: provider 输出的任意字段。
+    返回：
+        True 表示 None 或空 list；False 表示存在 join/异常形态，应 fail-closed 不做归一化。
+    """
+
+    return value is None or value == []
+
+
+def _dedupe_string_items(value: Any) -> list[str]:
+    """按出现顺序去重字符串数组，用于安全归一 provider 重复项。
+
+    参数：
+        value: 任意 provider 输出值，通常是 list[str]。
+    返回：
+        去重后的非空字符串列表；非字符串项不在这里修复，继续由后续 schema/validator 拦截。
+    """
+
+    seen: set[str] = set()
+    items: list[str] = []
+    for item in _string_items(value):
+        if item in seen:
+            continue
+        seen.add(item)
+        items.append(item)
+    return items
+
+
+def _should_drop_default_time_rule_for_explicit_years(
+    *,
+    original_question: str,
+    normalized_question: str,
+    plan: dict[str, Any],
+) -> bool:
+    """判断显式年份问题中误带的 default_time_range 是否可以安全移除。
+
+    参数：
+        original_question: 用户原始问题。
+        normalized_question: Query Rewrite 后的问题。
+        plan: provider 输出的 plan dict。
+    返回：
+        True 表示可移除 default_time_range；False 表示保持原样交给 validator。
+    业务逻辑：
+        default_time_range 仅代表无显式时间时默认 2023-2026。若用户已明确问 2023-2025，且
+        plan.filters 与 explicit_year_buckets 完全一致、并且不是默认全集，说明该规则是从召回示例误抄，
+        可以移除；否则不做推断，保持 fail-closed。
+    """
+
+    if not (_has_explicit_year(original_question) or _has_explicit_year(normalized_question)):
+        return False
+    filter_years = _extract_plan_biz_years(plan)
+    if not filter_years or filter_years == DEFAULT_LOGISTICS_YEARS:
+        return False
+    buckets = plan.get("explicit_year_buckets")
+    if not isinstance(buckets, list) or not buckets:
+        return False
+    bucket_years: list[int] = []
+    for value in buckets:
+        year = _coerce_year_value(value)
+        if year is None:
+            return False
+        bucket_years.append(year)
+    return sorted(set(bucket_years)) == filter_years
 
 
 def _is_empty_rule_placeholder(value: str) -> bool:

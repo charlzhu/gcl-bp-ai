@@ -1,0 +1,14 @@
+{
+  "passed": false,
+  "security_concerns": [],
+  "logic_errors": [
+    "_collect_plan_referenced_tables 对 filters 和 order_by 使用 plan.get(...) or []，会把 {}、空字符串、False 等 falsy malformed 字段当作空列表处理；filter/order_by item 缺失引用或引用为空白字符串时也会被忽略或经 _dedupe_string_items 丢弃，导致 _normalize_single_table_plan_tables 仍可能收敛 tables，不满足 malformed filter/order_by 引用必须保持原样 fail-closed 的要求。",
+    "新增 RED/GREEN 测试只覆盖结构化非空 joins 和 tables 非字符串项，未覆盖 malformed/falsy filters、order_by、缺失或空白 metric/dimension 引用；当前实现对这些场景仍可错误归一化，覆盖不足以证明第二条 fail-closed 要求完全修复。"
+  ],
+  "suggestions": [
+    "将 raw_filters = plan.get(\"filters\") or []、raw_order_by = plan.get(\"order_by\") or [] 改为显式区分缺省/None/空 list 与其他类型，任何非 list malformed 值都返回 None。",
+    "对 filters/order_by 中的引用字段要求非空白字符串；缺失必需引用、空白引用、非字符串引用均应返回 None，避免 _dedupe_string_items 静默丢弃异常引用后继续归一化。",
+    "补充 RED/GREEN 测试覆盖 filters/order_by 为 {}、空字符串、item 缺失 dimension/metric、dimension/metric 为空白字符串和未知引用等场景。"
+  ],
+  "summary": "diff 可解析且未见安全问题或越权修改，但单表归一化对 malformed filters/order_by 仍非严格 fail-closed，因此不通过。"
+}

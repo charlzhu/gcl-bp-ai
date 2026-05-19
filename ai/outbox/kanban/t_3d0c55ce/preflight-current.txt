@@ -1,0 +1,24 @@
+## timestamp
+2026-05-19 18:35:26 CST
+## branch
+feature/m15-sap-mid-oracle-smoke-t_2c15aff8
+## status
+## feature/m15-sap-mid-oracle-smoke-t_2c15aff8
+ M ai/outbox/kanban/t_2c15aff8/diff.patch
+ M ai/outbox/kanban/t_2c15aff8/final-acceptance.md
+ M ai/outbox/kanban/t_7895e090/m8-shadow-eval-records.jsonl
+ M ai/outbox/kanban/t_m9_nl2sql_shadow/m9-shadow-sqlplan-generation-records.jsonl
+ M backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py
+ M backend/requirements.txt
+ M docs/SAP_MID_ORACLE_SMOKE_TEST_REPORT.md
+ M tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py
+?? .worktrees/
+?? ai/outbox/kanban/t_2c15aff8/oracle_client_probe_safe_result.json
+?? ai/outbox/kanban/t_2c15aff8/oracle_smoke_safe_result.json
+?? ai/outbox/kanban/t_2c15aff8/smoke-result-sanitized.json
+?? ai/outbox/kanban/t_3d0c55ce/
+?? ai/outbox/kanban/t_8d973ff5/
+## HEAD
+0b14a715eaae5e539b43dcdbd973ed6863bad012
+## origin/agent/bp-main
+0b14a715eaae5e539b43dcdbd973ed6863bad012

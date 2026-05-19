@@ -1,0 +1,59 @@
+{
+  "executed_at": "2026-05-19 19:16:06 CST",
+  "scope": "Oracle Client thick-mode availability probe only; no database connection; no host/user/password/DSN output",
+  "oracledb_importable": true,
+  "oracledb_version": "4.0.0",
+  "optional_client_config_presence": {
+    "ORACLE_CLIENT_LIB_DIR": "missing",
+    "SAP_ORACLE_CLIENT_LIB_DIR": "missing"
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "lib_dir_redacted": false,
+      "ok": false,
+      "error_type": "DatabaseError",
+      "codes": [
+        "DPI-1047"
+      ]
+    },
+    {
+      "attempt": 2,
+      "lib_dir_redacted": true,
+      "ok": false,
+      "error_type": "DatabaseError",
+      "codes": [
+        "DPI-1047"
+      ]
+    },
+    {
+      "attempt": 3,
+      "lib_dir_redacted": true,
+      "ok": false,
+      "error_type": "DatabaseError",
+      "codes": [
+        "DPI-1047"
+      ]
+    },
+    {
+      "attempt": 4,
+      "lib_dir_redacted": true,
+      "ok": false,
+      "error_type": "DatabaseError",
+      "codes": [
+        "DPI-1047"
+      ]
+    },
+    {
+      "attempt": 5,
+      "lib_dir_redacted": true,
+      "ok": false,
+      "error_type": "DatabaseError",
+      "codes": [
+        "DPI-1047"
+      ]
+    }
+  ],
+  "thick_client_available": false,
+  "status": "blocked"
+}

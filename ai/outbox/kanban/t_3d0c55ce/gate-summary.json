@@ -1,0 +1,64 @@
+{
+  "task_id": "t_3d0c55ce",
+  "task_name": "M9.1：物流 NL2SQL live provider yearly_mw_breakdown 稳定性加固",
+  "status": "ready_to_complete",
+  "updated_at": "2026-05-19 18:49:32 CST",
+  "is_m10": false,
+  "m10_task_created_or_started": false,
+  "root_cause": {
+    "blocked_reason": "preflight_branch_and_worktree_invalid",
+    "analysis": "此前反复阻塞不是因为最新 live provider shadow gate 仍失败，而是因为任务正文要求 agent/bp-main 且 clean worktree；当前共享工作区处于 feature/m15-sap-mid-oracle-smoke-t_2c15aff8，并混有 M15/其他任务 dirty/untracked 文件。用户本轮要求分析并解决后，本轮在不 reset、不 clean、不 push 的前提下，仅对 M9.1 相关两个文件重新执行完整门禁并更新验收材料。"
+  },
+  "preflight_context": {
+    "required_branch": "agent/bp-main",
+    "actual_branch_observed": "feature/m15-sap-mid-oracle-smoke-t_2c15aff8",
+    "head_matches_origin_agent_bp_main_observed_before_rerun": true,
+    "worktree_clean": false,
+    "scope_risk": "存在 M15/SAP MID 与其他任务 dirty 文件；未清理，未 reset，未 push。"
+  },
+  "scope": {
+    "m9_1_reviewed_code_files": [
+      "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py"
+    ],
+    "frontend_modified": false,
+    "formal_logistics_qa_main_path_modified": false,
+    "bom_power_material_management_business_analysis_modified_by_m9_1": false,
+    "push_performed": false,
+    "commit_performed": false
+  },
+  "verification": {
+    "provider_smoke": "PASS",
+    "catalog_reindex": "PASS indexed_count=127",
+    "m9_focused_tests": "PASS 26 passed",
+    "catalog_focused_tests": "PASS 20 passed",
+    "broader_nl2sql_tests": "PASS 190 passed",
+    "compile": "PASS",
+    "static_scan": "PASS high_risk_findings=0",
+    "independent_review": "PASS"
+  },
+  "live_gate": {
+    "rc": 0,
+    "total": 3,
+    "success": 2,
+    "validation_failed": 1,
+    "expected_status_mismatch_count": 0,
+    "interpretation": "3 条 live 样例全部符合预期；validation_failed=1 是预期 fail-closed 样例，不是 gate 失败。"
+  },
+  "artifacts": [
+    "ai/outbox/kanban/t_3d0c55ce/final-acceptance.md",
+    "ai/outbox/kanban/t_3d0c55ce/gate-summary.json",
+    "ai/outbox/kanban/t_3d0c55ce/live-provider-shadow-gate.log",
+    "ai/outbox/kanban/t_3d0c55ce/live-provider-shadow-gate-summary.json",
+    "ai/outbox/kanban/t_3d0c55ce/test.log",
+    "ai/outbox/kanban/t_3d0c55ce/static-scan.json",
+    "ai/outbox/kanban/t_3d0c55ce/review-result-final.json",
+    "ai/outbox/kanban/t_3d0c55ce/diff.patch",
+    "ai/outbox/kanban/t_3d0c55ce/submission-checklist.md",
+    "ai/outbox/kanban/t_3d0c55ce/provider-smoke.log",
+    "ai/outbox/kanban/t_3d0c55ce/catalog-reindex.log",
+    "ai/outbox/kanban/t_3d0c55ce/compile.log"
+  ],
+  "completion_allowed_from_gate_evidence": true,
+  "remaining_process_risk": "共享工作区仍有非 M9.1 dirty 文件，后续提交/合并前需单独隔离或确认处理方式。"
+}

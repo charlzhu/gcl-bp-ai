@@ -1,0 +1,65 @@
+{
+  "executed_at": "2026-05-19 19:15:55 CST",
+  "scope": "read-only SAP MID Oracle smoke test; no Oracle writes; no unbounded table export; no real host/user/password/DSN output",
+  "required_config_keys": [
+    "SAP_ORACLE_HOST",
+    "SAP_ORACLE_PORT",
+    "SAP_ORACLE_SERVICE",
+    "SAP_ORACLE_USER",
+    "SAP_ORACLE_PASSWORD",
+    "SAP_ORACLE_OWNER"
+  ],
+  "config_presence": {
+    "SAP_ORACLE_HOST": "present",
+    "SAP_ORACLE_PORT": "present",
+    "SAP_ORACLE_SERVICE": "present",
+    "SAP_ORACLE_USER": "present",
+    "SAP_ORACLE_PASSWORD": "present",
+    "SAP_ORACLE_OWNER": "present"
+  },
+  "dependency": {
+    "oracledb_importable": true,
+    "cx_Oracle_importable": false,
+    "oracledb_version": "4.0.0"
+  },
+  "network_probe": {
+    "ok": false,
+    "elapsed_ms": 10005,
+    "timeout_seconds": 10.0,
+    "error_type": "TimeoutError",
+    "codes": []
+  },
+  "connection_attempts": [
+    {
+      "mode": "thick",
+      "ok": false,
+      "elapsed_ms": 60,
+      "client_init": {
+        "ok": false,
+        "candidate_count": 0,
+        "attempts": [
+          {
+            "attempt_no": 1,
+            "source": "default",
+            "ok": false,
+            "error_type": "DatabaseError",
+            "codes": [
+              "DPI-1047"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "security": {
+    "no_oracle_writes": true,
+    "no_unbounded_table_export": true,
+    "sample_values_redacted": true,
+    "connection_values_redacted": true
+  },
+  "status": "blocked",
+  "m2_ready": false,
+  "connection_status": "fail",
+  "block_reason": "TCP connectivity failed before SQL probe; local thick client probe codes=['DPI-1047']",
+  "owner_identifier_valid": true
+}

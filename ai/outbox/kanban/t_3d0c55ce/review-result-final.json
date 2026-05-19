@@ -1,0 +1,28 @@
+{
+  "passed": true,
+  "blockers": [],
+  "warnings": [
+    "当前工作区在分支 feature/m15-sap-mid-oracle-smoke-t_2c15aff8，且存在 M15/其他任务 dirty 与 untracked 文件；这是流程/隔离风险，不是本次 M9.1 两个相关文件的代码功能 blocker。",
+    "catalog/broader 测试日志中仅有 pymilvus/pkg_resources/Protobuf deprecation warnings，未见 M9.1 功能失败。"
+  ],
+  "reviewed_files": [
+    "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+    "tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py",
+    "ai/outbox/kanban/t_3d0c55ce/provider-smoke.log",
+    "ai/outbox/kanban/t_3d0c55ce/catalog-reindex.log",
+    "ai/outbox/kanban/t_3d0c55ce/test-m9-focused.log",
+    "ai/outbox/kanban/t_3d0c55ce/test-catalog-focused.log",
+    "ai/outbox/kanban/t_3d0c55ce/test.log",
+    "ai/outbox/kanban/t_3d0c55ce/compile.log",
+    "ai/outbox/kanban/t_3d0c55ce/live-provider-shadow-gate.log",
+    "ai/outbox/kanban/t_3d0c55ce/static-scan.log"
+  ],
+  "evidence": [
+    "provider-smoke.log: embedding、milvus、rerank、llm_provider 均 PASS。",
+    "catalog-reindex.log: status=ok, indexed_count=127。",
+    "test-m9-focused.log: 26 passed；test-catalog-focused.log: 20 passed；test.log: 190 passed；compile.log 无编译错误。",
+    "live-provider-shadow-gate.log: total=3, success=2, validation_failed=1, expected_status_mismatch_count=0。",
+    "static-scan.log 为空；git diff --check 对两个 M9.1 文件 rc=0。"
+  ],
+  "summary": "未发现 M9.1 相关代码功能或安全 blocker，可以从 blocked 收口；review 未修改任何文件。"
+}

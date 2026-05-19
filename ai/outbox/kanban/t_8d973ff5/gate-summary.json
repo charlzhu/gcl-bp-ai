@@ -1,0 +1,37 @@
+{
+  "task_id": "t_8d973ff5",
+  "generated_at": "2026-05-19 17:44:18 CST",
+  "status": "BLOCKED",
+  "verdict": "BLOCKED / do not submit",
+  "reason": "current branch feature/m15-sap-mid-oracle-smoke-t_2c15aff8 does not match required feature/nl2sql-m9-sqlplan-shadow-mvp and task forbids switching branches",
+  "branch": {
+    "required": "feature/nl2sql-m9-sqlplan-shadow-mvp",
+    "current": "feature/m15-sap-mid-oracle-smoke-t_2c15aff8",
+    "head": "0b14a71 NL2SQL M9 文档保存",
+    "ok": false
+  },
+  "required_artifacts": {
+    "missing": [
+      "ai/outbox/kanban/t_0b20b27f/final-acceptance.md",
+      "ai/outbox/kanban/t_0b20b27f/gate-summary.json",
+      "ai/outbox/kanban/t_0b20b27f/scoped-submission-checklist.md"
+    ]
+  },
+  "gates": {
+    "catalog_reindex": "not_run_branch_blocked",
+    "live_provider_shadow_gate": "not_run_branch_blocked",
+    "focused_tests": "not_run_branch_blocked",
+    "broader_tests": "not_run_branch_blocked",
+    "compile": "not_run_branch_blocked",
+    "static_scan": "not_run_branch_blocked",
+    "independent_review": "not_run_branch_blocked"
+  },
+  "side_effects": {
+    "code_modified": false,
+    "staged": false,
+    "committed": false,
+    "pushed": false,
+    "deployed": false
+  },
+  "next_manual_action": "请人工切到/恢复任务指定分支 feature/nl2sql-m9-sqlplan-shadow-mvp 后重新运行，或在看板评论中明确授权使用当前分支或现有 .worktrees/nl2sql-m9-1-hardening-v2 工作树继续；同时确认 t_0b20b27f 三个缺失交接产物的替代依据。"
+}
