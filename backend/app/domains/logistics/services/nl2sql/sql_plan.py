@@ -597,6 +597,7 @@ class LogisticsSqlPlanValidator:
         ids.update(f"dimension:{dimension.dimension_id}" for dimension in self.catalog.dimensions)
         ids.update(f"join:{join.join_id}" for join in self.catalog.joins)
         ids.update(f"rule:{rule.rule_id}" for rule in self.catalog.rules)
+        ids.update(f"example:{example.example_id}" for example in getattr(self.catalog, "examples", []))
         return ids
 
     @staticmethod

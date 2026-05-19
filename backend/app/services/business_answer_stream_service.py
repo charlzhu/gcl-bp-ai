@@ -260,7 +260,12 @@ class BusinessAnswerStreamService:
     def _build_system_prompt(cls, domain: str) -> str:
         """构造约束 LLM 只做表达的系统提示词。"""
 
-        domain_label = "计划 BOM" if domain == "plan_bom" else "物流经营"
+        domain_labels = {
+            "plan_bom": "计划 BOM",
+            "logistics": "物流经营",
+            "business_analysis": "经营分析产销存",
+        }
+        domain_label = domain_labels.get(domain, "业务")
         return (
             f"你是{domain_label}智能问答的答案表达层。"
             "你会收到用户原问题和后端确定性查询结果。"
@@ -753,6 +758,8 @@ class BusinessAnswerStreamService:
             return "计划 BOM 智能回答"
         if domain == "logistics":
             return "物流经营智能回答"
+        if domain == "business_analysis":
+            return "产销存经营分析"
         return "智能回答"
 
 

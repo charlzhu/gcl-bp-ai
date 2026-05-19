@@ -13,6 +13,8 @@ from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
     LogisticsCatalogRecallService,
     LogisticsCatalogRerankScore,
     LogisticsMilvusCatalogVectorStore,
+    _build_dashscope_service_url,
+    _build_provider_httpx_client_kwargs,
 )
 from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
 
@@ -251,6 +253,29 @@ def test_index_catalog_uses_mock_embedding_and_milvus_without_network() -> None:
     payload_call = store.upsert_calls[1]
     assert [document.catalog_id for document in payload_call["documents"]] == ["metric:shipment_mw", "dimension:city"]
     assert payload_call["vectors"] == [[1.0, 0.1, 0.2], [2.0, 0.1, 0.2]]
+
+
+def test_index_catalog_batches_embedding_requests_for_provider_limits() -> None:
+    """真实 reindex 应按 provider 批量上限分批 embedding，避免单次提交过多文档。"""
+
+    docs = [_doc(f"metric:batch_{index}", f"批量文档{index}") for index in range(23)]
+    embedding = _FakeEmbeddingClient()
+    store = _FakeVectorStore()
+    service = LogisticsCatalogRecallService(
+        document_builder=_FixedDocumentBuilder(docs),
+        embedding_client=embedding,
+        vector_store=store,
+        reranker=_FakeReranker(),
+    )
+
+    result = service.index_catalog(catalog=object())
+
+    assert result.status == "ok"
+    assert result.indexed_count == 23
+    assert [len(call) for call in embedding.calls] == [10, 10, 3]
+    payload_call = store.upsert_calls[1]
+    assert [document.catalog_id for document in payload_call["documents"]] == [document.catalog_id for document in docs]
+    assert len(payload_call["vectors"]) == 23
 
 
 def test_recall_fail_closes_when_clients_are_missing_and_does_not_call_external_store() -> None:
@@ -543,3 +568,48 @@ def test_settings_declares_m2_embedding_rerank_and_collection_defaults() -> None
     assert settings.milvus_collection_prefix
     assert settings.nl2sql_recall_top_k > 0
     assert settings.nl2sql_rerank_top_k > 0
+
+
+def test_settings_normalizes_legacy_bailian_model_aliases_for_provider_gate() -> None:
+    """旧规划名应兼容映射到当前百炼真实可用模型名，避免真实 provider gate 被配置名阻塞。"""
+
+    settings = Settings(embedding_model="Qwen3-Embedding-4B", rerank_model="Qwen3-Reranker")
+
+    assert settings.embedding_model == "text-embedding-v4"
+    assert settings.rerank_model == "gte-rerank-v2"
+
+
+def test_provider_httpx_client_kwargs_accepts_explicit_socks_proxy(monkeypatch: pytest.MonkeyPatch) -> None:
+    """配置 SOCKS 代理时，embedding/rerank/LLM provider HTTP 客户端应显式带上 proxy 参数。"""
+
+    from backend.app.domains.logistics.services.nl2sql import catalog_retrieval
+
+    monkeypatch.setattr(catalog_retrieval.settings, "llm_all_proxy", "socks5://127.0.0.1:7890")
+
+    kwargs = _build_provider_httpx_client_kwargs(timeout_seconds=3.5)
+
+    assert kwargs["timeout"] == 3.5
+    assert kwargs["trust_env"] is True
+    assert kwargs["proxy"] == "socks5://127.0.0.1:7890"
+
+
+def test_dashscope_service_url_strips_openai_compatible_suffix_for_rerank_endpoint() -> None:
+    """Rerank service API 应从 DashScope 根路径调用，不能拼到 OpenAI 兼容模式路径下。"""
+
+    url = _build_dashscope_service_url(
+        "https://dashscope.example.com/compatible-mode/v1",
+        "/api/v1/services/rerank/text-rerank/text-rerank",
+    )
+
+    assert url == "https://dashscope.example.com/api/v1/services/rerank/text-rerank/text-rerank"
+
+
+def test_dashscope_service_url_preserves_non_service_endpoint_shape() -> None:
+    """非 service 端点保持原 base_url，避免影响 OpenAI 兼容模式调用。"""
+
+    url = _build_dashscope_service_url(
+        "https://dashscope.example.com/compatible-mode/v1",
+        "/embeddings",
+    )
+
+    assert url == "https://dashscope.example.com/compatible-mode/v1/embeddings"

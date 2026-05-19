@@ -5,6 +5,9 @@ from sqlalchemy.orm import Session
 
 from backend.app.core.config import Settings, get_settings
 from backend.app.db.session import get_db
+from backend.app.domains.business_analysis.services.inventory_sales_production.qa_service import (
+    InventorySalesProductionQaService,
+)
 from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
 from backend.app.domains.logistics.services.import_service import LogisticsHistoryImportService
 from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
@@ -155,6 +158,20 @@ def get_logistics_data_qa_service(
     3. 不承担 BOM 查询、RAG 检索或 Agent 工作流能力。
     """
     return LogisticsDataQaService(db=db)
+
+
+def get_inventory_sales_production_qa_service(
+    db: Session = Depends(get_db),
+) -> InventorySalesProductionQaService:
+    """产销存经营分析问答服务依赖。
+
+    当前用于 M4 紧急接入：
+    1. 自然语言只生成受控产销存 QueryPlan；
+    2. 业务事实和指标计算复用 M3 QueryExecutor；
+    3. 不直查 Excel 原始文件，不让 LLM 自由生成 SQL。
+    """
+
+    return InventorySalesProductionQaService(db=db)
 
 
 def get_plan_bom_import_service(

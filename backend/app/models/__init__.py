@@ -5,6 +5,13 @@
 2. 计划 BOM 模型已用于 ORM 映射和 Alembic 迁移元数据，不属于可删除的过渡代码。
 """
 
+from backend.app.domains.business_analysis.models import (
+    BaIspExcelSheet,
+    BaIspExcelWorkbook,
+    BaIspMetric,
+    BaIspMetricAlias,
+    BaIspMonthlyFact,
+)
 from backend.app.domains.plan_bom.models import (
     PlanBomExportFile,
     PlanBomExportTask,
@@ -29,6 +36,11 @@ __all__ = [
     "SysQueryLog",
     "SysTaskLog",
     "SysTaskErrorLog",
+    "BaIspExcelWorkbook",
+    "BaIspExcelSheet",
+    "BaIspMonthlyFact",
+    "BaIspMetric",
+    "BaIspMetricAlias",
     "PlanBomImportBatch",
     "PlanBomHeader",
     "PlanBomMaterialLine",

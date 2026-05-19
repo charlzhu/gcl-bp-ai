@@ -1,1 +1,9 @@
-"""Business analysis domain placeholder."""
+"""经营分析业务域包。
+
+说明：
+1. 当前业务域用于承载产销存等经营分析能力；
+2. 本包不侵入物流、计划 BOM、物管等既有业务域；
+3. 后续统一 NL2SQL 接入时，可在本域内补充 QueryPlan/SQLPlan 适配器。
+"""
+
+__all__ = []

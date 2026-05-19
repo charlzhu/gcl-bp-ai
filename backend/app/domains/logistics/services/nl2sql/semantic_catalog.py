@@ -155,6 +155,32 @@ class LogisticsCatalogRule(BaseModel):
     business_message: str | None = None
 
 
+class LogisticsCatalogExample(BaseModel):
+    """Semantic Catalog 中的自然语言到 SQLPlan 形状示例。
+
+    业务逻辑：
+        examples 只给 M9 LLM SQLPlan Generator 提供受控结构参考；不得保存 raw SQL、
+        SQL 片段、连接信息或执行结果。后续 validator 仍只信 catalog_id 并回查 canonical catalog。
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    example_id: str
+    display_name: str
+    domain: str = "logistics"
+    question: str
+    query_type: str
+    metrics: list[str] = Field(default_factory=list)
+    dimensions: list[str] = Field(default_factory=list)
+    filters: list[dict[str, Any]] = Field(default_factory=list)
+    group_by: list[str] = Field(default_factory=list)
+    business_rules: list[str] = Field(default_factory=list)
+    catalog_refs: list[str] = Field(default_factory=list)
+    notes: str | None = None
+    sql: str | None = None
+    raw_sql: str | None = None
+
+
 class LogisticsSemanticCatalog(BaseModel):
     """物流 NL2SQL Semantic Catalog 聚合对象。"""
 
@@ -167,6 +193,7 @@ class LogisticsSemanticCatalog(BaseModel):
     dimensions: list[LogisticsCatalogDimension] = Field(default_factory=list)
     joins: list[LogisticsCatalogJoin] = Field(default_factory=list)
     rules: list[LogisticsCatalogRule] = Field(default_factory=list)
+    examples: list[LogisticsCatalogExample] = Field(default_factory=list)
 
     def get_metric(self, metric_id: str) -> LogisticsCatalogMetric:
         """按指标 ID 获取指标；不存在则抛出 KeyError。"""
@@ -230,7 +257,7 @@ class LogisticsSemanticCatalogLoader:
         3. 返回强 schema 对象，后续 SQLPlan validator 可直接复用。
     """
 
-    FILE_NAMES = ("tables.yaml", "metrics.yaml", "dimensions.yaml", "joins.yaml", "rules.yaml")
+    FILE_NAMES = ("tables.yaml", "metrics.yaml", "dimensions.yaml", "joins.yaml", "rules.yaml", "examples.yaml")
 
     def __init__(self, catalog_dir: str | Path | None = None) -> None:
         """初始化加载器。
@@ -259,6 +286,7 @@ class LogisticsSemanticCatalogLoader:
             "dimensions": raw_files["dimensions.yaml"].get("dimensions", []),
             "joins": raw_files["joins.yaml"].get("joins", []),
             "rules": raw_files["rules.yaml"].get("rules", []),
+            "examples": raw_files["examples.yaml"].get("examples", []),
         }
         catalog = LogisticsSemanticCatalog.model_validate(payload)
         self._validate_catalog(catalog)
@@ -311,6 +339,9 @@ class LogisticsSemanticCatalogLoader:
             if dimension.table and dimension.table not in allowed_names:
                 raise ValueError(f"catalog_dimension_table_not_allowed::{dimension.dimension_id}::{dimension.table}")
             self._validate_dimension_column(dimension, column_index)
+        allowed_catalog_refs = self._allowed_catalog_ref_ids(catalog)
+        for example in catalog.examples:
+            self._validate_example(example, allowed_catalog_refs)
 
     @staticmethod
     def _allowed_column_index(catalog: LogisticsSemanticCatalog) -> dict[str, set[str]]:
@@ -417,6 +448,30 @@ class LogisticsSemanticCatalogLoader:
         left_table, left_column, right_table, right_column = match.groups()
         return [(left_table, left_column), (right_table, right_column)]
 
+    @staticmethod
+    def _allowed_catalog_ref_ids(catalog: LogisticsSemanticCatalog) -> set[str]:
+        """构造 examples 可引用的受控 catalog ID 集合。"""
+
+        ids: set[str] = set()
+        ids.update(f"table:{table.table_name}" for table in catalog.allowed_tables())
+        ids.update(f"metric:{metric.metric_id}" for metric in catalog.metrics)
+        ids.update(f"dimension:{dimension.dimension_id}" for dimension in catalog.dimensions)
+        ids.update(f"join:{join.join_id}" for join in catalog.joins)
+        ids.update(f"rule:{rule.rule_id}" for rule in catalog.rules)
+        return ids
+
+    @staticmethod
+    def _validate_example(example: LogisticsCatalogExample, allowed_catalog_refs: set[str]) -> None:
+        """校验 examples 只描述受控 SQLPlan 形状，不携带 raw SQL。"""
+
+        if example.domain != "logistics":
+            raise ValueError(f"catalog_example_domain_invalid::{example.example_id}::{example.domain}")
+        if example.sql is not None or example.raw_sql is not None:
+            raise ValueError(f"catalog_example_sql_not_allowed::{example.example_id}")
+        for ref in example.catalog_refs:
+            if ref not in allowed_catalog_refs:
+                raise ValueError(f"catalog_example_ref_not_allowed::{example.example_id}::{ref}")
+
     def _read_yaml(self, file_name: str) -> dict[str, Any]:
         """读取单个 YAML 文件，缺失文件按空配置处理。"""
 
@@ -445,6 +500,7 @@ __all__ = [
     "LogisticsCatalogDimension",
     "LogisticsCatalogJoin",
     "LogisticsCatalogMetric",
+    "LogisticsCatalogExample",
     "LogisticsCatalogRule",
     "LogisticsCatalogTable",
     "LogisticsSemanticCatalog",

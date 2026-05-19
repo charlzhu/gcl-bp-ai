@@ -1,4 +1,4 @@
-export type BusinessChatDomain = 'auto' | 'logistics' | 'plan_bom'
+export type BusinessChatDomain = 'auto' | 'logistics' | 'plan_bom' | 'business_analysis'
 export type BusinessChatMessageRole = 'user' | 'assistant' | 'system'
 
 export interface BusinessChatMessage {

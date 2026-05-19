@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from typing import Any, Literal
 
@@ -11,6 +12,7 @@ from backend.app.core.config import settings
 from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
     LogisticsCatalogColumn,
     LogisticsCatalogDimension,
+    LogisticsCatalogExample,
     LogisticsCatalogJoin,
     LogisticsCatalogMetric,
     LogisticsCatalogRule,
@@ -41,7 +43,113 @@ FORBIDDEN_RECALL_SECRET_KEYS = {
 }
 
 
+def _build_dashscope_service_url(base_url: str, endpoint_path: str) -> str:
+    """构造 DashScope service 类接口 URL。
+
+    参数：
+        base_url: 项目配置的大模型基础地址，可能是 OpenAI 兼容模式地址。
+        endpoint_path: DashScope service 接口路径，例如 rerank 服务路径。
+
+    返回：
+        可用于 httpx 调用的完整 URL。
+
+    业务逻辑：
+        主 LLM 与 embedding 使用 OpenAI 兼容模式 `/compatible-mode/v1`；但 rerank
+        属于 DashScope service API，需要挂在站点根路径下。这里仅在 service
+        endpoint 场景剥离兼容模式后缀，避免把 rerank 错误拼成
+        `/compatible-mode/v1/api/v1/services/...` 导致真实 provider 返回 404。
+    """
+
+    normalized_base = (base_url or "").rstrip("/")
+    normalized_path = (endpoint_path or "").strip("/")
+    if normalized_path.startswith("api/v1/services/"):
+        normalized_base = re.sub(r"/compatible-mode/v1$", "", normalized_base)
+    return normalized_base + "/" + normalized_path
+
+
+def _configured_provider_proxy_url() -> str | None:
+    """读取 provider 调用使用的可选代理地址。
+
+    返回：
+        显式配置的代理 URL，或标准环境变量中的代理 URL；均不在日志中输出。
+    业务逻辑：
+        真实百炼 provider 门禁可能需要本地 SOCKS 代理。优先使用项目专用
+        `LLM_ALL_PROXY/LLM_HTTPS_PROXY/LLM_HTTP_PROXY`，未配置时兼容系统标准
+        `ALL_PROXY/HTTPS_PROXY/HTTP_PROXY` 与小写形式。
+    """
+
+    candidates = [
+        getattr(settings, "llm_all_proxy", ""),
+        getattr(settings, "llm_https_proxy", ""),
+        getattr(settings, "llm_http_proxy", ""),
+        os.getenv("ALL_PROXY"),
+        os.getenv("HTTPS_PROXY"),
+        os.getenv("HTTP_PROXY"),
+        os.getenv("all_proxy"),
+        os.getenv("https_proxy"),
+        os.getenv("http_proxy"),
+    ]
+    for value in candidates:
+        proxy_url = str(value or "").strip()
+        if proxy_url:
+            return proxy_url
+    return None
+
+
+def _build_provider_httpx_client_kwargs(*, timeout_seconds: float) -> dict[str, Any]:
+    """构造 provider HTTP 客户端参数。
+
+    参数：
+        timeout_seconds: 单次 provider 调用超时时间。
+    返回：
+        可传给 `httpx.Client` 的参数字典；显式代理存在时包含 `proxy`。
+    业务逻辑：
+        embedding、rerank、SQLPlan LLM 和 provider smoke 共用同一套代理策略，
+        以保证 SOCKS 配置在所有真实 provider gate 中表现一致。
+    """
+
+    kwargs: dict[str, Any] = {"timeout": timeout_seconds, "trust_env": True}
+    proxy_url = _configured_provider_proxy_url()
+    if proxy_url:
+        kwargs["proxy"] = proxy_url
+    return kwargs
+
+
+def _build_provider_openai_client_kwargs(
+    *,
+    base_url: str | None,
+    api_key: str | None,
+    timeout_seconds: float,
+    max_retries: int = 0,
+) -> dict[str, Any]:
+    """构造 OpenAI 兼容客户端参数。
+
+    参数：
+        base_url: OpenAI 兼容接口基础地址。
+        api_key: provider API Key。
+        timeout_seconds: 调用超时时间。
+        max_retries: OpenAI 客户端重试次数。
+    返回：
+        可传给 `OpenAI(...)` 的参数；若配置代理则内置 httpx.Client。
+    """
+
+    kwargs: dict[str, Any] = {
+        "base_url": base_url,
+        "api_key": api_key,
+        "max_retries": max_retries,
+    }
+    httpx_kwargs = _build_provider_httpx_client_kwargs(timeout_seconds=timeout_seconds)
+    if "proxy" in httpx_kwargs:
+        import httpx
+
+        kwargs["http_client"] = httpx.Client(**httpx_kwargs)
+    else:
+        kwargs["timeout"] = timeout_seconds
+    return kwargs
+
+
 class LogisticsCatalogRecallDocument(BaseModel):
+
     """可进入 M2 embedding/Milvus/rerank 的受控 Semantic Catalog 文档。
 
     业务逻辑：
@@ -53,7 +161,7 @@ class LogisticsCatalogRecallDocument(BaseModel):
 
     catalog_id: str
     catalog_version: str
-    doc_type: Literal["table", "column", "metric", "dimension", "rule", "join"]
+    doc_type: Literal["table", "column", "metric", "dimension", "rule", "join", "example"]
     title: str
     content: str
     keywords: list[str] = Field(default_factory=list)
@@ -142,6 +250,7 @@ class LogisticsCatalogRecallDocumentBuilder:
         documents.extend(self._dimension_document(catalog.catalog_version, dimension) for dimension in catalog.dimensions)
         documents.extend(self._rule_document(catalog.catalog_version, rule) for rule in catalog.rules)
         documents.extend(self._join_document(catalog.catalog_version, join) for join in catalog.joins)
+        documents.extend(self._example_document(catalog.catalog_version, example) for example in catalog.examples)
         return documents
 
     def _table_document(
@@ -326,6 +435,49 @@ class LogisticsCatalogRecallDocumentBuilder:
             },
         )
 
+    def _example_document(self, catalog_version: str, example: LogisticsCatalogExample) -> LogisticsCatalogRecallDocument:
+        content = self._content(
+            "示例",
+            example.display_name,
+            f"示例标识 {example.example_id}",
+            f"自然语言 {example.question}",
+            f"查询类型 {example.query_type}",
+            "指标 " + "，".join(example.metrics) if example.metrics else "",
+            "维度 " + "，".join(example.dimensions) if example.dimensions else "",
+            "分组 " + "，".join(example.group_by) if example.group_by else "",
+            "规则 " + "，".join(example.business_rules) if example.business_rules else "",
+            example.notes or "",
+        )
+        return LogisticsCatalogRecallDocument(
+            catalog_id=f"example:{example.example_id}",
+            catalog_version=catalog_version,
+            doc_type="example",
+            title=example.display_name,
+            content=content,
+            keywords=_dedupe_strings(
+                [
+                    example.example_id,
+                    example.display_name,
+                    example.question,
+                    example.query_type,
+                    *example.metrics,
+                    *example.dimensions,
+                    *example.business_rules,
+                ]
+            ),
+            source_table=None,
+            metadata={
+                "example_id": example.example_id,
+                "domain": example.domain,
+                "query_type": example.query_type,
+                "metrics": list(example.metrics),
+                "dimensions": list(example.dimensions),
+                "group_by": list(example.group_by),
+                "business_rules": list(example.business_rules),
+                "catalog_refs": list(example.catalog_refs),
+            },
+        )
+
     def _content(self, *parts: str) -> str:
         text = "；".join(part.strip() for part in parts if str(part).strip())
         text = re.sub(r"\s+", " ", text).strip()
@@ -370,12 +522,13 @@ class LogisticsBailianEmbeddingClient:
         try:
             from openai import OpenAI
 
-            client = self._client or OpenAI(
+            openai_kwargs = _build_provider_openai_client_kwargs(
                 base_url=self.base_url,
                 api_key=self.api_key,
-                timeout=self.timeout_seconds,
+                timeout_seconds=self.timeout_seconds,
                 max_retries=0,
             )
+            client = self._client or OpenAI(**openai_kwargs)
             response = client.embeddings.create(model=self.model, input=texts)
             return [list(item.embedding) for item in response.data]
         except Exception as exc:  # noqa: BLE001
@@ -428,14 +581,16 @@ class LogisticsBailianRerankClient:
         try:
             import httpx
 
-            url = self.base_url.rstrip("/") + "/" + self.endpoint_path.strip("/")
+            url = _build_dashscope_service_url(self.base_url, self.endpoint_path)
             payload = {
                 "model": self.model,
                 "input": {"query": query, "documents": [hit.document.content for hit in documents]},
                 "parameters": {"top_n": top_n, "return_documents": False},
             }
             headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-            response = httpx.post(url, headers=headers, json=payload, timeout=self.timeout_seconds)
+            httpx_kwargs = _build_provider_httpx_client_kwargs(timeout_seconds=self.timeout_seconds)
+            with httpx.Client(**httpx_kwargs) as http_client:
+                response = http_client.post(url, headers=headers, json=payload)
             response.raise_for_status()
             return _coerce_rerank_scores(response.json(), documents)
         except Exception as exc:  # noqa: BLE001
@@ -598,7 +753,7 @@ class LogisticsCatalogRecallService:
             documents = self.document_builder.build(resolved_catalog)
             if not documents:
                 return LogisticsCatalogRecallResult(status="empty", error="catalog_documents_empty")
-            vectors = self.embedding_client.embed_texts([document.content for document in documents])
+            vectors = self._embed_documents_for_index(documents)
             if len(vectors) != len(documents):
                 return LogisticsCatalogRecallResult(
                     status="error",
@@ -609,6 +764,28 @@ class LogisticsCatalogRecallService:
             return LogisticsCatalogRecallResult(status="ok", indexed_count=indexed)
         except Exception as exc:  # noqa: BLE001
             return LogisticsCatalogRecallResult(status="error", error=_safe_error("index_error", exc))
+
+    def _embed_documents_for_index(self, documents: list[LogisticsCatalogRecallDocument]) -> list[list[float]]:
+        """分批生成 catalog 文档向量。
+
+        参数：
+            documents: 已通过白名单与脱敏校验的 Semantic Catalog 召回文档。
+
+        返回：
+            与 documents 顺序一一对应的向量列表。
+
+        业务逻辑：
+            百炼 `text-embedding-v4` 单次请求存在批量上限，真实 reindex 不能一次性
+            提交全部 catalog 文档。这里固定按 10 条分批，既兼容当前 provider，也保持
+            Milvus upsert 前的文档顺序稳定，便于审计和回放。
+        """
+
+        vectors: list[list[float]] = []
+        batch_size = 10
+        for start in range(0, len(documents), batch_size):
+            batch = documents[start : start + batch_size]
+            vectors.extend(self.embedding_client.embed_texts([document.content for document in batch]))
+        return vectors
 
     def recall(
         self,
