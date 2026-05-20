@@ -5,6 +5,11 @@
 """
 
 from backend.app.domains.logistics.services.nl2sql.business_rules import LogisticsNl2SqlBusinessRules
+from backend.app.domains.logistics.services.nl2sql.candidate_sql_gate import (
+    LogisticsCandidateSqlGate,
+    LogisticsCandidateSqlGateResult,
+    check_logistics_candidate_sql,
+)
 from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
     LogisticsCatalogRecallDocumentBuilder,
     LogisticsCatalogRecallService,
@@ -87,6 +92,8 @@ __all__ = [
     "InMemoryLogisticsNl2SqlEvaluationLogSink",
     "JsonlLogisticsNl2SqlEvaluationLogSink",
     "DEFAULT_LOGISTICS_NL2SQL_SHADOW_SMOKE_SAMPLE_IDS",
+    "LogisticsCandidateSqlGate",
+    "LogisticsCandidateSqlGateResult",
     "LogisticsCatalogRecallDocumentBuilder",
     "LogisticsCatalogRecallService",
     "LogisticsNl2SqlEvaluationLogRecord",
@@ -129,6 +136,7 @@ __all__ = [
     "build_default_logistics_nl2sql_m8_shadow_eval_samples",
     "build_default_logistics_nl2sql_shadow_smoke_samples",
     "build_logistics_nl2sql_evaluation_report",
+    "check_logistics_candidate_sql",
     "redact_evaluation_text",
     "render_safe_m8_summary_json",
     "render_logistics_sql",

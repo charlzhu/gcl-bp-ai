@@ -1,0 +1,24 @@
+[compileall] /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m compileall backend/app/domains/logistics/services/nl2sql -q
+[compileall exit_code] 0
+
+[git diff --check]
+[git diff --check exit_code] 0
+
+[diff.patch regenerated] /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/nl2sql-m10a-candidate-sql-gate/ai/outbox/kanban/t_cb787cf5/diff.patch
+
+[static scan: hardcoded secret assignment]
+no matches
+
+[static scan: raw SQL direct execution]
+no matches
+
+[static scan: shell injection or dangerous eval]
+no matches
+
+[static scan: unsafe deserialization]
+no matches
+
+[static scan: main QA route takeover]
+no matches
+
+[static scan final exit_code] 0
