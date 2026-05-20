@@ -1,0 +1,17 @@
+
+==================================== ERRORS ====================================
+___ ERROR collecting tests/unit/logistics/nl2sql/test_candidate_sql_gate.py ____
+ImportError while importing test module '/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/nl2sql-m10a-candidate-sql-gate/tests/unit/logistics/nl2sql/test_candidate_sql_gate.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/opt/anaconda3/lib/python3.12/importlib/__init__.py:90: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+tests/unit/logistics/nl2sql/test_candidate_sql_gate.py:5: in <module>
+    from backend.app.domains.logistics.services.nl2sql.candidate_sql_gate import (
+E   ModuleNotFoundError: No module named 'backend.app.domains.logistics.services.nl2sql.candidate_sql_gate'
+=========================== short test summary info ============================
+ERROR tests/unit/logistics/nl2sql/test_candidate_sql_gate.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+1 error in 0.25s
+
+[exit_code] 2

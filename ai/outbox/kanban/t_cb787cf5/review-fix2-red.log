@@ -1,0 +1,180 @@
+....................FFFFF.                                               [100%]
+=================================== FAILURES ===================================
+_ test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants[SELECT biz_year INTO @x FROM dws_logistics_detail_union LIMIT 1-into_forbidden] _
+
+sql = 'SELECT biz_year INTO @x FROM dws_logistics_detail_union LIMIT 1'
+expected_code = 'into_forbidden'
+
+    @pytest.mark.parametrize(
+        ("sql", "expected_code"),
+        [
+            ("SELECT biz_year INTO @x FROM dws_logistics_detail_union LIMIT 1", "into_forbidden"),
+            ("SELECT GET_LOCK('nl2sql', 1) FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
+            ("SELECT RELEASE_LOCK('nl2sql') FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
+            ("SELECT biz_year FROM dws_logistics_detail_union RANDOM_GARBAGE LIMIT 20", "structure_uncertain"),
+        ],
+    )
+    def test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants(
+        sql: str,
+        expected_code: str,
+    ) -> None:
+        """审查发现的 SELECT INTO、副作用锁函数和未知子句也必须 fail-closed。"""
+
+        result = check_logistics_candidate_sql(sql)
+
+>       assert result.allowed is False
+E       AssertionError: assert True is False
+E        +  where True = LogisticsCandidateSqlGateResult(allowed=True, rejected=False, reason_code='allowed', sanitized_reason='candidate_sql_allowed', repair_info=None).allowed
+
+tests/unit/logistics/nl2sql/test_candidate_sql_gate.py:124: AssertionError
+_ test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants[SELECT GET_LOCK('nl2sql', 1) FROM dws_logistics_detail_union LIMIT 1-lock_forbidden] _
+
+sql = "SELECT GET_LOCK('nl2sql', 1) FROM dws_logistics_detail_union LIMIT 1"
+expected_code = 'lock_forbidden'
+
+    @pytest.mark.parametrize(
+        ("sql", "expected_code"),
+        [
+            ("SELECT biz_year INTO @x FROM dws_logistics_detail_union LIMIT 1", "into_forbidden"),
+            ("SELECT GET_LOCK('nl2sql', 1) FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
+            ("SELECT RELEASE_LOCK('nl2sql') FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
+            ("SELECT biz_year FROM dws_logistics_detail_union RANDOM_GARBAGE LIMIT 20", "structure_uncertain"),
+        ],
+    )
+    def test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants(
+        sql: str,
+        expected_code: str,
+    ) -> None:
+        """审查发现的 SELECT INTO、副作用锁函数和未知子句也必须 fail-closed。"""
+
+        result = check_logistics_candidate_sql(sql)
+
+>       assert result.allowed is False
+E       AssertionError: assert True is False
+E        +  where True = LogisticsCandidateSqlGateResult(allowed=True, rejected=False, reason_code='allowed', sanitized_reason='candidate_sql_allowed', repair_info=None).allowed
+
+tests/unit/logistics/nl2sql/test_candidate_sql_gate.py:124: AssertionError
+_ test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants[SELECT RELEASE_LOCK('nl2sql') FROM dws_logistics_detail_union LIMIT 1-lock_forbidden] _
+
+sql = "SELECT RELEASE_LOCK('nl2sql') FROM dws_logistics_detail_union LIMIT 1"
+expected_code = 'lock_forbidden'
+
+    @pytest.mark.parametrize(
+        ("sql", "expected_code"),
+        [
+            ("SELECT biz_year INTO @x FROM dws_logistics_detail_union LIMIT 1", "into_forbidden"),
+            ("SELECT GET_LOCK('nl2sql', 1) FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
+            ("SELECT RELEASE_LOCK('nl2sql') FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
+            ("SELECT biz_year FROM dws_logistics_detail_union RANDOM_GARBAGE LIMIT 20", "structure_uncertain"),
+        ],
+    )
+    def test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants(
+        sql: str,
+        expected_code: str,
+    ) -> None:
+        """审查发现的 SELECT INTO、副作用锁函数和未知子句也必须 fail-closed。"""
+
+        result = check_logistics_candidate_sql(sql)
+
+>       assert result.allowed is False
+E       AssertionError: assert True is False
+E        +  where True = LogisticsCandidateSqlGateResult(allowed=True, rejected=False, reason_code='allowed', sanitized_reason='candidate_sql_allowed', repair_info=None).allowed
+
+tests/unit/logistics/nl2sql/test_candidate_sql_gate.py:124: AssertionError
+_ test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants[SELECT biz_year FROM dws_logistics_detail_union RANDOM_GARBAGE LIMIT 20-structure_uncertain] _
+
+sql = 'SELECT biz_year FROM dws_logistics_detail_union RANDOM_GARBAGE LIMIT 20'
+expected_code = 'structure_uncertain'
+
+    @pytest.mark.parametrize(
+        ("sql", "expected_code"),
+        [
+            ("SELECT biz_year INTO @x FROM dws_logistics_detail_union LIMIT 1", "into_forbidden"),
+            ("SELECT GET_LOCK('nl2sql', 1) FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
+            ("SELECT RELEASE_LOCK('nl2sql') FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
+            ("SELECT biz_year FROM dws_logistics_detail_union RANDOM_GARBAGE LIMIT 20", "structure_uncertain"),
+        ],
+    )
+    def test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants(
+        sql: str,
+        expected_code: str,
+    ) -> None:
+        """审查发现的 SELECT INTO、副作用锁函数和未知子句也必须 fail-closed。"""
+
+        result = check_logistics_candidate_sql(sql)
+
+>       assert result.allowed is False
+E       AssertionError: assert True is False
+E        +  where True = LogisticsCandidateSqlGateResult(allowed=True, rejected=False, reason_code='allowed', sanitized_reason='candidate_sql_allowed', repair_info=None).allowed
+
+tests/unit/logistics/nl2sql/test_candidate_sql_gate.py:124: AssertionError
+_ test_candidate_sql_gate_returns_structured_rejection_for_extreme_limit_digits _
+
+    def test_candidate_sql_gate_returns_structured_rejection_for_extreme_limit_digits() -> None:
+        """超长 LIMIT 数字不能冒泡异常，必须返回结构化拒绝结果。"""
+
+>       result = check_logistics_candidate_sql(
+            "SELECT biz_year FROM dws_logistics_detail_union LIMIT " + "9" * 5000
+        )
+
+tests/unit/logistics/nl2sql/test_candidate_sql_gate.py:131:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+backend/app/domains/logistics/services/nl2sql/candidate_sql_gate.py:203: in check_logistics_candidate_sql
+    return LogisticsCandidateSqlGate(max_limit=max_limit).check(sql)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <backend.app.domains.logistics.services.nl2sql.candidate_sql_gate.LogisticsCandidateSqlGate object at 0x1071aae10>
+sql = 'SELECT biz_year FROM dws_logistics_detail_union LIMIT 999999999999999999999999999999999999999999999999999999999999999...9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999'
+
+    def check(self, sql: str | None) -> LogisticsCandidateSqlGateResult:
+        """校验候选 SQL 字符串。
+
+        参数：
+            sql: LLM/候选生成器输出的原始 SQL 字符串。
+        返回：
+            `LogisticsCandidateSqlGateResult`，包含 allowed/rejected、稳定 reason code、
+            脱敏 reason 和可选修复提示。
+        """
+
+        normalized_sql = (sql or "").strip()
+        if not normalized_sql:
+            return self._reject("empty_sql", {"suggested_action": "provide_select_with_limit"})
+
+        lower_sql = normalized_sql.lower()
+        basic_rejection = self._check_basic_shape(normalized_sql, lower_sql)
+        if basic_rejection is not None:
+            return basic_rejection
+
+        risk_rejection = self._check_high_risk_tokens(lower_sql)
+        if risk_rejection is not None:
+            return risk_rejection
+
+        if not lower_sql.startswith("select"):
+            return self._reject("not_select", {"suggested_action": "use_single_select"})
+
+        if not LIMIT_ANY_RE.search(normalized_sql):
+            repair = {"suggested_action": "add_limit", "max_limit": self.max_limit}
+            return self._reject("missing_limit", repair)
+        if not LIMIT_RE.search(normalized_sql):
+            return self._reject("structure_uncertain", {"suggested_action": "use_plain_numeric_limit"})
+
+        if not re.search(r"\bfrom\b", lower_sql):
+            return self._reject("structure_uncertain", {"suggested_action": "use_select_from_limit"})
+
+        structure_match = SELECT_WITH_LIMIT_RE.search(normalized_sql)
+        if not structure_match or not self._select_structure_is_safe(structure_match):
+            return self._reject("structure_uncertain", {"suggested_action": "use_select_from_limit"})
+
+>       limit_value = int(structure_match.group("limit"))
+E       ValueError: Exceeds the limit (4300 digits) for integer string conversion: value has 5000 digits; use sys.set_int_max_str_digits() to increase the limit
+
+backend/app/domains/logistics/services/nl2sql/candidate_sql_gate.py:90: ValueError
+=========================== short test summary info ============================
+FAILED tests/unit/logistics/nl2sql/test_candidate_sql_gate.py::test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants[SELECT biz_year INTO @x FROM dws_logistics_detail_union LIMIT 1-into_forbidden]
+FAILED tests/unit/logistics/nl2sql/test_candidate_sql_gate.py::test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants[SELECT GET_LOCK('nl2sql', 1) FROM dws_logistics_detail_union LIMIT 1-lock_forbidden]
+FAILED tests/unit/logistics/nl2sql/test_candidate_sql_gate.py::test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants[SELECT RELEASE_LOCK('nl2sql') FROM dws_logistics_detail_union LIMIT 1-lock_forbidden]
+FAILED tests/unit/logistics/nl2sql/test_candidate_sql_gate.py::test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants[SELECT biz_year FROM dws_logistics_detail_union RANDOM_GARBAGE LIMIT 20-structure_uncertain]
+FAILED tests/unit/logistics/nl2sql/test_candidate_sql_gate.py::test_candidate_sql_gate_returns_structured_rejection_for_extreme_limit_digits
+5 failed, 21 passed in 0.18s
+
+[exit_code] 1

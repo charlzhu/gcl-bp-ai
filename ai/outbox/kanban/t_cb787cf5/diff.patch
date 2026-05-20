@@ -1,0 +1,423 @@
+diff --git a/backend/app/domains/logistics/services/nl2sql/__init__.py b/backend/app/domains/logistics/services/nl2sql/__init__.py
+index e1e9398..a2a8efa 100644
+--- a/backend/app/domains/logistics/services/nl2sql/__init__.py
++++ b/backend/app/domains/logistics/services/nl2sql/__init__.py
+@@ -5,6 +5,11 @@
+ """
+
+ from backend.app.domains.logistics.services.nl2sql.business_rules import LogisticsNl2SqlBusinessRules
++from backend.app.domains.logistics.services.nl2sql.candidate_sql_gate import (
++    LogisticsCandidateSqlGate,
++    LogisticsCandidateSqlGateResult,
++    check_logistics_candidate_sql,
++)
+ from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
+     LogisticsCatalogRecallDocumentBuilder,
+     LogisticsCatalogRecallService,
+@@ -87,6 +92,8 @@ __all__ = [
+     "InMemoryLogisticsNl2SqlEvaluationLogSink",
+     "JsonlLogisticsNl2SqlEvaluationLogSink",
+     "DEFAULT_LOGISTICS_NL2SQL_SHADOW_SMOKE_SAMPLE_IDS",
++    "LogisticsCandidateSqlGate",
++    "LogisticsCandidateSqlGateResult",
+     "LogisticsCatalogRecallDocumentBuilder",
+     "LogisticsCatalogRecallService",
+     "LogisticsNl2SqlEvaluationLogRecord",
+@@ -129,6 +136,7 @@ __all__ = [
+     "build_default_logistics_nl2sql_m8_shadow_eval_samples",
+     "build_default_logistics_nl2sql_shadow_smoke_samples",
+     "build_logistics_nl2sql_evaluation_report",
++    "check_logistics_candidate_sql",
+     "redact_evaluation_text",
+     "render_safe_m8_summary_json",
+     "render_logistics_sql",
+diff --git a/backend/app/domains/logistics/services/nl2sql/candidate_sql_gate.py b/backend/app/domains/logistics/services/nl2sql/candidate_sql_gate.py
+new file mode 100644
+index 0000000..213e910
+--- /dev/null
++++ b/backend/app/domains/logistics/services/nl2sql/candidate_sql_gate.py
+@@ -0,0 +1,227 @@
++from __future__ import annotations
++
++import re
++from typing import Any
++
++from pydantic import BaseModel, ConfigDict, Field
++
++
++COMMENT_MARKERS = ("--", "#", "/*", "*/")
++LIMIT_ANY_RE = re.compile(r"\bLIMIT\b", re.IGNORECASE)
++LIMIT_RE = re.compile(r"\bLIMIT\s+(?P<limit>\d+)\s*$", re.IGNORECASE)
++MAX_LIMIT_DIGITS = 18
++SELECT_WITH_LIMIT_RE = re.compile(
++    r"^\s*SELECT\s+(?P<select>.+?)\s+FROM\s+"
++    r"(?P<table>[A-Za-z_][A-Za-z0-9_]*)(?P<body>.*?)\s+LIMIT\s+(?P<limit>\d+)\s*$",
++    re.IGNORECASE | re.DOTALL,
++)
++RESERVED_TABLE_IDENTIFIERS = {"from", "where", "group", "order", "limit", "select", "union"}
++
++
++class LogisticsCandidateSqlGateResult(BaseModel):
++    """候选 SQL 安全门禁的结构化返回。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    allowed: bool
++    rejected: bool
++    reason_code: str
++    sanitized_reason: str
++    repair_info: dict[str, Any] | None = Field(default=None)
++
++
++class LogisticsCandidateSqlGate:
++    """物流 NL2SQL candidate SQL 的 shadow-only 安全门禁。
++
++    业务逻辑：
++        本类只接收候选 SQL 字符串并做保守文本门禁，不执行 SQL，也不接入正式物流 QA
++        主链路。M10-A 阶段不依赖 sqlglot；遇到不确定形态时按 fail-closed 处理。
++    """
++
++    def __init__(self, *, max_limit: int = 500) -> None:
++        """初始化 candidate SQL gate。
++
++        参数：
++            max_limit: M10-A shadow gate 接受的最大 LIMIT；超过时先拒绝，不自动下调。
++        返回：
++            无。
++        """
++
++        self.max_limit = max_limit
++
++    def check(self, sql: str | None) -> LogisticsCandidateSqlGateResult:
++        """校验候选 SQL 字符串。
++
++        参数：
++            sql: LLM/候选生成器输出的原始 SQL 字符串。
++        返回：
++            `LogisticsCandidateSqlGateResult`，包含 allowed/rejected、稳定 reason code、
++            脱敏 reason 和可选修复提示。
++        """
++
++        normalized_sql = (sql or "").strip()
++        if not normalized_sql:
++            return self._reject("empty_sql", {"suggested_action": "provide_select_with_limit"})
++
++        lower_sql = normalized_sql.lower()
++        basic_rejection = self._check_basic_shape(normalized_sql, lower_sql)
++        if basic_rejection is not None:
++            return basic_rejection
++
++        risk_rejection = self._check_high_risk_tokens(lower_sql)
++        if risk_rejection is not None:
++            return risk_rejection
++
++        if not lower_sql.startswith("select"):
++            return self._reject("not_select", {"suggested_action": "use_single_select"})
++
++        if not LIMIT_ANY_RE.search(normalized_sql):
++            repair = {"suggested_action": "add_limit", "max_limit": self.max_limit}
++            return self._reject("missing_limit", repair)
++        if not LIMIT_RE.search(normalized_sql):
++            return self._reject("structure_uncertain", {"suggested_action": "use_plain_numeric_limit"})
++
++        if not re.search(r"\bfrom\b", lower_sql):
++            return self._reject("structure_uncertain", {"suggested_action": "use_select_from_limit"})
++
++        structure_match = SELECT_WITH_LIMIT_RE.search(normalized_sql)
++        if not structure_match or not self._select_structure_is_safe(structure_match):
++            return self._reject("structure_uncertain", {"suggested_action": "use_select_from_limit"})
++
++        limit_token = structure_match.group("limit")
++        if len(limit_token) > MAX_LIMIT_DIGITS:
++            repair = {"suggested_action": "lower_limit", "max_limit": self.max_limit}
++            return self._reject("limit_out_of_range", repair)
++
++        try:
++            limit_value = int(limit_token)
++        except ValueError:
++            repair = {"suggested_action": "use_plain_numeric_limit", "max_limit": self.max_limit}
++            return self._reject("limit_out_of_range", repair)
++
++        if limit_value < 1 or limit_value > self.max_limit:
++            repair = {"suggested_action": "lower_limit", "max_limit": self.max_limit}
++            return self._reject("limit_out_of_range", repair)
++
++        return LogisticsCandidateSqlGateResult(
++            allowed=True,
++            rejected=False,
++            reason_code="allowed",
++            sanitized_reason="candidate_sql_allowed",
++            repair_info=None,
++        )
++
++    def _select_structure_is_safe(self, match: re.Match[str]) -> bool:
++        """在无 SQL 解析器时做最小 SELECT/FROM/LIMIT 形态确认。
++
++        参数：
++            match: `SELECT_WITH_LIMIT_RE` 对候选 SQL 的匹配结果。
++        返回：
++            True 表示该候选满足 M10-A 可证明的最小结构；False 表示结构不确定。
++        业务逻辑：
++            这里只证明 select list 非空、FROM 后有普通表名、LIMIT 为末尾数字，且 FROM 与 LIMIT
++            之间没有额外未解析子句。复杂或变体语法留给后续 sqlglot/renderer 阶段，
++            本 gate 先 fail-closed。
++        """
++
++        select_list = match.group("select").strip()
++        table_name = match.group("table").strip().lower()
++        body = match.group("body").strip()
++        if not select_list or select_list.lower() in RESERVED_TABLE_IDENTIFIERS:
++            return False
++        if table_name in RESERVED_TABLE_IDENTIFIERS:
++            return False
++        if body:
++            return False
++        return True
++
++    def _check_basic_shape(
++        self,
++        sql: str,
++        lower_sql: str,
++    ) -> LogisticsCandidateSqlGateResult | None:
++        """校验空白之外的最基础危险形态。
++
++        参数：
++            sql: 原始 SQL。
++            lower_sql: 小写 SQL。
++        返回：
++            发现危险形态时返回拒绝结果，否则返回 None。
++        """
++
++        if ";" in sql:
++            return self._reject("multi_statement", {"suggested_action": "use_single_select"})
++        if any(marker in sql for marker in COMMENT_MARKERS):
++            return self._reject("comment_forbidden")
++        if re.search(r"\bunion\b", lower_sql):
++            return self._reject("union_forbidden")
++        return None
++
++    def _check_high_risk_tokens(self, lower_sql: str) -> LogisticsCandidateSqlGateResult | None:
++        """校验高风险关键字、函数和事务/锁语句。
++
++        参数：
++            lower_sql: 小写 SQL。
++        返回：
++            命中风险时返回拒绝结果，否则返回 None。
++        """
++
++        high_risk_patterns = [
++            (r"\binto\s+outfile\b", "into_outfile_forbidden"),
++            (r"\binto\s+dumpfile\b", "into_outfile_forbidden"),
++            (r"\binto\b", "into_forbidden"),
++            (r"\bload_file\s*\(", "load_file_forbidden"),
++            (r"\bsleep\s*\(", "sleep_forbidden"),
++            (r"\bbenchmark\s*\(", "benchmark_forbidden"),
++            (r"\b(get_lock|release_lock|is_free_lock|is_used_lock)\s*\(", "lock_forbidden"),
++            (r"\bfor\s+update\b", "for_update_forbidden"),
++            (r"\block\b", "lock_forbidden"),
++            (r"\b(start\s+transaction|begin|commit|rollback|savepoint)\b", "transaction_forbidden"),
++            (
++                r"\b(drop|alter|truncate|create|insert|update|upsert|delete|merge|call|grant|revoke|replace|copy|set|use|show|describe)\b",
++                "write_or_ddl_forbidden",
++            ),
++        ]
++        for pattern, reason_code in high_risk_patterns:
++            if re.search(pattern, lower_sql):
++                return self._reject(reason_code)
++        return None
++
++    @staticmethod
++    def _reject(
++        reason_code: str,
++        repair_info: dict[str, Any] | None = None,
++    ) -> LogisticsCandidateSqlGateResult:
++        """构造脱敏拒绝结果。
++
++        参数：
++            reason_code: 稳定拒绝原因码。
++            repair_info: 可选修复提示，不包含原始 SQL。
++        返回：
++            rejected=True 的结构化结果。
++        """
++
++        return LogisticsCandidateSqlGateResult(
++            allowed=False,
++            rejected=True,
++            reason_code=reason_code,
++            sanitized_reason=f"candidate_sql_rejected:{reason_code}",
++            repair_info=repair_info,
++        )
++
++
++def check_logistics_candidate_sql(
++    sql: str | None,
++    *,
++    max_limit: int = 500,
++) -> LogisticsCandidateSqlGateResult:
++    """函数式入口：校验物流 NL2SQL candidate SQL 字符串。"""
++
++    return LogisticsCandidateSqlGate(max_limit=max_limit).check(sql)
++
++
++__all__ = [
++    "LogisticsCandidateSqlGate",
++    "LogisticsCandidateSqlGateResult",
++    "check_logistics_candidate_sql",
++]
+diff --git a/tests/unit/logistics/nl2sql/test_candidate_sql_gate.py b/tests/unit/logistics/nl2sql/test_candidate_sql_gate.py
+new file mode 100644
+index 0000000..2d8d0cd
+--- /dev/null
++++ b/tests/unit/logistics/nl2sql/test_candidate_sql_gate.py
+@@ -0,0 +1,151 @@
++from __future__ import annotations
++
++import pytest
++
++from backend.app.domains.logistics.services.nl2sql.candidate_sql_gate import (
++    LogisticsCandidateSqlGate,
++    check_logistics_candidate_sql,
++)
++
++
++def test_candidate_sql_gate_allows_simple_select_with_limit() -> None:
++    """candidate SQL gate 应允许单条简单 SELECT + LIMIT 进入 shadow 后续分析。"""
++
++    result = check_logistics_candidate_sql("SELECT biz_year FROM dws_logistics_detail_union LIMIT 20")
++
++    assert result.allowed is True
++    assert result.rejected is False
++    assert result.reason_code == "allowed"
++    assert result.sanitized_reason == "candidate_sql_allowed"
++    assert result.repair_info is None
++
++
++@pytest.mark.parametrize(
++    ("sql", "expected_code"),
++    [
++        ("", "empty_sql"),
++        ("SELECT biz_year FROM dws_logistics_detail_union", "missing_limit"),
++        ("SELECT biz_year FROM dws_logistics_detail_union LIMIT 10; DROP TABLE sys_user", "multi_statement"),
++        ("SELECT biz_year FROM dws_logistics_detail_union -- bypass\n LIMIT 10", "comment_forbidden"),
++        ("SELECT biz_year FROM dws_logistics_detail_union /* bypass */ LIMIT 10", "comment_forbidden"),
++        ("UPDATE dws_logistics_detail_union SET biz_year = 2026 LIMIT 1", "write_or_ddl_forbidden"),
++    ],
++)
++def test_candidate_sql_gate_rejects_basic_fail_closed_shapes(sql: str, expected_code: str) -> None:
++    """空 SQL、缺 LIMIT、多语句、注释和非 SELECT 必须 fail-closed。"""
++
++    result = LogisticsCandidateSqlGate().check(sql)
++
++    assert result.allowed is False
++    assert result.rejected is True
++    assert result.reason_code == expected_code
++    assert result.sanitized_reason.startswith("candidate_sql_rejected:")
++
++
++@pytest.mark.parametrize(
++    ("sql", "expected_code"),
++    [
++        ("SELECT biz_year FROM dws_logistics_detail_union UNION SELECT password FROM sys_user LIMIT 10", "union_forbidden"),
++        ("SELECT biz_year FROM dws_logistics_detail_union INTO OUTFILE '/tmp/leak.csv' LIMIT 10", "into_outfile_forbidden"),
++        ("SELECT LOAD_FILE('/etc/passwd') FROM dws_logistics_detail_union LIMIT 10", "load_file_forbidden"),
++        ("SELECT SLEEP(1) FROM dws_logistics_detail_union LIMIT 10", "sleep_forbidden"),
++        ("SELECT BENCHMARK(100000, SHA1('x')) FROM dws_logistics_detail_union LIMIT 10", "benchmark_forbidden"),
++        ("SELECT biz_year FROM dws_logistics_detail_union LIMIT 10 FOR UPDATE", "for_update_forbidden"),
++        ("LOCK TABLES dws_logistics_detail_union READ", "lock_forbidden"),
++        ("START TRANSACTION", "transaction_forbidden"),
++    ],
++)
++def test_candidate_sql_gate_rejects_high_risk_tokens(sql: str, expected_code: str) -> None:
++    """UNION、文件/延迟函数、FOR UPDATE、LOCK、事务等高风险 token 必须拒绝。"""
++
++    result = check_logistics_candidate_sql(sql)
++
++    assert result.allowed is False
++    assert result.reason_code == expected_code
++
++
++def test_candidate_sql_gate_rejects_limit_above_max_with_repair_info() -> None:
++    """LIMIT 超过上限时 M10-A 先拒绝，并给出确定性修复提示，不自动下调。"""
++
++    result = LogisticsCandidateSqlGate(max_limit=500).check(
++        "SELECT biz_year FROM dws_logistics_detail_union LIMIT 9999"
++    )
++
++    assert result.allowed is False
++    assert result.reason_code == "limit_out_of_range"
++    assert result.repair_info == {"suggested_action": "lower_limit", "max_limit": 500}
++
++
++@pytest.mark.parametrize(
++    "sql",
++    [
++        "SELECT FROM dws_logistics_detail_union LIMIT 1",
++        "SELECT biz_year FROM LIMIT 10",
++        "SELECT biz_year FROM dws_logistics_detail_union WHERE biz_year = 2025 LIMIT 10 OFFSET 5",
++    ],
++)
++def test_candidate_sql_gate_rejects_structure_uncertain_selects(sql: str) -> None:
++    """无解析器时，畸形 SELECT 或非受控 LIMIT 变体必须按结构不确定拒绝。"""
++
++    result = check_logistics_candidate_sql(sql)
++
++    assert result.allowed is False
++    assert result.reason_code == "structure_uncertain"
++
++
++def test_candidate_sql_gate_rejects_dml_keyword_inside_select_candidate() -> None:
++    """SELECT 形态中夹带 DML 关键字也必须 fail-closed，不能只看开头是否 SELECT。"""
++
++    result = check_logistics_candidate_sql(
++        "SELECT biz_year FROM dws_logistics_detail_union UPDATE sys_user SET biz_year = 2026 LIMIT 1"
++    )
++
++    assert result.allowed is False
++    assert result.reason_code == "write_or_ddl_forbidden"
++
++
++@pytest.mark.parametrize(
++    ("sql", "expected_code"),
++    [
++        ("SELECT biz_year INTO @x FROM dws_logistics_detail_union LIMIT 1", "into_forbidden"),
++        ("SELECT GET_LOCK('nl2sql', 1) FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
++        ("SELECT RELEASE_LOCK('nl2sql') FROM dws_logistics_detail_union LIMIT 1", "lock_forbidden"),
++        ("SELECT biz_year FROM dws_logistics_detail_union RANDOM_GARBAGE LIMIT 20", "structure_uncertain"),
++    ],
++)
++def test_candidate_sql_gate_rejects_reviewer_found_unsafe_select_variants(
++    sql: str,
++    expected_code: str,
++) -> None:
++    """审查发现的 SELECT INTO、副作用锁函数和未知子句也必须 fail-closed。"""
++
++    result = check_logistics_candidate_sql(sql)
++
++    assert result.allowed is False
++    assert result.reason_code == expected_code
++
++
++def test_candidate_sql_gate_returns_structured_rejection_for_extreme_limit_digits() -> None:
++    """超长 LIMIT 数字不能冒泡异常，必须返回结构化拒绝结果。"""
++
++    result = check_logistics_candidate_sql(
++        "SELECT biz_year FROM dws_logistics_detail_union LIMIT " + "9" * 5000
++    )
++
++    assert result.allowed is False
++    assert result.reason_code == "limit_out_of_range"
++
++
++def test_candidate_sql_gate_reason_does_not_echo_full_sql_or_sensitive_values() -> None:
++    """危险输入的可见 reason 必须脱敏，不能回显完整 SQL 或敏感值。"""
++
++    sql = "SELECT LOAD_FILE('/etc/passwd') AS api_key FROM sys_user WHERE credential_value = 'sensitive-example' LIMIT 10"
++
++    result = check_logistics_candidate_sql(sql)
++
++    assert result.allowed is False
++    assert result.reason_code == "load_file_forbidden"
++    assert sql not in result.sanitized_reason
++    assert "/etc/passwd" not in result.sanitized_reason
++    assert "sensitive-example" not in result.sanitized_reason
++    assert "sys_user" not in result.sanitized_reason

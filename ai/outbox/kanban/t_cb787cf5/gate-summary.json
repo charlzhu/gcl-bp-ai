@@ -1,0 +1,106 @@
+{
+  "task_id": "t_cb787cf5",
+  "title": "M10-A: logistics NL2SQL candidate SQL safety gate minimal TDD slice",
+  "branch": "feature/nl2sql-m10a-candidate-sql-gate",
+  "base_head": "f24d39ae318cea9af081aa05b3edfdcdcf46ef33",
+  "scope": "shadow_only_candidate_sql_gate",
+  "changed_files": [
+    "backend/app/domains/logistics/services/nl2sql/candidate_sql_gate.py",
+    "backend/app/domains/logistics/services/nl2sql/__init__.py",
+    "tests/unit/logistics/nl2sql/test_candidate_sql_gate.py",
+    "ai/outbox/kanban/t_cb787cf5/*"
+  ],
+  "red_tests": [
+    {
+      "artifact": "ai/outbox/kanban/t_cb787cf5/red-test.log",
+      "expected_failure": true,
+      "summary": "initial candidate_sql_gate import failed before implementation"
+    },
+    {
+      "artifact": "ai/outbox/kanban/t_cb787cf5/review-fix2-red.log",
+      "expected_failure": true,
+      "summary": "reviewer blocker regressions failed before fix: SELECT INTO, advisory lock functions, unknown body, extreme LIMIT digits"
+    }
+  ],
+  "verification": {
+    "green_focused": {
+      "command": "PY -m pytest tests/unit/logistics/nl2sql/test_candidate_sql_gate.py tests/unit/logistics/nl2sql/test_sql_safety.py -q",
+      "passed": true,
+      "tests_passed": 56
+    },
+    "full_focused": {
+      "command": "PY -m pytest tests/unit/logistics/nl2sql -q",
+      "passed": true,
+      "tests_passed": 216,
+      "warnings": 9,
+      "warning_note": "third-party deprecation warnings from pymilvus/pkg_resources/google protobuf"
+    },
+    "compileall": {
+      "command": "PY -m compileall backend/app/domains/logistics/services/nl2sql -q",
+      "passed": true
+    },
+    "diff_check": {
+      "command": "git diff --check",
+      "passed": true
+    },
+    "static_scan": {
+      "passed": true,
+      "checks": [
+        "hardcoded secret assignment",
+        "raw SQL direct execution",
+        "shell injection or dangerous eval",
+        "unsafe deserialization",
+        "main QA route takeover"
+      ]
+    },
+    "independent_review": {
+      "passed": true,
+      "security_concerns": [],
+      "logic_errors": [],
+      "suggestions": [
+        "later executable-chain slices should add parser and logistics table/field allow-list checks"
+      ]
+    }
+  },
+  "gate_behavior": {
+    "allows": [
+      "simple single SELECT/FROM/LIMIT with numeric LIMIT within max_limit"
+    ],
+    "rejects": [
+      "empty SQL",
+      "missing LIMIT",
+      "multi-statement semicolon",
+      "comments",
+      "non-SELECT and DDL/DML/transaction tokens",
+      "UNION",
+      "INTO OUTFILE / INTO DUMPFILE / generic INTO",
+      "LOAD_FILE / SLEEP / BENCHMARK",
+      "GET_LOCK / RELEASE_LOCK / IS_FREE_LOCK / IS_USED_LOCK",
+      "FOR UPDATE / LOCK",
+      "structure-uncertain SELECT shapes and unparsed clauses",
+      "LIMIT outside configured range or with extreme digit count"
+    ],
+    "executes_sql": false,
+    "connected_to_formal_qa_chain": false,
+    "reason_echoes_raw_sql": false
+  },
+  "git_hygiene": {
+    "staged_files": [],
+    "committed": false,
+    "pushed": false,
+    "deployed": false,
+    "non_task_tracked_dirty_after_cleanup": false
+  },
+  "artifacts": [
+    "ai/outbox/kanban/t_cb787cf5/preflight.md",
+    "ai/outbox/kanban/t_cb787cf5/implementation-plan.md",
+    "ai/outbox/kanban/t_cb787cf5/red-test.log",
+    "ai/outbox/kanban/t_cb787cf5/review-fix2-red.log",
+    "ai/outbox/kanban/t_cb787cf5/test.log",
+    "ai/outbox/kanban/t_cb787cf5/compile-static-scan.log",
+    "ai/outbox/kanban/t_cb787cf5/diff.patch",
+    "ai/outbox/kanban/t_cb787cf5/review.md",
+    "ai/outbox/kanban/t_cb787cf5/final-acceptance.md",
+    "ai/outbox/kanban/t_cb787cf5/gate-summary.json"
+  ]
+}
