@@ -21,6 +21,11 @@ from backend.app.domains.logistics.services.llm_clarification_assist_service imp
 from backend.app.domains.logistics.services.llm_answer_presentation_service import LogisticsLlmAnswerPresentationService
 from backend.app.domains.logistics.services.llm_unsupported_assist_service import LogisticsLlmUnsupportedAssistService
 from backend.app.domains.logistics.services.llm_understanding_guardrail_service import LogisticsLlmUnderstandingGuardrailService
+from backend.app.domains.logistics.services.nl2sql.evaluation_log import redact_evaluation_text
+from backend.app.domains.logistics.services.nl2sql.live_shadow_adapter import (
+    LogisticsNl2SqlLiveShadowAdapter,
+    LogisticsNl2SqlLiveShadowSummary,
+)
 from backend.app.domains.logistics.schemas.llm_understanding import (
     LogisticsLlmGuardrailDecision,
     LogisticsLlmUnderstandingResult,
@@ -51,7 +56,24 @@ class LogisticsDataQaService:
         clarification_assist_service: LogisticsLlmClarificationAssistService | None = None,
         unsupported_assist_service: LogisticsLlmUnsupportedAssistService | None = None,
         answer_presentation_service: LogisticsLlmAnswerPresentationService | None = None,
+        nl2sql_live_shadow_adapter: LogisticsNl2SqlLiveShadowAdapter | None = None,
     ) -> None:
+        """初始化物流数据问答服务。
+
+        参数：
+            db: 当前数据库会话。
+            repository: 物流问答仓储，测试可注入替身。
+            planner: 确定性 planner，测试可注入替身。
+            query_log_repository: 查询历史仓储。
+            guardrail_service: LLM 理解 Guardrail 服务。
+            clarification_assist_service: 追问表达辅助服务。
+            unsupported_assist_service: 拒答表达辅助服务。
+            answer_presentation_service: 用户可见答案表达服务。
+            nl2sql_live_shadow_adapter: M10-C NL2SQL 正式 QA 旁路 shadow adapter，默认关闭。
+        返回：
+            无返回值。
+        """
+
         self.db = db
         self.repository = repository or LogisticsDataQaRepository(db)
         historical_carrier_candidate_provider = getattr(self.repository, "list_historical_carrier_names", None)
@@ -66,6 +88,7 @@ class LogisticsDataQaService:
         self.unsupported_assist_service = unsupported_assist_service or LogisticsLlmUnsupportedAssistService()
         self.answer_presentation_service = answer_presentation_service or LogisticsLlmAnswerPresentationService()
         self.query_plan_shadow_builder = QueryPlanningV2ShadowSnapshotBuilder()
+        self.nl2sql_live_shadow_adapter = nl2sql_live_shadow_adapter or LogisticsNl2SqlLiveShadowAdapter()
 
     def query(
         self,
@@ -499,6 +522,42 @@ class LogisticsDataQaService:
             "llm_confidence": decision.llm_confidence,
         }
 
+    def _build_nl2sql_live_shadow_audit(
+        self,
+        *,
+        question: str,
+        trace_id: str | None,
+        result: LogisticsDataQaResult,
+    ) -> dict[str, Any] | None:
+        """构建 M10-C NL2SQL live shadow 服务端审计摘要。
+
+        参数：
+            question: 当前正式物流 QA 原始问题。
+            trace_id: 当前请求追踪号。
+            result: 已生成的正式 QA 结果。
+        返回：
+            脱敏后的 shadow 摘要字典；adapter 异常时返回受控错误摘要。
+        业务逻辑：
+            该摘要只写入服务端历史快照，不挂到 `LogisticsDataQaResult`，因此不会改变用户可见回答。
+        """
+
+        try:
+            return self.nl2sql_live_shadow_adapter.run_shadow(
+                question=question,
+                trace_id=trace_id,
+                formal_result=result,
+            ).model_dump(mode="json")
+        except Exception as exc:  # noqa: BLE001 - 旁路失败不得影响正式问答和历史主记录写入。
+            logger.warning("build nl2sql live shadow audit failed: %s", redact_evaluation_text(str(exc)))
+            return LogisticsNl2SqlLiveShadowSummary(
+                enabled=False,
+                status="error",
+                stage="adapter",
+                error_codes=["m10c_live_shadow_audit_error"],
+                error_message="shadow audit failed",
+                trace_id=trace_id,
+            ).model_dump(mode="json")
+
     def _write_history_snapshot(
         self,
         *,
@@ -522,27 +581,35 @@ class LogisticsDataQaService:
             query_plan_v2_comparison = (
                 query_plan_v2_shadow.get("comparison") if isinstance(query_plan_v2_shadow.get("comparison"), dict) else {}
             )
+            nl2sql_live_shadow_summary = self._build_nl2sql_live_shadow_audit(
+                question=question,
+                trace_id=trace_id,
+                result=result,
+            )
+            response_meta = {
+                "question": question,
+                "domain": "logistics",
+                "mode": "data_qa",
+                "metric_type": result.query_plan.query_key or (result.query_plan.metrics[0] if result.query_plan.metrics else "data_qa"),
+                "source_scope": "logistics_ai",
+                "status": result.status.model_dump() if result.status else {},
+                "trace_ready": bool(trace_id),
+                "result_count": len(result.result_table.rows),
+                "guardrail": guardrail_decision.model_dump(mode="json") if guardrail_decision else None,
+                "query_plan_v2_strategy": query_plan_v2_shadow.get("strategy"),
+                "query_plan_v2_query_key": query_plan_v2_shadow.get("query_key"),
+                "query_plan_v2_shadow_ready": True,
+                "query_plan_v2_compare_matched": query_plan_v2_comparison.get("matched"),
+                "query_plan_v2_formal_query_key": query_plan_v2_comparison.get("formal_query_key"),
+                "query_plan_v2_shadow_query_key": query_plan_v2_comparison.get("shadow_query_key"),
+                "query_plan_v2_risk_tags": list(query_plan_v2_comparison.get("risk_tags") or []),
+            }
+            if nl2sql_live_shadow_summary is not None:
+                response_meta["nl2sql_live_shadow"] = nl2sql_live_shadow_summary
             payload_snapshot = {
                 "question": question,
                 "request_payload": {"question": question},
-                "response_meta": {
-                    "question": question,
-                    "domain": "logistics",
-                    "mode": "data_qa",
-                    "metric_type": result.query_plan.query_key or (result.query_plan.metrics[0] if result.query_plan.metrics else "data_qa"),
-                    "source_scope": "logistics_ai",
-                    "status": result.status.model_dump() if result.status else {},
-                    "trace_ready": bool(trace_id),
-                    "result_count": len(result.result_table.rows),
-                    "guardrail": guardrail_decision.model_dump(mode="json") if guardrail_decision else None,
-                    "query_plan_v2_strategy": query_plan_v2_shadow.get("strategy"),
-                    "query_plan_v2_query_key": query_plan_v2_shadow.get("query_key"),
-                    "query_plan_v2_shadow_ready": True,
-                    "query_plan_v2_compare_matched": query_plan_v2_comparison.get("matched"),
-                    "query_plan_v2_formal_query_key": query_plan_v2_comparison.get("formal_query_key"),
-                    "query_plan_v2_shadow_query_key": query_plan_v2_comparison.get("shadow_query_key"),
-                    "query_plan_v2_risk_tags": list(query_plan_v2_comparison.get("risk_tags") or []),
-                },
+                "response_meta": response_meta,
                 "query_plan_v2_shadow": query_plan_v2_shadow,
                 "query_result": query_result_snapshot,
             }
