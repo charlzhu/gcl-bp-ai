@@ -1,0 +1,29 @@
+{
+  "passed": false,
+  "findings": [
+    {
+      "rule": "hardcoded_secret_assignment",
+      "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py",
+      "line": 14473,
+      "text": "            \"select * from table where token='abc123'\","
+    },
+    {
+      "rule": "hardcoded_secret_assignment",
+      "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py",
+      "line": 14477,
+      "text": "            \"secret_key='abc123'\","
+    },
+    {
+      "rule": "hardcoded_secret_assignment",
+      "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py",
+      "line": 14492,
+      "text": "    assert \"secret_key='abc123'\" not in rendered"
+    }
+  ],
+  "diff_path": "ai/outbox/kanban/t_7528be89/diff.patch",
+  "artifact_paths": [
+    "ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-records.jsonl",
+    "ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-report.md"
+  ],
+  "scope": "added source/script/test lines plus M5/M5-6 shadow artifacts"
+}

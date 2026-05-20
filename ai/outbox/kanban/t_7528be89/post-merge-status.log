@@ -1,0 +1,17 @@
+## after merge target branch/status
+## hermes/hermes-9fa1e059
+?? ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-records.jsonl
+?? ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-report.md
+?? ai/outbox/kanban/t_7528be89/revision-summary.txt
+?? ai/outbox/kanban/t_7528be89/source-diff.name-status
+?? ai/outbox/kanban/t_7528be89/source-diff.patch
+?? ai/outbox/kanban/t_7528be89/source-diff.stat
+## after merge head
+ad31f3e0 (HEAD -> hermes/hermes-9fa1e059, feature/isp-m5-6-shadow-expansion) [verified] 扩展产销存M5-6影子对比样例
+4a219080 [verified] 收口产销存M5影子对比验收材料
+2ddf0fd7 fix: 补齐产销存SQLPlan内部日志标识脱敏
+2452a061 feat: 增加产销存 SQLPlan 白名单与安全门禁
+f24d39ae (hermes/hermes-b7037318, backup/agent-bp-main-after-feature-hermes-merge-before-delete-20260519-215003) Merge branch 'feature/isp-m5-inventory-nl2sql-integration' into agent/bp-main
+56ace558 chore(isp): 补充产销存语义目录 review 结果
+8588cbd1 (backup/agent-bp-main-after-feature-hermes-merge-before-delete-20260519-214843) Merge branch 'feature/nl2sql-m9-1-yearly-mw-hardening-v2' into agent/bp-main
+d5a769b1 chore(nl2sql): 保留 M9 shadow 验收材料

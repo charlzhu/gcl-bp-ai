@@ -1,0 +1,5 @@
+ad31f3e0 [verified] 扩展产销存M5-6影子对比样例
+4a219080 [verified] 收口产销存M5影子对比验收材料
+2ddf0fd7 fix: 补齐产销存SQLPlan内部日志标识脱敏
+2452a061 feat: 增加产销存 SQLPlan 白名单与安全门禁
+f24d39ae Merge branch 'feature/isp-m5-inventory-nl2sql-integration' into agent/bp-main
