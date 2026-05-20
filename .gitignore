@@ -60,3 +60,4 @@ ai/tasks/done/*.md
 ai/tasks/rejected/*.md
 
 ~
+.worktrees/
