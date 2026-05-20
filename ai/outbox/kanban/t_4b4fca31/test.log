@@ -1,0 +1,452 @@
+
+===== branch =====
+$ git branch --show-current
+feature/isp-m5-6-shadow-expansion
+[exit_code] 0
+
+===== status =====
+$ git status --short --branch
+## feature/isp-m5-6-shadow-expansion
+ M backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+ M tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+?? ai/outbox/kanban/t_4b4fca31/
+[exit_code] 0
+
+===== focused-green =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py::test_m5_6_shadow_default_samples_expand_to_business_boundary_suite -q
+.                                                                        [100%]
+1 passed in 1.24s
+[exit_code] 0
+
+===== regression-shadow-compare-tests =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py -q
+.............                                                            [100%]
+13 passed in 0.76s
+[exit_code] 0
+
+===== compile =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m py_compile backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+
+===== runner-all-samples =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python scripts/dev/run_inventory_sales_production_m5_shadow_compare.py --artifact-dir ai/outbox/kanban/t_4b4fca31
+{"by_status": {"matched": 20, "queryplan_clarification": 3, "queryplan_unsupported": 4, "sqlplan_candidate_unavailable": 1, "sqlplan_validation_failed": 3}, "expected_status_mismatch_count": 0, "fail_closed_count": 11, "formal_qa_executed": false, "live_db_executed": false, "matched_count": 20, "records_path": "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl", "report_path": "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md", "shadow_only": true, "total": 31, "version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1"}
+[exit_code] 0
+
+===== artifact-check =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/m5_6_artifact_check.py ai/outbox/kanban/t_4b4fca31
+ARTIFACT_CHECK_PASS total_records=31 by_status={'matched': 20, 'queryplan_unsupported': 4, 'queryplan_clarification': 3, 'sqlplan_validation_failed': 3, 'sqlplan_candidate_unavailable': 1}
+[exit_code] 0
+
+===== scoped-diff-stat =====
+$ git diff --stat -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+ .../m5_shadow_compare.py                           | 310 ++++++++++++++++++++-
+ ...inventory_sales_production_m5_shadow_compare.py |  86 +++++-
+ 2 files changed, 394 insertions(+), 2 deletions(-)
+[exit_code] 0
+
+===== static-scan-added-lines =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/m5_6_static_scan.py tmp/hermes/m5_6_scoped.diff
+STATIC_SCAN_PASS added_lines=394 findings=0
+[exit_code] 0
+
+===== diff-check =====
+$ git diff --check -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+\nALL_VERIFY_STEPS_PASSED
+
+===== full-acceptance-supplement-start =====
+reason: supplement task-required M2/M3/M4/M4-6, logistics, BOM/power and backend compileall gates after scoped M5-6 gate.
+
+===== inventory-sales-production-M2-M3-M4-M4-6-regression =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_inventory_sales_production_m2_fact_import.py tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py tests/unit/business_analysis/test_inventory_sales_production_m4_api_registration.py tests/unit/business_analysis/test_inventory_sales_production_m4_qa_service.py tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py tests/unit/business_analysis/test_inventory_sales_production_semantic_catalog.py tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py -q
+........................................................................ [ 84%]
+.............                                                            [100%]
+85 passed in 2.37s
+[exit_code] 0
+
+===== logistics-focused-regression =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py tests/business_acceptance/test_logistics_monthly_year_range.py tests/business_acceptance/test_logistics_field_scope_clarification.py -q
+......................                                                   [100%]
+22 passed in 0.32s
+[exit_code] 0
+
+===== plan-bom-power-focused-regression =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py tests/business_acceptance/test_plan_power_m5_qa_integration.py -q
+.....................                                                    [100%]
+21 passed in 2.22s
+[exit_code] 0
+
+===== backend-compileall =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m compileall backend/app
+Listing 'backend/app'...
+Listing 'backend/app/api'...
+Listing 'backend/app/api/v1'...
+Listing 'backend/app/api/v1/endpoints'...
+Listing 'backend/app/core'...
+Listing 'backend/app/db'...
+Listing 'backend/app/domains'...
+Listing 'backend/app/domains/business_analysis'...
+Listing 'backend/app/domains/business_analysis/api'...
+Listing 'backend/app/domains/business_analysis/api/endpoints'...
+Listing 'backend/app/domains/business_analysis/repositories'...
+Listing 'backend/app/domains/business_analysis/schemas'...
+Listing 'backend/app/domains/business_analysis/services'...
+Listing 'backend/app/domains/business_analysis/services/inventory_sales_production'...
+Listing 'backend/app/domains/logistics'...
+Listing 'backend/app/domains/logistics/api'...
+Listing 'backend/app/domains/logistics/api/endpoints'...
+Listing 'backend/app/domains/logistics/config'...
+Listing 'backend/app/domains/logistics/config/domains'...
+Listing 'backend/app/domains/logistics/config/domains/business_analysis'...
+Listing 'backend/app/domains/logistics/config/domains/logistics'...
+Listing 'backend/app/domains/logistics/config/domains/material_management'...
+Listing 'backend/app/domains/logistics/config/domains/plan_bom'...
+Listing 'backend/app/domains/logistics/config/global'...
+Listing 'backend/app/domains/logistics/config/nl2sql_catalog'...
+Listing 'backend/app/domains/logistics/config/sql_templates'...
+Listing 'backend/app/domains/logistics/config/sql_templates/logistics'...
+Listing 'backend/app/domains/logistics/etl'...
+Listing 'backend/app/domains/logistics/repositories'...
+Listing 'backend/app/domains/logistics/schemas'...
+Listing 'backend/app/domains/logistics/services'...
+Listing 'backend/app/domains/logistics/services/nl2sql'...
+Listing 'backend/app/domains/logistics/services/query_planner_v2'...
+Listing 'backend/app/domains/material_management'...
+Listing 'backend/app/domains/plan_bom'...
+Listing 'backend/app/domains/plan_bom/api'...
+Listing 'backend/app/domains/plan_bom/api/endpoints'...
+Listing 'backend/app/domains/plan_bom/config'...
+Listing 'backend/app/domains/plan_bom/repositories'...
+Listing 'backend/app/domains/plan_bom/schemas'...
+Listing 'backend/app/domains/plan_bom/services'...
+Listing 'backend/app/domains/query_planning'...
+Listing 'backend/app/domains/query_planning/api'...
+Listing 'backend/app/domains/query_planning/api/endpoints'...
+Listing 'backend/app/domains/query_planning/schemas'...
+Listing 'backend/app/domains/query_planning/services'...
+Listing 'backend/app/integrations'...
+Listing 'backend/app/llm'...
+Listing 'backend/app/middleware'...
+Listing 'backend/app/models'...
+Listing 'backend/app/repositories'...
+Listing 'backend/app/schemas'...
+Listing 'backend/app/services'...
+Listing 'backend/app/tasks'...
+Listing 'backend/app/utils'...
+Listing 'backend/app/vector'...
+[exit_code] 0
+
+===== post-supplement-diff-check =====
+$ git diff --check -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+FULL_ACCEPTANCE_SUPPLEMENT_PASSED
+
+
+===== independent-readonly-review-after-full-regression =====
+delegate_task independent reviewer verdict: passed=true; security_concerns=[]; logic_errors=[]; review_blockers=[]; shadow_only=true; live_db_executed=false; formal_qa_takeover=false; user_visible_technical_leakage=false; sensitive_or_period_boundary_leakage=false; impacts_logistics_plan_bom_power=false.
+
+===== staged-files-precommit =====
+$ git diff --cached --name-status
+A	ai/outbox/kanban/t_4b4fca31/diff.patch
+A	ai/outbox/kanban/t_4b4fca31/final-acceptance.md
+A	ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
+A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
+A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
+A	ai/outbox/kanban/t_4b4fca31/review-result.json
+A	ai/outbox/kanban/t_4b4fca31/review_bundle.md
+A	ai/outbox/kanban/t_4b4fca31/test.log
+M	backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+M	tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+
+===== cached-diff-check-precommit-logged =====
+$ git diff --cached --check
+ai/outbox/kanban/t_4b4fca31/diff.patch:12: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:13: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:28: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:39: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:40: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:304: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:305: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:343: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:361: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:378: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:379: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:444: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:447: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:448: trailing whitespace.
++
+ai/outbox/kanban/t_4b4fca31/diff.patch:472: trailing whitespace.
++
+
+===== cached-diff-check-whitespace-fix-note =====
+Earlier cached diff check failed only because diff.patch evidence contained blank added lines with trailing spaces; stripped trailing whitespace from diff.patch evidence, production source/test content unchanged.
+
+===== staged-files-precommit-after-diffpatch-whitespace-fix =====
+$ git diff --cached --name-status
+A	ai/outbox/kanban/t_4b4fca31/diff.patch
+A	ai/outbox/kanban/t_4b4fca31/final-acceptance.md
+A	ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
+A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
+A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
+A	ai/outbox/kanban/t_4b4fca31/review-result.json
+A	ai/outbox/kanban/t_4b4fca31/review_bundle.md
+A	ai/outbox/kanban/t_4b4fca31/test.log
+M	backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+M	tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+
+===== cached-diff-check-precommit-after-diffpatch-whitespace-fix =====
+$ git diff --cached --check
+ai/outbox/kanban/t_4b4fca31/test.log:166: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:168: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:170: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:172: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:174: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:176: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:178: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:180: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:182: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:184: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:186: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:188: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:190: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:192: trailing whitespace.
+++
+ai/outbox/kanban/t_4b4fca31/test.log:194: trailing whitespace.
+++
+
+===== m5-6r-final-rerun-start =====
+reason: rerun complete M5-6R closeout checklist before scoped verified commit.
+timestamp: 2026-05-20T10:55:30+08:00
+
+===== m5-6r-branch =====
+$ git branch --show-current
+feature/isp-m5-6-shadow-expansion
+[exit_code] 0
+
+===== m5-6r-status =====
+$ git status --short --branch
+## feature/isp-m5-6-shadow-expansion
+A  ai/outbox/kanban/t_4b4fca31/diff.patch
+AM ai/outbox/kanban/t_4b4fca31/final-acceptance.md
+A  ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
+A  ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
+A  ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
+A  ai/outbox/kanban/t_4b4fca31/review-result.json
+A  ai/outbox/kanban/t_4b4fca31/review_bundle.md
+AM ai/outbox/kanban/t_4b4fca31/test.log
+M  backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+M  tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+
+===== m5-m5-6-focused-shadow-compare =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py::test_m5_6_shadow_default_samples_expand_to_business_boundary_suite -q
+.                                                                        [100%]
+1 passed in 0.32s
+[exit_code] 0
+
+===== m5-m5-6-shadow-compare-full =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py -q
+.............                                                            [100%]
+13 passed in 0.75s
+[exit_code] 0
+
+===== inventory-sales-production-M2-M3-M4-M4-6-regression-rerun =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_inventory_sales_production_m2_fact_import.py tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py tests/unit/business_analysis/test_inventory_sales_production_m4_api_registration.py tests/unit/business_analysis/test_inventory_sales_production_m4_qa_service.py tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py tests/unit/business_analysis/test_inventory_sales_production_semantic_catalog.py tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py -q
+........................................................................ [ 84%]
+.............                                                            [100%]
+85 passed in 2.46s
+[exit_code] 0
+
+===== logistics-focused-regression-rerun =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py tests/business_acceptance/test_logistics_monthly_year_range.py tests/business_acceptance/test_logistics_field_scope_clarification.py -q
+......................                                                   [100%]
+22 passed in 0.35s
+[exit_code] 0
+
+===== plan-bom-power-focused-regression-rerun =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py tests/business_acceptance/test_plan_power_m5_qa_integration.py -q
+.....................                                                    [100%]
+21 passed in 1.86s
+[exit_code] 0
+
+===== backend-py-compile-rerun =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m py_compile backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+
+===== backend-compileall-rerun =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m compileall backend/app
+Listing 'backend/app'...
+Listing 'backend/app/api'...
+Listing 'backend/app/api/v1'...
+Listing 'backend/app/api/v1/endpoints'...
+Listing 'backend/app/core'...
+Listing 'backend/app/db'...
+Listing 'backend/app/domains'...
+Listing 'backend/app/domains/business_analysis'...
+Listing 'backend/app/domains/business_analysis/api'...
+Listing 'backend/app/domains/business_analysis/api/endpoints'...
+Listing 'backend/app/domains/business_analysis/repositories'...
+Listing 'backend/app/domains/business_analysis/schemas'...
+Listing 'backend/app/domains/business_analysis/services'...
+Listing 'backend/app/domains/business_analysis/services/inventory_sales_production'...
+Listing 'backend/app/domains/logistics'...
+Listing 'backend/app/domains/logistics/api'...
+Listing 'backend/app/domains/logistics/api/endpoints'...
+Listing 'backend/app/domains/logistics/config'...
+Listing 'backend/app/domains/logistics/config/domains'...
+Listing 'backend/app/domains/logistics/config/domains/business_analysis'...
+Listing 'backend/app/domains/logistics/config/domains/logistics'...
+Listing 'backend/app/domains/logistics/config/domains/material_management'...
+Listing 'backend/app/domains/logistics/config/domains/plan_bom'...
+Listing 'backend/app/domains/logistics/config/global'...
+Listing 'backend/app/domains/logistics/config/nl2sql_catalog'...
+Listing 'backend/app/domains/logistics/config/sql_templates'...
+Listing 'backend/app/domains/logistics/config/sql_templates/logistics'...
+Listing 'backend/app/domains/logistics/etl'...
+Listing 'backend/app/domains/logistics/repositories'...
+Listing 'backend/app/domains/logistics/schemas'...
+Listing 'backend/app/domains/logistics/services'...
+Listing 'backend/app/domains/logistics/services/nl2sql'...
+Listing 'backend/app/domains/logistics/services/query_planner_v2'...
+Listing 'backend/app/domains/material_management'...
+Listing 'backend/app/domains/plan_bom'...
+Listing 'backend/app/domains/plan_bom/api'...
+Listing 'backend/app/domains/plan_bom/api/endpoints'...
+Listing 'backend/app/domains/plan_bom/config'...
+Listing 'backend/app/domains/plan_bom/repositories'...
+Listing 'backend/app/domains/plan_bom/schemas'...
+Listing 'backend/app/domains/plan_bom/services'...
+Listing 'backend/app/domains/query_planning'...
+Listing 'backend/app/domains/query_planning/api'...
+Listing 'backend/app/domains/query_planning/api/endpoints'...
+Listing 'backend/app/domains/query_planning/schemas'...
+Listing 'backend/app/domains/query_planning/services'...
+Listing 'backend/app/integrations'...
+Listing 'backend/app/llm'...
+Listing 'backend/app/middleware'...
+Listing 'backend/app/models'...
+Listing 'backend/app/repositories'...
+Listing 'backend/app/schemas'...
+Listing 'backend/app/services'...
+Listing 'backend/app/tasks'...
+Listing 'backend/app/utils'...
+Listing 'backend/app/vector'...
+[exit_code] 0
+
+===== m5-6-shadow-runner-rerun =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python scripts/dev/run_inventory_sales_production_m5_shadow_compare.py --artifact-dir ai/outbox/kanban/t_4b4fca31
+{"by_status": {"matched": 20, "queryplan_clarification": 3, "queryplan_unsupported": 4, "sqlplan_candidate_unavailable": 1, "sqlplan_validation_failed": 3}, "expected_status_mismatch_count": 0, "fail_closed_count": 11, "formal_qa_executed": false, "live_db_executed": false, "matched_count": 20, "records_path": "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl", "report_path": "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md", "shadow_only": true, "total": 31, "version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1"}
+[exit_code] 0
+
+===== m5-6-artifact-check-rerun =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/m5_6_artifact_check.py ai/outbox/kanban/t_4b4fca31
+ARTIFACT_CHECK_PASS total_records=31 by_status={'matched': 20, 'queryplan_unsupported': 4, 'queryplan_clarification': 3, 'sqlplan_validation_failed': 3, 'sqlplan_candidate_unavailable': 1}
+[exit_code] 0
+
+===== m5-6r-source-diff-for-static-scan =====
+$ git diff HEAD -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py > tmp/hermes/m5_6r_source.diff
+[exit_code] 0
+
+===== static-scan-added-lines-rerun =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/m5_6_static_scan.py tmp/hermes/m5_6r_source.diff
+STATIC_SCAN_PASS added_lines=394 findings=0
+[exit_code] 0
+
+===== git-diff-check-head-rerun =====
+$ git diff --check HEAD -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+M5_6R_FINAL_RERUN_PASSED
+
+===== m5-6r-final-precommit-stage-check =====
+reason: final scoped staging and cached diff check before verified commit.
+timestamp: 2026-05-20T11:04:39+0800
+
+===== branch-before-final-stage =====
+$ git branch --show-current
+feature/isp-m5-6-shadow-expansion
+[exit_code] 0
+
+===== status-before-final-stage =====
+$ git status --short --branch
+## feature/isp-m5-6-shadow-expansion
+AM ai/outbox/kanban/t_4b4fca31/diff.patch
+AM ai/outbox/kanban/t_4b4fca31/final-acceptance.md
+A  ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
+A  ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
+A  ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
+A  ai/outbox/kanban/t_4b4fca31/review-result.json
+AM ai/outbox/kanban/t_4b4fca31/review_bundle.md
+AM ai/outbox/kanban/t_4b4fca31/test.log
+M  backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+M  tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+
+===== explicit-staging-allowed-scope =====
+$ git add -f -- <allowed M5-6 scoped files only>
+[exit_code] 0
+
+===== staged-files-final-precommit =====
+$ git diff --cached --name-status
+A	ai/outbox/kanban/t_4b4fca31/diff.patch
+A	ai/outbox/kanban/t_4b4fca31/final-acceptance.md
+A	ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
+A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
+A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
+A	ai/outbox/kanban/t_4b4fca31/review-result.json
+A	ai/outbox/kanban/t_4b4fca31/review_bundle.md
+A	ai/outbox/kanban/t_4b4fca31/test.log
+M	backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+M	tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+
+===== staged-scope-verification =====
+$ git diff --cached --name-only
+ai/outbox/kanban/t_4b4fca31/diff.patch
+ai/outbox/kanban/t_4b4fca31/final-acceptance.md
+ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
+ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
+ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
+ai/outbox/kanban/t_4b4fca31/review-result.json
+ai/outbox/kanban/t_4b4fca31/review_bundle.md
+ai/outbox/kanban/t_4b4fca31/test.log
+backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+allowed_scope_count=10
+bad_scope=[]
+forbidden=[]
+missing_expected=[]
+STAGED_SCOPE_PASS
+
+===== git-diff-cached-check-final-precommit =====
+$ git diff --cached --check
+[exit_code] 0

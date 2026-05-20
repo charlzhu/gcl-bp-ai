@@ -1,0 +1,1287 @@
+diff --git a/ai/outbox/kanban/t_4b4fca31/final-acceptance.md b/ai/outbox/kanban/t_4b4fca31/final-acceptance.md
+new file mode 100644
+index 00000000..23cb5fa2
+--- /dev/null
++++ b/ai/outbox/kanban/t_4b4fca31/final-acceptance.md
+@@ -0,0 +1,142 @@
++# t_4b4fca31 final acceptance
++
++## 结论
++
++M5-6 产销存 NL2SQL shadow 扩样与安全回归已完成。默认 shadow 样例从 M5-5 的 11 条扩展到 31 条，总体保持 shadow-only：未执行 live DB，未让 NL2SQL 正式接管用户可见 QA，未 push / merge / deploy。
++
++## 修改文件清单
++
++本次 scoped 修改/归档范围：
++
++- `backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py`
++- `tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py`
++- `ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md`
++- `ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl`
++- `ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md`
++- `ai/outbox/kanban/t_4b4fca31/test.log`
++- `ai/outbox/kanban/t_4b4fca31/diff.patch`
++- `ai/outbox/kanban/t_4b4fca31/review_bundle.md`
++- `ai/outbox/kanban/t_4b4fca31/review-result.json`
++- `ai/outbox/kanban/t_4b4fca31/final-acceptance.md`
++
++未修改/未提交范围：
++
++- 未修改 `scripts/dev/run_inventory_sales_production_m5_shadow_compare.py`。
++- 未修改物流、计划 BOM、功率预测主链路。
++- 未修改 `.env`、连接串、密钥、真实 host/账号。
++- 未提交 `tmp/hermes/**` 临时执行脚本。
++
++## 新增 shadow 样例覆盖说明
++
++默认样例总数：31。
++
++覆盖范围：
++
++- 产量、销量/发货量、库存/存货、寄存库存、预算达成率等核心指标。
++- 年度、季度、月度、YTD、已发布月份、未来/未发布月份等时间边界。
++- 对外销量/组件事业部剔除内部交易、发货量同义词、存货/库存同义词、中文季度等业务口径和同义表达。
++- 按型号、基地等维度拆分的安全 matched 场景。
++- fail-closed 场景：未来月份、暂不支持同比/环比、未知指标澄清、显式多年默认范围缺候选、直接无时间默认范围 guard、raw SQL/debug/internal candidate 拒绝。
++- 安全负例：持久化 artifact 不保留真实 SQL、原始问题、连接串、密钥、具体期间边界值。
++
++关键修复：第二轮独立 review 发现 SQLPlan 未发布月份错误码会把具体期间边界写入 artifact；已按 TDD 增加 RED 回归测试，并将持久化错误码清洗为 `sqlplan_unpublished_month_blocks_sql_direct::[PERIOD_BOUNDARY]`。
++
++## 测试方法与结果
++
++完整验收日志：`ai/outbox/kanban/t_4b4fca31/test.log`。
++
++已通过：
++
++- M5-6 focused GREEN：1 passed。
++- review-fix RED/GREEN：`test_m5_shadow_redacts_period_values_from_validation_error_codes` 修复前失败，修复后通过。
++- M5/M5-6 shadow compare regression：13 passed。
++- 产销存 M2/M3/M4/M4-6 regression：85 passed。
++- 物流 focused regression：22 passed。
++- 计划 BOM / 功率 focused regression：21 passed。
++- `py_compile`：m5_shadow_compare.py、runner、unit test 均通过。
++- backend compileall：通过。
++- M5-6 shadow runner：total=31，matched=20，fail_closed_count=11，expected_status_mismatch_count=0，shadow_only=true，formal_qa_executed=false，live_db_executed=false。
++- artifact-check：31 records，全部 shadow_only，formal_qa_executed=false，live_db_executed=false，未发现 forbidden SQL/credential fragments。
++- static scan：added_lines=394，findings=0。
++- `git diff --check`：通过。
++- `git diff --cached --check`：最终通过；中途仅因 `diff.patch`/`test.log` 证据文件中的历史失败输出含尾随空格失败，已只清理证据文件尾随空格，生产源码/测试逻辑未改变，并复跑 cached check 通过。
++- M5-6R 收口复跑：focused 1 passed、shadow compare 13 passed、产销存回归 85 passed、物流 22 passed、计划 BOM/功率 21 passed、py_compile/compileall/runner/artifact-check/static scan/diff-check 均通过。
++
++## Static scan 结果
++
++静态扫描结果：passed=true，findings=0。
++
++扫描重点覆盖新增 diff 行中的 hardcoded secret、shell injection、eval/exec、pickle、SQL format 注入等风险；同时 artifact-check 验证 JSONL/Markdown 不泄露真实 SQL、连接串、密钥、原始参数或具体期间边界值。
++
++## 独立 review 结果
++
++Review 结果文件：`ai/outbox/kanban/t_4b4fca31/review-result.json`。
++
++最终 verdict：
++
++- passed=true
++- security_concerns=[]
++- logic_errors=[]
++- suggestions=[]
++- shadow_only=true
++- live_db_executed=false
++- formal_qa_takeover=false
++- user_visible_technical_leakage=false
++- sensitive_or_period_boundary_leakage=false
++- impacts_logistics_plan_bom_power=false
++- review_blockers=[]
++
++Review 过程：
++
++1. 第一轮独立 review 通过，仅建议增强测试断言；已补强基线排序、全部 M5-6 新样例 ID、直接无时间默认范围 guard。
++2. 第二轮独立 review 发现 blocker：未发布月份错误码持久化具体期间边界；已按 TDD 修复并重新跑验收。
++3. 当前任务再次执行独立只读复审，结合完整回归日志后通过，无阻塞安全或逻辑问题。
++
++## Commit id
++
++提交前无法在同一提交内容中自包含最终 commit hash（hash 会随文件内容变化）。本文件随 `[verified] 扩展产销存M5-6影子对比样例` 提交归档；实际 commit id 在提交后由 `git rev-parse HEAD` 读取，并记录在本卡看板完成备注和最终回复中。
++
++## 当前 git status
++
++提交前最终 staged 范围仅限：
++
++```text
++A  ai/outbox/kanban/t_4b4fca31/diff.patch
++A  ai/outbox/kanban/t_4b4fca31/final-acceptance.md
++A  ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
++A  ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
++A  ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
++A  ai/outbox/kanban/t_4b4fca31/review-result.json
++A  ai/outbox/kanban/t_4b4fca31/review_bundle.md
++A  ai/outbox/kanban/t_4b4fca31/test.log
++M  backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
++M  tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++```
++
++未 staged/未提交禁止文件：无。
++
++## 风险点
++
++- 当前仍是 shadow-only 扩样与安全回归，不能把本轮结果误解为 live provider gate 已通过或正式用户可见 QA 已接管。
++- 直接无时间默认范围在本轮作为 fail-closed guard 记录，后续若要让产销存正式承接“无时间条件默认 2023-2026”，需要另开阶段卡做 live/provider 与用户可见链路接管。
++- M5-6 样例使用离线 SQLPlan fixture，不代表已执行真实数据库查询。
++
++## 当前仍未解决的问题
++
++- 未执行 live DB。
++- 未进入 live provider gate。
++- 未让 NL2SQL 正式接管产销存用户可见 QA。
++- 未实现采购/供应链/产供销范围，本轮保持经营分析域的产销存。
++
++## 对既有能力影响
++
++- 物流：focused regression 22 passed；未修改物流主链路。
++- 计划 BOM：计划 BOM / 功率 focused regression 合计 21 passed；未修改计划 BOM 主链路。
++- 功率预测：计划 BOM / 功率 focused regression 合计 21 passed；未修改功率预测主链路。
++
++## 阶段边界与发布动作
++
++- 已遵守 shadow-only 阶段边界。
++- 未执行 live DB。
++- 未让 NL2SQL 正式接管用户可见 QA。
++- 未 push / merge / deploy。
+diff --git a/ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md b/ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
+new file mode 100644
+index 00000000..9ac18638
+--- /dev/null
++++ b/ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
+@@ -0,0 +1,57 @@
++# M5-6 precheck：产销存 NL2SQL shadow 扩样与安全回归
++
++## 1. 当前仓库已完成能力判断
++
++- 当前 worktree 已在 `feature/isp-m5-6-shadow-expansion` 分支，基线 commit 为 `4a21908020eb82e6e5f57c07f12cf38129631c76`，与任务卡声明一致。
++- 父任务 `t_4131bbbb` 已完成 M5-5 收口并提交：产销存 M5 shadow-only QueryPlan / SQLPlan 离线对比能力、runner、focused tests、脱敏 JSONL/Markdown 证据已合入基线。
++- 当前 `build_default_inventory_sales_production_m5_shadow_samples()` 返回 11 条默认 shadow 样例；状态覆盖 `matched`、`queryplan_clarification`、`queryplan_unsupported`、`sqlplan_validation_failed`。
++- 当前 M5 shadow runner 已具备 `shadow_only=true`、`formal_qa_executed=false`、`live_db_executed=false` 的脱敏摘要输出能力。
++- 已有安全边界包括：不调用正式 QA 主链路、不执行 live DB、记录中不持久化原始问句/SQL/连接信息/参数明文、时间参数使用形状与不可逆指纹比较。
++- 已读取并遵守任务要求中的必读文档、项目协议、技术经理角色规范、company-code-builder 工作流、M5-5 验收材料及现有产销存测试/服务文件。
++
++## 2. 当前未完成能力判断
++
++- 默认 shadow 样例仍为 11 条，未达到本卡要求的至少 30 条总样例。
++- M5-6 尚未覆盖足够的同义问法、年度/月度/YTD/未来月份/无时间默认 2023-2026、预算达成率、对外销量、内部交易剔除等扩展样例。
++- fail-closed 场景还需要扩充：澄清、暂不支持、空结果或边界不安全、SQL/raw/debug/LLM/连接信息泄露负例。
++- 本卡所需 `test.log`、`static-scan`、`review-result.json`、`final-acceptance.md` 尚未生成。
++- 尚未执行本卡 focused/regression/compile/runner/static scan/diff check，也尚未执行独立 review 与本卡 commit。
++
++## 3. 本次任务与当前仓库状态一致性
++
++一致。当前仓库刚完成 M5 最小 shadow-only 对比与 M5-5 收口，正适合在不进入 live provider gate、不接管正式 QA 的前提下扩充离线样例与安全回归。当前分支、worktree、基线 commit、父卡结果均与任务卡声明一致，且当前工作区启动时无可见未提交 diff。
++
++## 4. 本轮允许修改范围
++
++仅限以下范围内增量修改或新增：
++
++1. `backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py`
++2. `scripts/dev/run_inventory_sales_production_m5_shadow_compare.py`
++3. `tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py`
++4. 必要时新增仅服务 M5-6 shadow 扩样的 fixture/helper/test 文件，路径必须在产销存或 test 相关目录下。
++5. `ai/outbox/kanban/t_4b4fca31/**`
++
++## 5. 本轮禁止修改范围
++
++- 不修改 main，不 push、merge、deploy。
++- 不执行 live DB，不读取或提交 `.env`、连接串、真实 host、账号、密钥或数据库凭据。
++- 不使用 `git add -A` 或 `git add .`；提交前只 staging 本卡允许范围。
++- 不修改正式 QA 用户可见接管逻辑，不让 NL2SQL 接管正式问答。
++- 不将采购、供应链或“产供销”纳入本轮；业务域仍限定为产销存 `inventory_sales_production`。
++- 不修改物流、计划 BOM、功率预测主链路。
++- 不提交 `frontend/tsconfig.tsbuildinfo` 等构建缓存差异。
++
++## 6. 为什么选择 shadow 扩样，而不是 live provider gate 或正式接管
++
++- 当前 M5 只完成 11 条最小 shadow 样例，样本面不足以证明 QueryPlan 与 SQLPlan/NL2SQL 候选在真实问法、边界问法和安全负例上的稳定性。
++- live provider gate 会引入真实 provider、召回、rerank、LLM 候选等更多变量；在离线样例不足时直接进入会放大定位难度和误接管风险。
++- 正式接管会影响用户可见 QA 主链路，当前阶段明确禁止。
++- shadow 扩样风险最低，能继续保护既有物流、计划 BOM、功率预测能力，同时为后续 live provider gate 提供更可靠的样例基线和 fail-closed 安全回归。
++
++## 7. 本轮执行计划
++
++1. TDD：先新增 M5-6 样例数量、覆盖范围、脱敏/安全负例、runner 输出的失败测试，并验证 RED。
++2. 实现：在 `m5_shadow_compare.py` 中增量补齐独立 SQLPlan fixture 与必要 helper，保持 QueryPlan/SQLPlan 独立、shadow-only、fail-closed 与脱敏。
++3. 验证：运行 focused M5/M5-6、产销存 M2/M3/M4/M4-6、物流 focused、计划 BOM/功率 focused、compileall、runner、static scan、diff check，并写入 `test.log`。
++4. Review：生成 scoped diff 与 review bundle，执行独立 review，修复 blocker 后复验。
++5. Commit/Handoff：只 staging 允许范围，运行 cached diff check，中文 `[verified]` commit，生成 final acceptance 并完成 Kanban handoff。
+diff --git a/ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl b/ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
+new file mode 100644
+index 00000000..3b32496a
+--- /dev/null
++++ b/ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
+@@ -0,0 +1,31 @@
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:b148fa11e9e0", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:b148fa11e9e0", "query_key": "ba_isp_metric_summary"}, "question_category": "sales_summary", "sample_id": "m4_6_sales_year_summary", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m4_6_sales_year_summary", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "quarter", "period_value_bucket": "quarter", "period_value_fingerprint": "dict:sha256:303f6bd508c4", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "quarter", "period_value_bucket": "quarter", "period_value_fingerprint": "dict:sha256:303f6bd508c4", "query_key": "ba_isp_metric_summary"}, "question_category": "sales_summary", "sample_id": "m4_6_sales_quarter_summary", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m4_6_sales_quarter_summary", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "ytd", "period_value_bucket": "year_to_date", "period_value_fingerprint": "dict:sha256:b68af2fb3081", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "ytd", "period_value_bucket": "year_to_date", "period_value_fingerprint": "dict:sha256:b68af2fb3081", "query_key": "ba_isp_metric_summary"}, "question_category": "sales_summary", "sample_id": "m4_6_sales_ytd_summary", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m4_6_sales_ytd_summary", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["ending_inventory_volume"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["ending_inventory_volume"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "question_category": "inventory_snapshot", "sample_id": "m4_6_inventory_snapshot", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m4_6_inventory_snapshot", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["consigned_inventory_volume"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["consigned_inventory_volume"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "question_category": "inventory_snapshot", "sample_id": "m4_6_consigned_inventory_snapshot", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m4_6_consigned_inventory_snapshot", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["production_actual_including_oem"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:861a1edb0eb4", "query_key": "ba_isp_budget_achievement"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["production_actual_including_oem"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:861a1edb0eb4", "query_key": "ba_isp_budget_achievement"}, "question_category": "budget_achievement", "sample_id": "m4_6_budget_achievement", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m4_6_budget_achievement", "warnings": []}
++{"candidate_signature": {"business_flags": {"explicit_invoice": "bool:true"}, "dimensions": [], "metrics": ["invoice_sales_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:33c0c46543cb", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {"explicit_invoice": "bool:true"}, "dimensions": [], "metrics": ["invoice_sales_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:33c0c46543cb", "query_key": "ba_isp_metric_summary"}, "question_category": "sales_summary", "sample_id": "m4_6_invoice_sales_summary", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m4_6_invoice_sales_summary", "warnings": []}
++{"candidate_signature": null, "error_codes": ["queryplan_unsupported"], "expected_status": "queryplan_unsupported", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": null, "question_category": "unsupported_guard", "sample_id": "m4_6_unsupported_yoy", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "queryplan_planning", "status": "queryplan_unsupported", "trace_id": "isp-m5-shadow-m4_6_unsupported_yoy", "warnings": []}
++{"candidate_signature": null, "error_codes": ["queryplan_unsupported"], "expected_status": "queryplan_unsupported", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": null, "question_category": "unsupported_guard", "sample_id": "m4_6_unsupported_month_range", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "queryplan_planning", "status": "queryplan_unsupported", "trace_id": "isp-m5-shadow-m4_6_unsupported_month_range", "warnings": []}
++{"candidate_signature": null, "error_codes": ["queryplan_clarification"], "expected_status": "queryplan_clarification", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": null, "question_category": "clarification_guard", "sample_id": "m4_6_clarification_inventory_turnover", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "queryplan_planning", "status": "queryplan_clarification", "trace_id": "isp-m5-shadow-m4_6_clarification_inventory_turnover", "warnings": []}
++{"candidate_signature": null, "error_codes": ["sqlplan_forbidden_key::plan.raw_sql", "sqlplan_forbidden_sql_string::plan.raw_sql", "sqlplan_schema_invalid::plan.raw_sql::extra_forbidden", "sqlplan_month_filter_operator_unsupported::like"], "expected_status": "sqlplan_validation_failed", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:b148fa11e9e0", "query_key": "ba_isp_metric_summary"}, "question_category": "redaction_guard", "sample_id": "m5_redaction_sql_payload_blocked", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "sqlplan_validation", "status": "sqlplan_validation_failed", "trace_id": "isp-m5-shadow-m5_redaction_sql_payload_blocked", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["production_actual_including_oem"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:861a1edb0eb4", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["production_actual_including_oem"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:861a1edb0eb4", "query_key": "ba_isp_metric_summary"}, "question_category": "production_summary", "sample_id": "m5_6_production_year_summary", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_production_year_summary", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:b148fa11e9e0", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:b148fa11e9e0", "query_key": "ba_isp_metric_summary"}, "question_category": "sales_summary", "sample_id": "m5_6_sales_external_default_scope", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_sales_external_default_scope", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:33c0c46543cb", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:33c0c46543cb", "query_key": "ba_isp_metric_summary"}, "question_category": "sales_summary", "sample_id": "m5_6_sales_year_synonym_shipment", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_sales_year_synonym_shipment", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "quarter", "period_value_bucket": "quarter", "period_value_fingerprint": "dict:sha256:303f6bd508c4", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "quarter", "period_value_bucket": "quarter", "period_value_fingerprint": "dict:sha256:303f6bd508c4", "query_key": "ba_isp_metric_summary"}, "question_category": "sales_summary", "sample_id": "m5_6_sales_chinese_quarter_synonym", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_sales_chinese_quarter_synonym", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "ytd", "period_value_bucket": "year_to_date", "period_value_fingerprint": "dict:sha256:b68af2fb3081", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "ytd", "period_value_bucket": "year_to_date", "period_value_fingerprint": "dict:sha256:b68af2fb3081", "query_key": "ba_isp_metric_summary"}, "question_category": "time_boundary_guard", "sample_id": "m5_6_sales_ytd_prefix_synonym", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_sales_ytd_prefix_synonym", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["ending_inventory_volume"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["ending_inventory_volume"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "question_category": "inventory_snapshot", "sample_id": "m5_6_inventory_stock_synonym", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_inventory_stock_synonym", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["consigned_inventory_volume"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["consigned_inventory_volume"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "question_category": "inventory_snapshot", "sample_id": "m5_6_consigned_inventory_synonym", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_consigned_inventory_synonym", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["production_actual_including_oem"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:fefded18540e", "query_key": "ba_isp_budget_achievement"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["production_actual_including_oem"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:fefded18540e", "query_key": "ba_isp_budget_achievement"}, "question_category": "budget_achievement", "sample_id": "m5_6_budget_achievement_current_year_boundary", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_budget_achievement_current_year_boundary", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": ["model_type"], "metrics": ["production_by_model_type"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:33c0c46543cb", "query_key": "ba_isp_metric_breakdown"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": ["model_type"], "metrics": ["production_by_model_type"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:33c0c46543cb", "query_key": "ba_isp_metric_breakdown"}, "question_category": "dimension_breakdown", "sample_id": "m5_6_production_by_model_type", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_production_by_model_type", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": ["base_name"], "metrics": ["ending_inventory_by_base"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": ["base_name"], "metrics": ["ending_inventory_by_base"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:43135970b7eb", "query_key": "ba_isp_inventory_snapshot"}, "question_category": "dimension_breakdown", "sample_id": "m5_6_inventory_by_base_period_end", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_inventory_by_base_period_end", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": ["base_name"], "metrics": ["shipment_by_base"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:b148fa11e9e0", "query_key": "ba_isp_metric_breakdown"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": ["base_name"], "metrics": ["shipment_by_base"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:b148fa11e9e0", "query_key": "ba_isp_metric_breakdown"}, "question_category": "dimension_breakdown", "sample_id": "m5_6_sales_by_base_breakdown", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_sales_by_base_breakdown", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": ["business_month"], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:fefded18540e", "query_key": "ba_isp_metric_trend"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": ["business_month"], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:fefded18540e", "query_key": "ba_isp_metric_trend"}, "question_category": "time_boundary_guard", "sample_id": "m5_6_sales_monthly_trend", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_sales_monthly_trend", "warnings": []}
++{"candidate_signature": {"business_flags": {}, "dimensions": [], "metrics": ["production_actual_including_oem"], "period_semantics": "ytd", "period_value_bucket": "year_to_date", "period_value_fingerprint": "dict:sha256:b68af2fb3081", "query_key": "ba_isp_metric_summary"}, "error_codes": [], "expected_status": "matched", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["production_actual_including_oem"], "period_semantics": "ytd", "period_value_bucket": "year_to_date", "period_value_fingerprint": "dict:sha256:b68af2fb3081", "query_key": "ba_isp_metric_summary"}, "question_category": "time_boundary_guard", "sample_id": "m5_6_production_ytd_boundary", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "shadow_compare", "status": "matched", "trace_id": "isp-m5-shadow-m5_6_production_ytd_boundary", "warnings": []}
++{"candidate_signature": null, "error_codes": ["queryplan_unsupported"], "expected_status": "queryplan_unsupported", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": null, "question_category": "time_boundary_guard", "sample_id": "m5_6_sales_future_month_blocked", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "queryplan_planning", "status": "queryplan_unsupported", "trace_id": "isp-m5-shadow-m5_6_sales_future_month_blocked", "warnings": []}
++{"candidate_signature": null, "error_codes": ["sqlplan_candidate_unavailable"], "expected_status": "sqlplan_candidate_unavailable", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:861a1edb0eb4", "query_key": "ba_isp_metric_summary"}, "question_category": "missing_time_scope_guard", "sample_id": "m5_6_missing_time_default_years_scope", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "sqlplan_candidate", "status": "sqlplan_candidate_unavailable", "trace_id": "isp-m5-shadow-m5_6_missing_time_default_years_scope", "warnings": []}
++{"candidate_signature": null, "error_codes": ["queryplan_clarification"], "expected_status": "queryplan_clarification", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": null, "question_category": "missing_time_scope_guard", "sample_id": "m5_6_missing_time_no_time_default_scope_guard", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "queryplan_planning", "status": "queryplan_clarification", "trace_id": "isp-m5-shadow-m5_6_missing_time_no_time_default_scope_guard", "warnings": []}
++{"candidate_signature": null, "error_codes": ["queryplan_unsupported"], "expected_status": "queryplan_unsupported", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": null, "question_category": "unsupported_guard", "sample_id": "m5_6_unsupported_mom", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "queryplan_planning", "status": "queryplan_unsupported", "trace_id": "isp-m5-shadow-m5_6_unsupported_mom", "warnings": []}
++{"candidate_signature": null, "error_codes": ["queryplan_clarification"], "expected_status": "queryplan_clarification", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": null, "question_category": "clarification_guard", "sample_id": "m5_6_clarification_unknown_metric", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "queryplan_planning", "status": "queryplan_clarification", "trace_id": "isp-m5-shadow-m5_6_clarification_unknown_metric", "warnings": []}
++{"candidate_signature": null, "error_codes": ["sqlplan_unpublished_month_blocks_sql_direct::[PERIOD_BOUNDARY]"], "expected_status": "sqlplan_validation_failed", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "month", "period_value_bucket": "single_month", "period_value_fingerprint": "dict:sha256:6589ddfb2129", "query_key": "ba_isp_metric_summary"}, "question_category": "time_boundary_guard", "sample_id": "m5_6_sqlplan_unpublished_month_guard", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "sqlplan_validation", "status": "sqlplan_validation_failed", "trace_id": "isp-m5-shadow-m5_6_sqlplan_unpublished_month_guard", "warnings": []}
++{"candidate_signature": null, "error_codes": ["sqlplan_forbidden_sql_string::plan.business_flags.redacted", "sqlplan_business_flag_not_allowed::redacted"], "expected_status": "sqlplan_validation_failed", "formal_qa_executed": false, "live_db_executed": false, "pipeline_version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1", "queryplan_signature": {"business_flags": {}, "dimensions": [], "metrics": ["shipment_volume"], "period_semantics": "year", "period_value_bucket": "full_year_or_published_year", "period_value_fingerprint": "dict:sha256:b148fa11e9e0", "query_key": "ba_isp_metric_summary"}, "question_category": "redaction_guard", "sample_id": "m5_6_sqlplan_internal_debug_key_guard", "schema_version": "business_analysis_inventory_sales_production_m5_shadow_record.v1", "shadow_only": true, "stage": "sqlplan_validation", "status": "sqlplan_validation_failed", "trace_id": "isp-m5-shadow-m5_6_sqlplan_internal_debug_key_guard", "warnings": []}
+diff --git a/ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md b/ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
+new file mode 100644
+index 00000000..4497288b
+--- /dev/null
++++ b/ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
+@@ -0,0 +1,50 @@
++# 产销存 M5 Shadow Compare Report
++
++version: business_analysis_inventory_sales_production_m5_shadow_compare.v1
++shadow_only: true
++formal_qa_executed: false
++live_db_executed: false
++total: 31
++matched_count: 20
++fail_closed_count: 11
++expected_status_mismatch_count: 0
++
++## by_status
++- matched: 20
++- queryplan_clarification: 3
++- queryplan_unsupported: 4
++- sqlplan_candidate_unavailable: 1
++- sqlplan_validation_failed: 3
++
++## sample_outcomes
++- m4_6_sales_year_summary: category=sales_summary; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m4_6_sales_quarter_summary: category=sales_summary; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m4_6_sales_ytd_summary: category=sales_summary; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m4_6_inventory_snapshot: category=inventory_snapshot; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m4_6_consigned_inventory_snapshot: category=inventory_snapshot; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m4_6_budget_achievement: category=budget_achievement; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m4_6_invoice_sales_summary: category=sales_summary; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m4_6_unsupported_yoy: category=unsupported_guard; status=queryplan_unsupported; expected=queryplan_unsupported; stage=queryplan_planning; errors=queryplan_unsupported
++- m4_6_unsupported_month_range: category=unsupported_guard; status=queryplan_unsupported; expected=queryplan_unsupported; stage=queryplan_planning; errors=queryplan_unsupported
++- m4_6_clarification_inventory_turnover: category=clarification_guard; status=queryplan_clarification; expected=queryplan_clarification; stage=queryplan_planning; errors=queryplan_clarification
++- m5_redaction_sql_payload_blocked: category=redaction_guard; status=sqlplan_validation_failed; expected=sqlplan_validation_failed; stage=sqlplan_validation; errors=sqlplan_forbidden_key::plan.raw_sql,sqlplan_forbidden_sql_string::plan.raw_sql,sqlplan_schema_invalid::plan.raw_sql::extra_forbidden,sqlplan_month_filter_operator_unsupported::like
++- m5_6_production_year_summary: category=production_summary; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_sales_external_default_scope: category=sales_summary; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_sales_year_synonym_shipment: category=sales_summary; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_sales_chinese_quarter_synonym: category=sales_summary; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_sales_ytd_prefix_synonym: category=time_boundary_guard; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_inventory_stock_synonym: category=inventory_snapshot; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_consigned_inventory_synonym: category=inventory_snapshot; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_budget_achievement_current_year_boundary: category=budget_achievement; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_production_by_model_type: category=dimension_breakdown; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_inventory_by_base_period_end: category=dimension_breakdown; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_sales_by_base_breakdown: category=dimension_breakdown; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_sales_monthly_trend: category=time_boundary_guard; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_production_ytd_boundary: category=time_boundary_guard; status=matched; expected=matched; stage=shadow_compare; errors=-
++- m5_6_sales_future_month_blocked: category=time_boundary_guard; status=queryplan_unsupported; expected=queryplan_unsupported; stage=queryplan_planning; errors=queryplan_unsupported
++- m5_6_missing_time_default_years_scope: category=missing_time_scope_guard; status=sqlplan_candidate_unavailable; expected=sqlplan_candidate_unavailable; stage=sqlplan_candidate; errors=sqlplan_candidate_unavailable
++- m5_6_missing_time_no_time_default_scope_guard: category=missing_time_scope_guard; status=queryplan_clarification; expected=queryplan_clarification; stage=queryplan_planning; errors=queryplan_clarification
++- m5_6_unsupported_mom: category=unsupported_guard; status=queryplan_unsupported; expected=queryplan_unsupported; stage=queryplan_planning; errors=queryplan_unsupported
++- m5_6_clarification_unknown_metric: category=clarification_guard; status=queryplan_clarification; expected=queryplan_clarification; stage=queryplan_planning; errors=queryplan_clarification
++- m5_6_sqlplan_unpublished_month_guard: category=time_boundary_guard; status=sqlplan_validation_failed; expected=sqlplan_validation_failed; stage=sqlplan_validation; errors=sqlplan_unpublished_month_blocks_sql_direct::[PERIOD_BOUNDARY]
++- m5_6_sqlplan_internal_debug_key_guard: category=redaction_guard; status=sqlplan_validation_failed; expected=sqlplan_validation_failed; stage=sqlplan_validation; errors=sqlplan_forbidden_sql_string::plan.business_flags.redacted,sqlplan_business_flag_not_allowed::redacted
+diff --git a/ai/outbox/kanban/t_4b4fca31/review-result.json b/ai/outbox/kanban/t_4b4fca31/review-result.json
+new file mode 100644
+index 00000000..10620ea8
+--- /dev/null
++++ b/ai/outbox/kanban/t_4b4fca31/review-result.json
+@@ -0,0 +1,50 @@
++{
++  "passed": true,
++  "review_type": "independent_readonly_final_review_after_full_regression",
++  "security_concerns": [],
++  "logic_errors": [],
++  "suggestions": [],
++  "summary": "只读复审通过：M5-6 扩样材料仍为 shadow-only，未见 live DB/正式 QA 接管/用户可见技术泄露/敏感或期间边界泄露，且回归日志覆盖产销存、物流、计划BOM与功率预测。",
++  "shadow_only": true,
++  "live_db_executed": false,
++  "formal_qa_takeover": false,
++  "formal_qa_executed": false,
++  "user_visible_technical_leakage": false,
++  "sensitive_or_period_boundary_leakage": false,
++  "impacts_logistics_plan_bom_power": false,
++  "review_blockers": [],
++  "reviewed_files": [
++    "ai/outbox/kanban/t_4b4fca31/review_bundle.md",
++    "ai/outbox/kanban/t_4b4fca31/diff.patch",
++    "ai/outbox/kanban/t_4b4fca31/test.log",
++    "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md",
++    "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl",
++    "backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py",
++    "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py"
++  ],
++  "checks": [
++    "31 sample shadow suite and original M4-6 baseline ordering",
++    "independent SQLPlan fixtures rather than QueryPlan reverse-generation",
++    "fail-closed guards for future/unpublished month, unsupported comparison, unknown metric, missing default-scope candidate, no-time guard, raw/debug/internal candidates",
++    "shadow_only=true with formal_qa_executed=false and live_db_executed=false",
++    "artifact redaction for SQL, raw question, credentials, connection strings, and concrete period boundary values",
++    "full regression log includes M5/M5-6 focused tests, inventory-sales-production M2/M3/M4/M4-6, logistics focused, plan BOM/power focused, backend compileall, runner, static scan, git diff check"
++  ],
++  "regression_results": {
++    "m5_m5_6_shadow_compare": "13 passed; focused M5-6 sample expansion 1 passed",
++    "inventory_sales_production_m2_m3_m4_m4_6": "85 passed",
++    "logistics_focused": "22 passed",
++    "plan_bom_power_focused": "21 passed",
++    "backend_compileall": "exit 0",
++    "m5_6_shadow_runner": "total=31 matched=20 fail_closed_count=11 expected_status_mismatch_count=0 shadow_only=true formal_qa_executed=false live_db_executed=false",
++    "static_scan": "passed=true findings=0",
++    "git_diff_check": "exit 0"
++  },
++  "blockers_fixed_before_final_pass": [
++    {
++      "round": 2,
++      "issue": "SQLPlan unpublished-month validation error codes persisted concrete period boundary values in JSONL/Markdown artifacts.",
++      "fix": "Added RED regression test and sanitized the error code to sqlplan_unpublished_month_blocks_sql_direct::[PERIOD_BOUNDARY] before persistence."
++    }
++  ]
++}
+diff --git a/ai/outbox/kanban/t_4b4fca31/review_bundle.md b/ai/outbox/kanban/t_4b4fca31/review_bundle.md
+new file mode 100644
+index 00000000..8e0bacb5
+--- /dev/null
++++ b/ai/outbox/kanban/t_4b4fca31/review_bundle.md
+@@ -0,0 +1,57 @@
++# M5-6 Shadow Expansion Review Bundle
++
++## Scope
++- Task: t_4b4fca31 / ISP M5-6 shadow expansion
++- Branch: feature/isp-m5-6-shadow-expansion
++- Goal: extend default inventory-sales-production M5 shadow samples to 30+ and verify shadow-only QueryPlan/SQLPlan compare remains fail-closed and redacted.
++
++## Scoped changed files
++- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
++- tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++- ai/outbox/kanban/t_4b4fca31/test.log
++- ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
++- ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
++- ai/outbox/kanban/t_4b4fca31/diff.patch
++- ai/outbox/kanban/t_4b4fca31/review_bundle.md
++- ai/outbox/kanban/t_4b4fca31/review-result.json
++- ai/outbox/kanban/t_4b4fca31/final-acceptance.md
++
++## Diff artifact
++- ai/outbox/kanban/t_4b4fca31/diff.patch
++
++## Verification summary
++All commands completed with exit code 0. Full details are in ai/outbox/kanban/t_4b4fca31/test.log.
++
++- focused GREEN: 1 passed
++- review-fix RED/GREEN: new period-boundary error-code redaction test failed before fix, then passed after sanitization
++- regression shadow compare tests: 13 passed
++- M2/M3/M4/M4-6 inventory-sales-production regression: 85 passed
++- logistics focused regression: 22 passed
++- plan BOM / power focused regression: 21 passed
++- compile: py_compile passed for m5_shadow_compare.py, runner, and unit test
++- backend compileall: passed
++- runner: total 31 shadow samples, matched 20, fail-closed 11, expected_status_mismatch_count 0
++- artifact-check: 31 records, all shadow_only, formal_qa_executed=false, live_db_executed=false, no forbidden raw SQL/credential fragments in persisted artifacts
++- static scan: added_lines=394, findings=0
++- diff-check: git diff --check passed
++- cached diff check: final pre-commit `git diff --cached --check` passed after evidence-only trailing whitespace cleanup
++
++## Shadow report summary
++- total: 31
++- matched_count: 20
++- fail_closed_count: 11
++- expected_status_mismatch_count: 0
++- by_status: matched=20, queryplan_clarification=3, queryplan_unsupported=4, sqlplan_candidate_unavailable=1, sqlplan_validation_failed=3
++- period-boundary SQLPlan validation error is persisted as sqlplan_unpublished_month_blocks_sql_direct::[PERIOD_BOUNDARY], not concrete year/month values.
++
++## Review feedback addressed before final review
++- First independent review passed and suggested stronger assertions: baseline ordering now locks first 11 samples, M5-6 expected IDs list all added samples, and a direct no-time default-scope guard sample was added.
++- Second independent review found a blocking artifact redaction issue: SQLPlan unpublished-month error codes persisted concrete period boundary values. A RED test was added, then `_dedupe_safe_texts` now redacts that error code to a safe `[PERIOD_BOUNDARY]` marker before JSONL/Markdown persistence; full verification was rerun.
++- Final independent review passed with `security_concerns=[]`, `logic_errors=[]`, `suggestions=[]`; verdict saved to `review-result.json`.
++
++## Review focus
++1. Check the M5-6 default sample expansion is business-relevant and reaches 30+ without replacing the original M4-6 baseline ordering.
++2. Check matched samples use independent SQLPlan fixtures, not QueryPlan reverse-generation.
++3. Check fail-closed guard samples are safe: future/unpublished month, unsupported comparison, unknown metric clarification, explicit multi-year default-scope missing candidate, direct no-time default-scope guard, and raw/debug/internal candidate rejection.
++4. Check persisted artifacts and summaries do not leak raw SQL text, concrete period boundary values, user questions, credentials, host/user/password/DSN, or connection strings.
++5. Check tests assert the new requirements and do not overfit to implementation internals beyond the established shadow fixture contract.
+diff --git a/ai/outbox/kanban/t_4b4fca31/test.log b/ai/outbox/kanban/t_4b4fca31/test.log
+new file mode 100644
+index 00000000..8b9332b5
+--- /dev/null
++++ b/ai/outbox/kanban/t_4b4fca31/test.log
+@@ -0,0 +1,387 @@
++
++===== branch =====
++$ git branch --show-current
++feature/isp-m5-6-shadow-expansion
++[exit_code] 0
++
++===== status =====
++$ git status --short --branch
++## feature/isp-m5-6-shadow-expansion
++ M backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
++ M tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++?? ai/outbox/kanban/t_4b4fca31/
++[exit_code] 0
++
++===== focused-green =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py::test_m5_6_shadow_default_samples_expand_to_business_boundary_suite -q
++.                                                                        [100%]
++1 passed in 1.24s
++[exit_code] 0
++
++===== regression-shadow-compare-tests =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py -q
++.............                                                            [100%]
++13 passed in 0.76s
++[exit_code] 0
++
++===== compile =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m py_compile backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++[exit_code] 0
++
++===== runner-all-samples =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python scripts/dev/run_inventory_sales_production_m5_shadow_compare.py --artifact-dir ai/outbox/kanban/t_4b4fca31
++{"by_status": {"matched": 20, "queryplan_clarification": 3, "queryplan_unsupported": 4, "sqlplan_candidate_unavailable": 1, "sqlplan_validation_failed": 3}, "expected_status_mismatch_count": 0, "fail_closed_count": 11, "formal_qa_executed": false, "live_db_executed": false, "matched_count": 20, "records_path": "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl", "report_path": "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md", "shadow_only": true, "total": 31, "version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1"}
++[exit_code] 0
++
++===== artifact-check =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/m5_6_artifact_check.py ai/outbox/kanban/t_4b4fca31
++ARTIFACT_CHECK_PASS total_records=31 by_status={'matched': 20, 'queryplan_unsupported': 4, 'queryplan_clarification': 3, 'sqlplan_validation_failed': 3, 'sqlplan_candidate_unavailable': 1}
++[exit_code] 0
++
++===== scoped-diff-stat =====
++$ git diff --stat -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++ .../m5_shadow_compare.py                           | 310 ++++++++++++++++++++-
++ ...inventory_sales_production_m5_shadow_compare.py |  86 +++++-
++ 2 files changed, 394 insertions(+), 2 deletions(-)
++[exit_code] 0
++
++===== static-scan-added-lines =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/m5_6_static_scan.py tmp/hermes/m5_6_scoped.diff
++STATIC_SCAN_PASS added_lines=394 findings=0
++[exit_code] 0
++
++===== diff-check =====
++$ git diff --check -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
++[exit_code] 0
++\nALL_VERIFY_STEPS_PASSED
++
++===== full-acceptance-supplement-start =====
++reason: supplement task-required M2/M3/M4/M4-6, logistics, BOM/power and backend compileall gates after scoped M5-6 gate.
++
++===== inventory-sales-production-M2-M3-M4-M4-6-regression =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_inventory_sales_production_m2_fact_import.py tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py tests/unit/business_analysis/test_inventory_sales_production_m4_api_registration.py tests/unit/business_analysis/test_inventory_sales_production_m4_qa_service.py tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py tests/unit/business_analysis/test_inventory_sales_production_semantic_catalog.py tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py -q
++........................................................................ [ 84%]
++.............                                                            [100%]
++85 passed in 2.37s
++[exit_code] 0
++
++===== logistics-focused-regression =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py tests/business_acceptance/test_logistics_monthly_year_range.py tests/business_acceptance/test_logistics_field_scope_clarification.py -q
++......................                                                   [100%]
++22 passed in 0.32s
++[exit_code] 0
++
++===== plan-bom-power-focused-regression =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py tests/business_acceptance/test_plan_power_m5_qa_integration.py -q
++.....................                                                    [100%]
++21 passed in 2.22s
++[exit_code] 0
++
++===== backend-compileall =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m compileall backend/app
++Listing 'backend/app'...
++Listing 'backend/app/api'...
++Listing 'backend/app/api/v1'...
++Listing 'backend/app/api/v1/endpoints'...
++Listing 'backend/app/core'...
++Listing 'backend/app/db'...
++Listing 'backend/app/domains'...
++Listing 'backend/app/domains/business_analysis'...
++Listing 'backend/app/domains/business_analysis/api'...
++Listing 'backend/app/domains/business_analysis/api/endpoints'...
++Listing 'backend/app/domains/business_analysis/repositories'...
++Listing 'backend/app/domains/business_analysis/schemas'...
++Listing 'backend/app/domains/business_analysis/services'...
++Listing 'backend/app/domains/business_analysis/services/inventory_sales_production'...
++Listing 'backend/app/domains/logistics'...
++Listing 'backend/app/domains/logistics/api'...
++Listing 'backend/app/domains/logistics/api/endpoints'...
++Listing 'backend/app/domains/logistics/config'...
++Listing 'backend/app/domains/logistics/config/domains'...
++Listing 'backend/app/domains/logistics/config/domains/business_analysis'...
++Listing 'backend/app/domains/logistics/config/domains/logistics'...
++Listing 'backend/app/domains/logistics/config/domains/material_management'...
++Listing 'backend/app/domains/logistics/config/domains/plan_bom'...
++Listing 'backend/app/domains/logistics/config/global'...
++Listing 'backend/app/domains/logistics/config/nl2sql_catalog'...
++Listing 'backend/app/domains/logistics/config/sql_templates'...
++Listing 'backend/app/domains/logistics/config/sql_templates/logistics'...
++Listing 'backend/app/domains/logistics/etl'...
++Listing 'backend/app/domains/logistics/repositories'...
++Listing 'backend/app/domains/logistics/schemas'...
++Listing 'backend/app/domains/logistics/services'...
++Listing 'backend/app/domains/logistics/services/nl2sql'...
++Listing 'backend/app/domains/logistics/services/query_planner_v2'...
++Listing 'backend/app/domains/material_management'...
++Listing 'backend/app/domains/plan_bom'...
++Listing 'backend/app/domains/plan_bom/api'...
++Listing 'backend/app/domains/plan_bom/api/endpoints'...
++Listing 'backend/app/domains/plan_bom/config'...
++Listing 'backend/app/domains/plan_bom/repositories'...
++Listing 'backend/app/domains/plan_bom/schemas'...
++Listing 'backend/app/domains/plan_bom/services'...
++Listing 'backend/app/domains/query_planning'...
++Listing 'backend/app/domains/query_planning/api'...
++Listing 'backend/app/domains/query_planning/api/endpoints'...
++Listing 'backend/app/domains/query_planning/schemas'...
++Listing 'backend/app/domains/query_planning/services'...
++Listing 'backend/app/integrations'...
++Listing 'backend/app/llm'...
++Listing 'backend/app/middleware'...
++Listing 'backend/app/models'...
++Listing 'backend/app/repositories'...
++Listing 'backend/app/schemas'...
++Listing 'backend/app/services'...
++Listing 'backend/app/tasks'...
++Listing 'backend/app/utils'...
++Listing 'backend/app/vector'...
++[exit_code] 0
++
++===== post-supplement-diff-check =====
++$ git diff --check -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
++[exit_code] 0
++FULL_ACCEPTANCE_SUPPLEMENT_PASSED
++
++
++===== independent-readonly-review-after-full-regression =====
++delegate_task independent reviewer verdict: passed=true; security_concerns=[]; logic_errors=[]; review_blockers=[]; shadow_only=true; live_db_executed=false; formal_qa_takeover=false; user_visible_technical_leakage=false; sensitive_or_period_boundary_leakage=false; impacts_logistics_plan_bom_power=false.
++
++===== staged-files-precommit =====
++$ git diff --cached --name-status
++A	ai/outbox/kanban/t_4b4fca31/diff.patch
++A	ai/outbox/kanban/t_4b4fca31/final-acceptance.md
++A	ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
++A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
++A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
++A	ai/outbox/kanban/t_4b4fca31/review-result.json
++A	ai/outbox/kanban/t_4b4fca31/review_bundle.md
++A	ai/outbox/kanban/t_4b4fca31/test.log
++M	backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
++M	tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++[exit_code] 0
++
++===== cached-diff-check-precommit-logged =====
++$ git diff --cached --check
++ai/outbox/kanban/t_4b4fca31/diff.patch:12: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:13: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:28: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:39: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:40: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:304: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:305: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:343: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:361: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:378: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:379: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:444: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:447: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:448: trailing whitespace.
+++
++ai/outbox/kanban/t_4b4fca31/diff.patch:472: trailing whitespace.
+++
++
++===== cached-diff-check-whitespace-fix-note =====
++Earlier cached diff check failed only because diff.patch evidence contained blank added lines with trailing spaces; stripped trailing whitespace from diff.patch evidence, production source/test content unchanged.
++
++===== staged-files-precommit-after-diffpatch-whitespace-fix =====
++$ git diff --cached --name-status
++A	ai/outbox/kanban/t_4b4fca31/diff.patch
++A	ai/outbox/kanban/t_4b4fca31/final-acceptance.md
++A	ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
++A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
++A	ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
++A	ai/outbox/kanban/t_4b4fca31/review-result.json
++A	ai/outbox/kanban/t_4b4fca31/review_bundle.md
++A	ai/outbox/kanban/t_4b4fca31/test.log
++M	backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
++M	tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++[exit_code] 0
++
++===== cached-diff-check-precommit-after-diffpatch-whitespace-fix =====
++$ git diff --cached --check
++ai/outbox/kanban/t_4b4fca31/test.log:166: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:168: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:170: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:172: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:174: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:176: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:178: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:180: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:182: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:184: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:186: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:188: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:190: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:192: trailing whitespace.
++++
++ai/outbox/kanban/t_4b4fca31/test.log:194: trailing whitespace.
++++
++
++===== m5-6r-final-rerun-start =====
++reason: rerun complete M5-6R closeout checklist before scoped verified commit.
++timestamp: 2026-05-20T10:55:30+08:00
++
++===== m5-6r-branch =====
++$ git branch --show-current
++feature/isp-m5-6-shadow-expansion
++[exit_code] 0
++
++===== m5-6r-status =====
++$ git status --short --branch
++## feature/isp-m5-6-shadow-expansion
++A  ai/outbox/kanban/t_4b4fca31/diff.patch
++AM ai/outbox/kanban/t_4b4fca31/final-acceptance.md
++A  ai/outbox/kanban/t_4b4fca31/m5-6-precheck.md
++A  ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl
++A  ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md
++A  ai/outbox/kanban/t_4b4fca31/review-result.json
++A  ai/outbox/kanban/t_4b4fca31/review_bundle.md
++AM ai/outbox/kanban/t_4b4fca31/test.log
++M  backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
++M  tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++[exit_code] 0
++
++===== m5-m5-6-focused-shadow-compare =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py::test_m5_6_shadow_default_samples_expand_to_business_boundary_suite -q
++.                                                                        [100%]
++1 passed in 0.32s
++[exit_code] 0
++
++===== m5-m5-6-shadow-compare-full =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py -q
++.............                                                            [100%]
++13 passed in 0.75s
++[exit_code] 0
++
++===== inventory-sales-production-M2-M3-M4-M4-6-regression-rerun =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_inventory_sales_production_m2_fact_import.py tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py tests/unit/business_analysis/test_inventory_sales_production_m4_api_registration.py tests/unit/business_analysis/test_inventory_sales_production_m4_qa_service.py tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py tests/unit/business_analysis/test_inventory_sales_production_semantic_catalog.py tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py -q
++........................................................................ [ 84%]
++.............                                                            [100%]
++85 passed in 2.46s
++[exit_code] 0
++
++===== logistics-focused-regression-rerun =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py tests/business_acceptance/test_logistics_monthly_year_range.py tests/business_acceptance/test_logistics_field_scope_clarification.py -q
++......................                                                   [100%]
++22 passed in 0.35s
++[exit_code] 0
++
++===== plan-bom-power-focused-regression-rerun =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py tests/business_acceptance/test_plan_power_m5_qa_integration.py -q
++.....................                                                    [100%]
++21 passed in 1.86s
++[exit_code] 0
++
++===== backend-py-compile-rerun =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m py_compile backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++[exit_code] 0
++
++===== backend-compileall-rerun =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m compileall backend/app
++Listing 'backend/app'...
++Listing 'backend/app/api'...
++Listing 'backend/app/api/v1'...
++Listing 'backend/app/api/v1/endpoints'...
++Listing 'backend/app/core'...
++Listing 'backend/app/db'...
++Listing 'backend/app/domains'...
++Listing 'backend/app/domains/business_analysis'...
++Listing 'backend/app/domains/business_analysis/api'...
++Listing 'backend/app/domains/business_analysis/api/endpoints'...
++Listing 'backend/app/domains/business_analysis/repositories'...
++Listing 'backend/app/domains/business_analysis/schemas'...
++Listing 'backend/app/domains/business_analysis/services'...
++Listing 'backend/app/domains/business_analysis/services/inventory_sales_production'...
++Listing 'backend/app/domains/logistics'...
++Listing 'backend/app/domains/logistics/api'...
++Listing 'backend/app/domains/logistics/api/endpoints'...
++Listing 'backend/app/domains/logistics/config'...
++Listing 'backend/app/domains/logistics/config/domains'...
++Listing 'backend/app/domains/logistics/config/domains/business_analysis'...
++Listing 'backend/app/domains/logistics/config/domains/logistics'...
++Listing 'backend/app/domains/logistics/config/domains/material_management'...
++Listing 'backend/app/domains/logistics/config/domains/plan_bom'...
++Listing 'backend/app/domains/logistics/config/global'...
++Listing 'backend/app/domains/logistics/config/nl2sql_catalog'...
++Listing 'backend/app/domains/logistics/config/sql_templates'...
++Listing 'backend/app/domains/logistics/config/sql_templates/logistics'...
++Listing 'backend/app/domains/logistics/etl'...
++Listing 'backend/app/domains/logistics/repositories'...
++Listing 'backend/app/domains/logistics/schemas'...
++Listing 'backend/app/domains/logistics/services'...
++Listing 'backend/app/domains/logistics/services/nl2sql'...
++Listing 'backend/app/domains/logistics/services/query_planner_v2'...
++Listing 'backend/app/domains/material_management'...
++Listing 'backend/app/domains/plan_bom'...
++Listing 'backend/app/domains/plan_bom/api'...
++Listing 'backend/app/domains/plan_bom/api/endpoints'...
++Listing 'backend/app/domains/plan_bom/config'...
++Listing 'backend/app/domains/plan_bom/repositories'...
++Listing 'backend/app/domains/plan_bom/schemas'...
++Listing 'backend/app/domains/plan_bom/services'...
++Listing 'backend/app/domains/query_planning'...
++Listing 'backend/app/domains/query_planning/api'...
++Listing 'backend/app/domains/query_planning/api/endpoints'...
++Listing 'backend/app/domains/query_planning/schemas'...
++Listing 'backend/app/domains/query_planning/services'...
++Listing 'backend/app/integrations'...
++Listing 'backend/app/llm'...
++Listing 'backend/app/middleware'...
++Listing 'backend/app/models'...
++Listing 'backend/app/repositories'...
++Listing 'backend/app/schemas'...
++Listing 'backend/app/services'...
++Listing 'backend/app/tasks'...
++Listing 'backend/app/utils'...
++Listing 'backend/app/vector'...
++[exit_code] 0
++
++===== m5-6-shadow-runner-rerun =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python scripts/dev/run_inventory_sales_production_m5_shadow_compare.py --artifact-dir ai/outbox/kanban/t_4b4fca31
++{"by_status": {"matched": 20, "queryplan_clarification": 3, "queryplan_unsupported": 4, "sqlplan_candidate_unavailable": 1, "sqlplan_validation_failed": 3}, "expected_status_mismatch_count": 0, "fail_closed_count": 11, "formal_qa_executed": false, "live_db_executed": false, "matched_count": 20, "records_path": "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-records.jsonl", "report_path": "ai/outbox/kanban/t_4b4fca31/m5-inventory-sales-production-shadow-report.md", "shadow_only": true, "total": 31, "version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1"}
++[exit_code] 0
++
++===== m5-6-artifact-check-rerun =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/m5_6_artifact_check.py ai/outbox/kanban/t_4b4fca31
++ARTIFACT_CHECK_PASS total_records=31 by_status={'matched': 20, 'queryplan_unsupported': 4, 'queryplan_clarification': 3, 'sqlplan_validation_failed': 3, 'sqlplan_candidate_unavailable': 1}
++[exit_code] 0
++
++===== m5-6r-source-diff-for-static-scan =====
++$ git diff HEAD -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py > tmp/hermes/m5_6r_source.diff
++[exit_code] 0
++
++===== static-scan-added-lines-rerun =====
++$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/m5_6_static_scan.py tmp/hermes/m5_6r_source.diff
++STATIC_SCAN_PASS added_lines=394 findings=0
++[exit_code] 0
++
++===== git-diff-check-head-rerun =====
++$ git diff --check HEAD -- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
++[exit_code] 0
++M5_6R_FINAL_RERUN_PASSED
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py b/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+index 56bf987f..da182234 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+@@ -48,6 +48,9 @@ _CONNECTION_TEXT_RE = re.compile(
+     r"\b(?:host|server|data\s+source|user\s+id|uid)\s*=\s*[^\s,;]+",
+     re.IGNORECASE,
+ )
++_PERIOD_BOUNDARY_ERROR_RE = re.compile(
++    r"\bsqlplan_unpublished_month_blocks_sql_direct::\d{4}::\d{1,2}::\d{1,2}\b"
++)
+
+
+ def resolve_default_inventory_sales_production_m5_artifact_dir() -> Path:
+@@ -123,7 +126,14 @@ def build_default_inventory_sales_production_m5_shadow_samples(
+     *,
+     max_samples: int | None = None,
+ ) -> list[InventorySalesProductionM5ShadowCompareSample]:
+-    """构造来自 M4-6 真实问法的产销存 M5 shadow 默认样例。"""
++    """构造产销存 M5/M5-6 shadow 默认样例。
++
++    参数：max_samples 为可选上限，用于 runner 或单测快速截取前 N 条样例。
++    返回：按稳定顺序排列的 shadow 样例列表，前 11 条保留 M5/M4-6 收口基线，后续
++    M5-6 扩样覆盖核心指标、同义问法、期间边界和 fail-closed 安全场景。
++    关键业务逻辑：这里只声明离线问题样例和独立 SQLPlan fixture，不调用 live DB，
++    也不把 QueryPlan 反向生成 SQLPlan，避免 shadow 自我匹配。
++    """
+
+     samples = [
+         InventorySalesProductionM5ShadowCompareSample(
+@@ -264,11 +274,270 @@ def build_default_inventory_sales_production_m5_shadow_samples(
+             candidate_override=_redaction_guard_candidate_payload(),
+         ),
+     ]
++    samples.extend(_build_m5_6_shadow_expansion_samples())
+     if max_samples is not None:
+         return samples[: max(0, max_samples)]
+     return samples
+
+
++def _build_m5_6_shadow_expansion_samples() -> list[InventorySalesProductionM5ShadowCompareSample]:
++    """构造 M5-6 shadow 扩样样例。
++
++    返回：只用于 M5-6 离线 shadow 的增量样例列表。
++    关键业务逻辑：样例覆盖产量、销量、库存、寄存、预算达成率、维度拆分、
++    已发布/月度边界、同义表达和 fail-closed；其中 matched 样例均显式提供独立
++    SQLPlan fixture，安全边界样例则保留缺候选或非法候选以验证保守失败。
++    """
++
++    return [
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_production_year_summary",
++            description="M5-6 年度产量核心指标样例",
++            question="2023年产量是多少？",
++            question_category="production_summary",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["production_actual_including_oem"],
++                dimensions=[],
++                period_type="year",
++                year=2023,
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_sales_external_default_scope",
++            description="M5-6 对外销量默认口径同义问法样例",
++            question="2024年对外销量是多少？",
++            question_category="sales_summary",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["shipment_volume"],
++                dimensions=[],
++                period_type="year",
++                year=2024,
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_sales_year_synonym_shipment",
++            description="M5-6 发货量等价销量的年度同义样例",
++            question="2025年发货量是多少？",
++            question_category="sales_summary",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["shipment_volume"],
++                dimensions=[],
++                period_type="year",
++                year=2025,
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_sales_chinese_quarter_synonym",
++            description="M5-6 中文季度和销售量同义样例",
++            question="2025年一季度销售量是多少？",
++            question_category="sales_summary",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["shipment_volume"],
++                dimensions=[],
++                period_type="quarter",
++                year=2025,
++                quarter=1,
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_sales_ytd_prefix_synonym",
++            description="M5-6 前 N 个月累计销量样例",
++            question="2026年前4个月累计销量是多少？",
++            question_category="time_boundary_guard",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["shipment_volume"],
++                dimensions=[],
++                period_type="ytd",
++                year=2026,
++                month_filter_values=[1, 2, 3, 4],
++                business_rules=["ytd_by_published_months"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_inventory_stock_synonym",
++            description="M5-6 库存/存货月度时点同义样例",
++            question="2026年4月库存是多少？",
++            question_category="inventory_snapshot",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_inventory_snapshot",
++                metrics=["ending_inventory_volume"],
++                dimensions=[],
++                period_type="month",
++                year=2026,
++                month=4,
++                business_rules=["period_end_inventory_snapshot"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_consigned_inventory_synonym",
++            description="M5-6 寄存仓/寄存合计月度时点同义样例",
++            question="2026年4月寄存合计是多少？",
++            question_category="inventory_snapshot",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_inventory_snapshot",
++                metrics=["consigned_inventory_volume"],
++                dimensions=[],
++                period_type="month",
++                year=2026,
++                month=4,
++                business_rules=["period_end_inventory_snapshot"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_budget_achievement_current_year_boundary",
++            description="M5-6 当前已发布年份预算达成率边界样例",
++            question="2026年预算达成率是多少？",
++            question_category="budget_achievement",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_budget_achievement",
++                metrics=["production_actual_including_oem"],
++                dimensions=[],
++                period_type="year",
++                year=2026,
++                business_rules=["budget_achievement_recalculated"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_production_by_model_type",
++            description="M5-6 按版型拆分产量样例",
++            question="2025年按版型产量是多少？",
++            question_category="dimension_breakdown",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_breakdown",
++                metrics=["production_by_model_type"],
++                dimensions=["model_type"],
++                period_type="year",
++                year=2025,
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_inventory_by_base_period_end",
++            description="M5-6 按基地拆分库存月末时点样例",
++            question="2026年4月各基地库存是多少？",
++            question_category="dimension_breakdown",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_inventory_snapshot",
++                metrics=["ending_inventory_by_base"],
++                dimensions=["base_name"],
++                period_type="month",
++                year=2026,
++                month=4,
++                business_rules=["period_end_inventory_snapshot"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_sales_by_base_breakdown",
++            description="M5-6 按基地拆分销量样例",
++            question="2024年各基地销量是多少？",
++            question_category="dimension_breakdown",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_breakdown",
++                metrics=["shipment_by_base"],
++                dimensions=["base_name"],
++                period_type="year",
++                year=2024,
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_sales_monthly_trend",
++            description="M5-6 按月销量趋势样例",
++            question="2026年按月销量趋势是多少？",
++            question_category="time_boundary_guard",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_trend",
++                metrics=["shipment_volume"],
++                dimensions=["business_month"],
++                period_type="year",
++                year=2026,
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_production_ytd_boundary",
++            description="M5-6 截至已发布月份累计产量样例",
++            question="2026年截至4月产量是多少？",
++            question_category="time_boundary_guard",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["production_actual_including_oem"],
++                dimensions=[],
++                period_type="ytd",
++                year=2026,
++                month_filter_values=[1, 2, 3, 4],
++                business_rules=["ytd_by_published_months"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_sales_future_month_blocked",
++            description="M5-6 未来月份区间必须在 QueryPlan 阶段 fail-closed",
++            question="2026年5月至6月未来月份销量是多少？",
++            question_category="time_boundary_guard",
++            expected_status="queryplan_unsupported",
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_missing_time_default_years_scope",
++            description="M5-6 多年默认范围暂缺独立 SQLPlan 候选时必须 fail-closed",
++            question="2023年至2026年销量是多少？",
++            question_category="missing_time_scope_guard",
++            expected_status="sqlplan_candidate_unavailable",
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_missing_time_no_time_default_scope_guard",
++            description="M5-6 无显式时间的 2023-2026 默认范围未接管前必须保守澄清",
++            question="销量是多少？",
++            question_category="missing_time_scope_guard",
++            expected_status="queryplan_clarification",
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_unsupported_mom",
++            description="M5-6 环比类问题暂不支持守卫样例",
++            question="2025年销量环比变化是多少？",
++            question_category="unsupported_guard",
++            expected_status="queryplan_unsupported",
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_clarification_unknown_metric",
++            description="M5-6 未知指标必须澄清，不能泛化为其他指标",
++            question="2025年未知指标是多少？",
++            question_category="clarification_guard",
++            expected_status="queryplan_clarification",
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_sqlplan_unpublished_month_guard",
++            description="M5-6 SQLPlan 候选越过已发布月份边界时必须 fail-closed",
++            question="2026年5月销量是多少？",
++            question_category="time_boundary_guard",
++            expected_status="sqlplan_validation_failed",
++            candidate_override=_unpublished_month_guard_candidate_payload(),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_6_sqlplan_internal_debug_key_guard",
++            description="M5-6 SQLPlan 候选含内部日志/调试标识时必须 fail-closed",
++            question="2024年销量是多少？",
++            question_category="redaction_guard",
++            expected_status="sqlplan_validation_failed",
++            candidate_override=_internal_debug_key_guard_candidate_payload(),
++        ),
++    ]
++
++
+ def run_inventory_sales_production_m5_shadow_compare(
+     *,
+     samples: list[InventorySalesProductionM5ShadowCompareSample] | None = None,
+@@ -525,6 +794,41 @@ def _redaction_guard_candidate_payload() -> dict[str, Any]:
+     return payload
+
+
++def _unpublished_month_guard_candidate_payload() -> dict[str, Any]:
++    """构造越过已发布月份边界的 SQLPlan fixture。
++
++    返回：2026 年 5 月销量候选。当前产销存中间库仅发布到 2026 年 4 月，
++    validator 应在 SQLPlan 阶段 fail-closed，避免未来月份被当成真实结果。
++    """
++
++    return _build_sqlplan_candidate_payload(
++        query_key="ba_isp_metric_summary",
++        metrics=["shipment_volume"],
++        dimensions=[],
++        period_type="month",
++        year=2026,
++        month=5,
++    )
++
++
++def _internal_debug_key_guard_candidate_payload() -> dict[str, Any]:
++    """构造含内部审计/调试标识的 SQLPlan fixture。
++
++    返回：带有内部日志标识 business_flag 的候选。该字段不是业务口径开关，
++    validator 应 fail-closed，确保 shadow artifacts 不接纳 raw/debug/internal 语义。
++    """
++
++    payload = _build_sqlplan_candidate_payload(
++        query_key="ba_isp_metric_summary",
++        metrics=["shipment_volume"],
++        dimensions=[],
++        period_type="year",
++        year=2024,
++    )
++    payload["plan"]["business_flags"]["sys_query_log"] = True
++    return payload
++
++
+ def _signature_from_query_plan(query_plan: InventorySalesProductionQueryPlan) -> dict[str, Any]:
+     """提取 QueryPlan 与 SQLPlan 可比的业务签名，不持久化具体时间参数。"""
+
+@@ -769,6 +1073,10 @@ def _dedupe_safe_texts(values: list[str]) -> list[str]:
+         normalized = _BEARER_TEXT_RE.sub("[BEARER]", normalized)
+         normalized = _SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=[REDACTED]", normalized)
+         normalized = _CONNECTION_TEXT_RE.sub("[CONNECTION]", normalized)
++        normalized = _PERIOD_BOUNDARY_ERROR_RE.sub(
++            "sqlplan_unpublished_month_blocks_sql_direct::[PERIOD_BOUNDARY]",
++            normalized,
++        )
+         if normalized and normalized not in safe_values:
+             safe_values.append(normalized)
+     return safe_values
+diff --git a/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py b/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+index 75d38d18..57dd969e 100644
+--- a/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++++ b/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+@@ -24,7 +24,7 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
+     sample_ids = [sample.sample_id for sample in samples]
+
+     assert M5_ISP_SHADOW_COMPARE_VERSION == "business_analysis_inventory_sales_production_m5_shadow_compare.v1"
+-    assert sample_ids[:10] == [
++    assert sample_ids[:11] == [
+         "m4_6_sales_year_summary",
+         "m4_6_sales_quarter_summary",
+         "m4_6_sales_ytd_summary",
+@@ -35,6 +35,7 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
+         "m4_6_unsupported_yoy",
+         "m4_6_unsupported_month_range",
+         "m4_6_clarification_inventory_turnover",
++        "m5_redaction_sql_payload_blocked",
+     ]
+     assert {sample.question_category for sample in samples} >= {
+         "sales_summary",
+@@ -69,6 +70,68 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
+     assert run.report["expected_status_mismatch_count"] == 0
+
+
++def test_m5_6_shadow_default_samples_expand_to_business_boundary_suite(tmp_path: Path) -> None:
++    """M5-6 默认 shadow 套件必须扩展到 30+，覆盖核心指标、时间边界和 fail-closed 场景。"""
++
++    samples = build_default_inventory_sales_production_m5_shadow_samples()
++    sample_ids = [sample.sample_id for sample in samples]
++
++    assert len(samples) >= 30
++    assert len(sample_ids) == len(set(sample_ids))
++    assert len(build_default_inventory_sales_production_m5_shadow_samples(max_samples=12)) == 12
++    assert build_default_inventory_sales_production_m5_shadow_samples(max_samples=0) == []
++    assert {sample.question_category for sample in samples} >= {
++        "sales_summary",
++        "production_summary",
++        "inventory_snapshot",
++        "budget_achievement",
++        "dimension_breakdown",
++        "time_boundary_guard",
++        "missing_time_scope_guard",
++        "unsupported_guard",
++        "clarification_guard",
++        "redaction_guard",
++    }
++    expected_expansion_ids = {
++        "m5_6_production_year_summary",
++        "m5_6_sales_external_default_scope",
++        "m5_6_sales_year_synonym_shipment",
++        "m5_6_sales_chinese_quarter_synonym",
++        "m5_6_sales_ytd_prefix_synonym",
++        "m5_6_inventory_stock_synonym",
++        "m5_6_consigned_inventory_synonym",
++        "m5_6_budget_achievement_current_year_boundary",
++        "m5_6_production_by_model_type",
++        "m5_6_inventory_by_base_period_end",
++        "m5_6_sales_by_base_breakdown",
++        "m5_6_sales_monthly_trend",
++        "m5_6_production_ytd_boundary",
++        "m5_6_sales_future_month_blocked",
++        "m5_6_missing_time_default_years_scope",
++        "m5_6_missing_time_no_time_default_scope_guard",
++        "m5_6_unsupported_mom",
++        "m5_6_clarification_unknown_metric",
++        "m5_6_sqlplan_unpublished_month_guard",
++        "m5_6_sqlplan_internal_debug_key_guard",
++    }
++    assert expected_expansion_ids <= set(sample_ids)
++
++    run = run_inventory_sales_production_m5_shadow_compare(samples=samples, artifact_dir=tmp_path)
++    by_sample = {outcome.sample.sample_id: outcome.record.status for outcome in run.outcomes}
++
++    assert run.report["total"] == len(samples)
++    assert run.report["matched_count"] >= 16
++    assert run.report["fail_closed_count"] >= 10
++    assert run.report["expected_status_mismatch_count"] == 0
++    assert by_sample["m5_6_sales_future_month_blocked"] == "queryplan_unsupported"
++    assert by_sample["m5_6_missing_time_default_years_scope"] == "sqlplan_candidate_unavailable"
++    assert by_sample["m5_6_missing_time_no_time_default_scope_guard"] == "queryplan_clarification"
++    assert by_sample["m5_6_unsupported_mom"] == "queryplan_unsupported"
++    assert by_sample["m5_6_clarification_unknown_metric"] == "queryplan_clarification"
++    assert by_sample["m5_6_sqlplan_unpublished_month_guard"] == "sqlplan_validation_failed"
++    assert by_sample["m5_6_sqlplan_internal_debug_key_guard"] == "sqlplan_validation_failed"
++
++
+ def test_m5_shadow_default_runner_uses_independent_sqlplan_fixtures(tmp_path: Path) -> None:
+     """默认 M5 shadow 候选必须独立于 QueryPlan，不能用 QueryPlan 反向生成候选后自我比较。"""
+
+@@ -261,6 +324,27 @@ def test_m5_shadow_safe_text_redaction_handles_lowercase_sql_and_secret_shapes()
+     assert "apikey=abc123" not in rendered
+
+
++def test_m5_shadow_redacts_period_values_from_validation_error_codes(tmp_path: Path) -> None:
++    """SQLPlan 边界错误码进入 artifacts 前也不能持久化具体年月边界值。"""
++
++    sample = InventorySalesProductionM5ShadowCompareSample(
++        sample_id="regression_unpublished_month_error_code_redaction",
++        description="未发布月份错误码必须脱敏期间值",
++        question="2026年5月销量是多少？",
++        question_category="time_boundary_guard",
++        expected_status="sqlplan_validation_failed",
++        candidate_override=m5_shadow_compare._unpublished_month_guard_candidate_payload(),
++    )
++
++    run = run_inventory_sales_production_m5_shadow_compare(samples=[sample], artifact_dir=tmp_path)
++    persisted = run.records_path.read_text(encoding="utf-8") + "\n" + run.report_path.read_text(encoding="utf-8")
++
++    assert run.outcomes[0].record.status == "sqlplan_validation_failed"
++    assert "sqlplan_unpublished_month_blocks_sql_direct" in persisted
++    assert "sqlplan_unpublished_month_blocks_sql_direct::2026::5::4" not in persisted
++    assert "::2026::5::4" not in persisted
++
++
+ def test_m5_shadow_artifacts_are_shadow_only_and_redacted(tmp_path: Path) -> None:
+     """JSONL/Markdown artifacts 只写脱敏评估摘要，不泄露 SQL、问题原文、真实参数值或连接信息。"""
