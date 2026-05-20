@@ -1,0 +1,7 @@
+{
+  "hardcoded_secret_like": [],
+  "shell_injection": [],
+  "dangerous_eval_exec": [],
+  "unsafe_deserialization": [],
+  "sql_formatting": []
+}
