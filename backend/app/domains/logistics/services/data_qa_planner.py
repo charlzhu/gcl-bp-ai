@@ -481,6 +481,26 @@ class LogisticsDataQaPlanner:
 
         city_total_fee_rank_limit = self._extract_city_total_fee_rank_limit(compact)
         if (
+            len(year_range) >= 2
+            and carrier_name
+            and self._is_mw_question(compact)
+            and any(keyword in compact for keyword in ("每年", "按年", "按年份", "各年", "年度", "分别"))
+            and not self._is_total_fee_question(compact)
+            and not region_breakdown
+        ):
+            # 显式年份范围 + 显式承运商 + “按年/按年份/每年”等拆分词，业务诉求是逐年发运量；
+            # 必须优先于后续单年总量 summary 分支，否则会只按首年汇总并丢失逐年维度。
+            return LogisticsDataQaPlan(
+                intent="detail_list",
+                query_key="hist_mw_by_year",
+                metrics=["shipment_mw"],
+                dimensions=["biz_year"],
+                filters={"years": year_range, "carrier_name": carrier_name},
+                group_by=["biz_year"],
+                sort=[{"field": "biz_year", "direction": "asc"}],
+            )
+
+        if (
             year in {2023, 2024, 2025}
             and ranking_top_n
             and (region or province)
@@ -692,6 +712,16 @@ class LogisticsDataQaPlanner:
             and not self._is_monthly_fee_compare_question(compact)
             and not self._extract_top_n(compact)
             and not self._has_extra_breakdown_intent(compact, allowed_dimension="carrier_name")
+            and not (
+                # “23年-25年，某承运商每年发运量分别是多少”是显式跨年 + 显式承运商的逐年发运量题；
+                # 这里必须让后续 hist_mw_by_year 专用分支处理，避免本宽 KPI 分支先返回单年承运商排名。
+                len(year_range) >= 2
+                and carrier_name
+                and self._is_mw_question(compact)
+                and any(keyword in compact for keyword in ("每年", "按年", "按年份", "各年", "年度", "分别"))
+                and not self._is_total_fee_question(compact)
+                and not region_breakdown
+            )
         ):
             filters: dict[str, Any] = {
                 "year": year,

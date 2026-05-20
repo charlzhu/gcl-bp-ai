@@ -1,0 +1,2088 @@
+diff --git a/backend/app/domains/logistics/services/business_entity_resolver.py b/backend/app/domains/logistics/services/business_entity_resolver.py
+index 9e1f279a..a2fd607b 100644
+--- a/backend/app/domains/logistics/services/business_entity_resolver.py
++++ b/backend/app/domains/logistics/services/business_entity_resolver.py
+@@ -66,14 +66,58 @@ class LogisticsBusinessEntityResolver:
+         "累计",
+         "总",
+     }
++    _COMMON_LOCATION_PREFIXES = (
++        "北京",
++        "上海",
++        "天津",
++        "重庆",
++        "苏州",
++        "南京",
++        "无锡",
++        "常州",
++        "杭州",
++        "宁波",
++        "合肥",
++        "芜湖",
++        "阜宁",
++        "广州",
++        "深圳",
++        "东莞",
++        "佛山",
++        "成都",
++        "武汉",
++        "郑州",
++        "西安",
++        "青岛",
++        "济南",
++        "厦门",
++        "福州",
++        "南昌",
++        "长沙",
++        "石家庄",
++        "太原",
++        "沈阳",
++        "大连",
++        "长春",
++        "哈尔滨",
++        "昆明",
++        "贵阳",
++        "南宁",
++        "海口",
++        "兰州",
++        "银川",
++        "西宁",
++        "乌鲁木齐",
++        "拉萨",
++    )
+     _EXPLICIT_CARRIER_PATTERNS = (
+         re.compile(
+             r"(?:^|[，,。；;？?])(?:20\d{2}|\d{2})?年?(?P<name>[\u4e00-\u9fa5A-Za-z0-9·（）()]{2,30}?(?:物流|供应链|运输|货运|速运|快运))"
+-            r"(?=在|的|发运|承运|运费|运输费用|总运费|总费用|承运量|运输量|发货量|各区域|分区域|各省|各城市|占|$)"
++            r"(?=在|的|每年|按年|按年份|各年|年度|分别|发运|承运|运费|运输费用|总运费|总费用|承运量|运输量|发货量|各区域|分区域|各省|各城市|占|$)"
+         ),
+         re.compile(
+             r"(?P<name>[\u4e00-\u9fa5A-Za-z0-9·（）()]{2,30}?(?:物流|供应链|运输|货运|速运|快运))"
+-            r"(?=在各区域|在各省|在各城市|在|的|发运|承运|运费|运输费用|总运费|总费用|承运量|运输量|发货量|占)"
++            r"(?=在各区域|在各省|在各城市|在|的|每年|按年|按年份|各年|年度|分别|发运|承运|运费|运输费用|总运费|总费用|承运量|运输量|发货量|占)"
+         ),
+     )
+
+@@ -207,6 +251,10 @@ class LogisticsBusinessEntityResolver:
+     def _clean_explicit_carrier_name(self, raw: str) -> str | None:
+         """清洗显式承运商短语。"""
+         raw_text = self._normalize_company_text(raw)
++        # 兜底正则可能从“23年-25年苏州晶茂物流”中的第二个“年”后开始命中，
++        # 得到“年苏州晶茂物流”或“25年苏州晶茂物流”。这里仅剥离开头的年份/年份范围残片，
++        # 中间仍含年份的短语继续 fail-closed，避免把业务描述误当承运商。
++        raw_text = re.sub(r"^(?:(?:20\d{2}|\d{2})?年|(?:20\d{2}|\d{2})年[-—至到](?:20\d{2}|\d{2})年?)", "", raw_text)
+         # 显式语法只兜底“京东物流/德邦物流”这类短公司名；如果短语里混入年份、范围、结构词，
+         # 说明它很可能是“江苏的物流总运费/历史物流”等业务描述，必须拒绝，避免回退成承运商过滤。
+         if any(token in raw_text for token in ("年", "月", "到", "至", "从", "的物流", "历史物流", "物流发运")):
+@@ -214,10 +262,34 @@ class LogisticsBusinessEntityResolver:
+         text = re.sub(r"^(?:请问|请查询|请统计|帮我查一下|帮我看一下|查询|统计)", "", raw_text)
+         text = re.sub(r"^\d{1,2}月份?", "", text)
+         text = self._strip_carrier_suffix(self._strip_legal_suffix(text))
++        # 显式短语没有候选源上下文时，也需要处理“苏州晶茂物流”这类城市前缀简称；
++        # 仅剥离常见行政区前缀，避免把“天地华宇”等非地名前缀误裁短。
++        text = self._strip_common_location_prefix(text)
+         if any(token in text for token in ("的", "区域", "历史", "发运", "累计", "全年", "各")):
+             return None
+         return text if self._is_valid_carrier_core(text) else None
+
++    def _strip_common_location_prefix(self, value: str) -> str:
++        """剥离承运商核心词前的常见行政区前缀。
++
++        参数：
++            value: 已去掉法律后缀和物流行业后缀后的承运商主体。
++        返回：
++            若主体以常见行政区开头且剩余部分仍是有效承运商核心词，返回剥离后的简称；否则返回原值。
++        业务逻辑：
++            历史台账承运商常同时出现“苏州晶茂物流有限公司”和“晶茂运输”两类写法；
++            用户显式说“苏州晶茂物流”时，下推“晶茂”可覆盖同一主体的不同历史写法。
++        """
++
++        text = self._normalize_company_text(value)
++        for prefix in self._COMMON_LOCATION_PREFIXES:
++            if not text.startswith(prefix) or len(text) <= len(prefix):
++                continue
++            candidate = text[len(prefix) :]
++            if self._is_valid_carrier_core(candidate):
++                return candidate
++        return text
++
+     def _is_valid_alias(self, value: str) -> bool:
+         """判断候选别名是否足够具体。"""
+         core = self._strip_carrier_suffix(self._strip_legal_suffix(value))
+diff --git a/backend/app/domains/logistics/services/data_qa_planner.py b/backend/app/domains/logistics/services/data_qa_planner.py
+index 7e71de48..3935aaac 100644
+--- a/backend/app/domains/logistics/services/data_qa_planner.py
++++ b/backend/app/domains/logistics/services/data_qa_planner.py
+@@ -480,6 +480,26 @@ class LogisticsDataQaPlanner:
+             )
+
+         city_total_fee_rank_limit = self._extract_city_total_fee_rank_limit(compact)
++        if (
++            len(year_range) >= 2
++            and carrier_name
++            and self._is_mw_question(compact)
++            and any(keyword in compact for keyword in ("每年", "按年", "按年份", "各年", "年度", "分别"))
++            and not self._is_total_fee_question(compact)
++            and not region_breakdown
++        ):
++            # 显式年份范围 + 显式承运商 + “按年/按年份/每年”等拆分词，业务诉求是逐年发运量；
++            # 必须优先于后续单年总量 summary 分支，否则会只按首年汇总并丢失逐年维度。
++            return LogisticsDataQaPlan(
++                intent="detail_list",
++                query_key="hist_mw_by_year",
++                metrics=["shipment_mw"],
++                dimensions=["biz_year"],
++                filters={"years": year_range, "carrier_name": carrier_name},
++                group_by=["biz_year"],
++                sort=[{"field": "biz_year", "direction": "asc"}],
++            )
++
+         if (
+             year in {2023, 2024, 2025}
+             and ranking_top_n
+@@ -692,6 +712,16 @@ class LogisticsDataQaPlanner:
+             and not self._is_monthly_fee_compare_question(compact)
+             and not self._extract_top_n(compact)
+             and not self._has_extra_breakdown_intent(compact, allowed_dimension="carrier_name")
++            and not (
++                # “23年-25年，某承运商每年发运量分别是多少”是显式跨年 + 显式承运商的逐年发运量题；
++                # 这里必须让后续 hist_mw_by_year 专用分支处理，避免本宽 KPI 分支先返回单年承运商排名。
++                len(year_range) >= 2
++                and carrier_name
++                and self._is_mw_question(compact)
++                and any(keyword in compact for keyword in ("每年", "按年", "按年份", "各年", "年度", "分别"))
++                and not self._is_total_fee_question(compact)
++                and not region_breakdown
++            )
+         ):
+             filters: dict[str, Any] = {
+                 "year": year,
+diff --git a/tests/business_acceptance/test_logistics_carrier_filter_scope.py b/tests/business_acceptance/test_logistics_carrier_filter_scope.py
+index f5e230a2..09f3f82f 100644
+--- a/tests/business_acceptance/test_logistics_carrier_filter_scope.py
++++ b/tests/business_acceptance/test_logistics_carrier_filter_scope.py
+@@ -139,6 +139,18 @@ def test_planner_keeps_year_range_and_explicit_carrier_for_yearly_mw_breakdown()
+     assert plan.sort == [{"field": "biz_year", "direction": "asc"}]
+
+
++def test_planner_keeps_explicit_carrier_when_yearly_wording_uses_by_year() -> None:
++    """验证“按年份”相邻问法不会把显式承运商截断或误路由到宽口径 KPI。"""
++
++    plan = LogisticsDataQaPlanner().build_plan("23年-25年苏州晶茂物流按年份发运量是多少")
++
++    assert plan.query_key == "hist_mw_by_year"
++    assert plan.filters["years"] == [2023, 2024, 2025]
++    assert plan.filters["carrier_name"] == "晶茂"
++    assert plan.dimensions == ["biz_year"]
++    assert plan.group_by == ["biz_year"]
++
++
+ def test_service_keeps_year_range_and_carrier_when_executing_yearly_mw_breakdown() -> None:
+     """验证服务层执行逐年发运量时，不丢失 2023-2025 年份范围和显式承运商。"""
+
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py b/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py
+new file mode 100644
+index 00000000..8b100193
+--- /dev/null
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py
+@@ -0,0 +1,1150 @@
++from __future__ import annotations
++
++import json
++import re
++from copy import deepcopy
++from pathlib import Path
++from typing import Any, Callable, Literal
++
++from pydantic import BaseModel, ConfigDict, Field
++
++from backend.app.domains.business_analysis.services.inventory_sales_production.semantic_catalog import (
++    InventorySalesProductionCatalogDimension,
++    InventorySalesProductionCatalogMetric,
++    InventorySalesProductionCatalogTable,
++    InventorySalesProductionSemanticCatalog,
++    InventorySalesProductionSemanticCatalogLoader,
++)
++from backend.app.domains.business_analysis.services.inventory_sales_production.sql_plan import (
++    REQUIRED_ISP_SEMANTIC_CATALOG_VERSION,
++    InventorySalesProductionSqlPlan,
++    InventorySalesProductionSqlPlanValidationResult,
++    InventorySalesProductionSqlPlanValidator,
++)
++
++M6_ISP_LIVE_PROVIDER_GATE_VERSION = "business_analysis_inventory_sales_production_m6_live_provider_gate.v1"
++DEFAULT_M6_RECORDS_FILENAME = "m6-live-provider-shadow-records.jsonl"
++DEFAULT_M6_REPORT_FILENAME = "m6-live-provider-shadow-report.json"
++
++_SECRET_VALUE_RE = re.compile(r"sk-[A-Za-z0-9_-]{6,}|Bearer\s+[^\s,'\"}]+", re.IGNORECASE)
++_SECRET_KEY_RE = re.compile(
++    r"(?i)\b(api[_-]?key|password|passwd|token|access[_-]?token|refresh[_-]?token|secret|authorization)\b"
++)
++_URL_RE = re.compile(r"(?i)\b[a-z][a-z0-9+.-]*://[^\s,'\")]+")
++_HOST_RE = re.compile(r"\b(?:\d{1,3}\.){3}\d{1,3}(?::\d{2,5})?\b")
++_INTERNAL_TOKEN_RE = re.compile(
++    r"dwd_ba_isp_[a-z0-9_]+|dim_ba_isp_[a-z0-9_]+|ods_ba_isp_[a-z0-9_]+|sys_query_log|raw_payload|"
++    r"select\s+\*|\bfrom\b|\bwhere\b|bailian|deepseek|oracle|mysql://",
++    re.IGNORECASE,
++)
++
++
++class InventorySalesProductionM6CatalogRecallDocument(BaseModel):
++    """产销存 M6 catalog recall 文档。
++
++    参数：
++        catalog_id: 受控目录引用 ID，例如 metric:shipment_volume。
++        catalog_version: 目录版本，必须与当前产销存 Semantic Catalog 一致。
++        domain/sub_domain: 业务域边界，固定为经营分析/产销存。
++        doc_type: 文档类型，区分 table、metric、dimension、rule。
++        title: 面向召回的业务标题。
++        retrieval_text: 可送入 embedding/召回的业务化文本，不包含 SQL 或密钥。
++        keywords: 同义词和关键词。
++        required_catalog_refs: 由本地 canonical catalog 推导出的依赖引用。
++        metadata: 仅保留公开安全的辅助元数据。
++    返回：
++        Pydantic 文档对象。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    catalog_id: str
++    catalog_version: str = REQUIRED_ISP_SEMANTIC_CATALOG_VERSION
++    domain: str = "business_analysis"
++    sub_domain: str = "inventory_sales_production"
++    doc_type: Literal["table", "metric", "dimension", "rule"]
++    title: str
++    retrieval_text: str
++    keywords: list[str] = Field(default_factory=list)
++    required_catalog_refs: list[str] = Field(default_factory=list)
++    metadata: dict[str, Any] = Field(default_factory=dict)
++
++
++class InventorySalesProductionM6CatalogRecallHit(BaseModel):
++    """产销存 M6 catalog recall 命中。
++
++    参数：document 为命中的目录文档；score 为本地轻量召回分；source 表示召回来源。
++    返回：召回命中对象。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    document: InventorySalesProductionM6CatalogRecallDocument
++    score: float = 0.0
++    source: str = "local_catalog"
++
++
++class InventorySalesProductionM6CatalogRecallResult(BaseModel):
++    """产销存 M6 catalog recall 结果。
++
++    参数：status 表示召回是否成功；hits 为命中文档；error 为公开安全错误码。
++    返回：召回结果对象。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    status: Literal["ok", "empty", "error"] = "ok"
++    hits: list[InventorySalesProductionM6CatalogRecallHit] = Field(default_factory=list)
++    error: str | None = None
++
++    def catalog_refs(self) -> list[str]:
++        """返回命中文档及其本地依赖引用，供 SQLPlan candidate 归一化使用。"""
++
++        refs: list[str] = []
++        for hit in self.hits:
++            refs.append(hit.document.catalog_id)
++            refs.extend(hit.document.required_catalog_refs)
++        return _dedupe(refs)
++
++
++class InventorySalesProductionM6CatalogRecallDocumentBuilder:
++    """从产销存本地 canonical Semantic Catalog 构建 M6 召回文档。
++
++    业务逻辑：
++        M6 reindex/retrieval 只能读取智能助手中间库的本地目录定义；不得把外部源、ODS、
++        日志表、SQL 片段或 provider debug 信息写入召回文档。
++    """
++
++    def __init__(self, catalog: InventorySalesProductionSemanticCatalog | None = None) -> None:
++        """初始化构建器。
++
++        参数：catalog 可选注入，用于单测或审查污染目录；为空时加载默认目录。
++        返回：无。
++        """
++
++        self.catalog = catalog or InventorySalesProductionSemanticCatalogLoader().load()
++
++    def build_documents(self) -> list[InventorySalesProductionM6CatalogRecallDocument]:
++        """构建产销存 M6 catalog recall 文档列表。"""
++
++        documents: list[InventorySalesProductionM6CatalogRecallDocument] = []
++        documents.extend(self._table_document(table) for table in self.catalog.allowed_tables())
++        documents.extend(self._metric_document(metric) for metric in self.catalog.metrics if metric.support_status == "supported")
++        documents.extend(
++            self._dimension_document(dimension)
++            for dimension in self.catalog.dimensions
++            if dimension.support_status == "supported"
++        )
++        documents.extend(self._business_rule_documents())
++        return documents
++
++    def _table_document(
++        self,
++        table: InventorySalesProductionCatalogTable,
++    ) -> InventorySalesProductionM6CatalogRecallDocument:
++        """把中间库白名单表转换为召回文档。"""
++
++        column_names = [column.business_name or column.name for column in table.columns]
++        return InventorySalesProductionM6CatalogRecallDocument(
++            catalog_id=f"table:{table.table_name}",
++            doc_type="table",
++            title=table.display_name,
++            retrieval_text="；".join(
++                [
++                    table.display_name,
++                    "智能助手中间库产销存月度事实和指标目录",
++                    f"粒度：{table.grain or '标准业务粒度'}",
++                    "字段：" + "、".join(column_names),
++                ]
++            ),
++            keywords=[table.display_name, "中间库", "产销存", "经营分析"],
++            metadata={"source_system": "middle_db", "allowed_read": bool(table.allowed_read)},
++        )
++
++    def _metric_document(
++        self,
++        metric: InventorySalesProductionCatalogMetric,
++    ) -> InventorySalesProductionM6CatalogRecallDocument:
++        """把标准指标转换为召回文档，并补齐本地声明的依赖引用。"""
++
++        dependencies = [f"table:{metric.table}", "dimension:business_year"]
++        if "business_month" in metric.source_columns:
++            dependencies.append("dimension:business_month")
++        if metric.metric_id == "shipment_volume":
++            dependencies.append("rule:sales_defaults_to_shipment_volume")
++        if metric.aggregation == "period_end":
++            dependencies.append("rule:inventory_period_end_snapshot")
++        if metric.metric_id == "production_budget_achievement_rate":
++            dependencies.append("rule:budget_achievement_recalculated")
++        dependencies.extend(f"metric:{metric_id}" for metric_id in metric.depends_on_metrics)
++        text_parts = [
++            metric.display_name,
++            "、".join(metric.aliases),
++            f"聚合口径：{metric.aggregation or '标准聚合'}",
++            f"单位：{metric.unit or '按指标标准单位'}",
++            metric.business_note or "",
++        ]
++        return InventorySalesProductionM6CatalogRecallDocument(
++            catalog_id=f"metric:{metric.metric_id}",
++            doc_type="metric",
++            title=metric.display_name,
++            retrieval_text="；".join(part for part in text_parts if part),
++            keywords=_dedupe([metric.metric_id, metric.display_name, *metric.aliases]),
++            required_catalog_refs=_dedupe(dependencies),
++            metadata={
++                "aggregation": metric.aggregation,
++                "unit": metric.unit,
++                "default_for_sales": metric.default_for_sales,
++            },
++        )
++
++    def _dimension_document(
++        self,
++        dimension: InventorySalesProductionCatalogDimension,
++    ) -> InventorySalesProductionM6CatalogRecallDocument:
++        """把标准维度转换为召回文档。"""
++
++        return InventorySalesProductionM6CatalogRecallDocument(
++            catalog_id=f"dimension:{dimension.dimension_id}",
++            doc_type="dimension",
++            title=dimension.display_name,
++            retrieval_text="；".join(
++                part
++                for part in [
++                    dimension.display_name,
++                    "、".join(dimension.aliases),
++                    dimension.business_note or "产销存可分组或过滤维度",
++                ]
++                if part
++            ),
++            keywords=_dedupe([dimension.dimension_id, dimension.display_name, *dimension.aliases]),
++            required_catalog_refs=[f"table:{dimension.table}"],
++            metadata={"column_role": "dimension"},
++        )
++
++    @staticmethod
++    def _business_rule_documents() -> list[InventorySalesProductionM6CatalogRecallDocument]:
++        """返回 M6 必须可召回的业务规则文档。"""
++
++        return [
++            InventorySalesProductionM6CatalogRecallDocument(
++                catalog_id="rule:policy_current_year_use_published_months_only",
++                doc_type="rule",
++                title="当前年度仅使用已发布月份",
++                retrieval_text="今年、当前年、最近数据只按已发布月份统计，未来月份不能当作实际值。",
++                keywords=["今年", "当前年", "已发布月份", "未来月份"],
++                required_catalog_refs=["dimension:business_year", "dimension:business_month"],
++            ),
++            InventorySalesProductionM6CatalogRecallDocument(
++                catalog_id="rule:sales_defaults_to_shipment_volume",
++                doc_type="rule",
++                title="销量默认等同发货量",
++                retrieval_text="销量、销售量默认按发货量或实际发出量口径回答，除非用户显式要求开票销量。",
++                keywords=["销量", "销售量", "发货量", "实际发出量"],
++                required_catalog_refs=["metric:shipment_volume"],
++            ),
++            InventorySalesProductionM6CatalogRecallDocument(
++                catalog_id="rule:inventory_period_end_snapshot",
++                doc_type="rule",
++                title="库存使用期末快照",
++                retrieval_text="库存、存货、寄存仓等期末类指标默认使用 period_end 快照口径，不做跨月求和。",
++                keywords=["库存", "存货", "寄存仓", "期末"],
++                required_catalog_refs=["metric:ending_inventory_volume"],
++            ),
++            InventorySalesProductionM6CatalogRecallDocument(
++                catalog_id="rule:budget_achievement_recalculated",
++                doc_type="rule",
++                title="预算达成率确定性重算",
++                retrieval_text="产量预算达成率由实际产量和预算目标确定性计算，不能由语言模型直接计算业务事实。",
++                keywords=["预算达成率", "目标", "实际产量"],
++                required_catalog_refs=["metric:production_actual_including_oem", "metric:production_budget"],
++            ),
++        ]
++
++
++class InventorySalesProductionM6CatalogRecallService:
++    """产销存 M6 本地 recall 服务。
++
++    业务逻辑：
++        当前类提供确定性本地召回和依赖扩展，后续真实 embedding/Milvus/rerank 只应替换检索实现，
++        不能绕过本地 canonical catalog 依赖边界。
++    """
++
++    def __init__(self, documents: list[InventorySalesProductionM6CatalogRecallDocument]) -> None:
++        """初始化召回服务。参数 documents 为已构建的本地目录文档。"""
++
++        self.documents = list(documents)
++        self.by_id = {document.catalog_id: document for document in self.documents}
++
++    @classmethod
++    def from_documents(
++        cls,
++        documents: list[InventorySalesProductionM6CatalogRecallDocument],
++    ) -> "InventorySalesProductionM6CatalogRecallService":
++        """从文档列表创建召回服务，便于测试注入。"""
++
++        return cls(documents)
++
++    def recall(self, question: str, *, top_k: int = 12) -> InventorySalesProductionM6CatalogRecallResult:
++        """按问题文本执行轻量本地召回，并补充文档依赖。"""
++
++        normalized_question = _normalize_text(question)
++        hits: list[InventorySalesProductionM6CatalogRecallHit] = []
++        for document in self.documents:
++            score = self._score_document(document, normalized_question)
++            if score > 0:
++                hits.append(InventorySalesProductionM6CatalogRecallHit(document=document, score=score))
++        hits.sort(key=lambda item: item.score, reverse=True)
++        expanded = self._expand_dependencies(hits[:top_k])
++        if not expanded:
++            return InventorySalesProductionM6CatalogRecallResult(status="empty", hits=[])
++        return InventorySalesProductionM6CatalogRecallResult(status="ok", hits=expanded[:top_k])
++
++    @staticmethod
++    def _score_document(document: InventorySalesProductionM6CatalogRecallDocument, normalized_question: str) -> float:
++        """根据关键词和召回文本给本地文档打分。"""
++
++        score = 0.0
++        haystack = _normalize_text(" ".join([document.title, document.retrieval_text, *document.keywords]))
++        for keyword in document.keywords:
++            normalized_keyword = _normalize_text(keyword)
++            if normalized_keyword and normalized_keyword in normalized_question:
++                score += 3.0
++            elif normalized_keyword and normalized_keyword in haystack and normalized_keyword[:2] in normalized_question:
++                score += 1.0
++        if document.doc_type == "rule":
++            if document.catalog_id == "rule:policy_current_year_use_published_months_only" and any(
++                token in normalized_question for token in ("今年", "当前", "最近")
++            ):
++                score += 0.5
++            elif document.catalog_id == "rule:sales_defaults_to_shipment_volume" and any(
++                token in normalized_question for token in ("销量", "销售量", "发货量")
++            ):
++                score += 0.5
++            elif document.catalog_id == "rule:inventory_period_end_snapshot" and any(
++                token in normalized_question for token in ("库存", "存货", "寄存")
++            ):
++                score += 0.5
++            elif document.catalog_id == "rule:budget_achievement_recalculated" and "预算达成" in normalized_question:
++                score += 0.5
++        return score
++
++    def _expand_dependencies(
++        self,
++        hits: list[InventorySalesProductionM6CatalogRecallHit],
++    ) -> list[InventorySalesProductionM6CatalogRecallHit]:
++        """只从本地目录声明扩展依赖，禁止由 LLM 输出发明依赖。"""
++
++        by_id: dict[str, InventorySalesProductionM6CatalogRecallHit] = {hit.document.catalog_id: hit for hit in hits}
++        for hit in list(hits):
++            for catalog_id in hit.document.required_catalog_refs:
++                document = self.by_id.get(catalog_id)
++                if document is not None and catalog_id not in by_id:
++                    by_id[catalog_id] = InventorySalesProductionM6CatalogRecallHit(
++                        document=document,
++                        score=max(hit.score - 0.1, 0.1),
++                        source="local_dependency",
++                    )
++        return list(by_id.values())
++
++
++class InventorySalesProductionM6ProviderGateResult(BaseModel):
++    """单项 provider smoke 门禁结果。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    name: Literal["embedding", "vector_store", "rerank", "llm"]
++    status: Literal["PASS", "FAIL", "BLOCKED"]
++    reason: str | None = None
++
++
++class InventorySalesProductionM6ProviderSmokeResult(BaseModel):
++    """M6 provider smoke 汇总结果。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    version: str = M6_ISP_LIVE_PROVIDER_GATE_VERSION
++    gates: list[InventorySalesProductionM6ProviderGateResult] = Field(default_factory=list)
++
++    @property
++    def ok(self) -> bool:
++        """全部 provider 门禁为 PASS 时返回 True。"""
++
++        return bool(self.gates) and all(gate.status == "PASS" for gate in self.gates)
++
++
++class InventorySalesProductionM6ProviderSmokeRunner:
++    """M6 provider smoke 运行器。
++
++    业务逻辑：
++        provider smoke 必须拆分 embedding、vector_store、rerank、LLM 四类检查；公开输出仅保留
++        PASS/FAIL/BLOCKED 和脱敏后的稳定原因，不输出模型名、集合名、密钥或连接细节。
++    """
++
++    def __init__(
++        self,
++        *,
++        embedding_probe: Callable[[], Any],
++        vector_store_probe: Callable[[], Any],
++        rerank_probe: Callable[[], Any],
++        llm_probe: Callable[[], Any],
++    ) -> None:
++        """初始化 runner，四个 probe 用于单测或真实 provider 检查。"""
++
++        self._probes: list[tuple[Literal["embedding", "vector_store", "rerank", "llm"], Callable[[], Any]]] = [
++            ("embedding", embedding_probe),
++            ("vector_store", vector_store_probe),
++            ("rerank", rerank_probe),
++            ("llm", llm_probe),
++        ]
++
++    def run(self) -> InventorySalesProductionM6ProviderSmokeResult:
++        """执行 provider smoke 并返回分项结果。"""
++
++        gates: list[InventorySalesProductionM6ProviderGateResult] = []
++        for name, probe in self._probes:
++            try:
++                probe_result = probe()
++                gates.append(_provider_gate_from_probe_result(name, probe_result))
++            except Exception as exc:  # noqa: BLE001 - provider smoke 必须把外部异常转成脱敏门禁结果。
++                gates.append(
++                    InventorySalesProductionM6ProviderGateResult(
++                        name=name,
++                        status="BLOCKED",
++                        reason=_safe_public_reason(str(exc)),
++                    )
++                )
++        return InventorySalesProductionM6ProviderSmokeResult(gates=gates)
++
++
++class InventorySalesProductionM6FakeSqlPlanProvider:
++    """测试用 LLM SQLPlan provider。
++
++    业务逻辑：
++        该类模拟“真实 provider 已被调用并返回候选 JSON”的边界；生产路径可以用同样接口接入
++        百炼/OpenAI 兼容 provider，但候选仍必须通过本地 validator。
++    """
++
++    def __init__(self, candidate_payload: dict[str, Any]) -> None:
++        """初始化 fake provider。参数 candidate_payload 为模拟 LLM 返回的候选结构。"""
++
++        self.candidate_payload = deepcopy(candidate_payload)
++        self.live_called = False
++
++    def generate(self, *, question: str, recall_result: InventorySalesProductionM6CatalogRecallResult) -> dict[str, Any]:
++        """返回候选 payload，并记录 provider 已调用。"""
++
++        self.live_called = True
++        return deepcopy(self.candidate_payload)
++
++
++class InventorySalesProductionM6OpenAiSqlPlanProvider:
++    """产销存 M6 真实 LLM SQLPlan provider。
++
++    业务逻辑：
++        该 provider 只负责把用户问题和本轮召回 catalog 上下文发给项目配置的 OpenAI 兼容
++        LLM，并要求返回严格 JSON candidate；它不生成 SQL、不查询数据库，后续仍必须经过
++        normalize + SQLPlan validator fail-closed。
++    """
++
++    def __init__(
++        self,
++        *,
++        base_url: str | None = None,
++        api_key: str | None = None,
++        model: str | None = None,
++        timeout_seconds: float = 60.0,
++    ) -> None:
++        """初始化真实 provider。
++
++        参数：base_url/api_key/model 可测试注入；为空时读取项目 settings。
++        返回：无。
++        """
++
++        from backend.app.core.config import settings
++
++        self.base_url = settings.llm_base_url if base_url is None else base_url
++        self.api_key = settings.llm_api_key if api_key is None else api_key
++        self.model = settings.llm_model if model is None else model
++        self.timeout_seconds = timeout_seconds
++        self.live_called = False
++
++    def is_available(self) -> bool:
++        """判断真实 LLM provider 是否已具备最小配置。"""
++
++        return bool(str(self.base_url or "").strip() and str(self.api_key or "").strip() and str(self.model or "").strip())
++
++    def generate(self, *, question: str, recall_result: InventorySalesProductionM6CatalogRecallResult) -> dict[str, Any]:
++        """调用真实 LLM 生成 candidate JSON。
++
++        参数：question 为用户问题；recall_result 为本轮召回上下文。
++        返回：provider 返回并解析后的 candidate dict。
++        """
++
++        if not self.is_available():
++            raise RuntimeError("provider_blocked::missing_config::llm_base_url,llm_api_key,llm_model")
++        try:
++            from openai import OpenAI
++
++            from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
++                _build_provider_openai_client_kwargs,
++            )
++
++            self.live_called = True
++            client = OpenAI(
++                **_build_provider_openai_client_kwargs(
++                    base_url=self.base_url,
++                    api_key=self.api_key,
++                    timeout_seconds=self.timeout_seconds,
++                    max_retries=0,
++                )
++            )
++            completion = client.chat.completions.create(
++                model=self.model,
++                temperature=0,
++                response_format={"type": "json_object"},
++                messages=self._build_messages(question=question, recall_result=recall_result),
++            )
++            content = completion.choices[0].message.content or "{}"
++            payload = json.loads(content)
++            if not isinstance(payload, dict):
++                raise ValueError("provider_candidate_not_object")
++            return payload
++        except Exception as exc:  # noqa: BLE001 - provider 异常交由 runner/summary 脱敏并 fail-closed。
++            raise RuntimeError(_safe_public_reason(str(exc))) from exc
++
++    def _build_messages(
++        self,
++        *,
++        question: str,
++        recall_result: InventorySalesProductionM6CatalogRecallResult,
++    ) -> list[dict[str, str]]:
++        """构造真实 provider 提示词。"""
++
++        context = [
++            {
++                "catalog_id": hit.document.catalog_id,
++                "doc_type": hit.document.doc_type,
++                "title": hit.document.title,
++                "retrieval_text": hit.document.retrieval_text,
++                "required_catalog_refs": hit.document.required_catalog_refs,
++            }
++            for hit in recall_result.hits[:12]
++        ]
++        # 给真实 provider 一个可直接仿照的最小合格 candidate；
++        # 这样既能提高 live gate 稳定性，又不放宽后续 validator 的白名单校验。
++        schema_example = {
++            "schema_version": "business_analysis_inventory_sales_production_sqlplan_candidate.v1",
++            "domain": "business_analysis",
++            "sub_domain": "inventory_sales_production",
++            "strategy": "sql_direct",
++            "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION,
++            "catalog_refs": [
++                {"catalog_id": "table:dwd_ba_isp_monthly_fact", "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION},
++                {"catalog_id": "metric:shipment_volume", "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION},
++                {"catalog_id": "dimension:business_year", "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION},
++            ],
++            "plan": {
++                "query_key": "ba_isp_metric_summary",
++                "tables": ["dwd_ba_isp_monthly_fact"],
++                "metrics": ["shipment_volume"],
++                "dimensions": [],
++                "filters": [{"dimension": "business_year", "operator": "=", "values": [2025]}],
++                "group_by": [],
++                "order_by": [],
++                "business_rules": [],
++                "business_flags": {},
++                "period_type": "year",
++                "year": 2025,
++                "calculation_policy": "sum",
++                "limit": 200,
++            },
++            "clarification_questions": [],
++            "unsupported_reason": None,
++            "confidence": 0.8,
++        }
++        return [
++            {
++                "role": "system",
++                "content": (
++                    "你是经营分析产销存 SQLPlan 候选生成器。只返回严格 JSON 对象，不要返回 SQL。"
++                    "必须使用 business_analysis_inventory_sales_production_sqlplan_candidate.v1 合同。"
++                    "不确定时 strategy 只能返回 clarify 或 unsupported。"
++                ),
++            },
++            {
++                "role": "user",
++                "content": json.dumps(
++                    {
++                        "question": question,
++                        "catalog_context": context,
++                        "required_schema": "business_analysis_inventory_sales_production_sqlplan_candidate.v1",
++                        "strict_output_contract": schema_example,
++                        "strict_rules": [
++                            "只能返回一个 JSON 对象，不能返回 markdown、解释、reasoning 或 SQL。",
++                            "strategy 必须是 sql_direct、clarify、unsupported 之一；可答问题使用 sql_direct，不能使用 sql。",
++                            "plan.tables、plan.metrics、plan.dimensions、plan.group_by 必须是字符串数组，不能是对象数组。",
++                            "plan.filters 必须是数组；每项只允许 dimension/operator/values/source。",
++                            "plan.tables 使用表名，如 dwd_ba_isp_monthly_fact；catalog_refs 才使用 table: 前缀。",
++                            "年度汇总问题使用 query_key=ba_isp_metric_summary、period_type=year、year=业务年份。",
++                            "销量/销售量默认映射 metric:shipment_volume，calculation_policy 使用 sum。",
++                        ],
++                    },
++                    ensure_ascii=False,
++                ),
++            },
++        ]
++
++
++class InventorySalesProductionM6SqlPlanGenerationResult(BaseModel):
++    """M6 SQLPlan 生成与校验结果。"""
++
++    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
++
++    provider_live_called: bool = False
++    candidate_payload: dict[str, Any] | None = None
++    validation: InventorySalesProductionSqlPlanValidationResult
++    normalized_plan: InventorySalesProductionSqlPlan | None = None
++    error_codes: list[str] = Field(default_factory=list)
++
++
++class InventorySalesProductionM6SqlPlanGenerator:
++    """产销存 M6 LLM SQLPlan 生成器。
++
++    业务逻辑：
++        1. 先执行 catalog recall；
++        2. 调用 provider 取得 JSON candidate；
++        3. 只做字段名/聚合策略的窄归一化和本地 catalog 依赖补齐；
++        4. 立即交给现有 M5 SQLPlan validator fail-closed 校验；
++        5. 全程不接受、生成或执行 SQL 文本。
++    """
++
++    def __init__(
++        self,
++        *,
++        recall_service: InventorySalesProductionM6CatalogRecallService,
++        llm_provider: Any,
++        validator: InventorySalesProductionSqlPlanValidator | None = None,
++    ) -> None:
++        """初始化生成器。参数 recall_service/llm_provider/validator 均可注入，便于 TDD。"""
++
++        self.recall_service = recall_service
++        self.llm_provider = llm_provider
++        self.validator = validator or InventorySalesProductionSqlPlanValidator()
++
++    def generate(self, question: str) -> InventorySalesProductionM6SqlPlanGenerationResult:
++        """生成并校验一个 SQLPlan candidate。"""
++
++        recall_result = self.recall_service.recall(question)
++        if recall_result.status != "ok":
++            validation = InventorySalesProductionSqlPlanValidationResult(
++                ok=False,
++                normalized_plan=None,
++                errors=[f"m6_catalog_recall_not_ok::{recall_result.status}"],
++            )
++            return InventorySalesProductionM6SqlPlanGenerationResult(
++                provider_live_called=False,
++                validation=validation,
++                error_codes=validation.error_codes,
++            )
++        candidate = self.llm_provider.generate(question=question, recall_result=recall_result)
++        provider_live_called = bool(getattr(self.llm_provider, "live_called", True))
++        normalized_candidate = normalize_m6_sqlplan_candidate_payload(candidate, recall_result=recall_result)
++        validation = self.validator.validate(normalized_candidate)
++        return InventorySalesProductionM6SqlPlanGenerationResult(
++            provider_live_called=provider_live_called,
++            candidate_payload=normalized_candidate,
++            validation=validation,
++            normalized_plan=validation.normalized_plan,
++            error_codes=validation.error_codes,
++        )
++
++
++class InventorySalesProductionM6FakeSqlPlanGenerator:
++    """测试用 M6 SQLPlan generator。
++
++    业务逻辑：用于验证 live shadow runner 的后半段，不连接 LLM，也不生成 SQL。
++    """
++
++    def __init__(self, metric_id: str) -> None:
++        """初始化 fake generator。参数 metric_id 为要模拟成功的标准指标。"""
++
++        self.metric_id = metric_id
++        self.validator = InventorySalesProductionSqlPlanValidator()
++
++    @classmethod
++    def success_for_metric(cls, metric_id: str) -> "InventorySalesProductionM6FakeSqlPlanGenerator":
++        """创建一个返回校验通过 SQLPlan 的 fake generator。"""
++
++        return cls(metric_id)
++
++    def generate(self, question: str) -> InventorySalesProductionM6SqlPlanGenerationResult:
++        """返回通过 validator 的受控 SQLPlan 生成结果。"""
++
++        candidate = _build_success_candidate(self.metric_id)
++        validation = self.validator.validate(candidate)
++        return InventorySalesProductionM6SqlPlanGenerationResult(
++            provider_live_called=True,
++            candidate_payload=candidate,
++            validation=validation,
++            normalized_plan=validation.normalized_plan,
++            error_codes=validation.error_codes,
++        )
++
++
++class InventorySalesProductionM6LiveShadowSample(BaseModel):
++    """M6 live shadow 样例声明。"""
++
++    model_config = ConfigDict(extra="forbid")
++
++    sample_id: str
++    question: str
++    expected_status: Literal["matched", "empty", "validation_failed", "shadow_error"] = "matched"
++
++
++class InventorySalesProductionM6FakeReadonlyShadowExecutor:
++    """测试用只读中间库 shadow executor。
++
++    业务逻辑：模拟只读中间库查询结果，用于验证 runner 确实在 SQLPlan 校验通过后才执行 shadow。
++    """
++
++    def __init__(self, rows: list[dict[str, Any]]) -> None:
++        """初始化 fake executor。参数 rows 为模拟返回行。"""
++
++        self.rows = list(rows)
++        self.executed = False
++
++    def execute(self, plan: InventorySalesProductionSqlPlan) -> list[dict[str, Any]]:
++        """执行只读 shadow；测试实现仅返回注入行。"""
++
++        self.executed = True
++        return list(self.rows)
++
++
++class InventorySalesProductionM6ReadonlyMiddleDbShadowExecutor:
++    """真实只读中间库 shadow executor。
++
++    业务逻辑：
++        将校验通过的 M6 SQLPlan 映射为现有产销存 QueryPlan，并复用后端确定性查询执行器。
++        该 executor 不写正式 QA、不写 query log、不接触 SAP/Oracle，只读智能助手中间库。
++    """
++
++    def __init__(self, session_factory: Callable[[], Any] | None = None) -> None:
++        """初始化 executor。参数 session_factory 用于测试或 CLI 注入数据库会话工厂。"""
++
++        self.session_factory = session_factory
++
++    def execute(self, plan: InventorySalesProductionSqlPlan) -> list[dict[str, Any]]:
++        """执行只读中间库 shadow 查询。
++
++        参数：plan 为已通过 validator 的 SQLPlan。
++        返回：业务结果行列表；非 success 状态返回空列表，由 gate 记为 empty。
++        """
++
++        from backend.app.db.session import SessionLocal
++        from backend.app.domains.business_analysis.schemas.inventory_sales_production_query import (
++            InventorySalesProductionPeriodSpec,
++            InventorySalesProductionQueryPlan,
++        )
++        from backend.app.domains.business_analysis.services.inventory_sales_production.query_executor import (
++            InventorySalesProductionQueryExecutor,
++        )
++
++        db = (self.session_factory or SessionLocal)()
++        try:
++            query_plan = InventorySalesProductionQueryPlan(
++                query_key=plan.query_key,
++                metrics=list(plan.metrics),
++                dimensions=list(plan.dimensions or plan.group_by),
++                filters=self._filters_to_query_plan_dict(plan),
++                period=InventorySalesProductionPeriodSpec(
++                    period_type="year" if plan.period_type == "month_range" else plan.period_type,
++                    year=plan.year,
++                    month=plan.month,
++                    quarter=plan.quarter,
++                    start_month=plan.start_month,
++                    end_month=plan.end_month,
++                ),
++                calculation_policy=plan.calculation_policy,
++                display_preference="shadow_gate",
++            )
++            result = InventorySalesProductionQueryExecutor(db).execute(query_plan)
++            if result.status != "success":
++                return []
++            return [row.model_dump(mode="json") for row in result.rows]
++        finally:
++            close = getattr(db, "close", None)
++            if callable(close):
++                close()
++
++    @staticmethod
++    def _filters_to_query_plan_dict(plan: InventorySalesProductionSqlPlan) -> dict[str, Any]:
++        """把 SQLPlan 过滤列表映射为 QueryPlan 白名单过滤字典。"""
++
++        filters: dict[str, Any] = dict(plan.business_flags or {})
++        for item in plan.filters:
++            if item.dimension in {"business_year", "business_month"}:
++                continue
++            if item.operator in {"=", "like"}:
++                filters[item.dimension] = item.values[0] if item.values else None
++            elif item.operator == "in":
++                filters[item.dimension] = list(item.values)
++        return filters
++
++
++class InventorySalesProductionM6LiveShadowGateRun(BaseModel):
++    """M6 live shadow gate 运行结果。"""
++
++    model_config = ConfigDict(extra="forbid", arbitrary_types_allowed=True)
++
++    report: dict[str, Any]
++    records_path: Path
++    report_path: Path
++
++
++class InventorySalesProductionM6LiveShadowGateRunner:
++    """M6 live-provider SQLPlan shadow gate runner。
++
++    业务逻辑：
++        串联 provider candidate、SQLPlan validator 和只读中间库 shadow；runner 只写验收材料，
++        不接管正式 QA，不向用户可见接口写入内部 SQLPlan/debug 信息。
++    """
++
++    def __init__(self, *, sqlplan_generator: Any, readonly_shadow_executor: Any) -> None:
++        """初始化 runner。参数 sqlplan_generator 负责候选生成，readonly_shadow_executor 负责只读 shadow。"""
++
++        self.sqlplan_generator = sqlplan_generator
++        self.readonly_shadow_executor = readonly_shadow_executor
++
++    def run(
++        self,
++        *,
++        samples: list[InventorySalesProductionM6LiveShadowSample],
++        artifact_dir: Path,
++    ) -> InventorySalesProductionM6LiveShadowGateRun:
++        """执行 M6 live shadow gate 并写入 JSONL/JSON 验收材料。"""
++
++        artifact_dir.mkdir(parents=True, exist_ok=True)
++        records_path = artifact_dir / DEFAULT_M6_RECORDS_FILENAME
++        report_path = artifact_dir / DEFAULT_M6_REPORT_FILENAME
++        records: list[dict[str, Any]] = []
++        validation_pass_count = 0
++        readonly_executed = False
++        provider_live_called = False
++        mismatch_count = 0
++        success_count = 0
++
++        for sample in samples:
++            record = self._run_one(sample)
++            records.append(record)
++            provider_live_called = provider_live_called or bool(record.get("provider_live_called"))
++            validation_pass_count += 1 if record.get("sqlplan_validation_ok") else 0
++            readonly_executed = readonly_executed or bool(record.get("readonly_middle_db_shadow_executed"))
++            success_count += 1 if record.get("actual_status") == "matched" else 0
++            mismatch_count += 1 if record.get("actual_status") != sample.expected_status else 0
++
++        report = {
++            "version": M6_ISP_LIVE_PROVIDER_GATE_VERSION,
++            "total": len(samples),
++            "success_count": success_count,
++            "provider_live_called": provider_live_called,
++            "sqlplan_validation_pass_count": validation_pass_count,
++            "readonly_middle_db_shadow_executed": readonly_executed,
++            "formal_qa_executed": False,
++            "expected_status_mismatch_count": mismatch_count,
++        }
++        records_path.write_text("\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in records) + "\n", encoding="utf-8")
++        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
++        return InventorySalesProductionM6LiveShadowGateRun(report=report, records_path=records_path, report_path=report_path)
++
++    def _run_one(self, sample: InventorySalesProductionM6LiveShadowSample) -> dict[str, Any]:
++        """执行单条样例；异常按 shadow_error fail-closed。"""
++
++        try:
++            generation = self.sqlplan_generator.generate(sample.question)
++            provider_live_called = bool(generation.provider_live_called)
++            if not generation.validation.ok or generation.normalized_plan is None:
++                return {
++                    "sample_id": sample.sample_id,
++                    "actual_status": "validation_failed",
++                    "provider_live_called": provider_live_called,
++                    "sqlplan_validation_ok": False,
++                    "error_codes": render_safe_m6_live_shadow_summary({"error_codes": generation.error_codes}).get("error_codes", []),
++                    "readonly_middle_db_shadow_executed": False,
++                }
++            rows = self.readonly_shadow_executor.execute(generation.normalized_plan)
++            return {
++                "sample_id": sample.sample_id,
++                "actual_status": "matched" if rows else "empty",
++                "provider_live_called": provider_live_called,
++                "sqlplan_validation_ok": True,
++                "row_count": len(rows),
++                "readonly_middle_db_shadow_executed": True,
++            }
++        except Exception as exc:  # noqa: BLE001 - shadow gate 必须失败关闭并输出公开安全原因。
++            return {
++                "sample_id": sample.sample_id,
++                "actual_status": "shadow_error",
++                "provider_live_called": False,
++                "sqlplan_validation_ok": False,
++                "error_message": _safe_public_reason(str(exc)),
++                "readonly_middle_db_shadow_executed": False,
++            }
++
++
++def normalize_m6_sqlplan_candidate_payload(
++    candidate_payload: dict[str, Any],
++    *,
++    recall_result: InventorySalesProductionM6CatalogRecallResult,
++) -> dict[str, Any]:
++    """归一化 provider SQLPlan candidate 并补齐本地 catalog 依赖。
++
++    参数：
++        candidate_payload: provider 返回的 JSON candidate。
++        recall_result: 当前问题的 catalog recall 结果。
++    返回：
++        可交给现有 M5 validator 的 candidate dict。
++    """
++
++    candidate = deepcopy(candidate_payload)
++    candidate.setdefault("catalog_version", REQUIRED_ISP_SEMANTIC_CATALOG_VERSION)
++    plan = candidate.setdefault("plan", {})
++    if isinstance(plan, dict):
++        plan.pop("safety", None)
++        if plan.get("calculation_policy") == "flow_sum":
++            plan["calculation_policy"] = "sum"
++        for item in plan.get("filters", []) or []:
++            if isinstance(item, dict) and "field" in item and "dimension" not in item:
++                item["dimension"] = item.pop("field")
++            if isinstance(item, dict) and "op" in item and "operator" not in item:
++                item["operator"] = item.pop("op")
++        plan.setdefault("group_by", [])
++        plan.setdefault("order_by", [])
++        plan.setdefault("business_rules", [])
++        plan.setdefault("business_flags", {})
++        plan.setdefault("limit", 200)
++    candidate["catalog_refs"] = _normalized_catalog_refs(candidate, recall_result=recall_result)
++    return candidate
++
++
++def render_safe_m6_provider_smoke_summary_json(result: InventorySalesProductionM6ProviderSmokeResult) -> str:
++    """渲染 provider smoke 公开安全 JSON 摘要。"""
++
++    payload = {
++        "version": result.version,
++        "ok": result.ok,
++        "gates": [
++            {
++                "name": gate.name,
++                "status": gate.status,
++                **({"reason": _safe_public_reason(gate.reason)} if gate.reason else {}),
++            }
++            for gate in result.gates
++        ],
++    }
++    return json.dumps(payload, ensure_ascii=False, sort_keys=True)
++
++
++def render_safe_m6_live_shadow_summary(summary: dict[str, Any]) -> dict[str, Any]:
++    """渲染 M6 live shadow 公开安全摘要。
++
++    业务逻辑：公开摘要可能进入 outbox、历史记录或前端可读 metadata，因此必须删除 SQLPlan、
++    表字段名、provider 名称、连接串和密钥样式片段。
++    """
++
++    safe: dict[str, Any] = {}
++    if "version" in summary:
++        safe["version"] = M6_ISP_LIVE_PROVIDER_GATE_VERSION
++    if "total" in summary:
++        safe["total"] = int(summary.get("total") or 0)
++    if "expected_status_mismatch_count" in summary:
++        safe["expected_status_mismatch_count"] = int(summary.get("expected_status_mismatch_count") or 0)
++    if "error_codes" in summary:
++        safe["error_codes"] = [_safe_error_code(code) for code in summary.get("error_codes") or []]
++    if "error_message" in summary:
++        safe["error_message"] = "shadow_error_redacted"
++    if "candidate_sql_gate_reason" in summary:
++        safe["candidate_sql_gate_reason"] = _safe_error_code(summary.get("candidate_sql_gate_reason"))
++    if not safe:
++        safe["error_message"] = "shadow_error_redacted"
++    return safe
++
++
++def _normalized_catalog_refs(
++    candidate: dict[str, Any],
++    *,
++    recall_result: InventorySalesProductionM6CatalogRecallResult,
++) -> list[dict[str, str]]:
++    """只基于召回上下文补齐 catalog_ref，禁止 provider plan 反向发明引用。
++
++    参数：
++        candidate: provider 返回的 candidate。
++        recall_result: 当前问题的召回结果。
++    返回：
++        catalog_ref 列表；仅包含本轮召回命中及其 canonical 依赖中的 table/metric/dimension。
++    业务逻辑：
++        LLM 可以在 plan 中写指标/维度，但不能因为写了这些名称就自动获得 catalog_ref。
++        否则 provider 只要猜到内部 ID 就可能绕过召回边界。这里采用 fail-closed：未召回的
++        plan 引用不补 ref，交由 validator 报 missing catalog_ref。
++    """
++
++    allowed_refs = {
++        ref
++        for ref in recall_result.catalog_refs()
++        if ref.startswith(("table:", "metric:", "dimension:"))
++    }
++    refs: list[str] = []
++    for item in candidate.get("catalog_refs") or []:
++        if isinstance(item, dict):
++            catalog_id = str(item.get("catalog_id") or "").strip()
++        elif isinstance(item, str):
++            catalog_id = item.strip()
++        else:
++            continue
++        if catalog_id in allowed_refs:
++            refs.append(catalog_id)
++    refs.extend(sorted(allowed_refs))
++    return [
++        {"catalog_id": catalog_id, "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION}
++        for catalog_id in _dedupe(refs)
++    ]
++
++
++def _build_success_candidate(metric_id: str) -> dict[str, Any]:
++    """构造测试用、可通过 validator 的产销存 SQLPlan candidate。"""
++
++    return {
++        "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION,
++        "catalog_refs": [
++            {"catalog_id": "table:dwd_ba_isp_monthly_fact", "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION},
++            {"catalog_id": f"metric:{metric_id}", "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION},
++            {"catalog_id": "dimension:business_year", "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION},
++        ],
++        "plan": {
++            "query_key": "ba_isp_metric_summary",
++            "tables": ["dwd_ba_isp_monthly_fact"],
++            "metrics": [metric_id],
++            "dimensions": [],
++            "filters": [{"dimension": "business_year", "operator": "=", "values": [2025]}],
++            "group_by": [],
++            "order_by": [],
++            "business_rules": [],
++            "business_flags": {},
++            "period_type": "year",
++            "year": 2025,
++            "calculation_policy": "sum",
++            "limit": 200,
++        },
++    }
++
++
++def _safe_error_code(value: Any) -> str:
++    """把内部错误码映射到公开安全枚举。"""
++
++    text = str(value or "")
++    if _SECRET_KEY_RE.search(text) or _SECRET_VALUE_RE.search(text) or _URL_RE.search(text) or _HOST_RE.search(text):
++        return "shadow_error_redacted"
++    if _INTERNAL_TOKEN_RE.search(text):
++        return "shadow_error_redacted"
++    prefix = text.split("::", 1)[0].strip().lower()
++    allowed = {
++        "recall_failed",
++        "validation_failed",
++        "shadow_error",
++        "provider_blocked",
++        "m6_catalog_recall_not_ok",
++    }
++    return prefix if prefix in allowed else "redacted"
++
++
++def _safe_public_reason(value: Any) -> str:
++    """把 provider/shadow 异常原因映射为公开安全枚举。
++
++    参数：value 为外部 provider、向量库、重排、LLM 或 shadow 执行返回的原始原因。
++    返回：仅返回稳定公开枚举；未知异常默认返回 shadow_error_redacted。
++
++    重要业务逻辑：provider 异常文本不可控，可能包含模型名、内部网关、trace、debug 或连接上下文。
++    因此这里不能“替换已知敏感词后回显剩余文本”，必须 fail-closed。
++    """
++
++    text = str(value or "").strip()
++    if not text:
++        return "shadow_error_redacted"
++    if _SECRET_VALUE_RE.search(text) or _URL_RE.search(text) or _HOST_RE.search(text):
++        return "shadow_error_redacted"
++    if _SECRET_KEY_RE.search(text) or _INTERNAL_TOKEN_RE.search(text):
++        return "shadow_error_redacted"
++
++    public_reason = text.split("::", 1)[0].strip().lower()
++    allowed_public_reasons = {
++        "missing_config",
++        "provider_blocked",
++        "empty_response",
++        "empty_embedding_vector",
++        "empty_rerank_scores",
++        "provider_candidate_not_object",
++        "candidate_parse_failed",
++    }
++    if public_reason in allowed_public_reasons:
++        return public_reason
++    return "shadow_error_redacted"
++
++
++def _provider_gate_from_probe_result(
++    name: Literal["embedding", "vector_store", "rerank", "llm"],
++    value: Any,
++) -> InventorySalesProductionM6ProviderGateResult:
++    """把 probe 返回值转换为门禁结果，保留 BLOCKED/FAIL 语义。
++
++    参数：
++        name: provider 分项名称。
++        value: probe 返回值；可为 {status, reason} 字典或普通 truthy/falsy 值。
++    返回：
++        单项门禁结果。BLOCKED 代表外部环境/配置阻塞，FAIL 代表调用完成但结果不合格。
++    """
++
++    if isinstance(value, dict):
++        status_text = str(value.get("status") or "").upper()
++        if status_text in {"PASS", "FAIL", "BLOCKED"}:
++            reason = _safe_public_reason(value.get("reason")) if value.get("reason") else None
++            status: Literal["PASS", "FAIL", "BLOCKED"] = "BLOCKED"
++            if status_text == "PASS":
++                status = "PASS"
++            elif status_text == "FAIL":
++                status = "FAIL"
++            return InventorySalesProductionM6ProviderGateResult(name=name, status=status, reason=reason)
++    status = "PASS" if _probe_result_is_pass(value) else "FAIL"
++    return InventorySalesProductionM6ProviderGateResult(name=name, status=status)
++
++
++def _probe_result_is_pass(value: Any) -> bool:
++    """判断 probe 返回是否表示通过；空值或显式 FAIL/BLOCKED 不算通过。"""
++
++    if isinstance(value, dict):
++        status = str(value.get("status") or "").upper()
++        if status in {"FAIL", "BLOCKED"}:
++            return False
++        if status == "PASS":
++            return True
++        return bool(value)
++    return bool(value)
++
++
++def _normalize_text(value: Any) -> str:
++    """统一文本，便于本地召回评分。"""
++
++    return "".join(str(value or "").lower().split())
++
++
++def _dedupe(values: list[str] | Any) -> list[str]:
++    """保持顺序去重，并丢弃空字符串。"""
++
++    result: list[str] = []
++    seen: set[str] = set()
++    for value in values:
++        text = str(value or "").strip()
++        if not text or text in seen:
++            continue
++        seen.add(text)
++        result.append(text)
++    return result
+diff --git a/scripts/dev/run_inventory_sales_production_m6_live_provider_gate.py b/scripts/dev/run_inventory_sales_production_m6_live_provider_gate.py
+new file mode 100644
+index 00000000..01be6776
+--- /dev/null
++++ b/scripts/dev/run_inventory_sales_production_m6_live_provider_gate.py
+@@ -0,0 +1,356 @@
++#!/usr/bin/env python
++from __future__ import annotations
++
++import argparse
++import json
++import sys
++from pathlib import Path
++from typing import Any
++
++# 固定脚本入口：M6 产销存 live provider gate / reindex / shadow gate，避免使用临时 heredoc 命令。
++REPO_ROOT = Path(__file__).resolve().parents[2]
++if str(REPO_ROOT) not in sys.path:
++    sys.path.insert(0, str(REPO_ROOT))
++
++from backend.app.core.config import settings  # noqa: E402
++from backend.app.domains.business_analysis.services.inventory_sales_production.m6_live_provider_gate import (  # noqa: E402
++    DEFAULT_M6_RECORDS_FILENAME,
++    DEFAULT_M6_REPORT_FILENAME,
++    M6_ISP_LIVE_PROVIDER_GATE_VERSION,
++    InventorySalesProductionM6CatalogRecallDocumentBuilder,
++    InventorySalesProductionM6CatalogRecallService,
++    InventorySalesProductionM6LiveShadowGateRun,
++    InventorySalesProductionM6LiveShadowGateRunner,
++    InventorySalesProductionM6LiveShadowSample,
++    InventorySalesProductionM6OpenAiSqlPlanProvider,
++    InventorySalesProductionM6ProviderSmokeRunner,
++    InventorySalesProductionM6ReadonlyMiddleDbShadowExecutor,
++    InventorySalesProductionM6SqlPlanGenerator,
++    render_safe_m6_provider_smoke_summary_json,
++)
++
++
++def _json_print(payload: dict[str, Any]) -> None:
++    """以 UTF-8 JSON 输出脚本结果，避免打印 provider/密钥/连接细节。"""
++
++    print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
++
++
++def _configured(value: Any) -> bool:
++    """判断配置是否已填写；只返回布尔，不输出真实配置。"""
++
++    return bool(str(value or "").strip())
++
++
++def _missing_config(required: dict[str, bool]) -> list[str]:
++    """返回缺失配置键名，键名本身可公开，值永不输出。"""
++
++    return [name for name, ok in required.items() if not ok]
++
++
++def _blocked(reason: str) -> dict[str, str]:
++    """构造 BLOCKED probe 返回值。"""
++
++    return {"status": "BLOCKED", "reason": reason}
++
++
++def _real_provider_smoke_runner() -> InventorySalesProductionM6ProviderSmokeRunner:
++    """构造真实 provider smoke runner。
++
++    业务逻辑：provider smoke 必须真实探测配置/外部 provider；配置缺失时返回 BLOCKED，
++    不得使用 fake 向量、fake rerank 或 fake LLM 伪装通过。
++    """
++
++    return InventorySalesProductionM6ProviderSmokeRunner(
++        embedding_probe=_probe_embedding_provider,
++        vector_store_probe=_probe_vector_store_provider,
++        rerank_probe=_probe_rerank_provider,
++        llm_probe=_probe_llm_provider,
++    )
++
++
++def _probe_embedding_provider() -> dict[str, Any]:
++    """真实探测 Embedding provider。"""
++
++    missing = _missing_config(
++        {
++            "llm_base_url": _configured(settings.llm_base_url),
++            "llm_api_key": _configured(settings.llm_api_key),
++            "embedding_model": _configured(settings.embedding_model),
++        }
++    )
++    if missing:
++        return _blocked("missing_config::" + ",".join(missing))
++    try:
++        from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import LogisticsBailianEmbeddingClient
++
++        vectors = LogisticsBailianEmbeddingClient(timeout_seconds=15).embed_texts(["产销存 provider smoke"])
++        return {"status": "PASS"} if vectors and vectors[0] else {"status": "FAIL", "reason": "empty_embedding_vector"}
++    except Exception as exc:  # noqa: BLE001 - 外部 provider 错误必须受控脱敏。
++        return _blocked("provider_error::" + str(exc))
++
++
++def _probe_vector_store_provider() -> dict[str, Any]:
++    """真实探测向量库连接。"""
++
++    missing = _missing_config(
++        {
++            "milvus_host": _configured(settings.milvus_host),
++            "milvus_port": int(settings.milvus_port or 0) > 0,
++            "embedding_dimension": int(settings.embedding_dimension or 0) > 0,
++        }
++    )
++    if missing:
++        return _blocked("missing_config::" + ",".join(missing))
++    try:
++        from pymilvus import MilvusClient
++
++        uri = f"http://{settings.milvus_host}:{settings.milvus_port}"
++        client = MilvusClient(uri=uri)
++        if hasattr(client, "list_collections"):
++            client.list_collections()
++        return {"status": "PASS"}
++    except Exception as exc:  # noqa: BLE001 - 不输出 host/端口细节。
++        return _blocked("provider_error::" + str(exc))
++
++
++def _probe_rerank_provider() -> dict[str, Any]:
++    """真实探测 Rerank provider。"""
++
++    missing = _missing_config(
++        {
++            "llm_base_url": _configured(settings.llm_base_url),
++            "llm_api_key": _configured(settings.llm_api_key),
++            "rerank_model": _configured(settings.rerank_model),
++            "rerank_endpoint_path": _configured(settings.rerank_endpoint_path),
++        }
++    )
++    if missing:
++        return _blocked("missing_config::" + ",".join(missing))
++    try:
++        from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
++            LogisticsBailianRerankClient,
++            LogisticsCatalogRecallDocument,
++            LogisticsCatalogRecallHit,
++        )
++
++        docs = [
++            LogisticsCatalogRecallHit(
++                document=LogisticsCatalogRecallDocument(
++                    catalog_id="metric:shipment_volume",
++                    catalog_version=M6_ISP_LIVE_PROVIDER_GATE_VERSION,
++                    doc_type="metric",
++                    title="销量",
++                    content="产销存销量默认等同发货量。",
++                    keywords=["销量", "发货量"],
++                ),
++                vector_score=0.9,
++            ),
++            LogisticsCatalogRecallHit(
++                document=LogisticsCatalogRecallDocument(
++                    catalog_id="metric:ending_inventory_volume",
++                    catalog_version=M6_ISP_LIVE_PROVIDER_GATE_VERSION,
++                    doc_type="metric",
++                    title="库存",
++                    content="产销存库存按期末快照口径。",
++                    keywords=["库存", "期末"],
++                ),
++                vector_score=0.8,
++            ),
++        ]
++        scores = LogisticsBailianRerankClient(timeout_seconds=15).rerank(query="2025年销量", documents=docs, top_n=1)
++        return {"status": "PASS"} if scores else {"status": "FAIL", "reason": "empty_rerank_scores"}
++    except Exception as exc:  # noqa: BLE001
++        return _blocked("provider_error::" + str(exc))
++
++
++def _probe_llm_provider() -> dict[str, Any]:
++    """真实探测主 LLM provider。"""
++
++    missing = _missing_config(
++        {
++            "llm_base_url": _configured(settings.llm_base_url),
++            "llm_api_key": _configured(settings.llm_api_key),
++            "llm_model": _configured(settings.llm_model),
++        }
++    )
++    if missing:
++        return _blocked("missing_config::" + ",".join(missing))
++    try:
++        from openai import OpenAI
++
++        from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import _build_provider_openai_client_kwargs
++
++        client = OpenAI(
++            **_build_provider_openai_client_kwargs(
++                base_url=settings.llm_base_url,
++                api_key=settings.llm_api_key,
++                timeout_seconds=15,
++                max_retries=0,
++            )
++        )
++        completion = client.chat.completions.create(
++            model=settings.llm_model,
++            temperature=0,
++            response_format={"type": "json_object"},
++            messages=[
++                {
++                    "role": "user",
++                    # OpenAI 兼容接口在 response_format=json_object 时要求消息显式包含 json 字样；
++                    # smoke 只验证 provider 可用性，不暴露模型名、密钥或连接信息。
++                    "content": "请只返回 JSON 对象：{\"ok\": true}",
++                }
++            ],
++        )
++        content = completion.choices[0].message.content or ""
++        return {"status": "PASS"} if content.strip() else {"status": "FAIL", "reason": "empty_llm_response"}
++    except Exception as exc:  # noqa: BLE001
++        return _blocked("provider_error::" + str(exc))
++
++
++def run_provider_smoke() -> int:
++    """执行 M6 provider smoke 并输出公开安全摘要。"""
++
++    result = _real_provider_smoke_runner().run()
++    print(render_safe_m6_provider_smoke_summary_json(result))
++    return 0 if result.ok else 2
++
++
++def run_reindex_catalog(*, artifact_dir: Path, dry_run: bool) -> int:
++    """执行 catalog reindex dry-run 或写入本地 reindex 文档。
++
++    参数：artifact_dir 为验收材料目录；dry_run 为 True 时只输出数量，不写索引。
++    返回：进程退出码。
++    """
++
++    documents = InventorySalesProductionM6CatalogRecallDocumentBuilder().build_documents()
++    payload = {
++        "version": M6_ISP_LIVE_PROVIDER_GATE_VERSION,
++        "gate": "catalog_reindex",
++        "status": "PASS",
++        "dry_run": bool(dry_run),
++        "document_count": len(documents),
++    }
++    if not dry_run:
++        artifact_dir.mkdir(parents=True, exist_ok=True)
++        path = artifact_dir / "m6-catalog-reindex-documents.json"
++        path.write_text(
++            json.dumps([document.model_dump(mode="json") for document in documents], ensure_ascii=False, indent=2),
++            encoding="utf-8",
++        )
++        payload["documents_path"] = str(path)
++    _json_print(payload)
++    return 0
++
++
++def _default_live_shadow_samples(sample_count: int) -> list[InventorySalesProductionM6LiveShadowSample]:
++    """构造 live shadow gate 默认样例。"""
++
++    return [
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id=f"m6_live_sales_year_summary_{index + 1}",
++            question="2025年销量是多少？",
++            expected_status="matched",
++        )
++        for index in range(max(1, sample_count))
++    ]
++
++
++def _write_provider_blocked_shadow_report(
++    *,
++    artifact_dir: Path,
++    samples: list[InventorySalesProductionM6LiveShadowSample],
++) -> InventorySalesProductionM6LiveShadowGateRun:
++    """真实 provider 阻塞时写入 fail-closed shadow gate 报告。"""
++
++    artifact_dir.mkdir(parents=True, exist_ok=True)
++    records_path = artifact_dir / DEFAULT_M6_RECORDS_FILENAME
++    report_path = artifact_dir / DEFAULT_M6_REPORT_FILENAME
++    records = [
++        {
++            "sample_id": sample.sample_id,
++            "actual_status": "shadow_error",
++            "provider_live_called": False,
++            "sqlplan_validation_ok": False,
++            "error_codes": ["provider_blocked"],
++            "readonly_middle_db_shadow_executed": False,
++        }
++        for sample in samples
++    ]
++    report = {
++        "version": M6_ISP_LIVE_PROVIDER_GATE_VERSION,
++        "status": "BLOCKED",
++        "total": len(samples),
++        "success_count": 0,
++        "provider_live_called": False,
++        "sqlplan_validation_pass_count": 0,
++        "readonly_middle_db_shadow_executed": False,
++        "formal_qa_executed": False,
++        "expected_status_mismatch_count": len(samples),
++        "blocked_reason": "provider_blocked",
++    }
++    records_path.write_text("\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in records) + "\n", encoding="utf-8")
++    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
++    return InventorySalesProductionM6LiveShadowGateRun(report=report, records_path=records_path, report_path=report_path)
++
++
++def run_live_provider_shadow_gate(*, artifact_dir: Path, max_live_samples: int) -> int:
++    """执行 M6 live-provider SQLPlan shadow gate。
++
++    业务逻辑：live gate 只允许真实 provider + 只读中间库；若 provider smoke 不全 PASS，
++    直接写 BLOCKED 报告并以非零退出，禁止使用 fake generator 伪通过。
++    """
++
++    samples = _default_live_shadow_samples(max_live_samples)
++    smoke_result = _real_provider_smoke_runner().run()
++    if not smoke_result.ok:
++        blocked_run = _write_provider_blocked_shadow_report(artifact_dir=artifact_dir, samples=samples)
++        _json_print({**blocked_run.report, "records_path": str(blocked_run.records_path), "report_path": str(blocked_run.report_path)})
++        return 2
++
++    documents = InventorySalesProductionM6CatalogRecallDocumentBuilder().build_documents()
++    recall_service = InventorySalesProductionM6CatalogRecallService.from_documents(documents)
++    runner = InventorySalesProductionM6LiveShadowGateRunner(
++        sqlplan_generator=InventorySalesProductionM6SqlPlanGenerator(
++            recall_service=recall_service,
++            llm_provider=InventorySalesProductionM6OpenAiSqlPlanProvider(),
++        ),
++        readonly_shadow_executor=InventorySalesProductionM6ReadonlyMiddleDbShadowExecutor(),
++    )
++    run = runner.run(samples=samples, artifact_dir=artifact_dir)
++    _json_print({**run.report, "records_path": str(run.records_path), "report_path": str(run.report_path)})
++    return 0 if run.report.get("expected_status_mismatch_count") == 0 else 2
++
++
++def main() -> int:
++    """解析 CLI 参数并执行 M6 独立门禁。"""
++
++    parser = argparse.ArgumentParser(description="Run inventory-sales-production M6 live provider gate checks")
++    parser.add_argument(
++        "--artifact-dir",
++        default="ai/outbox/kanban/t_isp_m6_live_provider_gate",
++        help="directory for sanitized M6 artifacts",
++    )
++    parser.add_argument("--provider-smoke", action="store_true", help="run provider smoke gate")
++    parser.add_argument("--reindex-catalog", action="store_true", help="run catalog reindex gate")
++    parser.add_argument("--reindex-dry-run", action="store_true", help="build catalog documents without writing index artifacts")
++    parser.add_argument("--live-provider-shadow-gate", action="store_true", help="run live-provider SQLPlan shadow gate")
++    parser.add_argument("--max-live-samples", type=int, default=1, help="maximum live shadow samples, default: 1")
++    args = parser.parse_args()
++
++    artifact_dir = Path(args.artifact_dir)
++    exit_codes: list[int] = []
++    if args.provider_smoke:
++        exit_codes.append(run_provider_smoke())
++    if args.reindex_catalog or args.reindex_dry_run:
++        exit_codes.append(run_reindex_catalog(artifact_dir=artifact_dir, dry_run=bool(args.reindex_dry_run)))
++    if args.live_provider_shadow_gate:
++        exit_codes.append(run_live_provider_shadow_gate(artifact_dir=artifact_dir, max_live_samples=args.max_live_samples))
++    if not exit_codes:
++        parser.print_help()
++        return 0
++    return 0 if all(code == 0 for code in exit_codes) else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py b/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py
+new file mode 100644
+index 00000000..d38d7096
+--- /dev/null
++++ b/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py
+@@ -0,0 +1,382 @@
++from __future__ import annotations
++
++import importlib
++import json
++import os
++import subprocess
++from pathlib import Path
++
++CATALOG_VERSION = "business_analysis_inventory_sales_production_catalog.v1"
++M6_GATE_VERSION = "business_analysis_inventory_sales_production_m6_live_provider_gate.v1"
++
++
++def _m6_module():
++    """加载产销存 M6 live provider gate 模块；RED 阶段应因模块尚未实现而失败。"""
++
++    return importlib.import_module(
++        "backend.app.domains.business_analysis.services.inventory_sales_production.m6_live_provider_gate"
++    )
++
++
++def _safe_text(payload: object) -> str:
++    """把对象转成小写 JSON 文本，便于统一检查脱敏结果。"""
++
++    return json.dumps(payload, ensure_ascii=False, default=str).lower()
++
++
++def test_m6_catalog_reindex_documents_cover_canonical_dependencies_without_external_sources() -> None:
++    """M6 catalog reindex 必须从产销存本地语义目录生成可召回文档，并排除外部/ODS/日志来源。"""
++
++    m6 = _m6_module()
++
++    builder = m6.InventorySalesProductionM6CatalogRecallDocumentBuilder()
++    documents = builder.build_documents()
++    by_id = {document.catalog_id: document for document in documents}
++
++    assert m6.M6_ISP_LIVE_PROVIDER_GATE_VERSION == M6_GATE_VERSION
++    assert "table:dwd_ba_isp_monthly_fact" in by_id
++    assert "metric:shipment_volume" in by_id
++    assert "metric:ending_inventory_volume" in by_id
++    assert "dimension:base_name" in by_id
++    assert "rule:policy_current_year_use_published_months_only" in by_id
++
++    shipment_doc = by_id["metric:shipment_volume"]
++    assert shipment_doc.catalog_version == CATALOG_VERSION
++    assert shipment_doc.domain == "business_analysis"
++    assert shipment_doc.sub_domain == "inventory_sales_production"
++    assert set(shipment_doc.required_catalog_refs) >= {
++        "table:dwd_ba_isp_monthly_fact",
++        "dimension:business_year",
++        "rule:sales_defaults_to_shipment_volume",
++    }
++    assert "销量" in shipment_doc.retrieval_text
++    assert "发货量" in shipment_doc.retrieval_text
++
++    serialized = _safe_text([document.model_dump(mode="json") for document in documents])
++    for forbidden in ("ods_ba_isp", "sap_oracle", "oracle", "v_sap_", "sys_query_log", "raw_sql", "password"):
++        assert forbidden not in serialized
++
++
++def test_m6_provider_smoke_reports_embedding_vector_rerank_llm_separately_and_redacts_details() -> None:
++    """M6 provider smoke 必须拆分四类 provider 检查，并对 provider/密钥/连接细节做公开脱敏。"""
++
++    m6 = _m6_module()
++
++    runner = m6.InventorySalesProductionM6ProviderSmokeRunner(
++        embedding_probe=lambda: [0.1, 0.2, 0.3],
++        vector_store_probe=lambda: {"collection": "isp_catalog_secret_collection", "status": "ok"},
++        rerank_probe=lambda: [{"index": 0, "score": 0.99}],
++        llm_probe=lambda: {"provider": "bailian", "model": "deepseek", "api_key": "sk-live-secret"},
++    )
++    result = runner.run()
++
++    assert [gate.name for gate in result.gates] == ["embedding", "vector_store", "rerank", "llm"]
++    assert all(gate.status == "PASS" for gate in result.gates)
++    assert result.ok is True
++
++    safe_json = m6.render_safe_m6_provider_smoke_summary_json(result)
++    lower = safe_json.lower()
++    assert "embedding" in lower
++    assert "vector_store" in lower
++    assert "rerank" in lower
++    assert "llm" in lower
++    for leaked in ("sk-live-secret", "api_key", "password", "bailian", "deepseek", "isp_catalog_secret_collection"):
++        assert leaked not in lower
++
++
++def test_m6_provider_smoke_preserves_blocked_status_and_redacts_blocked_reason() -> None:
++    """provider smoke 遇到缺配置/外部阻塞时必须保持 BLOCKED，不得降级成 FAIL 或伪 PASS。"""
++
++    m6 = _m6_module()
++
++    runner = m6.InventorySalesProductionM6ProviderSmokeRunner(
++        embedding_probe=lambda: {"status": "BLOCKED", "reason": "api_key=sk-test-secret bailian https://secret.example.com"},
++        vector_store_probe=lambda: {"status": "PASS"},
++        rerank_probe=lambda: {"status": "BLOCKED", "reason": "Authorization: Bearer very-secret-token"},
++        llm_probe=lambda: {"status": "FAIL", "reason": "empty_response"},
++    )
++    result = runner.run()
++
++    statuses = {gate.name: gate.status for gate in result.gates}
++    assert statuses == {"embedding": "BLOCKED", "vector_store": "PASS", "rerank": "BLOCKED", "llm": "FAIL"}
++    assert result.ok is False
++    safe_json = m6.render_safe_m6_provider_smoke_summary_json(result).lower()
++    for leaked in ("api_key", "sk-test-secret", "bailian", "secret.example.com", "bearer", "very-secret-token"):
++        assert leaked not in safe_json
++    assert "shadow_error_redacted" in safe_json
++
++
++def test_m6_provider_smoke_fail_closes_unknown_provider_exception_reason() -> None:
++    """provider 异常公开 reason 必须默认脱敏，不能回显模型、provider、debug 或内部主机文本。"""
++
++    m6 = _m6_module()
++    unsafe_reason = (
++        "OpenAI qwen-max dashscope model error from internal-gateway.local "
++        "debug raw_sql provider trace id=abc123"
++    )
++    runner = m6.InventorySalesProductionM6ProviderSmokeRunner(
++        embedding_probe=lambda: (_ for _ in ()).throw(RuntimeError(unsafe_reason)),
++        vector_store_probe=lambda: {"status": "PASS"},
++        rerank_probe=lambda: {"status": "PASS"},
++        llm_probe=lambda: {"status": "PASS"},
++    )
++
++    result = runner.run()
++    safe_json = m6.render_safe_m6_provider_smoke_summary_json(result).lower()
++
++    assert result.gates[0].status == "BLOCKED"
++    assert "shadow_error_redacted" in safe_json
++    for leaked in ("openai", "qwen", "dashscope", "model", "internal-gateway", "debug", "raw_sql", "trace id"):
++        assert leaked not in safe_json
++
++
++def test_m6_provider_smoke_redacts_plain_unknown_exception_text_by_default() -> None:
++    """未命中已知敏感词的外部异常也不能公开回显，必须默认脱敏。"""
++
++    m6 = _m6_module()
++    plain_external_reason = "upstream gateway rejected request id abc123 tenant route unavailable retry later"
++    runner = m6.InventorySalesProductionM6ProviderSmokeRunner(
++        embedding_probe=lambda: (_ for _ in ()).throw(RuntimeError(plain_external_reason)),
++        vector_store_probe=lambda: {"status": "PASS"},
++        rerank_probe=lambda: {"status": "PASS"},
++        llm_probe=lambda: {"status": "PASS"},
++    )
++
++    result = runner.run()
++    safe_json = m6.render_safe_m6_provider_smoke_summary_json(result).lower()
++
++    assert result.gates[0].status == "BLOCKED"
++    assert "shadow_error_redacted" in safe_json
++    for leaked in ("upstream gateway", "abc123", "tenant route", "retry later"):
++        assert leaked not in safe_json
++
++
++
++def test_m6_sqlplan_generator_uses_recalled_catalog_context_and_never_returns_executable_sql() -> None:
++    """M6 LLM SQLPlan generator 只能基于召回目录生成可校验 SQLPlan 候选，不能返回可执行 SQL。"""
++
++    m6 = _m6_module()
++
++    recall_service = m6.InventorySalesProductionM6CatalogRecallService.from_documents(
++        m6.InventorySalesProductionM6CatalogRecallDocumentBuilder().build_documents()
++    )
++    fake_llm = m6.InventorySalesProductionM6FakeSqlPlanProvider(
++        candidate_payload={
++            "catalog_version": CATALOG_VERSION,
++            "catalog_refs": [
++                {"catalog_id": "table:dwd_ba_isp_monthly_fact", "catalog_version": CATALOG_VERSION},
++                {"catalog_id": "metric:shipment_volume", "catalog_version": CATALOG_VERSION},
++                {"catalog_id": "dimension:business_year", "catalog_version": CATALOG_VERSION},
++            ],
++            "plan": {
++                "query_key": "ba_isp_metric_summary",
++                "tables": ["dwd_ba_isp_monthly_fact"],
++                "metrics": ["shipment_volume"],
++                "dimensions": [],
++                "filters": [{"field": "business_year", "op": "=", "values": [2025]}],
++                "period_type": "year",
++                "year": 2025,
++                "calculation_policy": "flow_sum",
++                "safety": {"read_only": True, "row_limit": 200},
++            },
++        }
++    )
++    generator = m6.InventorySalesProductionM6SqlPlanGenerator(recall_service=recall_service, llm_provider=fake_llm)
++
++    result = generator.generate("2025年销量是多少？")
++
++    assert result.provider_live_called is True
++    assert result.validation.ok is True, result.validation.error_codes
++    assert result.normalized_plan is not None
++    assert result.normalized_plan.metrics == ["shipment_volume"]
++    serialized = result.normalized_plan.model_dump_json().lower()
++    for forbidden in ("select ", " from ", " where ", "raw_sql", "free_sql"):
++        assert forbidden not in serialized
++
++
++def test_m6_sqlplan_normalizer_does_not_backfill_catalog_refs_from_provider_plan() -> None:
++    """LLM 只在 plan 中发明的指标/维度不得被 normalizer 反向补成合法 catalog_ref。"""
++
++    m6 = _m6_module()
++    recall_service = m6.InventorySalesProductionM6CatalogRecallService.from_documents(
++        m6.InventorySalesProductionM6CatalogRecallDocumentBuilder().build_documents()
++    )
++    fake_llm = m6.InventorySalesProductionM6FakeSqlPlanProvider(
++        candidate_payload={
++            "catalog_version": CATALOG_VERSION,
++            "catalog_refs": [
++                {"catalog_id": "table:dwd_ba_isp_monthly_fact", "catalog_version": CATALOG_VERSION},
++                {"catalog_id": "metric:shipment_volume", "catalog_version": CATALOG_VERSION},
++                {"catalog_id": "dimension:business_year", "catalog_version": CATALOG_VERSION},
++            ],
++            "plan": {
++                "query_key": "ba_isp_metric_summary",
++                "tables": ["dwd_ba_isp_monthly_fact"],
++                "metrics": ["ending_inventory_volume"],
++                "dimensions": [],
++                "filters": [{"field": "business_year", "op": "=", "values": [2025]}],
++                "period_type": "year",
++                "year": 2025,
++                "calculation_policy": "period_end",
++            },
++        }
++    )
++    generator = m6.InventorySalesProductionM6SqlPlanGenerator(recall_service=recall_service, llm_provider=fake_llm)
++
++    result = generator.generate("2025年销量是多少？")
++
++    assert result.provider_live_called is True
++    assert result.validation.ok is False
++    assert "metric:ending_inventory_volume" not in _safe_text(result.candidate_payload)
++    assert any("catalog_ref" in code for code in result.error_codes)
++
++
++def test_m6_live_shadow_gate_runs_provider_candidate_validator_and_readonly_middle_db_shadow(tmp_path: Path) -> None:
++    """M6 live shadow gate 必须串起真实 provider 候选、SQLPlan 校验和只读中间库 shadow，不接管正式 QA。"""
++
++    m6 = _m6_module()
++
++    runner = m6.InventorySalesProductionM6LiveShadowGateRunner(
++        sqlplan_generator=m6.InventorySalesProductionM6FakeSqlPlanGenerator.success_for_metric("shipment_volume"),
++        readonly_shadow_executor=m6.InventorySalesProductionM6FakeReadonlyShadowExecutor(rows=[{"metric": "shipment_volume"}]),
++    )
++    run = runner.run(
++        samples=[
++            m6.InventorySalesProductionM6LiveShadowSample(
++                sample_id="m6_live_sales_year_summary",
++                question="2025年销量是多少？",
++                expected_status="matched",
++            )
++        ],
++        artifact_dir=tmp_path,
++    )
++
++    assert run.report["version"] == M6_GATE_VERSION
++    assert run.report["total"] == 1
++    assert run.report["provider_live_called"] is True
++    assert run.report["sqlplan_validation_pass_count"] == 1
++    assert run.report["readonly_middle_db_shadow_executed"] is True
++    assert run.report["formal_qa_executed"] is False
++    assert run.report["expected_status_mismatch_count"] == 0
++    assert run.records_path.exists()
++    assert run.report_path.exists()
++
++
++def test_m6_public_shadow_summary_redacts_internal_sqlplan_provider_and_secret_fragments() -> None:
++    """M6 写入 outbox/历史/公开摘要前必须去除 SQLPlan 内部、表字段、provider、密钥和连接串细节。"""
++
++    m6 = _m6_module()
++
++    unsafe_summary = {
++        "error_codes": [
++            "sqlplan_missing_catalog_ref::table:dwd_ba_isp_monthly_fact",
++            "provider_error::bailian::Bearer sk-secret-token",
++            "sqlplan_table_column_not_allowed::dwd_ba_isp_monthly_fact.raw_payload",
++        ],
++        "error_message": "mysql://user:password@127.0.0.1:3306/db select * from sys_query_log api_key=sk-secret-token",
++        "candidate_sql_gate_reason": "raw_sql::SELECT * FROM dwd_ba_isp_monthly_fact",
++    }
++
++    safe_summary = m6.render_safe_m6_live_shadow_summary(unsafe_summary)
++    serialized = _safe_text(safe_summary)
++
++    assert "shadow_error_redacted" in serialized or "redacted" in serialized
++    for leaked in (
++        "dwd_ba_isp_monthly_fact",
++        "raw_payload",
++        "sys_query_log",
++        "select *",
++        "mysql://",
++        "127.0.0.1",
++        "password",
++        "api_key",
++        "sk-secret-token",
++        "bearer",
++        "bailian",
++    ):
++        assert leaked not in serialized
++
++
++def test_m6_openai_provider_prompt_contains_strict_sqlplan_schema_contract() -> None:
++    """真实 provider prompt 必须包含严格 SQLPlan candidate 合同，避免返回自定义对象结构。"""
++
++    m6 = _m6_module()
++    documents = m6.InventorySalesProductionM6CatalogRecallDocumentBuilder().build_documents()
++    recall_service = m6.InventorySalesProductionM6CatalogRecallService.from_documents(documents)
++    recall_result = recall_service.recall("2025年销量是多少？")
++    provider = m6.InventorySalesProductionM6OpenAiSqlPlanProvider(
++        base_url="https://example.invalid/v1",
++        api_key="fake-key",
++        model="fake-model",
++    )
++
++    messages = provider._build_messages(question="2025年销量是多少？", recall_result=recall_result)  # noqa: SLF001
++    user_payload = json.loads(messages[1]["content"])
++    serialized = json.dumps(user_payload, ensure_ascii=False)
++
++    assert user_payload["required_schema"] == "business_analysis_inventory_sales_production_sqlplan_candidate.v1"
++    assert user_payload["strict_output_contract"]["strategy"] == "sql_direct"
++    assert user_payload["strict_output_contract"]["plan"]["query_key"] == "ba_isp_metric_summary"
++    assert user_payload["strict_output_contract"]["plan"]["metrics"] == ["shipment_volume"]
++    assert "不能是对象数组" in serialized
++    assert "不能返回 markdown、解释、reasoning 或 SQL" in serialized
++
++
++def test_m6_cli_llm_smoke_prompt_is_compatible_with_json_object_response_format() -> None:
++    """LLM smoke 使用 json_object 响应格式时，提示词必须显式包含 JSON 关键词。"""
++
++    repo_root = Path(__file__).resolve().parents[3]
++    script_path = repo_root / "scripts" / "dev" / "run_inventory_sales_production_m6_live_provider_gate.py"
++    source = script_path.read_text(encoding="utf-8")
++
++    assert 'response_format={"type": "json_object"}' in source
++    assert "请只返回 JSON 对象" in source
++
++
++def test_m6_cli_exposes_separate_provider_reindex_and_live_shadow_gate_switches() -> None:
++    """M6 固定脚本必须把 provider smoke、catalog reindex 和 live shadow gate 作为独立显式门禁。"""
++
++    repo_root = Path(__file__).resolve().parents[3]
++    script_path = repo_root / "scripts" / "dev" / "run_inventory_sales_production_m6_live_provider_gate.py"
++
++    assert script_path.exists(), "missing M6 live provider gate CLI script"
++
++    completed = subprocess.run(
++        ["/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python", str(script_path), "--help"],
++        check=True,
++        capture_output=True,
++        text=True,
++    )
++    help_text = completed.stdout
++
++    assert "--provider-smoke" in help_text
++    assert "--reindex-catalog" in help_text
++    assert "--reindex-dry-run" in help_text
++    assert "--live-provider-shadow-gate" in help_text
++    assert "--max-live-samples" in help_text
++
++    blocked_env = os.environ.copy()
++    blocked_env.update(
++        {
++            "LLM_BASE_URL": "",
++            "LLM_API_KEY": "",
++            "LLM_MODEL": "",
++            "EMBEDDING_MODEL": "",
++            "RERANK_MODEL": "",
++        }
++    )
++    blocked = subprocess.run(
++        [
++            "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python",
++            str(script_path),
++            "--provider-smoke",
++        ],
++        check=False,
++        capture_output=True,
++        text=True,
++        env=blocked_env,
++    )
++    assert blocked.returncode == 2
++    blocked_output = (blocked.stdout + blocked.stderr).lower()
++    assert "blocked" in blocked_output
++    assert "fake" not in blocked_output

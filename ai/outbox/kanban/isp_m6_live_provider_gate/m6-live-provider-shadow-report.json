@@ -1,0 +1,10 @@
+{
+  "expected_status_mismatch_count": 0,
+  "formal_qa_executed": false,
+  "provider_live_called": true,
+  "readonly_middle_db_shadow_executed": true,
+  "sqlplan_validation_pass_count": 1,
+  "success_count": 1,
+  "total": 1,
+  "version": "business_analysis_inventory_sales_production_m6_live_provider_gate.v1"
+}

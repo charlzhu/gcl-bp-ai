@@ -1,0 +1,23 @@
+===== static scan =====
+COMMAND: /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/run_m6_static_scan.py
+{
+  "finding_count": 0,
+  "findings": [],
+  "rules": [
+    "dangerous_eval_exec",
+    "hardcoded_secret_assignment",
+    "shell_injection",
+    "sql_string_interpolation",
+    "unsafe_pickle"
+  ],
+  "scope": [
+    "backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py",
+    "scripts/dev/run_inventory_sales_production_m6_live_provider_gate.py",
+    "tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py",
+    "backend/app/domains/logistics/services/business_entity_resolver.py",
+    "backend/app/domains/logistics/services/data_qa_planner.py",
+    "tests/business_acceptance/test_logistics_carrier_filter_scope.py"
+  ],
+  "status": "PASS"
+}
+EXIT_CODE=0
