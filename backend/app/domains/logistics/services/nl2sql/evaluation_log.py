@@ -64,6 +64,8 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
         row_count/sample_row_count: 试执行返回行数摘要。
         duration_ms: shadow 运行耗时。
         warnings: 非阻塞告警。
+        candidate_sql_gate_*: M10-B raw candidate SQL 门禁摘要，只记录布尔状态、原因码、脱敏原因和修复建议，
+            禁止记录 raw SQL 原文。
         created_at: ISO8601 创建时间。
     返回：
         可写入内存 sink 或 JSONL sink 的结构化日志对象。
@@ -95,6 +97,11 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
     sample_row_count: int = 0
     duration_ms: int = 0
     warnings: list[str] = Field(default_factory=list)
+    candidate_sql_gate_allowed: bool | None = None
+    candidate_sql_gate_rejected: bool | None = None
+    candidate_sql_gate_reason_code: str | None = None
+    candidate_sql_gate_sanitized_reason: str | None = None
+    candidate_sql_gate_repair_info: dict[str, Any] | None = None
     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
 
     @field_validator(
@@ -109,6 +116,8 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
         "status",
         "stage",
         "error_message",
+        "candidate_sql_gate_reason_code",
+        "candidate_sql_gate_sanitized_reason",
         "created_at",
         mode="before",
     )
@@ -148,6 +157,13 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
 
         return _safe_non_negative_int(value)
 
+    @field_validator("candidate_sql_gate_repair_info", mode="before")
+    @classmethod
+    def _sanitize_gate_repair_info(cls, value: Any) -> dict[str, Any] | None:
+        """门禁修复提示只保留脱敏 JSON 对象，防止 raw SQL 或密钥经 dict 字段落盘。"""
+
+        return _safe_json_object(value)
+
     @classmethod
     def from_pipeline(
         cls,
@@ -175,6 +191,11 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
         duration_ms: int,
         pipeline_version: str,
         warnings: list[str] | None = None,
+        candidate_sql_gate_allowed: bool | None = None,
+        candidate_sql_gate_rejected: bool | None = None,
+        candidate_sql_gate_reason_code: str | None = None,
+        candidate_sql_gate_sanitized_reason: str | None = None,
+        candidate_sql_gate_repair_info: dict[str, Any] | None = None,
     ) -> "LogisticsNl2SqlEvaluationLogRecord":
         """从 shadow pipeline 中间结果生成脱敏评估日志。"""
 
@@ -202,6 +223,11 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
             sample_row_count=max(0, int(sample_row_count)),
             duration_ms=max(0, int(duration_ms)),
             warnings=_safe_string_list(warnings or []),
+            candidate_sql_gate_allowed=candidate_sql_gate_allowed,
+            candidate_sql_gate_rejected=candidate_sql_gate_rejected,
+            candidate_sql_gate_reason_code=_safe_text(candidate_sql_gate_reason_code),
+            candidate_sql_gate_sanitized_reason=_safe_text(candidate_sql_gate_sanitized_reason),
+            candidate_sql_gate_repair_info=_safe_json_object(candidate_sql_gate_repair_info),
         )
 
 
@@ -374,6 +400,36 @@ def _safe_string_list(values: list[str]) -> list[str]:
 
     sanitized = [_safe_text(value) or "" for value in values]
     return _dedupe_strings(sanitized)
+
+
+def _safe_json_value(value: Any) -> Any:
+    """递归脱敏 JSON 值，供 gate repair_info 这类结构化摘要字段使用。"""
+
+    if isinstance(value, dict):
+        return _safe_json_object(value) or {}
+    if isinstance(value, list):
+        return [_safe_json_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_safe_json_value(item) for item in value]
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    return _safe_text(value)
+
+
+def _safe_json_object(value: Any) -> dict[str, Any] | None:
+    """把任意 dict 收敛为脱敏 JSON 对象；非 dict 输入直接丢弃。"""
+
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        return None
+    result: dict[str, Any] = {}
+    for key, item in value.items():
+        safe_key = _safe_text(key, max_chars=120)
+        if not safe_key:
+            continue
+        result[safe_key] = _safe_json_value(item)
+    return result
 
 
 __all__ = [

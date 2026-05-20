@@ -1,0 +1,697 @@
+diff --git a/backend/app/domains/logistics/services/nl2sql/evaluation_log.py b/backend/app/domains/logistics/services/nl2sql/evaluation_log.py
+index 8a70e16f..de00509b 100644
+--- a/backend/app/domains/logistics/services/nl2sql/evaluation_log.py
++++ b/backend/app/domains/logistics/services/nl2sql/evaluation_log.py
+@@ -64,6 +64,8 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
+         row_count/sample_row_count: 试执行返回行数摘要。
+         duration_ms: shadow 运行耗时。
+         warnings: 非阻塞告警。
++        candidate_sql_gate_*: M10-B raw candidate SQL 门禁摘要，只记录布尔状态、原因码、脱敏原因和修复建议，
++            禁止记录 raw SQL 原文。
+         created_at: ISO8601 创建时间。
+     返回：
+         可写入内存 sink 或 JSONL sink 的结构化日志对象。
+@@ -95,6 +97,11 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
+     sample_row_count: int = 0
+     duration_ms: int = 0
+     warnings: list[str] = Field(default_factory=list)
++    candidate_sql_gate_allowed: bool | None = None
++    candidate_sql_gate_rejected: bool | None = None
++    candidate_sql_gate_reason_code: str | None = None
++    candidate_sql_gate_sanitized_reason: str | None = None
++    candidate_sql_gate_repair_info: dict[str, Any] | None = None
+     created_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+
+     @field_validator(
+@@ -109,6 +116,8 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
+         "status",
+         "stage",
+         "error_message",
++        "candidate_sql_gate_reason_code",
++        "candidate_sql_gate_sanitized_reason",
+         "created_at",
+         mode="before",
+     )
+@@ -148,6 +157,13 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
+
+         return _safe_non_negative_int(value)
+
++    @field_validator("candidate_sql_gate_repair_info", mode="before")
++    @classmethod
++    def _sanitize_gate_repair_info(cls, value: Any) -> dict[str, Any] | None:
++        """门禁修复提示只保留脱敏 JSON 对象，防止 raw SQL 或密钥经 dict 字段落盘。"""
++
++        return _safe_json_object(value)
++
+     @classmethod
+     def from_pipeline(
+         cls,
+@@ -175,6 +191,11 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
+         duration_ms: int,
+         pipeline_version: str,
+         warnings: list[str] | None = None,
++        candidate_sql_gate_allowed: bool | None = None,
++        candidate_sql_gate_rejected: bool | None = None,
++        candidate_sql_gate_reason_code: str | None = None,
++        candidate_sql_gate_sanitized_reason: str | None = None,
++        candidate_sql_gate_repair_info: dict[str, Any] | None = None,
+     ) -> "LogisticsNl2SqlEvaluationLogRecord":
+         """从 shadow pipeline 中间结果生成脱敏评估日志。"""
+
+@@ -202,6 +223,11 @@ class LogisticsNl2SqlEvaluationLogRecord(BaseModel):
+             sample_row_count=max(0, int(sample_row_count)),
+             duration_ms=max(0, int(duration_ms)),
+             warnings=_safe_string_list(warnings or []),
++            candidate_sql_gate_allowed=candidate_sql_gate_allowed,
++            candidate_sql_gate_rejected=candidate_sql_gate_rejected,
++            candidate_sql_gate_reason_code=_safe_text(candidate_sql_gate_reason_code),
++            candidate_sql_gate_sanitized_reason=_safe_text(candidate_sql_gate_sanitized_reason),
++            candidate_sql_gate_repair_info=_safe_json_object(candidate_sql_gate_repair_info),
+         )
+
+
+@@ -376,6 +402,36 @@ def _safe_string_list(values: list[str]) -> list[str]:
+     return _dedupe_strings(sanitized)
+
+
++def _safe_json_value(value: Any) -> Any:
++    """递归脱敏 JSON 值，供 gate repair_info 这类结构化摘要字段使用。"""
++
++    if isinstance(value, dict):
++        return _safe_json_object(value) or {}
++    if isinstance(value, list):
++        return [_safe_json_value(item) for item in value]
++    if isinstance(value, tuple):
++        return [_safe_json_value(item) for item in value]
++    if isinstance(value, (int, float, bool)) or value is None:
++        return value
++    return _safe_text(value)
++
++
++def _safe_json_object(value: Any) -> dict[str, Any] | None:
++    """把任意 dict 收敛为脱敏 JSON 对象；非 dict 输入直接丢弃。"""
++
++    if value is None:
++        return None
++    if not isinstance(value, dict):
++        return None
++    result: dict[str, Any] = {}
++    for key, item in value.items():
++        safe_key = _safe_text(key, max_chars=120)
++        if not safe_key:
++            continue
++        result[safe_key] = _safe_json_value(item)
++    return result
++
++
+ __all__ = [
+     "EVALUATION_LOG_SCHEMA_VERSION",
+     "InMemoryLogisticsNl2SqlEvaluationLogSink",
+diff --git a/backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py b/backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py
+index cf8a934a..1f64e846 100644
+--- a/backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py
++++ b/backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py
+@@ -850,7 +850,12 @@ class LogisticsSqlPlanGenerator:
+
+
+ class LogisticsNl2SqlM9ShadowSample(BaseModel):
+-    """M9 自然语言→SQLPlan shadow 样例。"""
++    """M9 自然语言→SQLPlan shadow 样例。
++
++    参数：
++        raw_candidate_sql: 可选的上游原始 SQL 文本，只在运行时传给 M10-B gate；字段设置为
++            `exclude=True`，写 records/report 时不会落盘 SQL 原文。
++    """
+
+     model_config = ConfigDict(extra="forbid")
+
+@@ -860,6 +865,7 @@ class LogisticsNl2SqlM9ShadowSample(BaseModel):
+     category: str = "general"
+     business_case: str = "general"
+     offline_only: bool = True
++    raw_candidate_sql: str | None = Field(default=None, exclude=True)
+
+
+ class LogisticsNl2SqlM9ShadowOutcome(BaseModel):
+@@ -876,6 +882,9 @@ class LogisticsNl2SqlM9ShadowOutcome(BaseModel):
+     shadow_status: str | None = None
+     sql_hash: str | None = None
+     row_count: int = 0
++    candidate_sql_gate_allowed: bool | None = None
++    candidate_sql_gate_rejected: bool | None = None
++    candidate_sql_gate_reason_code: str | None = None
+     elapsed_ms: int = 0
+
+
+@@ -890,6 +899,9 @@ class LogisticsNl2SqlM9ShadowReport(BaseModel):
+     generated_count: int = 0
+     validation_pass_count: int = 0
+     validation_failed_count: int = 0
++    candidate_sql_gate_allowed_count: int = 0
++    candidate_sql_gate_rejected_count: int = 0
++    by_candidate_sql_gate_reason: dict[str, int] = Field(default_factory=dict)
+     expected_status_match_count: int = 0
+     expected_status_mismatch_count: int = 0
+     by_status: dict[str, int] = Field(default_factory=dict)
+@@ -921,11 +933,19 @@ class LogisticsNl2SqlM9ShadowRun(BaseModel):
+             f"- generated_count: {self.report.generated_count}",
+             f"- validation_pass_count: {self.report.validation_pass_count}",
+             f"- recall_failed_count: {self.report.recall_failed_count}",
++            f"- candidate_sql_gate_allowed_count: {self.report.candidate_sql_gate_allowed_count}",
++            f"- candidate_sql_gate_rejected_count: {self.report.candidate_sql_gate_rejected_count}",
+             f"- expected_status_mismatch_count: {self.report.expected_status_mismatch_count}",
+             "",
+             "## By Status",
+         ]
+         lines.extend(f"- {key}: {value}" for key, value in sorted(self.report.by_status.items()))
++        if self.report.by_candidate_sql_gate_reason:
++            lines.append("")
++            lines.append("## Candidate SQL Gate Reasons")
++            lines.extend(
++                f"- {key}: {value}" for key, value in sorted(self.report.by_candidate_sql_gate_reason.items())
++            )
+         lines.append("")
+         lines.append("## Samples")
+         for outcome in self.outcomes:
+@@ -1075,6 +1095,7 @@ def run_logistics_nl2sql_m9_shadow_sqlplan_generation(
+                 domain=route.domain,
+                 source_system=route.source_system,
+                 candidate=generation.candidate,
++                raw_candidate_sql=sample.raw_candidate_sql,
+                 request_id=uuid4().hex,
+                 dry_run=True,
+             )
+@@ -1091,6 +1112,9 @@ def run_logistics_nl2sql_m9_shadow_sqlplan_generation(
+                 shadow_status=shadow_result.status,
+                 sql_hash=shadow_result.sql_hash,
+                 row_count=shadow_result.row_count,
++                candidate_sql_gate_allowed=shadow_result.candidate_sql_gate_allowed,
++                candidate_sql_gate_rejected=shadow_result.candidate_sql_gate_rejected,
++                candidate_sql_gate_reason_code=shadow_result.candidate_sql_gate_reason_code,
+             )
+         )
+
+@@ -1119,6 +1143,9 @@ def _outcome(
+     shadow_status: str | None = None,
+     sql_hash: str | None = None,
+     row_count: int = 0,
++    candidate_sql_gate_allowed: bool | None = None,
++    candidate_sql_gate_rejected: bool | None = None,
++    candidate_sql_gate_reason_code: str | None = None,
+ ) -> LogisticsNl2SqlM9ShadowOutcome:
+     return LogisticsNl2SqlM9ShadowOutcome(
+         sample=sample,
+@@ -1130,6 +1157,9 @@ def _outcome(
+         shadow_status=shadow_status,
+         sql_hash=sql_hash,
+         row_count=row_count,
++        candidate_sql_gate_allowed=candidate_sql_gate_allowed,
++        candidate_sql_gate_rejected=candidate_sql_gate_rejected,
++        candidate_sql_gate_reason_code=redact_evaluation_text(str(candidate_sql_gate_reason_code)) if candidate_sql_gate_reason_code else None,
+         elapsed_ms=int((time.perf_counter() - started) * 1000),
+     )
+
+@@ -1139,6 +1169,9 @@ def _build_report(outcomes: list[LogisticsNl2SqlM9ShadowOutcome]) -> LogisticsNl
+     by_status = Counter(outcome.status for outcome in outcomes)
+     by_category = Counter(outcome.sample.category for outcome in outcomes)
+     by_business_case = Counter(outcome.sample.business_case for outcome in outcomes)
++    by_candidate_sql_gate_reason = Counter(
++        outcome.candidate_sql_gate_reason_code for outcome in outcomes if outcome.candidate_sql_gate_reason_code
++    )
+     expected_status_match_count = sum(1 for outcome in outcomes if outcome.status == outcome.sample.expected_status)
+     return LogisticsNl2SqlM9ShadowReport(
+         total=total,
+@@ -1147,6 +1180,9 @@ def _build_report(outcomes: list[LogisticsNl2SqlM9ShadowOutcome]) -> LogisticsNl
+         generated_count=sum(1 for outcome in outcomes if outcome.generated),
+         validation_pass_count=sum(1 for outcome in outcomes if outcome.validation_ok),
+         validation_failed_count=by_status.get("validation_failed", 0),
++        candidate_sql_gate_allowed_count=sum(1 for outcome in outcomes if outcome.candidate_sql_gate_allowed is True),
++        candidate_sql_gate_rejected_count=sum(1 for outcome in outcomes if outcome.candidate_sql_gate_rejected is True),
++        by_candidate_sql_gate_reason=dict(by_candidate_sql_gate_reason),
+         expected_status_match_count=expected_status_match_count,
+         expected_status_mismatch_count=total - expected_status_match_count,
+         by_status=dict(by_status),
+diff --git a/backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py b/backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py
+index 25a93fe1..5d872efc 100644
+--- a/backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py
++++ b/backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py
+@@ -7,6 +7,10 @@ from uuid import uuid4
+
+ from pydantic import BaseModel, ConfigDict, Field
+
++from backend.app.domains.logistics.services.nl2sql.candidate_sql_gate import (
++    LogisticsCandidateSqlGate,
++    LogisticsCandidateSqlGateResult,
++)
+ from backend.app.domains.logistics.services.nl2sql.evaluation_log import (
+     InMemoryLogisticsNl2SqlEvaluationLogSink,
+     LogisticsNl2SqlEvaluationLogRecord,
+@@ -45,7 +49,15 @@ class LogisticsNl2SqlRendererProtocol(Protocol):
+         """把通过 M3 校验的 plan 渲染为参数化 SQL。"""
+
+
++class LogisticsCandidateSqlGateProtocol(Protocol):
++    """shadow pipeline 使用的 raw candidate SQL 门禁协议，方便单测注入 fake gate。"""
++
++    def check(self, sql: str | None) -> LogisticsCandidateSqlGateResult:
++        """校验 raw candidate SQL 并返回脱敏 gate 结果。"""
++
++
+ class LogisticsNl2SqlShadowPipelineRequest(BaseModel):
++
+     """物流 NL2SQL shadow pipeline 请求。
+
+     参数：
+@@ -54,6 +66,7 @@ class LogisticsNl2SqlShadowPipelineRequest(BaseModel):
+         domain: 业务域，MVP 仅允许 logistics。
+         source_system: 数据来源边界，MVP 仅允许 middle_db。
+         candidate: 受控 SQLPlan candidate；MVP 可由测试或上游 shadow wrapper 注入。
++        raw_candidate_sql: 上游生成的原始候选 SQL，仅用于 M10-B shadow gate 审计，绝不作为执行 SQL。
+         request_id: 上游请求追踪 ID。
+         dry_run: 预留字段；MVP 始终只做 shadow/dry-run，不接正式 QA 主链路。
+     返回：
+@@ -67,6 +80,7 @@ class LogisticsNl2SqlShadowPipelineRequest(BaseModel):
+     domain: str = "logistics"
+     source_system: str = "middle_db"
+     candidate: dict[str, Any] | None = None
++    raw_candidate_sql: str | None = None
+     request_id: str | None = None
+     dry_run: bool = True
+
+@@ -94,6 +108,11 @@ class LogisticsNl2SqlShadowPipelineResult(BaseModel):
+     trial_ok: bool = False
+     evaluation_log_record: LogisticsNl2SqlEvaluationLogRecord
+     log_error: str | None = None
++    candidate_sql_gate_allowed: bool | None = None
++    candidate_sql_gate_rejected: bool | None = None
++    candidate_sql_gate_reason_code: str | None = None
++    candidate_sql_gate_sanitized_reason: str | None = None
++    candidate_sql_gate_repair_info: dict[str, Any] | None = None
+
+
+ class LogisticsNl2SqlShadowPipeline:
+@@ -114,9 +133,23 @@ class LogisticsNl2SqlShadowPipeline:
+         safety_checker: LogisticsSqlSafetyChecker | None = None,
+         execution_service: LogisticsSqlExecutionService | None = None,
+         log_sink: LogisticsNl2SqlEvaluationLogSink | None = None,
++        candidate_sql_gate: LogisticsCandidateSqlGateProtocol | None = None,
+         pipeline_version: str = SHADOW_PIPELINE_VERSION,
+     ) -> None:
+-        """初始化 shadow pipeline。"""
++        """初始化 shadow pipeline。
++
++        参数：
++            catalog: 语义目录，缺省加载本地物流目录。
++            validator: SQLPlan 校验器，必须在 candidate SQL gate 通过后才会调用。
++            renderer: 受控 SQLPlan 渲染器，绝不接收 raw candidate SQL。
++            safety_checker: SQL 文本安全检查器，检查 renderer 产物。
++            execution_service: EXPLAIN/trial 执行服务，默认 fake executor。
++            log_sink: evaluation log sink，失败不影响主结果。
++            candidate_sql_gate: M10-B raw candidate SQL 门禁，缺省使用 `LogisticsCandidateSqlGate`。
++            pipeline_version: shadow pipeline 版本。
++        返回：
++            无。
++        """
+
+         resolved_catalog = catalog or LogisticsSemanticCatalogLoader().load()
+         self.validator = validator or LogisticsSqlPlanValidator(catalog=resolved_catalog)
+@@ -127,6 +160,7 @@ class LogisticsNl2SqlShadowPipeline:
+             safety_checker=self.safety_checker,
+         )
+         self.log_sink = log_sink or InMemoryLogisticsNl2SqlEvaluationLogSink()
++        self.candidate_sql_gate = candidate_sql_gate or LogisticsCandidateSqlGate()
+         self.pipeline_version = pipeline_version
+
+     def run(self, request: LogisticsNl2SqlShadowPipelineRequest) -> LogisticsNl2SqlShadowPipelineResult:
+@@ -151,9 +185,35 @@ class LogisticsNl2SqlShadowPipeline:
+         sample_row_count = 0
+         explain_ok = False
+         trial_ok = False
++        candidate_sql_gate_result: LogisticsCandidateSqlGateResult | None = None
++
++        if request.raw_candidate_sql is not None:
++            # 业务逻辑：M10-B raw candidate SQL 只做 shadow 门禁审计；一旦拒绝，必须在 SQLPlan
++            # validator/renderer/safety/executor 之前 fail-closed，且后续只记录脱敏 reason，不保存 SQL 原文。
++            candidate_sql_gate_result = self.candidate_sql_gate.check(request.raw_candidate_sql)
++            if candidate_sql_gate_result.rejected:
++                reason_code = candidate_sql_gate_result.reason_code
++                return self._finish(
++                    request=request,
++                    trace_id=trace_id,
++                    started=started,
++                    status="validation_failed",
++                    stage="candidate_sql_gate",
++                    error_codes=[f"candidate_sql_gate_rejected::{reason_code}"],
++                    error_message=candidate_sql_gate_result.sanitized_reason,
++                    catalog_ids=catalog_ids,
++                    catalog_versions=catalog_versions,
++                    validation_errors=[f"candidate_sql_gate_rejected::{reason_code}"],
++                    candidate_sql_gate_result=candidate_sql_gate_result,
++                )
++
++        def finish_with_gate(**kwargs: Any) -> LogisticsNl2SqlShadowPipelineResult:
++            """复用入口 gate 结果构造返回，避免允许路径重复检查同一段 raw SQL。"""
++
++            return self._finish(candidate_sql_gate_result=candidate_sql_gate_result, **kwargs)
+
+         if request.domain != "logistics":
+-            return self._finish(
++            return finish_with_gate(
+                 request=request,
+                 trace_id=trace_id,
+                 started=started,
+@@ -165,7 +225,7 @@ class LogisticsNl2SqlShadowPipeline:
+                 catalog_versions=catalog_versions,
+             )
+         if request.source_system != "middle_db":
+-            return self._finish(
++            return finish_with_gate(
+                 request=request,
+                 trace_id=trace_id,
+                 started=started,
+@@ -177,7 +237,7 @@ class LogisticsNl2SqlShadowPipeline:
+                 catalog_versions=catalog_versions,
+             )
+         if not request.candidate:
+-            return self._finish(
++            return finish_with_gate(
+                 request=request,
+                 trace_id=trace_id,
+                 started=started,
+@@ -191,7 +251,7 @@ class LogisticsNl2SqlShadowPipeline:
+
+         strategy = str(request.candidate.get("strategy") or "")
+         if strategy != "sql_direct":
+-            return self._finish(
++            return finish_with_gate(
+                 request=request,
+                 trace_id=trace_id,
+                 started=started,
+@@ -206,7 +266,7 @@ class LogisticsNl2SqlShadowPipeline:
+         validation_result = self.validator.validate(request.candidate)
+         if not validation_result.ok:
+             validation_errors = validation_result.error_codes
+-            return self._finish(
++            return finish_with_gate(
+                 request=request,
+                 trace_id=trace_id,
+                 started=started,
+@@ -223,7 +283,7 @@ class LogisticsNl2SqlShadowPipeline:
+             rendered = self.renderer.render(validation_result)
+         except Exception as exc:  # noqa: BLE001 - renderer 是 shadow 边界，失败需转为评估日志
+             error_message = redact_evaluation_text(str(exc))
+-            return self._finish(
++            return finish_with_gate(
+                 request=request,
+                 trace_id=trace_id,
+                 started=started,
+@@ -243,7 +303,7 @@ class LogisticsNl2SqlShadowPipeline:
+         safety_result = self.safety_checker.check(rendered)
+         if not safety_result.ok:
+             safety_errors = safety_result.error_codes
+-            return self._finish(
++            return finish_with_gate(
+                 request=request,
+                 trace_id=trace_id,
+                 started=started,
+@@ -264,7 +324,7 @@ class LogisticsNl2SqlShadowPipeline:
+         explain_ok = explain_result.ok
+         if not explain_result.ok:
+             error_message = explain_result.error
+-            return self._finish(
++            return finish_with_gate(
+                 request=request,
+                 trace_id=trace_id,
+                 started=started,
+@@ -286,7 +346,7 @@ class LogisticsNl2SqlShadowPipeline:
+         trial_ok = trial_result.ok
+         if not trial_result.ok:
+             error_message = trial_result.error
+-            return self._finish(
++            return finish_with_gate(
+                 request=request,
+                 trace_id=trace_id,
+                 started=started,
+@@ -307,7 +367,7 @@ class LogisticsNl2SqlShadowPipeline:
+
+         row_count = len(trial_result.rows)
+         sample_row_count = len(trial_result.rows)
+-        return self._finish(
++        return finish_with_gate(
+             request=request,
+             trace_id=trace_id,
+             started=started,
+@@ -349,6 +409,7 @@ class LogisticsNl2SqlShadowPipeline:
+         row_count: int = 0,
+         sample_row_count: int = 0,
+         warnings: list[str] | None = None,
++        candidate_sql_gate_result: LogisticsCandidateSqlGateResult | None = None,
+     ) -> LogisticsNl2SqlShadowPipelineResult:
+         """构造评估日志并返回 shadow 结果。
+
+@@ -357,6 +418,9 @@ class LogisticsNl2SqlShadowPipeline:
+         """
+
+         duration_ms = int((time.perf_counter() - started) * 1000)
++        if candidate_sql_gate_result is None and request.raw_candidate_sql is not None:
++            # 业务逻辑：允许路径和后续失败路径也需要审计 gate 摘要；这里重算只写脱敏结果，仍不保存 SQL 原文。
++            candidate_sql_gate_result = self.candidate_sql_gate.check(request.raw_candidate_sql)
+         record = LogisticsNl2SqlEvaluationLogRecord.from_pipeline(
+             trace_id=trace_id,
+             request_id=request.request_id,
+@@ -381,6 +445,13 @@ class LogisticsNl2SqlShadowPipeline:
+             duration_ms=duration_ms,
+             pipeline_version=self.pipeline_version,
+             warnings=warnings or [],
++            candidate_sql_gate_allowed=candidate_sql_gate_result.allowed if candidate_sql_gate_result else None,
++            candidate_sql_gate_rejected=candidate_sql_gate_result.rejected if candidate_sql_gate_result else None,
++            candidate_sql_gate_reason_code=candidate_sql_gate_result.reason_code if candidate_sql_gate_result else None,
++            candidate_sql_gate_sanitized_reason=(
++                candidate_sql_gate_result.sanitized_reason if candidate_sql_gate_result else None
++            ),
++            candidate_sql_gate_repair_info=candidate_sql_gate_result.repair_info if candidate_sql_gate_result else None,
+         )
+         log_error = self._write_log(record)
+         return LogisticsNl2SqlShadowPipelineResult(
+@@ -397,6 +468,11 @@ class LogisticsNl2SqlShadowPipeline:
+             trial_ok=trial_ok,
+             evaluation_log_record=record,
+             log_error=log_error,
++            candidate_sql_gate_allowed=record.candidate_sql_gate_allowed,
++            candidate_sql_gate_rejected=record.candidate_sql_gate_rejected,
++            candidate_sql_gate_reason_code=record.candidate_sql_gate_reason_code,
++            candidate_sql_gate_sanitized_reason=record.candidate_sql_gate_sanitized_reason,
++            candidate_sql_gate_repair_info=record.candidate_sql_gate_repair_info,
+         )
+
+     def _write_log(self, record: LogisticsNl2SqlEvaluationLogRecord) -> str | None:
+diff --git a/tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py b/tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py
+index bf78a9b7..54f9c1de 100644
+--- a/tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py
++++ b/tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py
+@@ -713,6 +713,41 @@ def test_m9_shadow_runner_writes_redacted_artifacts_for_fake_success(tmp_path) -
+     assert "正式物流 QA 主链路" not in payload
+
+
++def test_m9_shadow_runner_summarizes_candidate_sql_gate_without_raw_sql(tmp_path) -> None:
++    """M9 runner 传入 raw candidate SQL 时，report/records 只能写 gate 摘要，不能泄露 SQL 原文。"""
++
++    sample = LogisticsNl2SqlM9ShadowSample(
++        sample_id="m10b_raw_candidate_sql_rejected",
++        question="2025年发运量是多少",
++        expected_status="validation_failed",
++        category="candidate_sql_gate",
++        business_case="raw_candidate_sql_rejected",
++        raw_candidate_sql="SELECT password_token_dsn FROM dws_logistics_detail_union LIMIT 9999",
++    )
++
++    run = run_logistics_nl2sql_m9_shadow_sqlplan_generation(
++        samples=[sample],
++        artifact_dir=tmp_path,
++        recall_service=_StaticRecallService(),
++        generator=_StaticGenerator(_valid_candidate()),
++    )
++    payload = (
++        run.records_path.read_text(encoding="utf-8")
++        + run.report_path.read_text(encoding="utf-8")
++        + json.dumps(run.report.model_dump(mode="json"), ensure_ascii=False)
++    )
++
++    assert run.report.total == 1
++    assert run.report.candidate_sql_gate_rejected_count == 1
++    assert run.outcomes[0].candidate_sql_gate_rejected is True
++    assert run.outcomes[0].candidate_sql_gate_reason_code == "limit_out_of_range"
++    assert "candidate_sql_gate_rejected::limit_out_of_range" in run.outcomes[0].error_codes
++    assert "SELECT" not in payload
++    assert "password_token_dsn" not in payload
++    assert "dws_logistics_detail_union LIMIT 9999" not in payload
++    assert "candidate_sql_gate_rejected_count" in payload
++
++
+ def _single_table_normalization_plan() -> dict:
+     """构造单表归一化 guard 测试使用的多表噪声计划。
+
+diff --git a/tests/unit/logistics/nl2sql/test_shadow_pipeline.py b/tests/unit/logistics/nl2sql/test_shadow_pipeline.py
+index 399c75a2..28a93cb8 100644
+--- a/tests/unit/logistics/nl2sql/test_shadow_pipeline.py
++++ b/tests/unit/logistics/nl2sql/test_shadow_pipeline.py
+@@ -3,6 +3,7 @@ from __future__ import annotations
+ from copy import deepcopy
+ from typing import Any
+
++from backend.app.domains.logistics.services.nl2sql.candidate_sql_gate import LogisticsCandidateSqlGateResult
+ from backend.app.domains.logistics.services.nl2sql.evaluation_log import InMemoryLogisticsNl2SqlEvaluationLogSink
+ from backend.app.domains.logistics.services.nl2sql.shadow_pipeline import (
+     LogisticsNl2SqlShadowPipeline,
+@@ -71,6 +72,45 @@ class _FailingLogSink:
+         raise RuntimeError(f"disk full {password_key}=unit-password")
+
+
++class _ForbiddenValidator:
++    """测试用 validator：raw candidate SQL 被拒绝后不得再进入 SQLPlan 校验。"""
++
++    def validate(self, candidate: dict[str, Any]) -> Any:
++        """若被调用则说明 gate 没有在 validator 前 fail-closed。"""
++
++        raise AssertionError("candidate SQL gate 拒绝后不应调用 SQLPlan validator")
++
++
++class _ForbiddenRenderer:
++    """测试用 renderer：raw candidate SQL 被拒绝后不得进入渲染阶段。"""
++
++    def render(self, validation_result: Any) -> LogisticsRenderedSql:
++        """若被调用则说明 gate 拒绝路径越过了 fail-closed 边界。"""
++
++        raise AssertionError("candidate SQL gate 拒绝后不应调用 renderer")
++
++
++class _CountingAllowGate:
++    """测试用 gate：记录 raw candidate SQL 校验次数，确保 pipeline 复用入口 gate 结果。"""
++
++    def __init__(self) -> None:
++        """初始化调用记录。"""
++
++        self.calls: list[str | None] = []
++
++    def check(self, sql: str | None) -> LogisticsCandidateSqlGateResult:
++        """记录入参并返回允许结果；返回值不包含 raw SQL，便于验证审计摘要复用。"""
++
++        self.calls.append(sql)
++        return LogisticsCandidateSqlGateResult(
++            allowed=True,
++            rejected=False,
++            reason_code="allowed",
++            sanitized_reason="candidate_sql_allowed",
++            repair_info=None,
++        )
++
++
+ def test_shadow_pipeline_success_runs_validation_render_safety_explain_trial_and_logs_hash_only() -> None:
+     """合法 SQLPlan 应走完 M3/M4/explain/trial，并只在结果与日志中保留 SQL hash。"""
+
+@@ -109,6 +149,106 @@ def test_shadow_pipeline_success_runs_validation_render_safety_explain_trial_and
+     assert "dws_logistics_detail_union.biz_year" not in sink.records[0].model_dump_json()
+
+
++def test_shadow_pipeline_rejects_raw_candidate_sql_before_validation_and_redacts_log() -> None:
++    """raw candidate SQL gate 拒绝时必须停在入口，不调用 validator/renderer/executor 且不落 SQL 原文。"""
++
++    executor = FakeLogisticsSqlExecutor()
++    sink = InMemoryLogisticsNl2SqlEvaluationLogSink()
++    pipeline = LogisticsNl2SqlShadowPipeline(
++        validator=_ForbiddenValidator(),
++        renderer=_ForbiddenRenderer(),
++        execution_service=LogisticsSqlExecutionService(executor=executor),
++        log_sink=sink,
++    )
++    raw_candidate_sql = "SELECT password_token_dsn FROM dws_logistics_detail_union LIMIT 9999"
++
++    result = pipeline.run(
++        LogisticsNl2SqlShadowPipelineRequest(
++            question="2025年发运量是多少",
++            candidate=_valid_candidate(),
++            raw_candidate_sql=raw_candidate_sql,
++        )
++    )
++    payload = result.model_dump_json() + sink.records[0].model_dump_json()
++
++    assert result.status == "validation_failed"
++    assert result.stage == "candidate_sql_gate"
++    assert result.candidate_sql_gate_rejected is True
++    assert result.candidate_sql_gate_allowed is False
++    assert result.candidate_sql_gate_reason_code == "limit_out_of_range"
++    assert result.candidate_sql_gate_sanitized_reason == "candidate_sql_rejected:limit_out_of_range"
++    assert result.candidate_sql_gate_repair_info == {"suggested_action": "lower_limit", "max_limit": 500}
++    assert "candidate_sql_gate_rejected::limit_out_of_range" in result.error_codes
++    assert executor.calls == []
++    assert sink.records[0].candidate_sql_gate_rejected is True
++    assert sink.records[0].candidate_sql_gate_reason_code == "limit_out_of_range"
++    assert "SELECT" not in payload
++    assert "password_token_dsn" not in payload
++    assert "dws_logistics_detail_union LIMIT 9999" not in payload
++
++
++def test_shadow_pipeline_allows_raw_candidate_sql_but_executes_only_rendered_sqlplan_sql() -> None:
++    """gate 允许 raw candidate SQL 后也只能执行 SQLPlan 渲染结果，不能执行 raw SQL 文本。"""
++
++    raw_candidate_sql = "SELECT vehicle_plate_no FROM dws_logistics_detail_union LIMIT 1"
++    executor = FakeLogisticsSqlExecutor(
++        explain_rows=[{"select_type": "SIMPLE"}],
++        trial_rows=[{"logistics_company_name": "承运商A", "shipment_mw": 12.3}],
++    )
++    sink = InMemoryLogisticsNl2SqlEvaluationLogSink()
++    pipeline = LogisticsNl2SqlShadowPipeline(
++        execution_service=LogisticsSqlExecutionService(executor=executor),
++        log_sink=sink,
++    )
++
++    result = pipeline.run(
++        LogisticsNl2SqlShadowPipelineRequest(
++            question="2025年哪个物流承运商发运量最多",
++            rewritten_question="2025年按承运商统计发运量并排序",
++            request_id="req-gate-allowed",
++            candidate=_valid_candidate(),
++            raw_candidate_sql=raw_candidate_sql,
++        )
++    )
++    executed_sql = "\n".join(call.sql for call in executor.calls)
++    payload = result.model_dump_json() + sink.records[0].model_dump_json()
++
++    assert result.status == "success", result.error_codes
++    assert result.candidate_sql_gate_allowed is True
++    assert result.candidate_sql_gate_rejected is False
++    assert result.candidate_sql_gate_reason_code == "allowed"
++    assert sink.records[0].candidate_sql_gate_allowed is True
++    assert [call.mode for call in executor.calls] == ["explain", "trial"]
++    assert raw_candidate_sql not in executed_sql
++    assert "vehicle_plate_no" not in executed_sql
++    assert "vehicle_plate_no" not in payload
++    assert "candidate_sql_allowed" in payload
++
++
++def test_shadow_pipeline_reuses_raw_candidate_sql_gate_result_for_allowed_path() -> None:
++    """允许路径必须复用入口 gate 结果，避免执行后重复检查同一段 raw SQL。"""
++
++    gate = _CountingAllowGate()
++    executor = FakeLogisticsSqlExecutor(explain_rows=[{"select_type": "SIMPLE"}], trial_rows=[])
++    pipeline = LogisticsNl2SqlShadowPipeline(
++        candidate_sql_gate=gate,
++        execution_service=LogisticsSqlExecutionService(executor=executor),
++    )
++    raw_candidate_sql = "SELECT shipment_mw FROM dws_logistics_detail_union LIMIT 1"
++
++    result = pipeline.run(
++        LogisticsNl2SqlShadowPipelineRequest(
++            question="2025年发运量是多少",
++            candidate=_valid_candidate(plan={"query_type": "aggregate", "dimensions": [], "group_by": [], "order_by": [], "limit": None}),
++            raw_candidate_sql=raw_candidate_sql,
++        )
++    )
++
++    assert result.status == "success", result.error_codes
++    assert gate.calls == [raw_candidate_sql]
++    assert result.candidate_sql_gate_reason_code == "allowed"
++
++
+ def test_shadow_pipeline_validation_failure_logs_and_skips_renderer_safety_executor() -> None:
+     """M3 SQLPlan validation 失败时必须停止后续阶段，但仍写 evaluation log。"""

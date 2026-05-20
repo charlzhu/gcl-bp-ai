@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from backend.app.domains.logistics.services.nl2sql.candidate_sql_gate import LogisticsCandidateSqlGateResult
 from backend.app.domains.logistics.services.nl2sql.evaluation_log import InMemoryLogisticsNl2SqlEvaluationLogSink
 from backend.app.domains.logistics.services.nl2sql.shadow_pipeline import (
     LogisticsNl2SqlShadowPipeline,
@@ -71,6 +72,45 @@ class _FailingLogSink:
         raise RuntimeError(f"disk full {password_key}=unit-password")
 
 
+class _ForbiddenValidator:
+    """测试用 validator：raw candidate SQL 被拒绝后不得再进入 SQLPlan 校验。"""
+
+    def validate(self, candidate: dict[str, Any]) -> Any:
+        """若被调用则说明 gate 没有在 validator 前 fail-closed。"""
+
+        raise AssertionError("candidate SQL gate 拒绝后不应调用 SQLPlan validator")
+
+
+class _ForbiddenRenderer:
+    """测试用 renderer：raw candidate SQL 被拒绝后不得进入渲染阶段。"""
+
+    def render(self, validation_result: Any) -> LogisticsRenderedSql:
+        """若被调用则说明 gate 拒绝路径越过了 fail-closed 边界。"""
+
+        raise AssertionError("candidate SQL gate 拒绝后不应调用 renderer")
+
+
+class _CountingAllowGate:
+    """测试用 gate：记录 raw candidate SQL 校验次数，确保 pipeline 复用入口 gate 结果。"""
+
+    def __init__(self) -> None:
+        """初始化调用记录。"""
+
+        self.calls: list[str | None] = []
+
+    def check(self, sql: str | None) -> LogisticsCandidateSqlGateResult:
+        """记录入参并返回允许结果；返回值不包含 raw SQL，便于验证审计摘要复用。"""
+
+        self.calls.append(sql)
+        return LogisticsCandidateSqlGateResult(
+            allowed=True,
+            rejected=False,
+            reason_code="allowed",
+            sanitized_reason="candidate_sql_allowed",
+            repair_info=None,
+        )
+
+
 def test_shadow_pipeline_success_runs_validation_render_safety_explain_trial_and_logs_hash_only() -> None:
     """合法 SQLPlan 应走完 M3/M4/explain/trial，并只在结果与日志中保留 SQL hash。"""
 
@@ -107,6 +147,106 @@ def test_shadow_pipeline_success_runs_validation_render_safety_explain_trial_and
     assert sink.records[0].sql_hash == result.sql_hash
     assert "SELECT " not in result.model_dump_json()
     assert "dws_logistics_detail_union.biz_year" not in sink.records[0].model_dump_json()
+
+
+def test_shadow_pipeline_rejects_raw_candidate_sql_before_validation_and_redacts_log() -> None:
+    """raw candidate SQL gate 拒绝时必须停在入口，不调用 validator/renderer/executor 且不落 SQL 原文。"""
+
+    executor = FakeLogisticsSqlExecutor()
+    sink = InMemoryLogisticsNl2SqlEvaluationLogSink()
+    pipeline = LogisticsNl2SqlShadowPipeline(
+        validator=_ForbiddenValidator(),
+        renderer=_ForbiddenRenderer(),
+        execution_service=LogisticsSqlExecutionService(executor=executor),
+        log_sink=sink,
+    )
+    raw_candidate_sql = "SELECT password_token_dsn FROM dws_logistics_detail_union LIMIT 9999"
+
+    result = pipeline.run(
+        LogisticsNl2SqlShadowPipelineRequest(
+            question="2025年发运量是多少",
+            candidate=_valid_candidate(),
+            raw_candidate_sql=raw_candidate_sql,
+        )
+    )
+    payload = result.model_dump_json() + sink.records[0].model_dump_json()
+
+    assert result.status == "validation_failed"
+    assert result.stage == "candidate_sql_gate"
+    assert result.candidate_sql_gate_rejected is True
+    assert result.candidate_sql_gate_allowed is False
+    assert result.candidate_sql_gate_reason_code == "limit_out_of_range"
+    assert result.candidate_sql_gate_sanitized_reason == "candidate_sql_rejected:limit_out_of_range"
+    assert result.candidate_sql_gate_repair_info == {"suggested_action": "lower_limit", "max_limit": 500}
+    assert "candidate_sql_gate_rejected::limit_out_of_range" in result.error_codes
+    assert executor.calls == []
+    assert sink.records[0].candidate_sql_gate_rejected is True
+    assert sink.records[0].candidate_sql_gate_reason_code == "limit_out_of_range"
+    assert "SELECT" not in payload
+    assert "password_token_dsn" not in payload
+    assert "dws_logistics_detail_union LIMIT 9999" not in payload
+
+
+def test_shadow_pipeline_allows_raw_candidate_sql_but_executes_only_rendered_sqlplan_sql() -> None:
+    """gate 允许 raw candidate SQL 后也只能执行 SQLPlan 渲染结果，不能执行 raw SQL 文本。"""
+
+    raw_candidate_sql = "SELECT vehicle_plate_no FROM dws_logistics_detail_union LIMIT 1"
+    executor = FakeLogisticsSqlExecutor(
+        explain_rows=[{"select_type": "SIMPLE"}],
+        trial_rows=[{"logistics_company_name": "承运商A", "shipment_mw": 12.3}],
+    )
+    sink = InMemoryLogisticsNl2SqlEvaluationLogSink()
+    pipeline = LogisticsNl2SqlShadowPipeline(
+        execution_service=LogisticsSqlExecutionService(executor=executor),
+        log_sink=sink,
+    )
+
+    result = pipeline.run(
+        LogisticsNl2SqlShadowPipelineRequest(
+            question="2025年哪个物流承运商发运量最多",
+            rewritten_question="2025年按承运商统计发运量并排序",
+            request_id="req-gate-allowed",
+            candidate=_valid_candidate(),
+            raw_candidate_sql=raw_candidate_sql,
+        )
+    )
+    executed_sql = "\n".join(call.sql for call in executor.calls)
+    payload = result.model_dump_json() + sink.records[0].model_dump_json()
+
+    assert result.status == "success", result.error_codes
+    assert result.candidate_sql_gate_allowed is True
+    assert result.candidate_sql_gate_rejected is False
+    assert result.candidate_sql_gate_reason_code == "allowed"
+    assert sink.records[0].candidate_sql_gate_allowed is True
+    assert [call.mode for call in executor.calls] == ["explain", "trial"]
+    assert raw_candidate_sql not in executed_sql
+    assert "vehicle_plate_no" not in executed_sql
+    assert "vehicle_plate_no" not in payload
+    assert "candidate_sql_allowed" in payload
+
+
+def test_shadow_pipeline_reuses_raw_candidate_sql_gate_result_for_allowed_path() -> None:
+    """允许路径必须复用入口 gate 结果，避免执行后重复检查同一段 raw SQL。"""
+
+    gate = _CountingAllowGate()
+    executor = FakeLogisticsSqlExecutor(explain_rows=[{"select_type": "SIMPLE"}], trial_rows=[])
+    pipeline = LogisticsNl2SqlShadowPipeline(
+        candidate_sql_gate=gate,
+        execution_service=LogisticsSqlExecutionService(executor=executor),
+    )
+    raw_candidate_sql = "SELECT shipment_mw FROM dws_logistics_detail_union LIMIT 1"
+
+    result = pipeline.run(
+        LogisticsNl2SqlShadowPipelineRequest(
+            question="2025年发运量是多少",
+            candidate=_valid_candidate(plan={"query_type": "aggregate", "dimensions": [], "group_by": [], "order_by": [], "limit": None}),
+            raw_candidate_sql=raw_candidate_sql,
+        )
+    )
+
+    assert result.status == "success", result.error_codes
+    assert gate.calls == [raw_candidate_sql]
+    assert result.candidate_sql_gate_reason_code == "allowed"
 
 
 def test_shadow_pipeline_validation_failure_logs_and_skips_renderer_safety_executor() -> None:

@@ -1,0 +1,42 @@
+{
+  "task_id": "t_cb150261",
+  "task_name": "M10-B：物流 NL2SQL candidate SQL gate 接入 shadow runner",
+  "branch": "feature/nl2sql-m10b-shadow-runner-gate",
+  "base": "origin/agent/bp-main@090af2e0e344a1523bc1ae74cfc1d2bc4f2ab779",
+  "status": "accepted_after_recovery_verification_and_independent_review",
+  "changed_files": [
+    "backend/app/domains/logistics/services/nl2sql/shadow_pipeline.py",
+    "backend/app/domains/logistics/services/nl2sql/evaluation_log.py",
+    "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+    "tests/unit/logistics/nl2sql/test_shadow_pipeline.py",
+    "tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py"
+  ],
+  "gate_behavior": {
+    "raw_candidate_sql_field": "shadow-only",
+    "reject_path": "fail_closed_before_validator_renderer_safety_executor",
+    "allow_path": "continue_sqlplan_validation_render_safety_executor_without_using_raw_sql",
+    "gate_result_reuse": "entry_gate_result_reused_for_allowed_and_later_finish_paths",
+    "log_policy": "reason_code_and_sanitized_summary_only_no_raw_sql"
+  },
+  "tests": {
+    "test_candidate_sql_gate.py": "26 passed",
+    "test_shadow_pipeline.py": "13 passed",
+    "test_m9_sqlplan_generation.py": "27 passed",
+    "tests/unit/logistics/nl2sql": "220 passed, 9 warnings",
+    "compileall_nl2sql": "passed",
+    "git_diff_check": "passed",
+    "task_scoped_static_scan": "passed, added lines scanned 355, findings 0",
+    "independent_review": "passed=true, security_concerns=[], logic_errors=[]"
+  },
+  "side_effects_cleaned": [
+    "ai/outbox/kanban/t_7895e090/m8-shadow-eval-records.jsonl"
+  ],
+  "not_done": [
+    "commit",
+    "push",
+    "deploy",
+    "formal_qa_chat_takeover",
+    "M10-C"
+  ],
+  "worker_note": "Default kanban worker produced code/tests but repeatedly hit API timeout/protocol violation; main controller completed recovery verification, refreshed artifacts, and obtained independent review."
+}
