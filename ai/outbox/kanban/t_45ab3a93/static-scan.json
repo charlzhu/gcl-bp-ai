@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "target_count": 8,
+  "targets": [
+    "backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py",
+    "scripts/dev/run_inventory_sales_production_m5_shadow_compare.py",
+    "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py",
+    "ai/outbox/kanban/t_45ab3a93/m5-inventory-sales-production-shadow-records.jsonl",
+    "ai/outbox/kanban/t_45ab3a93/m5-inventory-sales-production-shadow-report.md",
+    "ai/outbox/kanban/t_45ab3a93/static-scan.json",
+    "ai/outbox/kanban/t_45ab3a93/static-scan.log",
+    "ai/outbox/kanban/t_45ab3a93/test.log"
+  ],
+  "findings": [],
+  "scan_scope": "task-scoped M5 shadow source, runner, focused tests, and kanban evidence artifacts"
+}

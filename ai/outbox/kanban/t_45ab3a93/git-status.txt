@@ -1,0 +1,12 @@
+## feature/isp-m5-inventory-nl2sql-integration
+ M frontend/tsconfig.tsbuildinfo
+?? ai/outbox/kanban/t_3ca95bf9/
+?? ai/outbox/kanban/t_45ab3a93/
+?? ai/outbox/kanban/t_87762691/
+?? ai/outbox/kanban/t_d76060c2/
+?? backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+?? scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
+?? tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+2ddf0fd fix: 补齐产销存SQLPlan内部日志标识脱敏
+2452a06 feat: 增加产销存 SQLPlan 白名单与安全门禁
+f24d39a Merge branch 'feature/isp-m5-inventory-nl2sql-integration' into agent/bp-main
