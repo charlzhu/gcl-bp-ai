@@ -1,0 +1,12 @@
+static scan passed: true
+targets:
+- backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+- scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
+- tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+- ai/outbox/kanban/t_4131bbbb/m5-inventory-sales-production-shadow-records.jsonl
+- ai/outbox/kanban/t_4131bbbb/m5-inventory-sales-production-shadow-report.md
+- ai/outbox/kanban/t_4131bbbb/test.log
+allowed_fixture_notes_count: 12
+allowed_fixture_notes_digest: 87be17fc3a1ec94c
+findings:
+- none

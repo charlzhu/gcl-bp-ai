@@ -1,0 +1,1056 @@
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py b/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+new file mode 100644
+index 0000000..2380529
+--- /dev/null
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+@@ -0,0 +1,769 @@
++from __future__ import annotations
++
++from collections import Counter
++from dataclasses import asdict, dataclass
++import hashlib
++import json
++from pathlib import Path
++import re
++from typing import Any
++
++from backend.app.domains.business_analysis.schemas.inventory_sales_production_query import (
++    InventorySalesProductionPeriodSpec,
++    InventorySalesProductionQueryPlan,
++)
++from backend.app.domains.business_analysis.services.inventory_sales_production.nl_query_planner import (
++    InventorySalesProductionNlQueryPlanner,
++    InventorySalesProductionPlanningError,
++)
++from backend.app.domains.business_analysis.services.inventory_sales_production.sql_plan import (
++    DEFAULT_ISP_MAX_PUBLISHED_MONTH_BY_YEAR,
++    ISP_SQLPLAN_CANDIDATE_SCHEMA_VERSION,
++    REQUIRED_ISP_SEMANTIC_CATALOG_VERSION,
++    InventorySalesProductionSqlPlan,
++    validate_inventory_sales_production_sql_plan_candidate,
++)
++
++M5_ISP_SHADOW_COMPARE_VERSION = "business_analysis_inventory_sales_production_m5_shadow_compare.v1"
++DEFAULT_M5_ISP_RECORDS_FILENAME = "m5-inventory-sales-production-shadow-records.jsonl"
++DEFAULT_M5_ISP_REPORT_FILENAME = "m5-inventory-sales-production-shadow-report.md"
++DEFAULT_M5_ISP_ARTIFACT_DIR = Path("ai/outbox/kanban/t_d76060c2")
++
++_MIDDLE_FACT_TABLE = "dwd_ba_isp_monthly_fact"
++_SQL_TEXT_RE = re.compile(
++    r"\b(select|insert|update|delete|drop|alter|truncate|create|merge|from|where|having|union)\b|--|/\*|\*/",
++    re.IGNORECASE,
++)
++_DSN_TEXT_RE = re.compile(r"\b[a-z][a-z0-9+.-]*://[^\s]+", re.IGNORECASE)
++_BEARER_TEXT_RE = re.compile(r"\bbearer\s+[^\s,;]+", re.IGNORECASE)
++_SECRET_ASSIGNMENT_RE = re.compile(
++    r"\b(api[_-]?key|secret|password|passwd|token)\b\s*[:=]\s*['\"]?[^'\"\s,;]+",
++    re.IGNORECASE,
++)
++
++
++@dataclass(frozen=True, slots=True)
++class InventorySalesProductionM5ShadowCompareSample:
++    """M5 产销存 QueryPlan / SQLPlan 离线 shadow 对比样例。"""
++
++    sample_id: str
++    description: str
++    question: str
++    question_category: str
++    expected_status: str
++    candidate_override: dict[str, Any] | None = None
++
++
++@dataclass(frozen=True, slots=True)
++class InventorySalesProductionM5ShadowCompareRecord:
++    """可持久化的脱敏 shadow 对比记录。"""
++
++    schema_version: str
++    pipeline_version: str
++    trace_id: str
++    sample_id: str
++    question_category: str
++    expected_status: str
++    status: str
++    stage: str
++    error_codes: list[str]
++    warnings: list[str]
++    queryplan_signature: dict[str, Any] | None
++    candidate_signature: dict[str, Any] | None
++    shadow_only: bool = True
++    formal_qa_executed: bool = False
++    live_db_executed: bool = False
++
++
++@dataclass(frozen=True, slots=True)
++class InventorySalesProductionM5ShadowCompareOutcome:
++    """单条样例的 shadow 对比结果。"""
++
++    sample: InventorySalesProductionM5ShadowCompareSample
++    record: InventorySalesProductionM5ShadowCompareRecord
++
++
++@dataclass(frozen=True, slots=True)
++class InventorySalesProductionM5ShadowCompareRunResult:
++    """M5 shadow compare 运行结果。"""
++
++    outcomes: list[InventorySalesProductionM5ShadowCompareOutcome]
++    records_path: Path
++    report_path: Path
++    report: dict[str, Any]
++    shadow_only: bool = True
++    formal_qa_executed: bool = False
++    live_db_executed: bool = False
++
++
++def build_default_inventory_sales_production_m5_shadow_samples(
++    *,
++    max_samples: int | None = None,
++) -> list[InventorySalesProductionM5ShadowCompareSample]:
++    """构造来自 M4-6 真实问法的产销存 M5 shadow 默认样例。"""
++
++    samples = [
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_sales_year_summary",
++            description="M4-6 年度销量口径样例",
++            question="2024年销量是多少？",
++            question_category="sales_summary",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["shipment_volume"],
++                dimensions=[],
++                period_type="year",
++                year=2024,
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_sales_quarter_summary",
++            description="M4-6 一季度销量口径样例",
++            question="2025年Q1销量是多少？",
++            question_category="sales_summary",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["shipment_volume"],
++                dimensions=[],
++                period_type="quarter",
++                year=2025,
++                quarter=1,
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_sales_ytd_summary",
++            description="M4-6 截至指定月份累计销量样例",
++            question="2026年截至4月累计销量是多少？",
++            question_category="sales_summary",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["shipment_volume"],
++                dimensions=[],
++                period_type="ytd",
++                year=2026,
++                month_filter_values=[1, 2, 3, 4],
++                business_rules=["ytd_by_published_months"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_inventory_snapshot",
++            description="M4-6 月度库存时点样例",
++            question="2026年4月存货合计是多少？",
++            question_category="inventory_snapshot",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_inventory_snapshot",
++                metrics=["ending_inventory_volume"],
++                dimensions=[],
++                period_type="month",
++                year=2026,
++                month=4,
++                business_rules=["period_end_inventory_snapshot"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_consigned_inventory_snapshot",
++            description="M4-6 月度寄存库存时点样例",
++            question="2026年4月寄存仓还有多少？",
++            question_category="inventory_snapshot",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_inventory_snapshot",
++                metrics=["consigned_inventory_volume"],
++                dimensions=[],
++                period_type="month",
++                year=2026,
++                month=4,
++                business_rules=["period_end_inventory_snapshot"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_budget_achievement",
++            description="M4-6 年度预算达成率样例",
++            question="2023年预算达成率是多少？",
++            question_category="budget_achievement",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_budget_achievement",
++                metrics=["production_actual_including_oem"],
++                dimensions=[],
++                period_type="year",
++                year=2023,
++                business_rules=["budget_achievement_recalculated"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_invoice_sales_summary",
++            description="M4-6 显式开票销量样例",
++            question="2025年开票销量是多少？",
++            question_category="sales_summary",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_metric_summary",
++                metrics=["invoice_sales_volume"],
++                dimensions=[],
++                period_type="year",
++                year=2025,
++                business_flags={"explicit_invoice": True},
++                business_rules=["explicit_invoice_metric"],
++            ),
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_unsupported_yoy",
++            description="M4-6 同比类暂不支持守卫样例",
++            question="2025年销量同比增长率是多少？",
++            question_category="unsupported_guard",
++            expected_status="queryplan_unsupported",
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_unsupported_month_range",
++            description="M4-6 任意月份区间暂不支持守卫样例",
++            question="2026年2月至4月销量是多少？",
++            question_category="unsupported_guard",
++            expected_status="queryplan_unsupported",
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m4_6_clarification_inventory_turnover",
++            description="M4-6 库存周转率需补充口径样例",
++            question="2025年库存周转率是多少？",
++            question_category="clarification_guard",
++            expected_status="queryplan_clarification",
++        ),
++        InventorySalesProductionM5ShadowCompareSample(
++            sample_id="m5_redaction_sql_payload_blocked",
++            description="M5 SQLPlan 候选含 SQL/凭据噪声时必须 fail-closed 且 artifacts 脱敏",
++            question="2024年销量是多少？",
++            question_category="redaction_guard",
++            expected_status="sqlplan_validation_failed",
++            candidate_override=_redaction_guard_candidate_payload(),
++        ),
++    ]
++    if max_samples is not None:
++        return samples[: max(0, max_samples)]
++    return samples
++
++
++def run_inventory_sales_production_m5_shadow_compare(
++    *,
++    samples: list[InventorySalesProductionM5ShadowCompareSample] | None = None,
++    artifact_dir: str | Path | None = None,
++) -> InventorySalesProductionM5ShadowCompareRunResult:
++    """执行 QueryPlan 与 SQLPlan 的离线 shadow 对比，不调用正式 QA 主链路或真实数据库。"""
++
++    resolved_samples = list(samples or build_default_inventory_sales_production_m5_shadow_samples())
++    resolved_artifact_dir = Path(artifact_dir) if artifact_dir is not None else DEFAULT_M5_ISP_ARTIFACT_DIR
++    resolved_artifact_dir.mkdir(parents=True, exist_ok=True)
++    records_path = resolved_artifact_dir / DEFAULT_M5_ISP_RECORDS_FILENAME
++    report_path = resolved_artifact_dir / DEFAULT_M5_ISP_REPORT_FILENAME
++
++    planner = InventorySalesProductionNlQueryPlanner()
++    outcomes = [_run_one_shadow_sample(planner, sample) for sample in resolved_samples]
++    records = [outcome.record for outcome in outcomes]
++    report = _build_report(records)
++    _write_records(records_path, records)
++    _write_report(report_path, report, records)
++    return InventorySalesProductionM5ShadowCompareRunResult(
++        outcomes=outcomes,
++        records_path=records_path,
++        report_path=report_path,
++        report=report,
++    )
++
++
++def render_safe_m5_shadow_compare_summary_json(result: InventorySalesProductionM5ShadowCompareRunResult) -> str:
++    """渲染 CLI stdout 使用的脱敏 JSON 摘要。"""
++
++    summary = {
++        "version": M5_ISP_SHADOW_COMPARE_VERSION,
++        "shadow_only": result.shadow_only,
++        "formal_qa_executed": result.formal_qa_executed,
++        "live_db_executed": result.live_db_executed,
++        "records_path": str(result.records_path),
++        "report_path": str(result.report_path),
++        "total": result.report["total"],
++        "by_status": result.report["by_status"],
++        "matched_count": result.report["matched_count"],
++        "fail_closed_count": result.report["fail_closed_count"],
++        "expected_status_mismatch_count": result.report["expected_status_mismatch_count"],
++    }
++    return json.dumps(summary, ensure_ascii=False, sort_keys=True)
++
++
++def _run_one_shadow_sample(
++    planner: InventorySalesProductionNlQueryPlanner,
++    sample: InventorySalesProductionM5ShadowCompareSample,
++) -> InventorySalesProductionM5ShadowCompareOutcome:
++    """执行单样例离线对比。"""
++
++    trace_id = f"isp-m5-shadow-{sample.sample_id}"
++    try:
++        query_plan = planner.build_plan(sample.question)
++    except InventorySalesProductionPlanningError as exc:
++        status = "queryplan_clarification" if exc.status == "clarification" else "queryplan_unsupported"
++        record = _record(
++            trace_id=trace_id,
++            sample=sample,
++            status=status,
++            stage="queryplan_planning",
++            error_codes=[f"queryplan_{exc.status}"],
++            warnings=[],
++            queryplan_signature=None,
++            candidate_signature=None,
++        )
++        return InventorySalesProductionM5ShadowCompareOutcome(sample=sample, record=record)
++
++    queryplan_signature = _signature_from_query_plan(query_plan)
++    candidate_payload = sample.candidate_override or _candidate_from_query_plan(query_plan)
++    validation = validate_inventory_sales_production_sql_plan_candidate(candidate_payload)
++    if not validation.ok or validation.normalized_plan is None:
++        record = _record(
++            trace_id=trace_id,
++            sample=sample,
++            status="sqlplan_validation_failed",
++            stage="sqlplan_validation",
++            error_codes=validation.error_codes,
++            warnings=[],
++            queryplan_signature=queryplan_signature,
++            candidate_signature=None,
++        )
++        return InventorySalesProductionM5ShadowCompareOutcome(sample=sample, record=record)
++
++    candidate_signature = _signature_from_sql_plan(validation.normalized_plan)
++    status = "matched" if queryplan_signature == candidate_signature else "plan_mismatch"
++    errors = [] if status == "matched" else ["queryplan_sqlplan_signature_mismatch"]
++    record = _record(
++        trace_id=trace_id,
++        sample=sample,
++        status=status,
++        stage="shadow_compare",
++        error_codes=errors,
++        warnings=[],
++        queryplan_signature=queryplan_signature,
++        candidate_signature=candidate_signature,
++    )
++    return InventorySalesProductionM5ShadowCompareOutcome(sample=sample, record=record)
++
++
++def _record(
++    *,
++    trace_id: str,
++    sample: InventorySalesProductionM5ShadowCompareSample,
++    status: str,
++    stage: str,
++    error_codes: list[str],
++    warnings: list[str],
++    queryplan_signature: dict[str, Any] | None,
++    candidate_signature: dict[str, Any] | None,
++) -> InventorySalesProductionM5ShadowCompareRecord:
++    """构造不含原问题、不含 SQL、不含参数值的安全记录。"""
++
++    return InventorySalesProductionM5ShadowCompareRecord(
++        schema_version="business_analysis_inventory_sales_production_m5_shadow_record.v1",
++        pipeline_version=M5_ISP_SHADOW_COMPARE_VERSION,
++        trace_id=trace_id,
++        sample_id=sample.sample_id,
++        question_category=sample.question_category,
++        expected_status=sample.expected_status,
++        status=status,
++        stage=stage,
++        error_codes=_dedupe_safe_texts(error_codes),
++        warnings=_dedupe_safe_texts(warnings),
++        queryplan_signature=queryplan_signature,
++        candidate_signature=candidate_signature,
++    )
++
++
++def _candidate_from_query_plan(query_plan: InventorySalesProductionQueryPlan) -> dict[str, Any]:
++    """把现有 QueryPlan 映射为受控 SQLPlan candidate，用于离线一致性对比。"""
++
++    plan_filters = [
++        {"dimension": "business_year", "operator": "=", "values": [query_plan.period.year]},
++    ]
++    period_payload = _sqlplan_period_payload(query_plan.period)
++    if query_plan.period.period_type == "ytd":
++        end_month = query_plan.period.end_month or DEFAULT_ISP_MAX_PUBLISHED_MONTH_BY_YEAR.get(query_plan.period.year, 12)
++        plan_filters.append({"dimension": "business_month", "operator": "in", "values": list(range(1, end_month + 1))})
++    business_flags = dict(query_plan.filters or {})
++    plan_payload = {
++        "query_key": query_plan.query_key,
++        "domain": "business_analysis",
++        "sub_domain": "inventory_sales_production",
++        "tables": [_MIDDLE_FACT_TABLE],
++        "metrics": list(query_plan.metrics),
++        "dimensions": list(query_plan.dimensions),
++        "filters": plan_filters,
++        "group_by": list(query_plan.dimensions),
++        "order_by": [],
++        "business_rules": _business_rules_for_query_plan(query_plan),
++        "business_flags": business_flags,
++        "calculation_policy": query_plan.calculation_policy,
++        "limit": None,
++        **period_payload,
++    }
++    return {
++        "schema_version": ISP_SQLPLAN_CANDIDATE_SCHEMA_VERSION,
++        "domain": "business_analysis",
++        "sub_domain": "inventory_sales_production",
++        "strategy": "sql_direct",
++        "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION,
++        "catalog_refs": _catalog_refs_for_plan_payload(plan_payload),
++        "plan": plan_payload,
++        "clarification_questions": [],
++        "unsupported_reason": None,
++        "confidence": 0.9,
++    }
++
++
++def _build_sqlplan_candidate_payload(
++    *,
++    query_key: str,
++    metrics: list[str],
++    dimensions: list[str],
++    period_type: str,
++    year: int,
++    month: int | None = None,
++    quarter: int | None = None,
++    month_filter_values: list[int] | None = None,
++    business_flags: dict[str, Any] | None = None,
++    business_rules: list[str] | None = None,
++    calculation_policy: str | None = None,
++) -> dict[str, Any]:
++    """构造独立 SQLPlan fixture 候选，不依赖 QueryPlan 反向生成。
++
++    业务逻辑：M5 shadow 阶段需要对比既有 QueryPlan 与独立 NL2SQL/SQLPlan 形态。
++    当前没有接入 live LLM provider 时，用显式样例 fixture 代表独立 SQLPlan 候选，
++    避免把 QueryPlan 原样转换后自我比较导致误报 matched。
++    """
++
++    filters: list[dict[str, Any]] = [{"dimension": "business_year", "operator": "=", "values": [year]}]
++    if month_filter_values:
++        filters.append({"dimension": "business_month", "operator": "in", "values": list(month_filter_values)})
++    plan_payload = {
++        "query_key": query_key,
++        "domain": "business_analysis",
++        "sub_domain": "inventory_sales_production",
++        "tables": [_MIDDLE_FACT_TABLE],
++        "metrics": list(metrics),
++        "dimensions": list(dimensions),
++        "filters": filters,
++        "group_by": list(dimensions),
++        "order_by": [],
++        "business_rules": list(business_rules or []),
++        "business_flags": dict(business_flags or {}),
++        "period_type": period_type,
++        "year": year,
++        "month": month,
++        "quarter": quarter,
++        "start_month": None,
++        "end_month": None,
++        "calculation_policy": calculation_policy,
++        "limit": None,
++    }
++    return {
++        "schema_version": ISP_SQLPLAN_CANDIDATE_SCHEMA_VERSION,
++        "domain": "business_analysis",
++        "sub_domain": "inventory_sales_production",
++        "strategy": "sql_direct",
++        "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION,
++        "catalog_refs": _catalog_refs_for_plan_payload(plan_payload),
++        "plan": plan_payload,
++        "clarification_questions": [],
++        "unsupported_reason": None,
++        "confidence": 0.9,
++    }
++
++
++def _sqlplan_period_payload(period: InventorySalesProductionPeriodSpec) -> dict[str, Any]:
++    """转换期间字段；YTD 用年度期间 + 月份白名单过滤表达，避开自由区间。"""
++
++    if period.period_type == "ytd":
++        return {"period_type": "year", "year": period.year, "month": None, "quarter": None, "start_month": None, "end_month": None}
++    return {
++        "period_type": period.period_type,
++        "year": period.year,
++        "month": period.month,
++        "quarter": period.quarter,
++        "start_month": None,
++        "end_month": None,
++    }
++
++
++def _business_rules_for_query_plan(query_plan: InventorySalesProductionQueryPlan) -> list[str]:
++    """生成不包含 SQL 片段的业务规则标签。"""
++
++    rules: list[str] = []
++    if query_plan.query_key == "ba_isp_budget_achievement":
++        rules.append("budget_achievement_recalculated")
++    if query_plan.period.period_type == "ytd":
++        rules.append("ytd_by_published_months")
++    if query_plan.query_key == "ba_isp_inventory_snapshot":
++        rules.append("period_end_inventory_snapshot")
++    if query_plan.filters.get("explicit_invoice"):
++        rules.append("explicit_invoice_metric")
++    return rules
++
++
++def _catalog_refs_for_plan_payload(plan_payload: dict[str, Any]) -> list[dict[str, str]]:
++    """按稳定顺序为 SQLPlan candidate 补齐 catalog_refs。"""
++
++    ids: list[str] = []
++    for table in plan_payload.get("tables", []):
++        _append_unique(ids, f"table:{table}")
++    for metric in plan_payload.get("metrics", []):
++        _append_unique(ids, f"metric:{metric}")
++    for dimension in plan_payload.get("dimensions", []):
++        _append_unique(ids, f"dimension:{dimension}")
++    for dimension in plan_payload.get("group_by", []):
++        _append_unique(ids, f"dimension:{dimension}")
++    for item in plan_payload.get("filters", []):
++        dimension = item.get("dimension") if isinstance(item, dict) else None
++        if dimension:
++            _append_unique(ids, f"dimension:{dimension}")
++    return [{"catalog_id": catalog_id, "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION} for catalog_id in ids]
++
++
++def _redaction_guard_candidate_payload() -> dict[str, Any]:
++    """构造含 SQL-like 噪声的 candidate，验证 validator fail-closed 与 artifact 脱敏。"""
++
++    payload = _build_sqlplan_candidate_payload(
++        query_key="ba_isp_metric_summary",
++        metrics=["shipment_volume"],
++        dimensions=[],
++        period_type="year",
++        year=2024,
++    )
++    payload["plan"]["raw_sql"] = "SELECT * FROM dwd_ba_isp_monthly_fact"
++    payload["plan"]["filters"].append(
++        {"dimension": "business_month", "operator": "like", "values": ["Bearer redaction_probe"]}
++    )
++    payload["catalog_refs"].append(
++        {"catalog_id": "dimension:business_month", "catalog_version": REQUIRED_ISP_SEMANTIC_CATALOG_VERSION}
++    )
++    return payload
++
++
++def _signature_from_query_plan(query_plan: InventorySalesProductionQueryPlan) -> dict[str, Any]:
++    """提取 QueryPlan 与 SQLPlan 可比的业务签名，不持久化具体时间参数。"""
++
++    return {
++        "query_key": query_plan.query_key,
++        "metrics": sorted(query_plan.metrics),
++        "dimensions": sorted(query_plan.dimensions),
++        "business_flags": _safe_flag_signature(query_plan.filters),
++        "period_semantics": _query_period_semantics(query_plan.period),
++        "period_value_bucket": _query_period_value_bucket(query_plan.period),
++    }
++
++
++def _signature_from_sql_plan(plan: InventorySalesProductionSqlPlan) -> dict[str, Any]:
++    """提取 SQLPlan 与 QueryPlan 可比的业务签名，不持久化具体时间参数。"""
++
++    return {
++        "query_key": plan.query_key,
++        "metrics": sorted(plan.metrics),
++        "dimensions": sorted(plan.dimensions),
++        "business_flags": _safe_flag_signature(plan.business_flags),
++        "period_semantics": _sql_period_semantics(plan),
++        "period_value_bucket": _sql_period_value_bucket(plan),
++    }
++
++
++def _safe_flag_signature(flags: dict[str, Any]) -> dict[str, str]:
++    """业务开关签名使用类型/指纹，避免 bool 强转掩盖非布尔差异。"""
++
++    return {key: _safe_value_fingerprint(value) for key, value in sorted((flags or {}).items())}
++
++
++def _safe_value_fingerprint(value: Any) -> str:
++    """生成不回显原值的安全指纹；布尔开关保留真假语义，非布尔仅保留类型和摘要。"""
++
++    if isinstance(value, bool):
++        return f"bool:{str(value).lower()}"
++    if value is None:
++        return "null"
++    try:
++        rendered = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
++    except TypeError:
++        rendered = str(type(value).__name__)
++    digest = hashlib.sha256(rendered.encode("utf-8")).hexdigest()[:12]
++    return f"{type(value).__name__}:sha256:{digest}"
++
++
++def _query_period_semantics(period: InventorySalesProductionPeriodSpec) -> str:
++    """返回 QueryPlan 的期间语义类别，不包含具体年月。"""
++
++    if period.period_type in {"month", "quarter", "ytd"}:
++        return period.period_type
++    return "year"
++
++
++def _sql_period_semantics(plan: InventorySalesProductionSqlPlan) -> str:
++    """从 SQLPlan 受控字段推断期间语义，避免 YTD 与年度误判一致。"""
++
++    rules = {str(rule) for rule in plan.business_rules}
++    if plan.period_type == "ytd" or "ytd_by_published_months" in rules:
++        return "ytd"
++    if plan.period_type == "month" and plan.month is not None:
++        return "month"
++    if plan.period_type == "quarter" and plan.quarter is not None:
++        return "quarter"
++    return "year"
++
++
++def _query_period_value_bucket(period: InventorySalesProductionPeriodSpec) -> str:
++    """返回 QueryPlan 期间形状桶，不写出具体年月参数。"""
++
++    if period.period_type == "month":
++        return "single_month"
++    if period.period_type == "quarter":
++        return "quarter"
++    if period.period_type == "ytd":
++        return "year_to_date"
++    return "full_year_or_published_year"
++
++
++def _sql_period_value_bucket(plan: InventorySalesProductionSqlPlan) -> str:
++    """返回 SQLPlan 期间形状桶，不写出具体年月参数。"""
++
++    semantics = _sql_period_semantics(plan)
++    if semantics == "month":
++        return "single_month"
++    if semantics == "quarter":
++        return "quarter"
++    if semantics == "ytd":
++        return "year_to_date"
++    return "full_year_or_published_year"
++
++
++def _months_from_query_period(period: InventorySalesProductionPeriodSpec) -> list[int]:
++    """把 QueryPlan 期间规范化为月份集合。"""
++
++    if period.period_type == "month" and period.month is not None:
++        return [period.month]
++    if period.period_type == "quarter" and period.quarter is not None:
++        start = (period.quarter - 1) * 3 + 1
++        return list(range(start, start + 3))
++    if period.period_type == "ytd":
++        end = period.end_month or DEFAULT_ISP_MAX_PUBLISHED_MONTH_BY_YEAR.get(period.year, 12)
++        start = period.start_month or 1
++        return list(range(start, end + 1))
++    return list(range(1, DEFAULT_ISP_MAX_PUBLISHED_MONTH_BY_YEAR.get(period.year, 12) + 1))
++
++
++def _months_from_sql_plan(plan: InventorySalesProductionSqlPlan) -> list[int]:
++    """把 SQLPlan 期间和月份过滤规范化为月份集合。"""
++
++    month_filter_values: list[int] = []
++    for item in plan.filters:
++        if item.dimension == "business_month":
++            for value in item.values:
++                if isinstance(value, int) and not isinstance(value, bool):
++                    month_filter_values.append(value)
++    if month_filter_values:
++        return sorted(set(month_filter_values))
++    if plan.period_type == "month" and plan.month is not None:
++        return [plan.month]
++    if plan.period_type == "quarter" and plan.quarter is not None:
++        start = (plan.quarter - 1) * 3 + 1
++        return list(range(start, start + 3))
++    return list(range(1, DEFAULT_ISP_MAX_PUBLISHED_MONTH_BY_YEAR.get(plan.year, 12) + 1))
++
++
++def _build_report(records: list[InventorySalesProductionM5ShadowCompareRecord]) -> dict[str, Any]:
++    """基于安全记录生成可读报告数据。"""
++
++    by_status = Counter(record.status for record in records)
++    by_category = Counter(record.question_category for record in records)
++    fail_closed_statuses = {"queryplan_unsupported", "queryplan_clarification", "sqlplan_validation_failed"}
++    expected_mismatch = sum(1 for record in records if record.status != record.expected_status)
++    matched_count = by_status.get("matched", 0)
++    total = len(records)
++    return {
++        "version": M5_ISP_SHADOW_COMPARE_VERSION,
++        "total": total,
++        "by_status": dict(sorted(by_status.items())),
++        "by_category": dict(sorted(by_category.items())),
++        "matched_count": matched_count,
++        "fail_closed_count": sum(by_status.get(status, 0) for status in fail_closed_statuses),
++        "expected_status_match_count": total - expected_mismatch,
++        "expected_status_mismatch_count": expected_mismatch,
++        "match_rate": round(matched_count / total, 4) if total else 0.0,
++        "shadow_only": True,
++        "formal_qa_executed": False,
++        "live_db_executed": False,
++    }
++
++
++def _write_records(path: Path, records: list[InventorySalesProductionM5ShadowCompareRecord]) -> None:
++    """写出 JSONL 安全记录。"""
++
++    lines = [json.dumps(asdict(record), ensure_ascii=False, sort_keys=True) for record in records]
++    path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
++
++
++def _write_report(path: Path, report: dict[str, Any], records: list[InventorySalesProductionM5ShadowCompareRecord]) -> None:
++    """写出不包含 SQL/原问题/参数值的 Markdown 报告。"""
++
++    lines = [
++        "# 产销存 M5 Shadow Compare Report",
++        "",
++        f"version: {report['version']}",
++        f"shadow_only: {str(report['shadow_only']).lower()}",
++        f"formal_qa_executed: {str(report['formal_qa_executed']).lower()}",
++        f"live_db_executed: {str(report['live_db_executed']).lower()}",
++        f"total: {report['total']}",
++        f"matched_count: {report['matched_count']}",
++        f"fail_closed_count: {report['fail_closed_count']}",
++        f"expected_status_mismatch_count: {report['expected_status_mismatch_count']}",
++        "",
++        "## by_status",
++    ]
++    lines.extend(f"- {status}: {count}" for status, count in report["by_status"].items())
++    lines.extend(["", "## sample_outcomes"])
++    for record in records:
++        errors = ",".join(record.error_codes) if record.error_codes else "-"
++        lines.append(
++            f"- {record.sample_id}: category={record.question_category}; status={record.status}; "
++            f"expected={record.expected_status}; stage={record.stage}; errors={errors}"
++        )
++    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
++
++
++def _append_unique(values: list[str], item: str) -> None:
++    """稳定去重追加。"""
++
++    if item and item not in values:
++        values.append(item)
++
++
++def _dedupe_safe_texts(values: list[str]) -> list[str]:
++    """错误码/告警只保留稳定安全文本，不回显 raw payload。"""
++
++    safe_values: list[str] = []
++    for value in values:
++        normalized = str(value or "")
++        normalized = _SQL_TEXT_RE.sub("[SQL]", normalized)
++        normalized = _DSN_TEXT_RE.sub("[DSN]", normalized)
++        normalized = _BEARER_TEXT_RE.sub("[BEARER]", normalized)
++        normalized = _SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=[REDACTED]", normalized)
++        if normalized and normalized not in safe_values:
++            safe_values.append(normalized)
++    return safe_values
++
++
++__all__ = [
++    "DEFAULT_M5_ISP_ARTIFACT_DIR",
++    "DEFAULT_M5_ISP_RECORDS_FILENAME",
++    "DEFAULT_M5_ISP_REPORT_FILENAME",
++    "M5_ISP_SHADOW_COMPARE_VERSION",
++    "InventorySalesProductionM5ShadowCompareOutcome",
++    "InventorySalesProductionM5ShadowCompareRecord",
++    "InventorySalesProductionM5ShadowCompareRunResult",
++    "InventorySalesProductionM5ShadowCompareSample",
++    "build_default_inventory_sales_production_m5_shadow_samples",
++    "render_safe_m5_shadow_compare_summary_json",
++    "run_inventory_sales_production_m5_shadow_compare",
++]
+diff --git a/scripts/dev/run_inventory_sales_production_m5_shadow_compare.py b/scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
+new file mode 100644
+index 0000000..ef93894
+--- /dev/null
++++ b/scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
+@@ -0,0 +1,45 @@
++from __future__ import annotations
++
++import argparse
++import sys
++from pathlib import Path
++
++# 固定脚本入口：允许本地手动触发 M5 产销存 shadow-only QueryPlan/SQLPlan 对比，避免临时 heredoc 命令。
++REPO_ROOT = Path(__file__).resolve().parents[2]
++if str(REPO_ROOT) not in sys.path:
++    sys.path.insert(0, str(REPO_ROOT))
++
++from backend.app.domains.business_analysis.services.inventory_sales_production.m5_shadow_compare import (  # noqa: E402
++    DEFAULT_M5_ISP_ARTIFACT_DIR,
++    build_default_inventory_sales_production_m5_shadow_samples,
++    render_safe_m5_shadow_compare_summary_json,
++    run_inventory_sales_production_m5_shadow_compare,
++)
++
++
++def main() -> int:
++    """解析 CLI 参数并执行 M5 产销存 shadow-only 离线对比。"""
++
++    parser = argparse.ArgumentParser(description="Run inventory sales production M5 shadow-only QueryPlan/SQLPlan compare")
++    parser.add_argument(
++        "--artifact-dir",
++        default=str(DEFAULT_M5_ISP_ARTIFACT_DIR),
++        help="directory for sanitized M5 JSONL/Markdown artifacts",
++    )
++    parser.add_argument(
++        "--max-samples",
++        type=int,
++        default=None,
++        help="optional cap for repeatable focused smoke runs; defaults to all shadow-only samples",
++    )
++    args = parser.parse_args()
++
++    samples = build_default_inventory_sales_production_m5_shadow_samples(max_samples=args.max_samples)
++    result = run_inventory_sales_production_m5_shadow_compare(samples=samples, artifact_dir=Path(args.artifact_dir))
++    # 只输出脱敏摘要：不打印 SQL、问题原文、参数值、host/user/password/DSN。
++    print(render_safe_m5_shadow_compare_summary_json(result))
++    return 0 if result.shadow_only and not result.formal_qa_executed and not result.live_db_executed else 2
++
++
++if __name__ == "__main__":
++    raise SystemExit(main())
+diff --git a/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py b/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+new file mode 100644
+index 0000000..aeee2ac
+--- /dev/null
++++ b/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+@@ -0,0 +1,224 @@
++from __future__ import annotations
++
++import json
++import subprocess
++import sys
++from pathlib import Path
++
++from backend.app.domains.business_analysis.services.inventory_sales_production import m5_shadow_compare
++from backend.app.domains.business_analysis.services.inventory_sales_production.m5_shadow_compare import (
++    DEFAULT_M5_ISP_RECORDS_FILENAME,
++    DEFAULT_M5_ISP_REPORT_FILENAME,
++    M5_ISP_SHADOW_COMPARE_VERSION,
++    InventorySalesProductionM5ShadowCompareSample,
++    build_default_inventory_sales_production_m5_shadow_samples,
++    render_safe_m5_shadow_compare_summary_json,
++    run_inventory_sales_production_m5_shadow_compare,
++)
++
++
++def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_guards(tmp_path: Path) -> None:
++    """M5-3 默认 shadow 样例应来自 M4-6 真实问法，并覆盖成功、暂不支持、澄清和脱敏负例。"""
++
++    samples = build_default_inventory_sales_production_m5_shadow_samples()
++    sample_ids = [sample.sample_id for sample in samples]
++
++    assert M5_ISP_SHADOW_COMPARE_VERSION == "business_analysis_inventory_sales_production_m5_shadow_compare.v1"
++    assert sample_ids[:10] == [
++        "m4_6_sales_year_summary",
++        "m4_6_sales_quarter_summary",
++        "m4_6_sales_ytd_summary",
++        "m4_6_inventory_snapshot",
++        "m4_6_consigned_inventory_snapshot",
++        "m4_6_budget_achievement",
++        "m4_6_invoice_sales_summary",
++        "m4_6_unsupported_yoy",
++        "m4_6_unsupported_month_range",
++        "m4_6_clarification_inventory_turnover",
++    ]
++    assert {sample.question_category for sample in samples} >= {
++        "sales_summary",
++        "inventory_snapshot",
++        "budget_achievement",
++        "unsupported_guard",
++        "clarification_guard",
++        "redaction_guard",
++    }
++    assert all(sample.expected_status for sample in samples)
++
++    run = run_inventory_sales_production_m5_shadow_compare(samples=samples, artifact_dir=tmp_path)
++    by_sample = {outcome.sample.sample_id: outcome.record.status for outcome in run.outcomes}
++    assert by_sample["m4_6_sales_year_summary"] == "matched"
++    assert by_sample["m4_6_sales_quarter_summary"] == "matched"
++    assert by_sample["m4_6_sales_ytd_summary"] == "matched"
++    assert by_sample["m4_6_inventory_snapshot"] == "matched"
++    assert by_sample["m4_6_consigned_inventory_snapshot"] == "matched"
++    assert by_sample["m4_6_budget_achievement"] == "matched"
++    assert by_sample["m4_6_invoice_sales_summary"] == "matched"
++    assert by_sample["m4_6_unsupported_yoy"] == "queryplan_unsupported"
++    assert by_sample["m4_6_unsupported_month_range"] == "queryplan_unsupported"
++    assert by_sample["m4_6_clarification_inventory_turnover"] == "queryplan_clarification"
++    assert by_sample["m5_redaction_sql_payload_blocked"] == "sqlplan_validation_failed"
++
++    assert run.shadow_only is True
++    assert run.formal_qa_executed is False
++    assert run.live_db_executed is False
++    assert run.report["total"] == len(samples)
++    assert run.report["matched_count"] >= 7
++    assert run.report["fail_closed_count"] >= 3
++    assert run.report["expected_status_mismatch_count"] == 0
++
++
++def test_m5_shadow_default_runner_uses_independent_sqlplan_fixtures(monkeypatch, tmp_path: Path) -> None:
++    """默认 M5 shadow 候选必须独立于 QueryPlan，不能用 QueryPlan 反向生成候选后自我比较。"""
++
++    def fail_if_self_comparison(*args, **kwargs):  # pragma: no cover - only executed on regression
++        raise AssertionError("default shadow compare must not derive SQLPlan candidate from QueryPlan")
++
++    monkeypatch.setattr(m5_shadow_compare, "_candidate_from_query_plan", fail_if_self_comparison)
++
++    run = run_inventory_sales_production_m5_shadow_compare(artifact_dir=tmp_path)
++
++    assert run.report["expected_status_mismatch_count"] == 0
++    assert run.report["matched_count"] >= 7
++
++
++def test_m5_shadow_persisted_signatures_redact_period_values(tmp_path: Path) -> None:
++    """持久化签名只保留安全形状，不写出具体年份、月份等抽取参数值。"""
++
++    run = run_inventory_sales_production_m5_shadow_compare(artifact_dir=tmp_path)
++    records = [json.loads(line) for line in run.records_path.read_text(encoding="utf-8").splitlines() if line]
++
++    for record in records:
++        for signature_name in ("queryplan_signature", "candidate_signature"):
++            signature = record.get(signature_name)
++            if signature is None:
++                continue
++            assert "year" not in signature
++            assert "months" not in signature
++            assert "business_flag_values" not in signature
++            assert "period_value_bucket" in signature
++
++
++def test_m5_shadow_compare_distinguishes_ytd_from_same_month_count_annual_plan(tmp_path: Path) -> None:
++    """对比签名必须区分 YTD 与年度期间，避免 2026 已发布 1-4 月时错误匹配。"""
++
++    annual_candidate = m5_shadow_compare._build_sqlplan_candidate_payload(
++        query_key="ba_isp_metric_summary",
++        metrics=["shipment_volume"],
++        dimensions=[],
++        period_type="year",
++        year=2026,
++    )
++    sample = InventorySalesProductionM5ShadowCompareSample(
++        sample_id="regression_ytd_not_annual",
++        description="同月数 YTD 和年度计划不能误判一致",
++        question="2026年截至4月累计销量是多少？",
++        question_category="period_semantics_guard",
++        expected_status="plan_mismatch",
++        candidate_override=annual_candidate,
++    )
++
++    run = run_inventory_sales_production_m5_shadow_compare(samples=[sample], artifact_dir=tmp_path)
++
++    assert run.outcomes[0].record.status == "plan_mismatch"
++    assert "queryplan_sqlplan_signature_mismatch" in run.outcomes[0].record.error_codes
++
++
++def test_m5_shadow_safe_text_redaction_handles_lowercase_sql_and_secret_shapes() -> None:
++    """错误/告警清洗必须大小写无关地处理 SQL、DSN、Bearer 和 key/value 密钥形态。"""
++
++    safe_values = m5_shadow_compare._dedupe_safe_texts(
++        [
++            "select * from table where token='abc123'",
++            "mysql://user:password@db.internal/schema",
++            "Bearer abc123",
++            "api_key='abc123'",
++        ]
++    )
++    rendered = "\n".join(safe_values).lower()
++
++    assert "select" not in rendered
++    assert "mysql://" not in rendered
++    assert "bearer abc123" not in rendered
++    assert "api_key='abc123'" not in rendered
++
++
++def test_m5_shadow_artifacts_are_shadow_only_and_redacted(tmp_path: Path) -> None:
++    """JSONL/Markdown artifacts 只写脱敏评估摘要，不泄露 SQL、问题原文、真实参数值或连接信息。"""
++
++    run = run_inventory_sales_production_m5_shadow_compare(artifact_dir=tmp_path)
++
++    assert run.records_path == tmp_path / DEFAULT_M5_ISP_RECORDS_FILENAME
++    assert run.report_path == tmp_path / DEFAULT_M5_ISP_REPORT_FILENAME
++    assert run.records_path.exists()
++    assert run.report_path.exists()
++
++    records = [json.loads(line) for line in run.records_path.read_text(encoding="utf-8").splitlines() if line]
++    assert records
++    assert all(record["shadow_only"] is True for record in records)
++    assert all(record["formal_qa_executed"] is False for record in records)
++    assert all(record["live_db_executed"] is False for record in records)
++    assert all("question_category" in record for record in records)
++    assert all("raw_question" not in record for record in records)
++    assert all("raw_param_value" not in record for record in records)
++    assert all("sql" not in {key.lower() for key in record} for record in records)
++
++    payload = (
++        run.records_path.read_text(encoding="utf-8")
++        + "\n"
++        + run.report_path.read_text(encoding="utf-8")
++        + "\n"
++        + render_safe_m5_shadow_compare_summary_json(run)
++    )
++    forbidden_fragments = (
++        "SELECT",
++        "UPDATE",
++        " FROM ",
++        " WHERE ",
++        "mysql://",
++        "MYSQL_PASSWORD",
++        "Bearer ",
++        "sk-",
++        "api_key",
++        "password",
++        "token",
++        "raw_param_value",
++        "正式产销存 QA 主链路",
++        "InventorySalesProductionQaService.ask",
++        "2024年销量是多少",
++        "2025年Q1销量是多少",
++        "2026年4月存货合计是多少",
++        "2027年销量是多少",
++    )
++    for forbidden in forbidden_fragments:
++        assert forbidden not in payload
++
++
++def test_m5_shadow_runner_does_not_call_formal_qa_main_chain(monkeypatch, tmp_path: Path) -> None:
++    """M5-3 对比 runner 只能执行离线 planner/sqlplan validator，不得调用正式 QA ask 主链路。"""
++
++    from backend.app.domains.business_analysis.services.inventory_sales_production import qa_service
++
++    def fail_if_called(*args, **kwargs):  # pragma: no cover - only executed on regression
++        raise AssertionError("formal QA main chain must not be called by M5 shadow compare")
++
++    monkeypatch.setattr(qa_service.InventorySalesProductionQaService, "ask", fail_if_called)
++
++    run = run_inventory_sales_production_m5_shadow_compare(artifact_dir=tmp_path)
++
++    assert run.formal_qa_executed is False
++    assert run.live_db_executed is False
++    assert run.report["expected_status_mismatch_count"] == 0
++
++
++def test_m5_shadow_dev_runner_cli_exposes_repeatable_smoke_flags() -> None:
++    """固定 smoke runner 应支持重复指定 artifact_dir，并默认离线 shadow-only。"""
++
++    script_path = Path(__file__).resolve().parents[3] / "scripts/dev/run_inventory_sales_production_m5_shadow_compare.py"
++    result = subprocess.run([sys.executable, str(script_path), "--help"], capture_output=True, text=True, check=False)
++
++    assert result.returncode == 0
++    assert "--artifact-dir" in result.stdout
++    assert "--max-samples" in result.stdout
++    assert "shadow-only" in result.stdout
