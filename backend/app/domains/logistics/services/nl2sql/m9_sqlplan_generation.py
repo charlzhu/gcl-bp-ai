@@ -850,7 +850,12 @@ class LogisticsSqlPlanGenerator:
 
 
 class LogisticsNl2SqlM9ShadowSample(BaseModel):
-    """M9 自然语言→SQLPlan shadow 样例。"""
+    """M9 自然语言→SQLPlan shadow 样例。
+
+    参数：
+        raw_candidate_sql: 可选的上游原始 SQL 文本，只在运行时传给 M10-B gate；字段设置为
+            `exclude=True`，写 records/report 时不会落盘 SQL 原文。
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -860,6 +865,7 @@ class LogisticsNl2SqlM9ShadowSample(BaseModel):
     category: str = "general"
     business_case: str = "general"
     offline_only: bool = True
+    raw_candidate_sql: str | None = Field(default=None, exclude=True)
 
 
 class LogisticsNl2SqlM9ShadowOutcome(BaseModel):
@@ -876,6 +882,9 @@ class LogisticsNl2SqlM9ShadowOutcome(BaseModel):
     shadow_status: str | None = None
     sql_hash: str | None = None
     row_count: int = 0
+    candidate_sql_gate_allowed: bool | None = None
+    candidate_sql_gate_rejected: bool | None = None
+    candidate_sql_gate_reason_code: str | None = None
     elapsed_ms: int = 0
 
 
@@ -890,6 +899,9 @@ class LogisticsNl2SqlM9ShadowReport(BaseModel):
     generated_count: int = 0
     validation_pass_count: int = 0
     validation_failed_count: int = 0
+    candidate_sql_gate_allowed_count: int = 0
+    candidate_sql_gate_rejected_count: int = 0
+    by_candidate_sql_gate_reason: dict[str, int] = Field(default_factory=dict)
     expected_status_match_count: int = 0
     expected_status_mismatch_count: int = 0
     by_status: dict[str, int] = Field(default_factory=dict)
@@ -921,11 +933,19 @@ class LogisticsNl2SqlM9ShadowRun(BaseModel):
             f"- generated_count: {self.report.generated_count}",
             f"- validation_pass_count: {self.report.validation_pass_count}",
             f"- recall_failed_count: {self.report.recall_failed_count}",
+            f"- candidate_sql_gate_allowed_count: {self.report.candidate_sql_gate_allowed_count}",
+            f"- candidate_sql_gate_rejected_count: {self.report.candidate_sql_gate_rejected_count}",
             f"- expected_status_mismatch_count: {self.report.expected_status_mismatch_count}",
             "",
             "## By Status",
         ]
         lines.extend(f"- {key}: {value}" for key, value in sorted(self.report.by_status.items()))
+        if self.report.by_candidate_sql_gate_reason:
+            lines.append("")
+            lines.append("## Candidate SQL Gate Reasons")
+            lines.extend(
+                f"- {key}: {value}" for key, value in sorted(self.report.by_candidate_sql_gate_reason.items())
+            )
         lines.append("")
         lines.append("## Samples")
         for outcome in self.outcomes:
@@ -1075,6 +1095,7 @@ def run_logistics_nl2sql_m9_shadow_sqlplan_generation(
                 domain=route.domain,
                 source_system=route.source_system,
                 candidate=generation.candidate,
+                raw_candidate_sql=sample.raw_candidate_sql,
                 request_id=uuid4().hex,
                 dry_run=True,
             )
@@ -1091,6 +1112,9 @@ def run_logistics_nl2sql_m9_shadow_sqlplan_generation(
                 shadow_status=shadow_result.status,
                 sql_hash=shadow_result.sql_hash,
                 row_count=shadow_result.row_count,
+                candidate_sql_gate_allowed=shadow_result.candidate_sql_gate_allowed,
+                candidate_sql_gate_rejected=shadow_result.candidate_sql_gate_rejected,
+                candidate_sql_gate_reason_code=shadow_result.candidate_sql_gate_reason_code,
             )
         )
 
@@ -1119,6 +1143,9 @@ def _outcome(
     shadow_status: str | None = None,
     sql_hash: str | None = None,
     row_count: int = 0,
+    candidate_sql_gate_allowed: bool | None = None,
+    candidate_sql_gate_rejected: bool | None = None,
+    candidate_sql_gate_reason_code: str | None = None,
 ) -> LogisticsNl2SqlM9ShadowOutcome:
     return LogisticsNl2SqlM9ShadowOutcome(
         sample=sample,
@@ -1130,6 +1157,9 @@ def _outcome(
         shadow_status=shadow_status,
         sql_hash=sql_hash,
         row_count=row_count,
+        candidate_sql_gate_allowed=candidate_sql_gate_allowed,
+        candidate_sql_gate_rejected=candidate_sql_gate_rejected,
+        candidate_sql_gate_reason_code=redact_evaluation_text(str(candidate_sql_gate_reason_code)) if candidate_sql_gate_reason_code else None,
         elapsed_ms=int((time.perf_counter() - started) * 1000),
     )
 
@@ -1139,6 +1169,9 @@ def _build_report(outcomes: list[LogisticsNl2SqlM9ShadowOutcome]) -> LogisticsNl
     by_status = Counter(outcome.status for outcome in outcomes)
     by_category = Counter(outcome.sample.category for outcome in outcomes)
     by_business_case = Counter(outcome.sample.business_case for outcome in outcomes)
+    by_candidate_sql_gate_reason = Counter(
+        outcome.candidate_sql_gate_reason_code for outcome in outcomes if outcome.candidate_sql_gate_reason_code
+    )
     expected_status_match_count = sum(1 for outcome in outcomes if outcome.status == outcome.sample.expected_status)
     return LogisticsNl2SqlM9ShadowReport(
         total=total,
@@ -1147,6 +1180,9 @@ def _build_report(outcomes: list[LogisticsNl2SqlM9ShadowOutcome]) -> LogisticsNl
         generated_count=sum(1 for outcome in outcomes if outcome.generated),
         validation_pass_count=sum(1 for outcome in outcomes if outcome.validation_ok),
         validation_failed_count=by_status.get("validation_failed", 0),
+        candidate_sql_gate_allowed_count=sum(1 for outcome in outcomes if outcome.candidate_sql_gate_allowed is True),
+        candidate_sql_gate_rejected_count=sum(1 for outcome in outcomes if outcome.candidate_sql_gate_rejected is True),
+        by_candidate_sql_gate_reason=dict(by_candidate_sql_gate_reason),
         expected_status_match_count=expected_status_match_count,
         expected_status_mismatch_count=total - expected_status_match_count,
         by_status=dict(by_status),

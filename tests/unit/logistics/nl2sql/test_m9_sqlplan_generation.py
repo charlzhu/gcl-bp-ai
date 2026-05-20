@@ -713,6 +713,41 @@ def test_m9_shadow_runner_writes_redacted_artifacts_for_fake_success(tmp_path) -
     assert "正式物流 QA 主链路" not in payload
 
 
+def test_m9_shadow_runner_summarizes_candidate_sql_gate_without_raw_sql(tmp_path) -> None:
+    """M9 runner 传入 raw candidate SQL 时，report/records 只能写 gate 摘要，不能泄露 SQL 原文。"""
+
+    sample = LogisticsNl2SqlM9ShadowSample(
+        sample_id="m10b_raw_candidate_sql_rejected",
+        question="2025年发运量是多少",
+        expected_status="validation_failed",
+        category="candidate_sql_gate",
+        business_case="raw_candidate_sql_rejected",
+        raw_candidate_sql="SELECT password_token_dsn FROM dws_logistics_detail_union LIMIT 9999",
+    )
+
+    run = run_logistics_nl2sql_m9_shadow_sqlplan_generation(
+        samples=[sample],
+        artifact_dir=tmp_path,
+        recall_service=_StaticRecallService(),
+        generator=_StaticGenerator(_valid_candidate()),
+    )
+    payload = (
+        run.records_path.read_text(encoding="utf-8")
+        + run.report_path.read_text(encoding="utf-8")
+        + json.dumps(run.report.model_dump(mode="json"), ensure_ascii=False)
+    )
+
+    assert run.report.total == 1
+    assert run.report.candidate_sql_gate_rejected_count == 1
+    assert run.outcomes[0].candidate_sql_gate_rejected is True
+    assert run.outcomes[0].candidate_sql_gate_reason_code == "limit_out_of_range"
+    assert "candidate_sql_gate_rejected::limit_out_of_range" in run.outcomes[0].error_codes
+    assert "SELECT" not in payload
+    assert "password_token_dsn" not in payload
+    assert "dws_logistics_detail_union LIMIT 9999" not in payload
+    assert "candidate_sql_gate_rejected_count" in payload
+
+
 def _single_table_normalization_plan() -> dict:
     """构造单表归一化 guard 测试使用的多表噪声计划。
 
