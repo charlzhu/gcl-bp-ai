@@ -1,0 +1,413 @@
+[
+  {
+    "path": "AGENTS.md",
+    "exists": true,
+    "kind": "file",
+    "size": 14969,
+    "headings": [
+      "# AGENTS.md",
+      "## 一、文件用途",
+      "## 二、项目概述",
+      "### 1. 项目名称",
+      "### 2. 已确认的总体定位",
+      "### 3. 当前阶段口径",
+      "### 4. 历史能力基线仍需保持",
+      "## 三、当前必须读取的任务资料"
+    ],
+    "selected_lines": [
+      "本文件用于让接手本项目的 Codex / 工程代理在开始工作前，快速理解项目目标、当前边界、工作规则和代码约束。",
+      "本文件只定义当前项目执行口径与长期规则，不代表可以越过 `docs/CURRENT_STATUS.md`、`docs/NEXT_TASK.md`、`ai/inbox/requirement.md` 中声明的阶段边界。",
+      "### 3. 当前阶段口径",
+      "当前阶段口径已从“计划 BOM 功率预测 M1”刷新为：",
+      "当前状态：",
+      "下一步建议：",
+      "## 三、当前必须读取的任务资料",
+      "## 四、当前 M2 目标与边界",
+      "M2 不验证完整多 Agent、多工具、RAG、经营分析和全域 NL2SQL 能力。",
+      "2. 新增 Oracle 基础设施层或遵循当前配置规范增加 Oracle client/config。",
+      "### 5. M2 禁止事项",
+      "5. 不扩展到采购、工单、SAP BOM，除非 M2 验收后另开任务。"
+    ]
+  },
+  {
+    "path": "README_WORKSPACE.md",
+    "exists": true,
+    "kind": "file",
+    "size": 486,
+    "headings": [
+      "# README_WORKSPACE",
+      "## 目录说明",
+      "## 当前阶段",
+      "## 重要说明"
+    ],
+    "selected_lines": [
+      "## 当前阶段",
+      "当前优先聚焦物流一期。",
+      "3. 一切以当前仓库代码为准，不要假设历史补丁已经合入。"
+    ]
+  },
+  {
+    "path": "docs/PLATFORM_OVERALL_ARCHITECTURE_AND_ROADMAP.md",
+    "exists": true,
+    "kind": "file",
+    "size": 29112,
+    "headings": [
+      "# 经营计划综合智能平台总体架构与阶段路线",
+      "## 一、文档用途",
+      "## 二、总体产品定位",
+      "### 2.1 一句话定位",
+      "### 2.2 核心能力组合",
+      "### 2.3 平台建设原则",
+      "## 三、当前基线与文档关系",
+      "### 3.1 当前仓库可复用基线"
+    ],
+    "selected_lines": [
+      "6. 当前物管 SAP MID、计划 BOM、功率预测、物流 NL2SQL 等既有阶段文档如何纳入总路线。",
+      "7. **每个业务域必须有测试集**：业务问答能力必须有样例题、标准答案、回归脚本和验收报告，不能只依赖人工感觉。",
+      "## 三、当前基线与文档关系",
+      "### 3.1 当前仓库可复用基线",
+      "结合当前已读取的项目文档，当前仓库已沉淀出以下基础：",
+      "| 能力 | 当前状态 | 在总路线中的定位 |",
+      "| 物流问答 | 已形成较成熟链路，具备历史台账、系统侧数据、查询服务、回归样例和前端展示基础 | 平台样板域，也是后续 NL2SQL 和多域治理的主要基线 |",
+      "| Query Planning V2 | 已有统一 QueryPlan envelope、shadow/diagnostic 设计 | 多域问答进入统一规划层的前置基础 |",
+      "| 物流 NL2SQL | 已有物流一期 NL2SQL 架构规划，第一阶段只做物流、只查中间库 | 后续结构化问数增强路线之一 |",
+      "### 3.2 当前文档存在的阶段差异",
+      "当前项目文档中同时存在不同阶段的沉淀：",
+      "2. `docs/CURRENT_STATUS.md` 显示当前正式任务已切换到物管域 SAP MID M1 已完成、建议进入 M2；"
+    ]
+  },
+  {
+    "path": "docs/CURRENT_STATUS.md",
+    "exists": true,
+    "kind": "file",
+    "size": 5156,
+    "headings": [
+      "# CURRENT_STATUS.md",
+      "## 当前阶段：总体架构已确认，近期执行口径统一到物管 SAP MID M2 准备",
+      "## 一、总体架构确认状态",
+      "## 二、物管 SAP MID M1 已完成内容",
+      "## 三、M1 未做事项",
+      "## 四、当前结论",
+      "## 五、现有能力基线仍需保持",
+      "## 六、当前禁止事项"
+    ],
+    "selected_lines": [
+      "## 当前阶段：总体架构已确认，近期执行口径统一到物管 SAP MID M2 准备",
+      "当前项目长期定位已由以下文档确认：",
+      "当前近期正式执行口径为：",
+      "上一阶段 M1 已完成。下一阶段建议进入：",
+      "> 说明：计划 BOM 功率预测 M1 已作为计划域历史/专项能力沉淀，不再作为当前阶段入口；后续如继续功率预测，应按 `docs/PLAN_POWER_IMPLEMENTATION_PLAN.md` 另行确认阶段边界。",
+      "## 四、当前结论",
+      "1. 当前阶段口径已统一：不再把计划 BOM 功率预测 M1 作为当前默认入口。",
+      "2. 下一步建议执行物管 SAP MID M2，首批范围只聚焦：",
+      "6. 总规中的多 Agent、多工具、经营分析、统一入口属于中长期路线，不等于当前可直接进入完整实现。",
+      "## 六、当前禁止事项"
+    ]
+  },
+  {
+    "path": "docs/NEXT_TASK.md",
+    "exists": true,
+    "kind": "file",
+    "size": 5363,
+    "headings": [
+      "# NEXT_TASK.md",
+      "## 下一步任务：M2 库存 / 出入库同步 MVP + 物管问答入口 MVP",
+      "## 一、进入 M2 前必须先读取",
+      "## 二、M2 前置阻塞必须处理",
+      "## 三、M2 后端任务清单",
+      "## 四、M2 前端任务清单",
+      "## 五、M2 验收标准",
+      "## 六、M2 禁止事项"
+    ],
+    "selected_lines": [
+      "## 下一步任务：M2 库存 / 出入库同步 MVP + 物管问答入口 MVP",
+      "当前总体架构已确认：",
+      "当前近期执行主线不再是计划 BOM 功率预测 M1，而是物管域 SAP MID 接入后续阶段。",
+      "M1 已完成。下一轮建议进入：",
+      "2. 新增 Oracle 基础设施层或遵循当前配置规范增加 Oracle client/config。",
+      "## 五、M2 验收标准",
+      "10. 形成验收材料：测试日志、diff、风险说明、最终报告。",
+      "## 六、M2 禁止事项",
+      "5. 不扩展到采购、工单、SAP BOM，除非 M2 验收后另开任务。",
+      "M2 不验证完整多 Agent、多工具、RAG、经营分析和全域 NL2SQL 能力。"
+    ]
+  },
+  {
+    "path": "docs/HANDOFF.md",
+    "exists": true,
+    "kind": "file",
+    "size": 2730,
+    "headings": [
+      "# HANDOFF.md",
+      "## 交接结论：物管域 SAP MID 接入 M1 方案已完成",
+      "## 一、已完成产物",
+      "## 二、关键结论",
+      "## 三、Oracle smoke test 状态",
+      "## 四、下一步建议",
+      "## 五、人工确认项",
+      "## 六、边界提醒"
+    ],
+    "selected_lines": [
+      "4. LLM 只负责理解和表达，程序负责基于模板准确查数；禁止 LLM 自由 SQL。",
+      "## 四、下一步建议"
+    ]
+  },
+  {
+    "path": "ai/protocols/company_task_protocol.md",
+    "exists": true,
+    "kind": "file",
+    "size": 4229,
+    "headings": [
+      "# Company Task Protocol V1",
+      "## 1. 目标",
+      "## 2. 任务状态",
+      "## 3. 标准任务目录",
+      "## 4. 附件规则",
+      "## 5. 技术经理闭环",
+      "## 6. 阶段边界规则",
+      "## 7. 质量等级"
+    ],
+    "selected_lines": [
+      "- WAIT_ACCEPT：等待人工验收",
+      "生成计划和验收标准",
+      "- PASS：测试通过，质量检查通过，可以进入人工验收。",
+      "- WARN：测试通过，但涉及敏感文件、diff 较大或有非阻塞风险，可以进入人工验收但必须重点检查。",
+      "- FAIL：测试失败、修改禁止目录、缺关键产物，不允许验收。",
+      "## 8. 绝对禁止",
+      "10. 将假样例题当作真实验收数据。"
+    ]
+  },
+  {
+    "path": "ai/company/roles/technical_manager.md",
+    "exists": true,
+    "kind": "file",
+    "size": 2610,
+    "headings": [
+      "# Technical Manager Role",
+      "## 核心职责",
+      "## 禁止事项",
+      "## 必须暂停并询问用户的情况",
+      "## 质量判断标准",
+      "## 输出格式"
+    ],
+    "selected_lines": [
+      "6. 生成验收标准。",
+      "14. 等待用户最终验收。",
+      "## 禁止事项",
+      "1. 禁止自动 commit。",
+      "2. 禁止自动 push。",
+      "3. 禁止自动部署。",
+      "4. 禁止修改 `.env`、密钥和生产配置。",
+      "5. 禁止直接连接生产数据库。",
+      "6. 禁止让 Codex 大范围无关重构。",
+      "7. 禁止测试失败后伪装成功。",
+      "8. 禁止无报告结束任务。",
+      "9. 禁止未获用户确认就执行高风险操作。"
+    ]
+  },
+  {
+    "path": "ai/hermes_skills/company-code-builder/SKILL.md",
+    "exists": true,
+    "kind": "file",
+    "size": 5752,
+    "headings": [
+      "# Company Code Builder - Technical Manager Mode",
+      "## 角色定位",
+      "## 触发条件",
+      "## 必读文件",
+      "## 总体流程",
+      "### 1. 需求理解阶段",
+      "### 2. 任务拆解阶段",
+      "### 3. 用户确认阶段"
+    ],
+    "selected_lines": [
+      "你是用户本地一人公司代码构建系统中的技术经理。你负责理解需求、读取上下文和附件、拆任务、指挥 Codex、监控 Codex 执行、检查结果、纠错、重试、生成报告，并等待用户验收。",
+      "- 正式启动当前 inbox 任务",
+      "6. 初步验收标准。",
+      "3. 禁止修改的目录。",
+      "6. 验收标准。",
+      "6. 越过当前 requirement 的阶段边界。",
+      "1. 当前 task_id。",
+      "2. 当前 state。",
+      "2. 修改了禁止文件或原始附件。",
+      "9. 任务越过当前阶段边界。",
+      "2. 当前状态。",
+      "8. 是否建议用户验收。"
+    ]
+  },
+  {
+    "path": "ai/inbox/requirement.md",
+    "exists": true,
+    "kind": "file",
+    "size": 45545,
+    "headings": [
+      "# Goal：物管域 SAP Oracle MID 数据同步、智能问数与前端适配建设",
+      "## 0. 本次 Goal 总目标",
+      "### 目标一：将 SAP Oracle MID 库中的相关视图同步到智能助手中间库",
+      "#### 1. 自动同步",
+      "#### 2. 手动同步",
+      "### 目标二：基于智能助手中间库实现智能问数、分析和回答",
+      "### 目标三：前端页面适配物管业务域与 SAP/MID 同步能力",
+      "#### 1. 智能问答页增加物管业务域问答能力"
+    ],
+    "selected_lines": [
+      "> 当前首次执行阶段：M1 数据资产审计、同步方案设计、中间库建模、智能问数链路设计、前端适配方案设计",
+      "当前前端页面主要适配了物流和计划 BOM 的问答能力，尚未完整适配物管业务域。",
+      "## 1. 当前业务背景",
+      "当前计划 BOM 问答能力主要依赖手动上传的 BOM Excel。后续需要支持 SAP BOM 数据源，将 SAP BOM 相关视图同步到智能助手中间库，并逐步与现有计划 BOM 查询 / 问答能力兼容。",
+      "## 2. 当前系统现状",
+      "当前项目不是从零开始。必须基于已有智能助手项目进行扩展。",
+      "当前智能助手中间库已经支持公司物流数据同步，并形成了较清晰的数据分层。",
+      "当前已有计划 BOM 问答功能，主要数据来源是手动上传 BOM Excel 文件。",
+      "### 2.3 当前物管业务域",
+      "当前物管业务域可作为本次 SAP MID 数据接入的主要承接域。",
+      "### 2.4 当前前端状态",
+      "当前前端主要适配："
+    ]
+  },
+  {
+    "path": "ai/inbox/attachments_manifest.md",
+    "exists": true,
+    "kind": "file",
+    "size": 6709,
+    "headings": [
+      "# 附件清单：计划 BOM 功率预测智能问答任务",
+      "## 0. 当前附件目录",
+      "## 1. 附件一：GCL功率测试基准（V2.1）TOPCon 26.04.13.xlsm",
+      "### 1.1 文件位置",
+      "### 1.2 文件用途",
+      "### 1.3 M1.5 补充审计摘要",
+      "### 1.4 对开发的要求",
+      "### 1.5 需要重点分析 / 入库的内容"
+    ],
+    "selected_lines": [
+      "## 0. 当前附件目录",
+      "当前与本任务相关附件：",
+      "5. 当前供应商投产比例仍为 `D29:D48`。",
+      "8. 智能问答默认使用当前 active 功率模型版本。",
+      "9. 不能将当前 Excel 的某一组结果 hardcode 到代码中。",
+      "5. 文档中的问题不能直接作为真实验收问题。",
+      "1. 基于当前项目中真实存在的 BOM 数据。",
+      "因此建议下一轮进入："
+    ]
+  },
+  {
+    "path": "docs/NL2SQL_LOGISTICS_M9_SQLPLAN_GENERATION_SHADOW_MVP_PLAN.md",
+    "exists": true,
+    "kind": "file",
+    "size": 5012,
+    "headings": [
+      "# NL2SQL Logistics M9 SQLPlan Generation Shadow MVP Plan",
+      "## 背景",
+      "## 用户确认口径",
+      "## 本阶段范围",
+      "## 非范围",
+      "## 验收测试",
+      "### RED/GREEN focused tests",
+      "### 既有 NL2SQL 回归"
+    ],
+    "selected_lines": [
+      "# NL2SQL Logistics M9 SQLPlan Generation Shadow MVP Plan",
+      "M8 已验证物流 NL2SQL 的后半段 shadow-only 安全评估骨架：受控 SQLPlan candidate、确定性 validator、renderer、SQL safety、fake executor / 只读 smoke runner、脱敏评估日志与报表。",
+      "但 M8 样例仍以人工注入 SQLPlan candidate 为主，尚未证明“自然语言问题 → SQLPlan candidate”的前半段链路。因此 M9 的目标是补齐 front-half shadow MVP：从物流自然语言问题出发，经过 Query Rewrite、Domain Router、Semantic Catalog recall/rerank、主 LLM SQLPlan Generator，再进入既有 M8 shadow pipeline。",
+      "1. SQLPlan Generator 使用当前项目已配置的主 LLM（`settings.llm_base_url` / `settings.llm_api_key` / `settings.llm_model`），测试允许注入 fake client。",
+      "3. M9 阶段允许跑一次真实 reindex + recall smoke。",
+      "5. 进入 M10/M12 前的门槛：SQLPlan 结构合法率 ≥ 90%，高确定性问题结果一致率 ≥ 95%，安全违规 0 容忍，正式链路影响 0 容忍。",
+      "7. “整体 NL2SQL 完成”定义为 C：主链路替换、NL2SQL 成为主要物流问答链路；但 M9 不做主链路替换。",
+      "9. M9 允许真实调用 LLM / Embedding / Rerank。",
+      "- M9 只允许 logistics + middle_db + shadow；",
+      "- 使用当前主 LLM；",
+      "5. 新增 M9 shadow runner：",
+      "- 自然语言样例 → rewrite/router/recall/generator → shadow pipeline；"
+    ]
+  },
+  {
+    "path": "ai/outbox/kanban/t_3d0c55ce",
+    "exists": true,
+    "kind": "dir",
+    "file_count": 25,
+    "sample_files": [
+      "diff.patch",
+      "final-acceptance.md",
+      "submission-checklist.md",
+      "static-scan.json",
+      "red-green.md",
+      "provider-output-investigation.stdout.json",
+      "inspect_provider_yearly.py",
+      "m9-shadow-sqlplan-generation-report.md",
+      "preflight.md",
+      "review-result.json",
+      "m9-shadow-sqlplan-generation-records.jsonl",
+      "live-provider-shadow-gate-summary.json",
+      "review-result-final.json",
+      "preflight-current.txt",
+      "review-result-round2.json",
+      "review-result-round3.json",
+      "provider-output-investigation.json",
+      "review_bundle.md",
+      "gate-summary.json",
+      "fake-shadow/m9-shadow-sqlplan-generation-report.md"
+    ]
+  },
+  {
+    "path": "ai/outbox/kanban/t_bc1100bb",
+    "exists": true,
+    "kind": "dir",
+    "file_count": 10,
+    "sample_files": [
+      "diff.patch",
+      "final-acceptance.md",
+      "submission-checklist.md",
+      "static-scan.json",
+      "m9-shadow-sqlplan-generation-report.md",
+      "test.log",
+      "m9-shadow-sqlplan-generation-records.jsonl",
+      "review-result-final.json",
+      "live-provider-shadow-gate.rc",
+      "live-provider-shadow-gate.log"
+    ]
+  },
+  {
+    "path": "ai/outbox/kanban/t_8d973ff5",
+    "exists": true,
+    "kind": "dir",
+    "file_count": 4,
+    "sample_files": [
+      "final-acceptance.md",
+      "preflight.md",
+      "dirty-worktree-audit.txt",
+      "gate-summary.json"
+    ]
+  },
+  {
+    "path": "ai/outbox/kanban/t_1fceb427",
+    "exists": true,
+    "kind": "dir",
+    "file_count": 7,
+    "sample_files": [
+      "diff.patch",
+      "m7-shadow-smoke-records.jsonl",
+      "final-acceptance.md",
+      "m7-shadow-smoke-report.md",
+      "static-scan.json",
+      "review-result-final.json",
+      "review-bundle.md"
+    ]
+  },
+  {
+    "path": "ai/outbox/kanban/t_7895e090",
+    "exists": true,
+    "kind": "dir",
+    "file_count": 8,
+    "sample_files": [
+      "diff.patch",
+      "final-acceptance.md",
+      "m8-shadow-eval-report.md",
+      "test.log",
+      "review-result.json",
+      "m8-shadow-eval-records.jsonl",
+      "m7-live-smoke-check/m7-shadow-smoke-records.jsonl",
+      "m7-live-smoke-check/m7-shadow-smoke-report.md"
+    ]
+  }
+]
