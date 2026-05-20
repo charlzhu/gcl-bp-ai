@@ -1,0 +1,170 @@
+{
+  "scanned_file_count": 26,
+  "high_risk_findings_count": 0,
+  "review_findings_count": 22,
+  "high_risk_findings": [],
+  "review_findings_sample": [
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/catalog_retrieval.py",
+      "line": 107,
+      "text": "embedding、rerank、SQLPlan LLM 和 provider smoke 共用同一套代理策略，"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/evaluation_log.py",
+      "line": 331,
+      "text": "if SQL_HASH_PATTERN.fullmatch(text):"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 37,
+      "text": "_SQLPLAN_FORBIDDEN_LLM_FIELDS = {"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 39,
+      "text": "\"raw_sql\","
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 211,
+      "text": "\"\"\"M9 LLM SQLPlan Generator 的受控结果。\"\"\""
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 224,
+      "text": "\"\"\"使用当前项目主 LLM 生成受控 SQLPlan candidate，并立即走 SQLPlan validator。\"\"\""
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 267,
+      "text": "return LogisticsSqlPlanGenerationResult(status=\"disabled\", error_codes=[\"m9_llm_not_configured\"])"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 672,
+      "text": "\"不能输出 SQL、raw_sql、where、having、表字段猜测、数据库连接、最终答案或计算值。\\n\""
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 836,
+      "text": "return LogisticsSqlPlanGenerationResult(status=\"validation_failed\", error_codes=[\"m9_llm_output_not_strict_json\"])"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 840,
+      "text": "return LogisticsSqlPlanGenerationResult(status=\"validation_failed\", error_codes=[\"m9_llm_output_json_parse_error\"])"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 842,
+      "text": "return LogisticsSqlPlanGenerationResult(status=\"validation_failed\", error_codes=[\"m9_llm_output_not_json_object\"])"
+    },
+    {
+      "severity": "review",
+      "pattern": "formal_qa_main_chain_touch",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 987,
+      "text": "router = LogisticsNl2SqlDomainRouter()"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/m9_sqlplan_generation.py",
+      "line": 1459,
+      "text": "if key_text.lower() in _SQLPLAN_FORBIDDEN_LLM_FIELDS:"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/semantic_catalog.py",
+      "line": 162,
+      "text": "examples 只给 M9 LLM SQLPlan Generator 提供受控结构参考；不得保存 raw SQL、"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/semantic_catalog.py",
+      "line": 181,
+      "text": "raw_sql: str | None = None"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/semantic_catalog.py",
+      "line": 469,
+      "text": "if example.sql is not None or example.raw_sql is not None:"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/sql_plan.py",
+      "line": 19,
+      "text": "FORBIDDEN_SQLPLAN_KEYS = {\"raw_sql\", \"sql\", \"where\", \"having\", \"free_sql\"}"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/sql_plan.py",
+      "line": 123,
+      "text": "\"\"\"LLM 或上游规划器产出的 SQLPlan candidate。"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/sql_plan.py",
+      "line": 164,
+      "text": "2. 先扫描 raw candidate，阻断 raw_sql/sql/where/having/free_sql 和 SQL-like 字符串；"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "backend/app/domains/logistics/services/nl2sql/sql_plan.py",
+      "line": 644,
+      "text": "错误码只暴露字段路径，不回显 LLM 原文，避免把疑似 SQL/密钥片段写入审计或用户侧材料。"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "scripts/dev/run_logistics_nl2sql_m9_shadow_sqlplan_generation.py",
+      "line": 67,
+      "text": "该生成器只用于 smoke/验收材料，不访问 LLM，不生成 SQL；它产出受控"
+    },
+    {
+      "severity": "review",
+      "pattern": "raw_sql_candidate",
+      "path": "scripts/dev/run_logistics_nl2sql_m9_shadow_sqlplan_generation.py",
+      "line": 69,
+      "text": "的后半段闭环。真实 LLM 生成由 LogisticsSqlPlanGenerator 负责。"
+    }
+  ],
+  "interpretation": "No high-risk static findings in scoped NL2SQL code/scripts",
+  "scope": [
+    "backend/app/domains/logistics/services/nl2sql",
+    "backend/app/domains/logistics/config/nl2sql_catalog",
+    "scripts/reindex_logistics_nl2sql_catalog.py",
+    "scripts/dev/run_logistics_nl2sql_m9_provider_smoke.py",
+    "scripts/dev/run_logistics_nl2sql_m9_shadow_sqlplan_generation.py"
+  ]
+}

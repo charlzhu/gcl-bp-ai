@@ -1,0 +1,82 @@
+{
+  "task_id": "t_236bba5f",
+  "task_title": "M10-0：物流 NL2SQL M9 当前树复核与 M10 启动门禁",
+  "verdict": "BLOCKED",
+  "can_start_m10_code_development": false,
+  "blocker_type": "provider_config_and_live_recall_gate",
+  "environment": {
+    "workspace": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/nl2sql-m10-preflight-revalidation",
+    "branch": "feature/nl2sql-m10-preflight-revalidation",
+    "workspace_python3_issue": "python3 缺 pytest/pydantic/yaml 等项目依赖",
+    "fallback_python": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python",
+    "fallback_python_version": "Python 3.12.7"
+  },
+  "gates": {
+    "nl2sql_unit_tests": {
+      "status": "PASS",
+      "command": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql -q",
+      "result": "190 passed, 9 warnings in 6.02s",
+      "log": "ai/outbox/kanban/t_236bba5f/test.log"
+    },
+    "compileall": {
+      "status": "PASS",
+      "result": "RC=0",
+      "log": "ai/outbox/kanban/t_236bba5f/compileall.log"
+    },
+    "diff_check": {
+      "status": "PASS",
+      "result": "RC=0",
+      "log": "ai/outbox/kanban/t_236bba5f/diff-check.log"
+    },
+    "static_scan": {
+      "status": "PASS_WITH_REVIEW_NOTES",
+      "high_risk_findings_count": 0,
+      "review_findings_count": 22,
+      "log": "ai/outbox/kanban/t_236bba5f/compile-static-scan.log"
+    },
+    "fake_shadow_m9_sqlplan_generation": {
+      "status": "PASS",
+      "total": 3,
+      "success_count": 2,
+      "validation_failed_count": 1,
+      "expected_status_mismatch_count": 0,
+      "report": "ai/outbox/kanban/t_236bba5f/m9-shadow-current/m9-shadow-sqlplan-generation-report.md"
+    },
+    "provider_smoke": {
+      "status": "BLOCKED",
+      "milvus": "PASS",
+      "embedding": "BLOCKED: missing_config::llm_base_url,llm_api_key,embedding_model",
+      "rerank": "BLOCKED: missing_config::llm_base_url,llm_api_key,rerank_model",
+      "llm_provider": "BLOCKED: missing_config::llm_base_url,llm_api_key,llm_model",
+      "log": "ai/outbox/kanban/t_236bba5f/provider-smoke.log"
+    },
+    "catalog_reindex": {
+      "status": "BLOCKED",
+      "result": "embedding_unavailable; indexed_count=0; rc=2",
+      "log": "ai/outbox/kanban/t_236bba5f/catalog-reindex.log"
+    },
+    "live_provider_shadow_gate": {
+      "status": "BLOCKED",
+      "total": 1,
+      "success_count": 0,
+      "recall_failed_count": 1,
+      "expected_status_mismatch_count": 1,
+      "report": "ai/outbox/kanban/t_236bba5f/m9-shadow-live-current/m9-shadow-sqlplan-generation-report.md"
+    }
+  },
+  "remaining_actions": [
+    "补齐或确认物流 NL2SQL 使用的 provider 配置：llm_base_url、llm_api_key、embedding_model、rerank_model、llm_model。",
+    "重新运行 provider smoke。",
+    "重新运行真实 catalog reindex。",
+    "重新运行 live provider shadow gate，要求 recall_failed=0 且 expected_status_mismatch_count=0。",
+    "provider/live gate 通过后再创建 M10 candidate-SQL safety-gate Shadow MVP 代码开发看板任务。"
+  ],
+  "side_effects": {
+    "code_modified": false,
+    "staged": false,
+    "committed": false,
+    "pushed": false,
+    "deployed": false,
+    "business_mainline_replaced": false
+  }
+}
