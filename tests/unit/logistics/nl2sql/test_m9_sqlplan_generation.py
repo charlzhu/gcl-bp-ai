@@ -66,9 +66,9 @@ def test_domain_router_allows_only_logistics_middle_db_shadow_route() -> None:
     assert allowed.reason_code is None
 
     bom = router.route("BOM 615功率预测是多少？")
-    assert bom.should_process is False
+    assert bom.should_process is True
     assert bom.domain == "plan_bom"
-    assert bom.reason_code == "m9_domain_not_supported::plan_bom"
+    assert bom.reason_code is None
 
     oracle = router.route("直查 SAP Oracle MID 物流源表")
     assert oracle.should_process is False

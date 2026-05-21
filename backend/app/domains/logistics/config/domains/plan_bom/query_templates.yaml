@@ -1,9 +1,85 @@
+# 计划 BOM 域 NL2SQL query_templates
+# 
+# 对应域：plan_bom
+# 支持表：plan_bom_header, plan_bom_material_line, plan_bom_revision,
+#        plan_power_model_version, plan_power_model_sheet
+#
+# BOM 查询类（A 类问题）：
+#   - 版型搭配查询（型号/版号/组件版型）
+#   - 物料清单查询（按订单号/评审号查询 BOM 明细）
+#   - 材料归类/清单统计
+#
+# 功率测算类（B 类 + 功率预测）：
+#   - 功率档位/供应商效率/标板基准
+#   - LLM 负责理解问题 + 提取参数，确定性引擎负责计算
+
 templates:
-  - id: plan_bom.aggregate.version_change_overview
-    name: BOM版本变更统计（占位模板）
-    priority: 60
+  # === BOM 明细查询（按订单号/评审号查 BOM 头）===
+  - id: plan_bom.query.header_detail
+    name: BOM 头表查询
+    priority: 40
+    mode: direct
+    required_slots: [order_no_or_review_no]
+    metric_candidates: []
+    keywords_any: ["BOM", "版型", "搭配", "订单号", "评审号", "物料清单", "物料明细"]
+    group_by: []
+
+  # === BOM 版本变更查询 ===
+  - id: plan_bom.query.version_history
+    name: BOM 版本变更查询
+    priority: 45
     mode: aggregate
-    required_slots: [single_period_or_year]
-    metric_candidates: [shipment_watt]
-    keywords_any: ["BOM", "版本", "替代料"]
-    group_by: [biz_month]
+    required_slots: [order_no_or_review_no]
+    metric_candidates: []
+    keywords_any: ["版本", "变更记录", "版本号", "修订", "改版"]
+    group_by: [version_no]
+
+  # === BOM 材料统计 ===
+  - id: plan_bom.aggregate.material_summary
+    name: BOM 材料统计汇总
+    priority: 45
+    mode: aggregate
+    required_slots: [order_no_or_review_no]
+    metric_candidates: [material_count]
+    keywords_any: ["材料", "物料", "物料类别", "材料统计", "用量"]
+    group_by: [material_category]
+
+  # === BOM 对比（A 类问题中带版本消歧）===
+  - id: plan_bom.compare.version_diff
+    name: BOM 版本差异对比
+    priority: 40
+    mode: comparison
+    required_slots: [order_no_or_review_no, version_pair]
+    metric_candidates: []
+    keywords_any: ["对比", "差异", "变更", "不同", "比较"]
+    group_by: [material_category, sap_code]
+
+  # === 功率预测模型版本查询 ===
+  - id: plan_bom.power.model_version
+    name: 功率测算模型版本查询
+    priority: 50
+    mode: direct
+    required_slots: []
+    metric_candidates: []
+    keywords_any: ["功率模型", "功率测算", "功率版本", "功率档位", "效率分布", "标板基准"]
+    group_by: []
+
+  # === 功率档位查询 ===
+  - id: plan_bom.power.bin_query
+    name: 功率档位查询
+    priority: 50
+    mode: direct
+    required_slots: [power_bin_or_panel_type]
+    metric_candidates: []
+    keywords_any: ["功率档位", "功率档", "功率分段", "档位分布"]
+    group_by: []
+
+  # === 供应商效率查询 ===
+  - id: plan_bom.power.supplier_efficiency
+    name: 供应商效率分布查询
+    priority: 50
+    mode: direct
+    required_slots: [supplier_name_or_type]
+    metric_candidates: []
+    keywords_any: ["供应商效率", "效率分布", "供应商功率", "供应商等级"]
+    group_by: []

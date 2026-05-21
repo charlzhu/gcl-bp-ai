@@ -219,15 +219,73 @@ def register_business_analysis_domain(registry: Nl2SqlDomainRegistry) -> None:
     ))
 
 
+def register_plan_bom_domain(registry: Nl2SqlDomainRegistry) -> None:
+    """注册计划 BOM（含功率测算）业务域到 registry。
+
+    注册内容：
+        - domain: plan_bom
+        - keywords: BOM 域识别关键词
+        - catalog_loader: 懒加载 BOM 表描述
+        - templates_loader: 懒加载 BOM query_templates
+        - allowed_tables: BOM 中间库允许读取的表
+    """
+    def _load_catalog() -> list[dict]:
+        return [
+            {"table": "plan_bom_header", "description": "BOM 头表，含订单号/版本号/生效日期"},
+            {"table": "plan_bom_material_line", "description": "BOM 材料明细表，含SAP编码/物料名称/用量"},
+            {"table": "plan_bom_revision", "description": "BOM 修订区表"},
+            {"table": "plan_power_model_version", "description": "功率模型版本表"},
+            {"table": "plan_power_model_sheet", "description": "功率模型 Sheet 表"},
+            {"table": "plan_power_factor_option", "description": "功率模型配置选项"},
+            {"table": "plan_power_supplier_efficiency_distribution", "description": "供应商效率分布"},
+            {"table": "plan_power_power_bin", "description": "功率档位表"},
+        ]
+
+    def _load_templates() -> list[dict]:
+        from pathlib import Path
+
+        import yaml
+
+        templates_path = (
+            Path(__file__).resolve().parents[3]
+            / "config" / "domains" / "plan_bom" / "query_templates.yaml"
+        )
+        if templates_path.exists():
+            data = yaml.safe_load(templates_path.read_text(encoding="utf-8"))
+            return (data or {}).get("templates", [])
+        return []
+
+    registry.register(DomainCatalogRegistration(
+        domain="plan_bom",
+        priority=10,
+        keywords=["BOM", "版型", "功率", "评审号", "物料清单", "材料明细",
+                   "功率测算", "功率预测", "功率档位", "供应商效率", "标板基准",
+                   "搭配虚拟件", "版号", "物料匹配"],
+        catalog_loader=_load_catalog,
+        templates_loader=_load_templates,
+        allowed_tables=(
+            "plan_bom_header",
+            "plan_bom_material_line",
+            "plan_bom_revision",
+            "plan_power_model_version",
+            "plan_power_model_sheet",
+            "plan_power_factor_option",
+            "plan_power_supplier_efficiency_distribution",
+            "plan_power_power_bin",
+        ),
+    ))
+
+
 def create_default_registry() -> Nl2SqlDomainRegistry:
-    """创建包含物流域 + 产销存域的默认注册表。
+    """创建包含物流域 + 产销存域 + 计划 BOM 域的默认注册表。
 
     用途：
         1. 被 Nl2SqlDomainRouter 默认构造使用；
-        2. 物流域 + 产销存域已注册；
-        3. 后续 Phase C（plan_bom）在此函数中追加注册。
+        2. 物流域 + 产销存域 + 计划BOM域已注册；
+        3. 后续 Phase D（material_management）在此函数中追加注册。
     """
     registry = Nl2SqlDomainRegistry()
     register_logistics_domain(registry)
     register_business_analysis_domain(registry)
+    register_plan_bom_domain(registry)
     return registry

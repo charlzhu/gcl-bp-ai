@@ -150,6 +150,20 @@ class TestNl2SqlDomainRouter:
         assert route.should_process is True
         assert route.domain == "business_analysis"
 
+    def test_plan_bom_domain_identified(self):
+        """BOM 类问题应被路由到 plan_bom 域。"""
+        router = Nl2SqlDomainRouter()
+        route = router.route("BOM 版型搭配查询")
+        assert route.should_process is True
+        assert route.domain == "plan_bom"
+
+    def test_plan_bom_power_domain_identified(self):
+        """功率测算类问题应被路由到 plan_bom 域。"""
+        router = Nl2SqlDomainRouter()
+        route = router.route("功率档位分布查询")
+        assert route.should_process is True
+        assert route.domain == "plan_bom"
+
     def test_router_with_rewrite_result_object(self):
         """兼容 LogisticsNl2SqlQueryRewriteResult 对象。"""
         registry = Nl2SqlDomainRegistry()

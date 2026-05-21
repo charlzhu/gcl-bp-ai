@@ -8,6 +8,8 @@ from backend.app.domains.logistics.services.nl2sql.business_rules import Logisti
 from backend.app.domains.logistics.services.nl2sql.domain_registry import (
     DomainCatalogRegistration,
     Nl2SqlDomainRegistry,
+    register_business_analysis_domain,
+    register_plan_bom_domain,
 )
 from backend.app.domains.logistics.services.nl2sql.domain_router import (
     Nl2SqlDomainRoute,
