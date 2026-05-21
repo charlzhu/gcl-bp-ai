@@ -35,6 +35,15 @@ from backend.app.domains.logistics.services.nl2sql.m10d_shadow_gate import (
     LogisticsNl2SqlM10DShadowGateConfig,
     LogisticsNl2SqlM10DShadowGateReport,
 )
+from backend.app.domains.logistics.services.nl2sql.m10_shadow_gate_runner import (
+    M10_SHADOW_GATE_RUNNER_VERSION,
+    LogisticsNl2SqlM10ShadowGateOutcome,
+    LogisticsNl2SqlM10ShadowGateRunReport,
+    LogisticsNl2SqlM10ShadowGateRunResult,
+    LogisticsNl2SqlM10ShadowGateSample,
+    build_default_logistics_nl2sql_m10_shadow_gate_samples,
+    run_logistics_nl2sql_m10_shadow_gate,
+)
 from backend.app.domains.logistics.services.nl2sql.m7_readonly_smoke import (
     M7_READONLY_SMOKE_VERSION,
     LogisticsNl2SqlM7ReadonlySmokeOutcome,
@@ -69,6 +78,10 @@ from backend.app.domains.logistics.services.nl2sql.shadow_smoke import (
     LogisticsNl2SqlShadowSmokeSample,
     build_default_logistics_nl2sql_shadow_smoke_samples,
     run_logistics_nl2sql_shadow_smoke,
+)
+from backend.app.domains.logistics.services.nl2sql.sql_ast_safety import (
+    LogisticsSqlAstSafetyChecker,
+    LogisticsSqlAstSafetyResult,
 )
 from backend.app.domains.logistics.services.nl2sql.sql_execution import (
     FakeLogisticsSqlExecutor,
@@ -112,6 +125,13 @@ __all__ = [
     "LogisticsNl2SqlM10DShadowGate",
     "LogisticsNl2SqlM10DShadowGateConfig",
     "LogisticsNl2SqlM10DShadowGateReport",
+    "M10_SHADOW_GATE_RUNNER_VERSION",
+    "LogisticsNl2SqlM10ShadowGateOutcome",
+    "LogisticsNl2SqlM10ShadowGateRunReport",
+    "LogisticsNl2SqlM10ShadowGateRunResult",
+    "LogisticsNl2SqlM10ShadowGateSample",
+    "build_default_logistics_nl2sql_m10_shadow_gate_samples",
+    "run_logistics_nl2sql_m10_shadow_gate",
     "M7_READONLY_SMOKE_VERSION",
     "LogisticsNl2SqlM7ReadonlySmokeOutcome",
     "LogisticsNl2SqlM7ReadonlySmokeRunResult",
@@ -147,6 +167,9 @@ __all__ = [
     "build_default_logistics_nl2sql_shadow_smoke_samples",
     "build_logistics_nl2sql_evaluation_report",
     "check_logistics_candidate_sql",
+    "check_logistics_sql_safety",
+    "LogisticsSqlAstSafetyChecker",
+    "LogisticsSqlAstSafetyResult",
     "redact_evaluation_text",
     "render_safe_m8_summary_json",
     "render_logistics_sql",

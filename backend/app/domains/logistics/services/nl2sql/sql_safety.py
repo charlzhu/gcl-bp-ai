@@ -11,6 +11,7 @@ from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
     LogisticsSemanticCatalog,
     LogisticsSemanticCatalogLoader,
 )
+from backend.app.domains.logistics.services.nl2sql.sql_ast_safety import LogisticsSqlAstSafetyChecker
 from backend.app.domains.logistics.services.nl2sql.sql_renderer import LogisticsRenderedSql
 
 
@@ -157,6 +158,12 @@ class LogisticsSqlSafetyChecker:
         errors.extend(self._check_params(sql, rendered.params))
         errors.extend(self._check_limit(sql, rendered))
         errors.extend(self._check_join_boundary(sql, rendered))
+
+        # D3: SQLGlot AST 级安全校验（在正则 safety 通过后串联执行）
+        ast_checker = LogisticsSqlAstSafetyChecker(catalog=self.catalog, max_limit=self.max_limit)
+        ast_result = ast_checker.check(rendered)
+        if not ast_result.ok:
+            errors.extend(ast_result.error_codes)
 
         deduped = _dedupe_errors(errors)
         return LogisticsSqlSafetyResult(ok=not deduped, errors=deduped)

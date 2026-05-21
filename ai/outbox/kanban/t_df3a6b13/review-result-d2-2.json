@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "_detect_environment_unavailable_error 使用子串匹配 error_code，建议后续改为等值匹配避免歧义后缀误匹配"
+  ],
+  "summary": "通过。D2-1 real_db_access_enabled 默认关闭防止意外连库，env 加载失败静默降级到 fake executor 符合 shadow gate 设计。D2-2 executor_factory 传入时不连真实库、脱敏保护完整（二次脱敏+secret 过滤+递归 sanitize），artifact 不暴露 SQL/表名/参数值/host/user/password/DSN。阶段边界符合：只做物流 NL2SQL，默认不连库，不查 SAP Oracle MID，不接正式 QA。"
+}
