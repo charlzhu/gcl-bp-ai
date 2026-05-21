@@ -45,6 +45,8 @@ class InventorySalesProductionQaService:
         2. 业务事实、聚合、预算达成率等计算全部复用 M3 QueryExecutor；
         3. 服务层只整理用户可见状态、摘要、表格和追溯日志；
         4. 不让 LLM 直接生成 SQL、直接计算指标或直接读取 Excel/数据库表。
+        5. ISP M8：当 isp_m8_live_provider_enabled 开启时，优先走 M6 live provider 链路，
+           失败时自动 fallback 到 M4 确定性链路。
     """
 
     def __init__(
@@ -54,6 +56,7 @@ class InventorySalesProductionQaService:
         planner: InventorySalesProductionNlQueryPlanner | None = None,
         executor: InventorySalesProductionQueryExecutor | None = None,
         query_log_repository: LogisticsQueryRepository | None = None,
+        settings: Any | None = None,
     ) -> None:
         """初始化产销存 QA 服务。
 
@@ -62,6 +65,7 @@ class InventorySalesProductionQaService:
             planner: 自然语言临时规划器，测试可注入。
             executor: M3 QueryExecutor，测试可注入。
             query_log_repository: 统一查询历史仓储，失败时不影响主链路。
+            settings: 应用配置，ISP M8 灰度接管时必需。
         返回：
             无返回值。
         """
@@ -70,6 +74,10 @@ class InventorySalesProductionQaService:
         self.planner = planner or InventorySalesProductionNlQueryPlanner()
         self.executor = executor or InventorySalesProductionQueryExecutor(db)
         self.query_log_repository = query_log_repository or LogisticsQueryRepository()
+        self._settings = settings
+
+        # M8 灰度接管门禁（延迟初始化，避免 import 时触发 LLM 连接）
+        self._m8_gate: Any = None
 
     def ask(self, question: str, *, trace_id: str | None = None) -> InventorySalesProductionQaResponse:
         """回答一个产销存自然语言问题。
@@ -81,6 +89,20 @@ class InventorySalesProductionQaService:
             InventorySalesProductionQaResponse，包含业务化摘要、结果表和状态。
         """
 
+        # ISP M8：feature flag 开启时优先走 M6 live provider 链路
+        if self._is_m8_enabled():
+            m8_success, m8_response = self._try_m8_ask(question=question, trace_id=trace_id)
+            if m8_success and m8_response is not None:
+                self._write_history_snapshot(question=question, trace_id=trace_id, response=m8_response)
+                return m8_response
+            # M8 失败：记录内部日志后 fallback 到 M4 确定性链路
+            logger.info(
+                "m8_fallback_to_m4 trace_id=%s question=%s",
+                trace_id,
+                question[:80],
+            )
+
+        # M4 确定性链路（现有逻辑不变）
         try:
             plan = self.planner.build_plan(question)
             query_result = self.executor.execute(plan)
@@ -103,6 +125,40 @@ class InventorySalesProductionQaService:
 
         self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
         return response
+
+    def _is_m8_enabled(self) -> bool:
+        """判断 ISP M8 feature flag 是否开启。
+
+        返回：
+            True 当 isp_m8_live_provider_enabled 配置为 True 且 settings 已注入时。
+        """
+        if self._settings is None:
+            return False
+        return bool(getattr(self._settings, "isp_m8_live_provider_enabled", False))
+
+    def _try_m8_ask(
+        self,
+        *,
+        question: str,
+        trace_id: str | None,
+    ) -> tuple[bool, Any]:
+        """尝试通过 M8 灰度接管门禁回答问题。
+
+        返回：
+            (success, qa_response_or_none)
+        """
+        try:
+            from backend.app.domains.business_analysis.services.inventory_sales_production.m8_live_gate import (
+                InventorySalesProductionM8LiveGate,
+            )
+
+            if self._m8_gate is None:
+                self._m8_gate = InventorySalesProductionM8LiveGate(settings=self._settings)
+            return self._m8_gate.try_ask(question=question, trace_id=trace_id)
+        except Exception as exc:  # noqa: BLE001
+            # M8 异常不向用户暴露，静默 fallback 到 M4
+            logger.warning("m8_gate_unexpected_error trace_id=%s reason=%s", trace_id, str(exc))
+            return False, None
 
     def write_error_log(self, *, question: str, trace_id: str | None, message: str) -> int:
         """写入 API 异常兜底日志。

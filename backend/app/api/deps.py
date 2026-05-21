@@ -162,16 +162,18 @@ def get_logistics_data_qa_service(
 
 def get_inventory_sales_production_qa_service(
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> InventorySalesProductionQaService:
     """产销存经营分析问答服务依赖。
 
-    当前用于 M4 紧急接入：
+    当前用于 M4 紧急接入 + ISP M8 灰度接管：
     1. 自然语言只生成受控产销存 QueryPlan；
     2. 业务事实和指标计算复用 M3 QueryExecutor；
-    3. 不直查 Excel 原始文件，不让 LLM 自由生成 SQL。
+    3. 不直查 Excel 原始文件，不让 LLM 自由生成 SQL；
+    4. ISP M8 feature flag 开启时优先走 M6 live provider 链路，失败 fallback M4。
     """
 
-    return InventorySalesProductionQaService(db=db)
+    return InventorySalesProductionQaService(db=db, settings=settings)
 
 
 def get_plan_bom_import_service(

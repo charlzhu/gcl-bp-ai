@@ -1,0 +1,868 @@
+diff --git a/backend/app/api/deps.py b/backend/app/api/deps.py
+index e580c28a..4e043584 100644
+--- a/backend/app/api/deps.py
++++ b/backend/app/api/deps.py
+@@ -162,16 +162,18 @@ def get_logistics_data_qa_service(
+ 
+ def get_inventory_sales_production_qa_service(
+     db: Session = Depends(get_db),
++    settings: Settings = Depends(get_settings),
+ ) -> InventorySalesProductionQaService:
+     """产销存经营分析问答服务依赖。
+ 
+-    当前用于 M4 紧急接入：
++    当前用于 M4 紧急接入 + ISP M8 灰度接管：
+     1. 自然语言只生成受控产销存 QueryPlan；
+     2. 业务事实和指标计算复用 M3 QueryExecutor；
+-    3. 不直查 Excel 原始文件，不让 LLM 自由生成 SQL。
++    3. 不直查 Excel 原始文件，不让 LLM 自由生成 SQL；
++    4. ISP M8 feature flag 开启时优先走 M6 live provider 链路，失败 fallback M4。
+     """
+ 
+-    return InventorySalesProductionQaService(db=db)
++    return InventorySalesProductionQaService(db=db, settings=settings)
+ 
+ 
+ def get_plan_bom_import_service(
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/qa_service.py b/backend/app/domains/business_analysis/services/inventory_sales_production/qa_service.py
+index 91d1192a..0bfbc3b5 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/qa_service.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/qa_service.py
+@@ -45,6 +45,8 @@ class InventorySalesProductionQaService:
+         2. 业务事实、聚合、预算达成率等计算全部复用 M3 QueryExecutor；
+         3. 服务层只整理用户可见状态、摘要、表格和追溯日志；
+         4. 不让 LLM 直接生成 SQL、直接计算指标或直接读取 Excel/数据库表。
++        5. ISP M8：当 isp_m8_live_provider_enabled 开启时，优先走 M6 live provider 链路，
++           失败时自动 fallback 到 M4 确定性链路。
+     """
+ 
+     def __init__(
+@@ -54,6 +56,7 @@ class InventorySalesProductionQaService:
+         planner: InventorySalesProductionNlQueryPlanner | None = None,
+         executor: InventorySalesProductionQueryExecutor | None = None,
+         query_log_repository: LogisticsQueryRepository | None = None,
++        settings: Any | None = None,
+     ) -> None:
+         """初始化产销存 QA 服务。
+ 
+@@ -62,6 +65,7 @@ class InventorySalesProductionQaService:
+             planner: 自然语言临时规划器，测试可注入。
+             executor: M3 QueryExecutor，测试可注入。
+             query_log_repository: 统一查询历史仓储，失败时不影响主链路。
++            settings: 应用配置，ISP M8 灰度接管时必需。
+         返回：
+             无返回值。
+         """
+@@ -70,6 +74,10 @@ class InventorySalesProductionQaService:
+         self.planner = planner or InventorySalesProductionNlQueryPlanner()
+         self.executor = executor or InventorySalesProductionQueryExecutor(db)
+         self.query_log_repository = query_log_repository or LogisticsQueryRepository()
++        self._settings = settings
++
++        # M8 灰度接管门禁（延迟初始化，避免 import 时触发 LLM 连接）
++        self._m8_gate: Any = None
+ 
+     def ask(self, question: str, *, trace_id: str | None = None) -> InventorySalesProductionQaResponse:
+         """回答一个产销存自然语言问题。
+@@ -81,6 +89,20 @@ class InventorySalesProductionQaService:
+             InventorySalesProductionQaResponse，包含业务化摘要、结果表和状态。
+         """
+ 
++        # ISP M8：feature flag 开启时优先走 M6 live provider 链路
++        if self._is_m8_enabled():
++            m8_success, m8_response = self._try_m8_ask(question=question, trace_id=trace_id)
++            if m8_success and m8_response is not None:
++                self._write_history_snapshot(question=question, trace_id=trace_id, response=m8_response)
++                return m8_response
++            # M8 失败：记录内部日志后 fallback 到 M4 确定性链路
++            logger.info(
++                "m8_fallback_to_m4 trace_id=%s question=%s",
++                trace_id,
++                question[:80],
++            )
++
++        # M4 确定性链路（现有逻辑不变）
+         try:
+             plan = self.planner.build_plan(question)
+             query_result = self.executor.execute(plan)
+@@ -104,6 +126,40 @@ class InventorySalesProductionQaService:
+         self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+         return response
+ 
++    def _is_m8_enabled(self) -> bool:
++        """判断 ISP M8 feature flag 是否开启。
++
++        返回：
++            True 当 isp_m8_live_provider_enabled 配置为 True 且 settings 已注入时。
++        """
++        if self._settings is None:
++            return False
++        return bool(getattr(self._settings, "isp_m8_live_provider_enabled", False))
++
++    def _try_m8_ask(
++        self,
++        *,
++        question: str,
++        trace_id: str | None,
++    ) -> tuple[bool, Any]:
++        """尝试通过 M8 灰度接管门禁回答问题。
++
++        返回：
++            (success, qa_response_or_none)
++        """
++        try:
++            from backend.app.domains.business_analysis.services.inventory_sales_production.m8_live_gate import (
++                InventorySalesProductionM8LiveGate,
++            )
++
++            if self._m8_gate is None:
++                self._m8_gate = InventorySalesProductionM8LiveGate(settings=self._settings)
++            return self._m8_gate.try_ask(question=question, trace_id=trace_id)
++        except Exception as exc:  # noqa: BLE001
++            # M8 异常不向用户暴露，静默 fallback 到 M4
++            logger.warning("m8_gate_unexpected_error trace_id=%s reason=%s", trace_id, str(exc))
++            return False, None
++
+     def write_error_log(self, *, question: str, trace_id: str | None, message: str) -> int:
+         """写入 API 异常兜底日志。
+ 
+--- new file: m8_live_gate.py ---
+"""
+产销存 ISP M8 灰度接管门禁。
+
+业务逻辑：
+    当 isp_m8_live_provider_enabled feature flag 开启时，先尝试 M6 live provider 链路；
+    失败时返回 None 信号，由调用方（InventorySalesProductionQaService）fallback 到 M4 确定性链路。
+
+规则：
+    1. M8 门禁不暴露任何内部技术实现到用户可见回答。
+    2. M8 失败只记录内部日志，不抛出用户可见异常。
+    3. M8 成功时将 M6 链路结果转换为与 M4 完全相同的 QA 响应格式。
+    4. M8 不修改物流/计划 BOM/功率预测主链路。
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from backend.app.core.config import Settings
+from backend.app.domains.business_analysis.schemas.inventory_sales_production_qa import (
+    InventorySalesProductionQaResponse,
+)
+from backend.app.domains.business_analysis.schemas.inventory_sales_production_query import (
+    InventorySalesProductionQueryRow,
+)
+from backend.app.domains.business_analysis.services.inventory_sales_production.m6_live_provider_gate import (
+    InventorySalesProductionM6CatalogRecallDocumentBuilder,
+    InventorySalesProductionM6CatalogRecallService,
+    InventorySalesProductionM6OpenAiSqlPlanProvider,
+    InventorySalesProductionM6SqlPlanGenerator,
+    InventorySalesProductionM6SqlPlanGenerationResult,
+    InventorySalesProductionM6ReadonlyMiddleDbShadowExecutor,
+)
+from backend.app.domains.business_analysis.services.inventory_sales_production.sql_plan import (
+    InventorySalesProductionSqlPlan,
+)
+
+logger = logging.getLogger(__name__)
+
+M8_LIVE_GATE_VERSION = "business_analysis_inventory_sales_production_m8_live_gate.v1"
+
+
+class InventorySalesProductionM8LiveGate:
+    """ISP M8 灰度接管门禁。
+
+    参数：
+        settings: 应用配置，用于读取 feature flag 和 LLM 配置。
+        db_factory: 数据库会话工厂，用于只读中间库 shadow 查询。
+
+    返回：
+        try_ask() 返回 (success: bool, response: InventorySalesProductionQaResponse | None)。
+    """
+
+    def __init__(
+        self,
+        *,
+        settings: Settings,
+        db_factory: Any | None = None,
+    ) -> None:
+        """初始化 M8 门禁。
+
+        参数：
+            settings: 应用配置。
+            db_factory: 数据库会话工厂，可为空（使用默认 SessionLocal）。
+        返回：
+            无。
+        """
+        self._settings = settings
+        self._db_factory = db_factory
+
+        # 延迟初始化 M6 组件，避免 import 时触发 LLM 连接。
+        self._recall_service: InventorySalesProductionM6CatalogRecallService | None = None
+        self._llm_provider: InventorySalesProductionM6OpenAiSqlPlanProvider | None = None
+        self._generator: InventorySalesProductionM6SqlPlanGenerator | None = None
+        self._executor: InventorySalesProductionM6ReadonlyMiddleDbShadowExecutor | None = None
+
+    def _ensure_components(self) -> bool:
+        """初始化 M6 组件；若任一组件不可用，返回 False 以触发 fallback。
+
+        返回：
+            True 表示所有组件就绪；False 表示应 fallback 到 M4。
+        """
+        if self._generator is not None:
+            return True
+
+        try:
+            # 1. 构建召回文档
+            builder = InventorySalesProductionM6CatalogRecallDocumentBuilder()
+            documents = builder.build_documents()
+            self._recall_service = InventorySalesProductionM6CatalogRecallService(documents)
+
+            # 2. 初始化 LLM provider（读取项目配置）
+            self._llm_provider = InventorySalesProductionM6OpenAiSqlPlanProvider(
+                base_url=self._settings.llm_base_url,
+                api_key=self._settings.llm_api_key,
+                model=self._settings.llm_model,
+            )
+            if not self._llm_provider.is_available():
+                logger.info("m8_live_gate_provider_not_available: LLM 配置不完整，M8 链路不可用")
+                return False
+
+            # 3. 初始化生成器（recall + provider + validator）
+            self._generator = InventorySalesProductionM6SqlPlanGenerator(
+                recall_service=self._recall_service,
+                llm_provider=self._llm_provider,
+            )
+
+            # 4. 初始化只读 shadow executor
+            self._executor = InventorySalesProductionM6ReadonlyMiddleDbShadowExecutor(
+                session_factory=self._db_factory,
+            )
+
+            logger.info("m8_live_gate_components_ready: M8 所有组件初始化完成")
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("m8_live_gate_components_init_failed: %s", exc)
+            return False
+
+    def try_ask(
+        self,
+        question: str,
+        *,
+        trace_id: str | None = None,
+    ) -> tuple[bool, InventorySalesProductionQaResponse | None]:
+        """尝试通过 M6 live provider 链路回答产销存问题。
+
+        参数：
+            question: 用户自然语言问题。
+            trace_id: 请求链路 ID，可为空。
+
+        返回：
+            (success, response):
+            - success=True: M6 链路成功，返回统一 QA 响应。
+            - success=False: M6 链路失败，response 为 None，调用方必须 fallback 到 M4。
+        """
+        if not self._ensure_components():
+            return False, None
+
+        try:
+            # 1. M6 生成 SQLPlan candidate
+            generation = self._generator.generate(question) if self._generator else None
+            if generation is None or not generation.validation.ok or generation.normalized_plan is None:
+                self._log_generation_failure(generation, trace_id)
+                return False, None
+
+            # 2. 只读 shadow 执行
+            if self._executor is None:
+                return False, None
+            rows = self._executor.execute(generation.normalized_plan)
+
+            # 3. 将 shadow 结果转换为 QA 响应格式
+            response = self._build_response_from_shadow_rows(
+                question=question,
+                trace_id=trace_id,
+                normalized_plan=generation.normalized_plan,
+                rows=rows,
+            )
+            logger.info(
+                "m8_live_gate_success trace_id=%s row_count=%d",
+                trace_id,
+                len(rows),
+            )
+            return True, response
+
+        except Exception as exc:  # noqa: BLE001
+            # M8 失败只记录内部日志，不向用户暴露异常细节
+            logger.warning(
+                "m8_live_gate_failed trace_id=%s reason=%s",
+                trace_id,
+                str(exc),
+            )
+            return False, None
+
+    @staticmethod
+    def _log_generation_failure(
+        generation: InventorySalesProductionM6SqlPlanGenerationResult | None,
+        trace_id: str | None,
+    ) -> None:
+        """记录 M6 生成失败日志，不暴露内部技术细节到用户可见回答。"""
+        error_codes = generation.error_codes if generation else ["generation_none"]
+        logger.info(
+            "m8_live_gate_generation_failed trace_id=%s error_codes=%s",
+            trace_id,
+            error_codes,
+        )
+
+    @staticmethod
+    def _build_response_from_shadow_rows(
+        *,
+        question: str,
+        trace_id: str | None,
+        normalized_plan: InventorySalesProductionSqlPlan,
+        rows: list[dict[str, Any]],
+    ) -> InventorySalesProductionQaResponse:
+        """将 M6 shadow 执行行转换为与 M4 相同格式的 QA 响应。
+
+        说明：
+            这里走的是 M6 → 只读执行 → 结构化事实的路径；
+            响应格式与 M4 完全一致，确保前端流式体验不退化、用户不可见内部技术实现。
+        """
+        from decimal import Decimal, ROUND_HALF_UP
+
+        _DECIMAL_SCALE = Decimal("0.00000001")
+
+        # 维度中文标签映射（与 M4 qa_service.py 保持一致）
+        _DIMENSION_LABELS = {
+            "base_name": "基地",
+            "factory_name": "工厂",
+            "model_type": "版型",
+            "production_mode": "生产模式",
+            "trade_scope": "交易范围",
+            "business_month": "月份",
+        }
+
+        def _format_decimal(value):
+            if value is None:
+                return ""
+            decimal_value = value if isinstance(value, Decimal) else Decimal(str(value))
+            return str(decimal_value.quantize(_DECIMAL_SCALE, rounding=ROUND_HALF_UP))
+
+        def _format_months(months):
+            if not months:
+                return ""
+            return ",".join(f"{int(month)}月" for month in months)
+
+        def _safe_business_text(text, fallback):
+            candidate = (text or "").strip()
+            forbidden = (
+                "sql", "query_key", "planner", "guardrail", "schema",
+                "raw", "debug", "llm", "ba_isp", "metric_code",
+            )
+            if not candidate or any(word in candidate.lower() for word in forbidden):
+                return fallback
+            return candidate
+
+        # 构建业务化摘要
+        answer_summary = _build_business_summary(normalized_plan, rows)
+        status_payload = {
+            "code": "OK",
+            "message": "查询成功",
+            "success": True,
+            "severity": "success",
+        }
+
+        # 构建结果表（与 M4 格式一致）
+        query_rows = [
+            InventorySalesProductionQueryRow(
+                metric_code=(normalized_plan.metrics or [""])[0],
+                metric_name=row.get("metric_name", (normalized_plan.metrics or [""])[0]),
+                value_decimal=_safe_decimal(row.get("value_decimal")),
+                dimensions=row.get("dimensions") if isinstance(row.get("dimensions"), dict) else None,
+                months_covered=row.get("months_covered", []) if isinstance(row.get("months_covered"), list) else [],
+                unit_standard=row.get("unit_standard", "MW"),
+                aggregation_type=normalized_plan.calculation_policy or row.get("aggregation_type", "sum"),
+                row_count=int(row.get("row_count", 0)),
+            )
+            for row in rows
+        ]
+
+        # 提取维度列
+        dimension_keys = ["base_name", "factory_name", "model_type", "production_mode", "trade_scope", "business_month"]
+        present_keys = {key for row in query_rows for key in (row.dimensions or {}) if key in _DIMENSION_LABELS}
+        ordered_keys = [key for key in dimension_keys if key in present_keys]
+
+        columns = [_DIMENSION_LABELS[key] for key in ordered_keys]
+        columns.extend(["期间", "指标", "数值", "单位", "覆盖月份", "数据行数"])
+
+        period_label = _period_label_from_plan(normalized_plan)
+        table_rows: list[dict[str, Any]] = []
+        for row in query_rows:
+            table_row: dict[str, Any] = {}
+            for key in ordered_keys:
+                table_row[_DIMENSION_LABELS[key]] = row.dimensions.get(key) if row.dimensions else None
+            table_row.update({
+                "期间": period_label or _format_months(row.months_covered),
+                "指标": row.metric_name,
+                "数值": _format_decimal(row.value_decimal),
+                "单位": "%" if row.unit_standard == "percent" else row.unit_standard,
+                "覆盖月份": _format_months(row.months_covered),
+                "数据行数": row.row_count,
+            })
+            table_rows.append(table_row)
+
+        result_table = {"columns": columns, "rows": table_rows} if table_rows else None
+
+        # 构建 presentation（与 M4 格式一致）
+        highlights = []
+        if query_rows:
+            first = query_rows[0]
+            highlights.append({
+                "label": first.metric_name,
+                "value": _format_decimal(first.value_decimal),
+                "unit": "%" if first.unit_standard == "percent" else first.unit_standard,
+            })
+
+        presentation = {
+            "display_type": "business_analysis_result" if result_table else "narrative",
+            "title": "产销存经营分析",
+            "answer": answer_summary,
+            "highlights": highlights,
+            "table_spec": result_table,
+            "caveats": [],
+        }
+
+        return InventorySalesProductionQaResponse(
+            question=question,
+            classification="A",
+            status=status_payload,
+            answer_summary=_safe_business_text(answer_summary, fallback=status_payload["message"]),
+            result_table=result_table,
+            presentation=presentation,
+            warnings=[],
+            trace_id=trace_id,
+        )
+
+
+def _safe_decimal(value: Any) -> Any:
+    """安全转换 shadow 返回值为 Decimal 或保持原值。"""
+    if value is None:
+        return None
+    from decimal import Decimal, InvalidOperation
+
+    try:
+        return Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return value
+
+
+def _build_business_summary(plan: InventorySalesProductionSqlPlan, rows: list[dict[str, Any]]) -> str:
+    """基于 SQLPlan 和执行结果构建业务化摘要。
+
+    说明：摘要不暴露表名、字段名、query_key 等内部技术实现。
+    """
+    if not rows:
+        metric_label = _metric_business_label(plan)
+        year_info = _year_business_label(plan)
+        return f"{year_info}{metric_label}查询结果为空，请调整条件后重试。"
+
+    metric_label = _metric_business_label(plan)
+    year_info = _year_business_label(plan)
+    row_count = len(rows)
+
+    # 尝试从结果行中提取值
+    first_row = rows[0]
+    value = first_row.get("value_decimal") if rows else None
+    unit = first_row.get("unit_standard", "") if rows else ""
+
+    if value is not None:
+        return f"{year_info}{metric_label}为 {_format_value(value)} {unit}，共 {row_count} 条记录。"
+
+    return f"{year_info}{metric_label}查询成功，共 {row_count} 条记录。"
+
+
+def _metric_business_label(plan: InventorySalesProductionSqlPlan) -> str:
+    """从 SQLPlan 提取指标业务化标签。"""
+    metric_map = {
+        "shipment_volume": "发货量",
+        "production_actual": "实际产量",
+        "production_actual_including_oem": "实际产量（含代工）",
+        "production_budget": "预算产量",
+        "production_budget_achievement_rate": "预算达成率",
+        "ending_inventory_volume": "期末库存",
+        "consigned_inventory_volume": "寄存仓库存",
+        "production_sales_ratio": "产销率",
+    }
+    metrics = plan.metrics or []
+    labels = [metric_map.get(m, str(m)) for m in metrics if m]
+    return "、".join(labels) if labels else "指标"
+
+
+def _year_business_label(plan: InventorySalesProductionSqlPlan) -> str:
+    """从 SQLPlan 提取年份业务化标签。"""
+    if plan.year:
+        return f"{plan.year}年"
+    return ""
+
+
+def _format_value(value: Any) -> str:
+    """格式化数值为业务化展示。"""
+    from decimal import Decimal
+
+    try:
+        d = Decimal(str(value))
+        # 格式化：保留适当小数位
+        formatted = f"{d:.4f}".rstrip("0").rstrip(".")
+        return formatted
+    except Exception:
+        return str(value)
+
+
+def _period_label_from_plan(plan: InventorySalesProductionSqlPlan) -> str | None:
+    """从 SQLPlan 提取期间标签。"""
+    if plan.period_type == "year" and plan.year:
+        return f"{plan.year}年"
+    if plan.period_type == "month" and plan.month:
+        return f"{plan.year}年{plan.month}月"
+    if plan.period_type == "quarter" and plan.quarter:
+        return f"{plan.year}年Q{plan.quarter}"
+    return None
+
+
+__all__ = [
+    "InventorySalesProductionM8LiveGate",
+    "M8_LIVE_GATE_VERSION",
+]
+--- new file: test_m8_live_gate.py ---
+"""
+产销存 ISP M8 灰度接管门禁 focused tests。
+
+测试范围：
+    1. M8 feature flag 关闭时 M4 链路不受影响
+    2. M8 feature flag 开启但 provider 不可用时 fallback 到 M4
+    3. M8 响应格式与 M4 一致
+    4. M8 响应不暴露内部技术实现
+    5. M8 gate 组件不可用时返回 False（触发 fallback）
+
+禁止：
+    - 不修改物流/计划 BOM/功率预测主链路
+    - 不连接真实 LLM provider
+    - 不访问真实数据库
+"""
+
+from __future__ import annotations
+
+import importlib
+import json
+from typing import Any
+from unittest.mock import MagicMock
+
+M8_GATE_VERSION = "business_analysis_inventory_sales_production_m8_live_gate.v1"
+
+
+def _m8_module():
+    """加载产销存 M8 live gate 模块。"""
+    return importlib.import_module(
+        "backend.app.domains.business_analysis.services.inventory_sales_production.m8_live_gate"
+    )
+
+
+def _qa_module():
+    """加载产销存 QA 服务模块。"""
+    return importlib.import_module(
+        "backend.app.domains.business_analysis.services.inventory_sales_production.qa_service"
+    )
+
+
+def _safe_text(payload: object) -> str:
+    """把对象转成小写 JSON 文本，便于统一检查脱敏结果。"""
+    return json.dumps(payload, ensure_ascii=False, default=str).lower()
+
+
+class FakeSettings:
+    """测试用配置对象，模拟 pydantic Settings。"""
+
+    def __init__(self, **kwargs: Any) -> None:
+        self.__dict__.update(kwargs)
+
+
+# ==================== M8 gate 独立单测 ====================
+
+
+def test_m8_live_gate_version_is_stable() -> None:
+    """M8 gate 版本号必须稳定，防止下游误匹配。"""
+    m8 = _m8_module()
+    assert m8.M8_LIVE_GATE_VERSION == M8_GATE_VERSION
+
+
+def test_m8_live_gate_returns_false_when_provider_not_available() -> None:
+    """M8 gate 在 LLM provider 不可用时应返回 (False, None)，触发 fallback。"""
+    m8 = _m8_module()
+
+    settings = FakeSettings(
+        isp_m8_live_provider_enabled=True,
+        llm_base_url="",
+        llm_api_key="",
+        llm_model="",
+    )
+    gate = m8.InventorySalesProductionM8LiveGate(settings=settings)
+    success, response = gate.try_ask(question="2025年发货量是多少", trace_id="test-m8-001")
+    assert success is False
+    assert response is None
+
+
+def test_m8_live_gate_returns_false_when_feature_flag_off_in_settings() -> None:
+    """当 feature flag 关闭时，M8 gate 不应被 QA 服务调用；
+    此处验证 gate 本身在无 LLM 配置时返回 False（与 flag 无关）。"""
+    m8 = _m8_module()
+
+    settings = FakeSettings(
+        isp_m8_live_provider_enabled=False,
+        llm_base_url="",
+        llm_api_key="",
+        llm_model="",
+    )
+    gate = m8.InventorySalesProductionM8LiveGate(settings=settings)
+    success, response = gate.try_ask(question="测试问题", trace_id="test-m8-002")
+    assert success is False
+    assert response is None
+
+
+def test_m8_live_gate_no_technical_leakage_in_failure() -> None:
+    """M8 gate 失败时不应在返回结果中暴露技术细节。"""
+    m8 = _m8_module()
+
+    settings = FakeSettings(
+        isp_m8_live_provider_enabled=True,
+        llm_base_url="",
+        llm_api_key="",
+        llm_model="",
+    )
+    gate = m8.InventorySalesProductionM8LiveGate(settings=settings)
+    # M8 失败返回 None，不暴露任何内容 - 这是正确的行为
+    success, response = gate.try_ask(question="2025年发货量是多少", trace_id="test-m8-003")
+    assert success is False
+    assert response is None
+
+
+# ==================== QA 服务 M8 集成单测 ====================
+
+
+def test_qa_service_feature_flag_off_uses_m4_directly() -> None:
+    """feature flag 关闭时，QA 服务直接走 M4 链路，不尝试 M8。"""
+    qa = _qa_module()
+
+    # 构造 M4 所需的 mock planner 和 executor
+    mock_planner = MagicMock()
+    mock_plan = MagicMock()
+    mock_planner.build_plan.return_value = mock_plan
+
+    mock_executor = MagicMock()
+    mock_executor.execute.return_value = _fake_success_query_result()
+
+    mock_log_repo = MagicMock()
+    mock_log_repo.write_query_log.return_value = 1
+
+    settings = FakeSettings(isp_m8_live_provider_enabled=False)
+
+    service = qa.InventorySalesProductionQaService(
+        db=MagicMock(),
+        planner=mock_planner,
+        executor=mock_executor,
+        query_log_repository=mock_log_repo,
+        settings=settings,
+    )
+
+    response = service.ask(question="2025年发货量是多少", trace_id="test-m4-001")
+
+    # 验证 M4 链路被调用
+    assert mock_planner.build_plan.called
+    assert mock_executor.execute.called
+
+    # 验证响应结构
+    result = response.model_dump(mode="json")
+    assert result["classification"] == "A"
+    assert result["status"]["code"] == "OK"
+    assert result["domain"] == "business_analysis"
+    assert result["sub_domain"] == "inventory_sales_production"
+
+    # 验证无技术泄漏
+    safe = _safe_text(result)
+    for forbidden in ("sql", "query_key", "planner", "guardrail", "ba_isp", "metric_code", "dwd_ba_isp"):
+        assert forbidden not in safe
+
+
+def test_qa_service_feature_flag_on_m8_fails_falls_back_to_m4() -> None:
+    """feature flag 开启但 M8 provider 不可用，应 fallback 到 M4。"""
+    qa = _qa_module()
+
+    mock_planner = MagicMock()
+    mock_plan = MagicMock()
+    mock_planner.build_plan.return_value = mock_plan
+
+    mock_executor = MagicMock()
+    mock_executor.execute.return_value = _fake_success_query_result()
+
+    mock_log_repo = MagicMock()
+    mock_log_repo.write_query_log.return_value = 1
+
+    # feature flag 开启但无真实 LLM 配置 → M8 会失败，应 fallback 到 M4
+    settings = FakeSettings(
+        isp_m8_live_provider_enabled=True,
+        llm_base_url="",
+        llm_api_key="",
+        llm_model="",
+    )
+
+    service = qa.InventorySalesProductionQaService(
+        db=MagicMock(),
+        planner=mock_planner,
+        executor=mock_executor,
+        query_log_repository=mock_log_repo,
+        settings=settings,
+    )
+
+    response = service.ask(question="2025年发货量是多少", trace_id="test-m8-fallback-001")
+
+    # M8 失败后应正确 fallback 到 M4
+    assert mock_planner.build_plan.called
+    assert mock_executor.execute.called
+
+    result = response.model_dump(mode="json")
+    assert result["classification"] == "A"
+    assert result["status"]["code"] == "OK"
+
+
+def test_qa_service_no_settings_uses_m4() -> None:
+    """未注入 settings 时，QA 服务应等同于 M4 行为。"""
+    qa = _qa_module()
+
+    mock_planner = MagicMock()
+    mock_plan = MagicMock()
+    mock_planner.build_plan.return_value = mock_plan
+
+    mock_executor = MagicMock()
+    mock_executor.execute.return_value = _fake_success_query_result()
+
+    mock_log_repo = MagicMock()
+    mock_log_repo.write_query_log.return_value = 1
+
+    # 不传 settings → _is_m8_enabled 返回 False
+    service = qa.InventorySalesProductionQaService(
+        db=MagicMock(),
+        planner=mock_planner,
+        executor=mock_executor,
+        query_log_repository=mock_log_repo,
+    )
+
+    response = service.ask(question="2025年发货量是多少", trace_id="test-no-settings-001")
+    assert mock_planner.build_plan.called
+    assert mock_executor.execute.called
+
+    result = response.model_dump(mode="json")
+    assert result["classification"] == "A"
+
+
+def test_qa_service_is_m8_enabled_returns_false_without_settings() -> None:
+    """_is_m8_enabled 在 settings 为 None 时必须返回 False。"""
+    qa = _qa_module()
+
+    service = qa.InventorySalesProductionQaService(
+        db=MagicMock(),
+        planner=MagicMock(),
+        executor=MagicMock(),
+    )
+    assert service._is_m8_enabled() is False
+
+
+def test_qa_service_is_m8_enabled_returns_true_with_flag_on() -> None:
+    """_is_m8_enabled 在 feature flag 开启时必须返回 True。"""
+    qa = _qa_module()
+
+    settings = FakeSettings(isp_m8_live_provider_enabled=True)
+    service = qa.InventorySalesProductionQaService(
+        db=MagicMock(),
+        planner=MagicMock(),
+        executor=MagicMock(),
+        settings=settings,
+    )
+    assert service._is_m8_enabled() is True
+
+
+def test_qa_service_is_m8_enabled_returns_false_with_flag_off() -> None:
+    """_is_m8_enabled 在 feature flag 关闭时必须返回 False。"""
+    qa = _qa_module()
+
+    settings = FakeSettings(isp_m8_live_provider_enabled=False)
+    service = qa.InventorySalesProductionQaService(
+        db=MagicMock(),
+        planner=MagicMock(),
+        executor=MagicMock(),
+        settings=settings,
+    )
+    assert service._is_m8_enabled() is False
+
+
+def test_qa_service_error_response_no_technical_leakage() -> None:
+    """QA 服务异常响应不应暴露技术细节。"""
+    qa = _qa_module()
+
+    mock_planner = MagicMock()
+    # 模拟 M4 planner 抛异常
+    mock_planner.build_plan.side_effect = RuntimeError("database connection failed dwd_ba_isp_monthly_fact")
+
+    mock_executor = MagicMock()
+    mock_log_repo = MagicMock()
+    mock_log_repo.write_query_log.return_value = 1
+
+    settings = FakeSettings(isp_m8_live_provider_enabled=False)
+
+    service = qa.InventorySalesProductionQaService(
+        db=MagicMock(),
+        planner=mock_planner,
+        executor=mock_executor,
+        query_log_repository=mock_log_repo,
+        settings=settings,
+    )
+
+    response = service.ask(question="测试", trace_id="test-err-001")
+    result = response.model_dump(mode="json")
+
+    # 错误响应不应暴露内部细节
+    assert result["classification"] == "D"
+    safe = _safe_text(result)
+    for forbidden in ("dwd_ba_isp", "database connection", "monthly_fact", "sql"):
+        assert forbidden not in safe, f"发现技术泄漏: {forbidden}"
+
+
+# ==================== 辅助函数 ====================
+
+
+def _fake_success_query_result() -> Any:
+    """构造模拟的 M3 QueryResult。"""
+    from backend.app.domains.business_analysis.schemas.inventory_sales_production_query import (
+        InventorySalesProductionQueryResult,
+        InventorySalesProductionQueryRow,
+    )
+    from decimal import Decimal
+
+    return InventorySalesProductionQueryResult(
+        status="success",
+        answer_summary="2025年发货量为 1234.56000000 MW，共 12 条记录。",
+        rows=[
+            InventorySalesProductionQueryRow(
+                metric_code="shipment_volume",
+                metric_name="发货量",
+                value_decimal=Decimal("1234.56"),
+                dimensions={"business_year": 2025},
+                months_covered=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+                unit_standard="MW",
+                aggregation_type="sum",
+                row_count=12,
+            )
+        ],
+        warnings=[],
+        calculation_policy="sum",
+        period_label="2025年",
+        query_key="ba_isp_metric_summary",
+    )
