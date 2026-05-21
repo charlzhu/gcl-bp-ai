@@ -1292,6 +1292,175 @@ def _build_nl_variant_shadow_samples() -> list[InventorySalesProductionM5ShadowC
     ]
 
 
+# ===== S5: M7 双轨对比 — 规则规划器 vs LLM 规划器 =====
+
+
+@dataclass(frozen=True, slots=True)
+class InventorySalesProductionDualTrackCompareOutcome:
+    """双轨对比输出：规则规划器与 LLM 规划器的 QueryPlan 签名对比结果。
+
+    参数：
+        sample: 参与对比的样本。
+        rule_signature: 规则规划器生成的 QueryPlan 签名；为空时表示规则规划器无法处理。
+        llm_signature: LLM 规划器生成的 QueryPlan 签名（注入 mock，不真调用 API）；为空时表示 LLM 规划器无法处理。
+        rule_status: 规则规划器执行状态（success/clarification/unsupported）。
+        llm_mode: LLM 规划器使用模式（llm/fallback_rule/fallback_error）。
+        signatures_match: 两个签名是否一致（都不为空时才比较）。
+    返回：
+        可被双轨对比汇总和报告使用的对比结果。
+    """
+
+    sample: InventorySalesProductionM5ShadowCompareSample
+    rule_signature: dict[str, Any] | None
+    llm_signature: dict[str, Any] | None
+    rule_status: str
+    llm_mode: str
+    signatures_match: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class InventorySalesProductionDualTrackCompareRunResult:
+    """双轨对比运行结果。"""
+
+    outcomes: list[InventorySalesProductionDualTrackCompareOutcome]
+    total: int
+    by_status: dict[str, int]
+    matched_count: int
+    mismatch_count: int
+    rule_only_count: int
+    llm_only_count: int
+    both_fail_count: int
+
+
+def run_dual_track_compare(
+    *,
+    samples: list[InventorySalesProductionM5ShadowCompareSample] | None = None,
+    llm_planner: object | None = None,
+) -> InventorySalesProductionDualTrackCompareRunResult:
+    """执行双轨对比：对每条样本并行使用规则规划器和 LLM 规划器。
+
+    参数：
+        samples: 参与对比的样本，为空时使用默认 NL 变体样本。
+        llm_planner: 可注入的 LLM 规划器实例（测试可注入 mock）。
+    返回：
+        InventorySalesProductionDualTrackCompareRunResult，包含每条样本的对比结果。
+    """
+    resolved_samples = list(samples or build_default_inventory_sales_production_m5_shadow_samples())
+    # 只对 NL 变体样本执行双轨对比
+    nl_samples = [s for s in resolved_samples if s.question_category == "nl_variant"]
+    if not nl_samples:
+        nl_samples = resolved_samples[:10]  # 兜底取前 10 条
+
+    planner = InventorySalesProductionNlQueryPlanner()
+    outcomes: list[InventorySalesProductionDualTrackCompareOutcome] = []
+
+    for sample in nl_samples:
+        outcome = _run_one_dual_track_sample(
+            rule_planner=planner,
+            llm_planner=llm_planner,
+            sample=sample,
+        )
+        outcomes.append(outcome)
+
+    by_status: dict[str, int] = {}
+    matched = 0
+    mismatched = 0
+    rule_only = 0
+    llm_only = 0
+    both_fail = 0
+
+    for o in outcomes:
+        if o.signatures_match is True:
+            matched += 1
+            _increment_counter(by_status, "matched")
+        elif o.signatures_match is False:
+            mismatched += 1
+            _increment_counter(by_status, "mismatch")
+        elif o.rule_signature and not o.llm_signature:
+            rule_only += 1
+            _increment_counter(by_status, "rule_only")
+        elif not o.rule_signature and o.llm_signature:
+            llm_only += 1
+            _increment_counter(by_status, "llm_only")
+        else:
+            both_fail += 1
+            _increment_counter(by_status, "both_fail")
+
+    return InventorySalesProductionDualTrackCompareRunResult(
+        outcomes=outcomes,
+        total=len(outcomes),
+        by_status=dict(sorted(by_status.items())),
+        matched_count=matched,
+        mismatch_count=mismatched,
+        rule_only_count=rule_only,
+        llm_only_count=llm_only,
+        both_fail_count=both_fail,
+    )
+
+
+def _run_one_dual_track_sample(
+    *,
+    rule_planner: InventorySalesProductionNlQueryPlanner,
+    llm_planner: object | None,
+    sample: InventorySalesProductionM5ShadowCompareSample,
+) -> InventorySalesProductionDualTrackCompareOutcome:
+    """执行单条样本的双轨对比。
+
+    参数：
+        rule_planner: 规则规划器实例。
+        llm_planner: LLM 规划器实例（测试可注入 mock；None 时使用真实 S3 planner 但跳过 LLM 调用）。
+        sample: 待对比样本。
+    返回：
+        DualTrackCompareOutcome。
+    """
+    # 规则规划器
+    rule_signature: dict[str, Any] | None = None
+    rule_status = "success"
+    try:
+        rule_plan = rule_planner.build_plan(sample.question)
+        rule_signature = _signature_from_query_plan(rule_plan)
+    except InventorySalesProductionPlanningError as exc:
+        rule_status = exc.status
+
+    # LLM 规划器
+    llm_signature: dict[str, Any] | None = None
+    llm_mode = "llm"
+    if llm_planner is not None:
+        # 使用注入的 LLM 规划器（测试 mock / 真实 planner）
+        if hasattr(llm_planner, "build_plan_with_debug"):
+            try:
+                llm_plan, debug = llm_planner.build_plan_with_debug(sample.question)  # type: ignore[union-attr]
+                llm_signature = _signature_from_query_plan(llm_plan)
+                llm_mode = debug.get("mode", "llm")
+            except InventorySalesProductionPlanningError:
+                llm_mode = "fallback_error"
+        elif hasattr(llm_planner, "build_plan"):
+            try:
+                llm_plan = llm_planner.build_plan(sample.question)  # type: ignore[union-attr]
+                llm_signature = _signature_from_query_plan(llm_plan)
+            except InventorySalesProductionPlanningError:
+                llm_mode = "fallback_error"
+
+    # 签名对比
+    signatures_match: bool | None = None
+    if rule_signature is not None and llm_signature is not None:
+        signatures_match = rule_signature == llm_signature
+
+    return InventorySalesProductionDualTrackCompareOutcome(
+        sample=sample,
+        rule_signature=rule_signature,
+        llm_signature=llm_signature,
+        rule_status=rule_status,
+        llm_mode=llm_mode,
+        signatures_match=signatures_match,
+    )
+
+
+def _increment_counter(counter: dict[str, int], key: str) -> None:
+    """稳定递增计数器。"""
+    counter[key] = counter.get(key, 0) + 1
+
+
 __all__ = [
     "DEFAULT_M5_ISP_ARTIFACT_DIR",
     "DEFAULT_M5_ISP_RECORDS_FILENAME",
@@ -1301,7 +1470,10 @@ __all__ = [
     "InventorySalesProductionM5ShadowCompareRecord",
     "InventorySalesProductionM5ShadowCompareRunResult",
     "InventorySalesProductionM5ShadowCompareSample",
+    "InventorySalesProductionDualTrackCompareOutcome",
+    "InventorySalesProductionDualTrackCompareRunResult",
     "build_default_inventory_sales_production_m5_shadow_samples",
     "render_safe_m5_shadow_compare_summary_json",
     "run_inventory_sales_production_m5_shadow_compare",
+    "run_dual_track_compare",
 ]
