@@ -48,6 +48,9 @@ _CONNECTION_TEXT_RE = re.compile(
     r"\b(?:host|server|data\s+source|user\s+id|uid)\s*=\s*[^\s,;]+",
     re.IGNORECASE,
 )
+_PERIOD_BOUNDARY_ERROR_RE = re.compile(
+    r"\bsqlplan_unpublished_month_blocks_sql_direct::\d{4}::\d{1,2}::\d{1,2}\b"
+)
 
 
 def resolve_default_inventory_sales_production_m5_artifact_dir() -> Path:
@@ -123,7 +126,14 @@ def build_default_inventory_sales_production_m5_shadow_samples(
     *,
     max_samples: int | None = None,
 ) -> list[InventorySalesProductionM5ShadowCompareSample]:
-    """构造来自 M4-6 真实问法的产销存 M5 shadow 默认样例。"""
+    """构造产销存 M5/M5-6 shadow 默认样例。
+
+    参数：max_samples 为可选上限，用于 runner 或单测快速截取前 N 条样例。
+    返回：按稳定顺序排列的 shadow 样例列表，前 11 条保留 M5/M4-6 收口基线，后续
+    M5-6 扩样覆盖核心指标、同义问法、期间边界和 fail-closed 安全场景。
+    关键业务逻辑：这里只声明离线问题样例和独立 SQLPlan fixture，不调用 live DB，
+    也不把 QueryPlan 反向生成 SQLPlan，避免 shadow 自我匹配。
+    """
 
     samples = [
         InventorySalesProductionM5ShadowCompareSample(
@@ -264,9 +274,268 @@ def build_default_inventory_sales_production_m5_shadow_samples(
             candidate_override=_redaction_guard_candidate_payload(),
         ),
     ]
+    samples.extend(_build_m5_6_shadow_expansion_samples())
     if max_samples is not None:
         return samples[: max(0, max_samples)]
     return samples
+
+
+def _build_m5_6_shadow_expansion_samples() -> list[InventorySalesProductionM5ShadowCompareSample]:
+    """构造 M5-6 shadow 扩样样例。
+
+    返回：只用于 M5-6 离线 shadow 的增量样例列表。
+    关键业务逻辑：样例覆盖产量、销量、库存、寄存、预算达成率、维度拆分、
+    已发布/月度边界、同义表达和 fail-closed；其中 matched 样例均显式提供独立
+    SQLPlan fixture，安全边界样例则保留缺候选或非法候选以验证保守失败。
+    """
+
+    return [
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_production_year_summary",
+            description="M5-6 年度产量核心指标样例",
+            question="2023年产量是多少？",
+            question_category="production_summary",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["production_actual_including_oem"],
+                dimensions=[],
+                period_type="year",
+                year=2023,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_sales_external_default_scope",
+            description="M5-6 对外销量默认口径同义问法样例",
+            question="2024年对外销量是多少？",
+            question_category="sales_summary",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["shipment_volume"],
+                dimensions=[],
+                period_type="year",
+                year=2024,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_sales_year_synonym_shipment",
+            description="M5-6 发货量等价销量的年度同义样例",
+            question="2025年发货量是多少？",
+            question_category="sales_summary",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["shipment_volume"],
+                dimensions=[],
+                period_type="year",
+                year=2025,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_sales_chinese_quarter_synonym",
+            description="M5-6 中文季度和销售量同义样例",
+            question="2025年一季度销售量是多少？",
+            question_category="sales_summary",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["shipment_volume"],
+                dimensions=[],
+                period_type="quarter",
+                year=2025,
+                quarter=1,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_sales_ytd_prefix_synonym",
+            description="M5-6 前 N 个月累计销量样例",
+            question="2026年前4个月累计销量是多少？",
+            question_category="time_boundary_guard",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["shipment_volume"],
+                dimensions=[],
+                period_type="ytd",
+                year=2026,
+                month_filter_values=[1, 2, 3, 4],
+                business_rules=["ytd_by_published_months"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_inventory_stock_synonym",
+            description="M5-6 库存/存货月度时点同义样例",
+            question="2026年4月库存是多少？",
+            question_category="inventory_snapshot",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_inventory_snapshot",
+                metrics=["ending_inventory_volume"],
+                dimensions=[],
+                period_type="month",
+                year=2026,
+                month=4,
+                business_rules=["period_end_inventory_snapshot"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_consigned_inventory_synonym",
+            description="M5-6 寄存仓/寄存合计月度时点同义样例",
+            question="2026年4月寄存合计是多少？",
+            question_category="inventory_snapshot",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_inventory_snapshot",
+                metrics=["consigned_inventory_volume"],
+                dimensions=[],
+                period_type="month",
+                year=2026,
+                month=4,
+                business_rules=["period_end_inventory_snapshot"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_budget_achievement_current_year_boundary",
+            description="M5-6 当前已发布年份预算达成率边界样例",
+            question="2026年预算达成率是多少？",
+            question_category="budget_achievement",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_budget_achievement",
+                metrics=["production_actual_including_oem"],
+                dimensions=[],
+                period_type="year",
+                year=2026,
+                business_rules=["budget_achievement_recalculated"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_production_by_model_type",
+            description="M5-6 按版型拆分产量样例",
+            question="2025年按版型产量是多少？",
+            question_category="dimension_breakdown",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_breakdown",
+                metrics=["production_by_model_type"],
+                dimensions=["model_type"],
+                period_type="year",
+                year=2025,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_inventory_by_base_period_end",
+            description="M5-6 按基地拆分库存月末时点样例",
+            question="2026年4月各基地库存是多少？",
+            question_category="dimension_breakdown",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_inventory_snapshot",
+                metrics=["ending_inventory_by_base"],
+                dimensions=["base_name"],
+                period_type="month",
+                year=2026,
+                month=4,
+                business_rules=["period_end_inventory_snapshot"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_sales_by_base_breakdown",
+            description="M5-6 按基地拆分销量样例",
+            question="2024年各基地销量是多少？",
+            question_category="dimension_breakdown",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_breakdown",
+                metrics=["shipment_by_base"],
+                dimensions=["base_name"],
+                period_type="year",
+                year=2024,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_sales_monthly_trend",
+            description="M5-6 按月销量趋势样例",
+            question="2026年按月销量趋势是多少？",
+            question_category="time_boundary_guard",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_trend",
+                metrics=["shipment_volume"],
+                dimensions=["business_month"],
+                period_type="year",
+                year=2026,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_production_ytd_boundary",
+            description="M5-6 截至已发布月份累计产量样例",
+            question="2026年截至4月产量是多少？",
+            question_category="time_boundary_guard",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["production_actual_including_oem"],
+                dimensions=[],
+                period_type="ytd",
+                year=2026,
+                month_filter_values=[1, 2, 3, 4],
+                business_rules=["ytd_by_published_months"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_sales_future_month_blocked",
+            description="M5-6 未来月份区间必须在 QueryPlan 阶段 fail-closed",
+            question="2026年5月至6月未来月份销量是多少？",
+            question_category="time_boundary_guard",
+            expected_status="queryplan_unsupported",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_missing_time_default_years_scope",
+            description="M5-6 多年默认范围暂缺独立 SQLPlan 候选时必须 fail-closed",
+            question="2023年至2026年销量是多少？",
+            question_category="missing_time_scope_guard",
+            expected_status="sqlplan_candidate_unavailable",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_missing_time_no_time_default_scope_guard",
+            description="M5-6 无显式时间的 2023-2026 默认范围未接管前必须保守澄清",
+            question="销量是多少？",
+            question_category="missing_time_scope_guard",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_unsupported_mom",
+            description="M5-6 环比类问题暂不支持守卫样例",
+            question="2025年销量环比变化是多少？",
+            question_category="unsupported_guard",
+            expected_status="queryplan_unsupported",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_clarification_unknown_metric",
+            description="M5-6 未知指标必须澄清，不能泛化为其他指标",
+            question="2025年未知指标是多少？",
+            question_category="clarification_guard",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_sqlplan_unpublished_month_guard",
+            description="M5-6 SQLPlan 候选越过已发布月份边界时必须 fail-closed",
+            question="2026年5月销量是多少？",
+            question_category="time_boundary_guard",
+            expected_status="sqlplan_validation_failed",
+            candidate_override=_unpublished_month_guard_candidate_payload(),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_sqlplan_internal_debug_key_guard",
+            description="M5-6 SQLPlan 候选含内部日志/调试标识时必须 fail-closed",
+            question="2024年销量是多少？",
+            question_category="redaction_guard",
+            expected_status="sqlplan_validation_failed",
+            candidate_override=_internal_debug_key_guard_candidate_payload(),
+        ),
+    ]
 
 
 def run_inventory_sales_production_m5_shadow_compare(
@@ -525,6 +794,41 @@ def _redaction_guard_candidate_payload() -> dict[str, Any]:
     return payload
 
 
+def _unpublished_month_guard_candidate_payload() -> dict[str, Any]:
+    """构造越过已发布月份边界的 SQLPlan fixture。
+
+    返回：2026 年 5 月销量候选。当前产销存中间库仅发布到 2026 年 4 月，
+    validator 应在 SQLPlan 阶段 fail-closed，避免未来月份被当成真实结果。
+    """
+
+    return _build_sqlplan_candidate_payload(
+        query_key="ba_isp_metric_summary",
+        metrics=["shipment_volume"],
+        dimensions=[],
+        period_type="month",
+        year=2026,
+        month=5,
+    )
+
+
+def _internal_debug_key_guard_candidate_payload() -> dict[str, Any]:
+    """构造含内部审计/调试标识的 SQLPlan fixture。
+
+    返回：带有内部日志标识 business_flag 的候选。该字段不是业务口径开关，
+    validator 应 fail-closed，确保 shadow artifacts 不接纳 raw/debug/internal 语义。
+    """
+
+    payload = _build_sqlplan_candidate_payload(
+        query_key="ba_isp_metric_summary",
+        metrics=["shipment_volume"],
+        dimensions=[],
+        period_type="year",
+        year=2024,
+    )
+    payload["plan"]["business_flags"]["sys_query_log"] = True
+    return payload
+
+
 def _signature_from_query_plan(query_plan: InventorySalesProductionQueryPlan) -> dict[str, Any]:
     """提取 QueryPlan 与 SQLPlan 可比的业务签名，不持久化具体时间参数。"""
 
@@ -769,6 +1073,10 @@ def _dedupe_safe_texts(values: list[str]) -> list[str]:
         normalized = _BEARER_TEXT_RE.sub("[BEARER]", normalized)
         normalized = _SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=[REDACTED]", normalized)
         normalized = _CONNECTION_TEXT_RE.sub("[CONNECTION]", normalized)
+        normalized = _PERIOD_BOUNDARY_ERROR_RE.sub(
+            "sqlplan_unpublished_month_blocks_sql_direct::[PERIOD_BOUNDARY]",
+            normalized,
+        )
         if normalized and normalized not in safe_values:
             safe_values.append(normalized)
     return safe_values

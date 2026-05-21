@@ -24,7 +24,7 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
     sample_ids = [sample.sample_id for sample in samples]
 
     assert M5_ISP_SHADOW_COMPARE_VERSION == "business_analysis_inventory_sales_production_m5_shadow_compare.v1"
-    assert sample_ids[:10] == [
+    assert sample_ids[:11] == [
         "m4_6_sales_year_summary",
         "m4_6_sales_quarter_summary",
         "m4_6_sales_ytd_summary",
@@ -35,6 +35,7 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
         "m4_6_unsupported_yoy",
         "m4_6_unsupported_month_range",
         "m4_6_clarification_inventory_turnover",
+        "m5_redaction_sql_payload_blocked",
     ]
     assert {sample.question_category for sample in samples} >= {
         "sales_summary",
@@ -67,6 +68,68 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
     assert run.report["matched_count"] >= 7
     assert run.report["fail_closed_count"] >= 3
     assert run.report["expected_status_mismatch_count"] == 0
+
+
+def test_m5_6_shadow_default_samples_expand_to_business_boundary_suite(tmp_path: Path) -> None:
+    """M5-6 默认 shadow 套件必须扩展到 30+，覆盖核心指标、时间边界和 fail-closed 场景。"""
+
+    samples = build_default_inventory_sales_production_m5_shadow_samples()
+    sample_ids = [sample.sample_id for sample in samples]
+
+    assert len(samples) >= 30
+    assert len(sample_ids) == len(set(sample_ids))
+    assert len(build_default_inventory_sales_production_m5_shadow_samples(max_samples=12)) == 12
+    assert build_default_inventory_sales_production_m5_shadow_samples(max_samples=0) == []
+    assert {sample.question_category for sample in samples} >= {
+        "sales_summary",
+        "production_summary",
+        "inventory_snapshot",
+        "budget_achievement",
+        "dimension_breakdown",
+        "time_boundary_guard",
+        "missing_time_scope_guard",
+        "unsupported_guard",
+        "clarification_guard",
+        "redaction_guard",
+    }
+    expected_expansion_ids = {
+        "m5_6_production_year_summary",
+        "m5_6_sales_external_default_scope",
+        "m5_6_sales_year_synonym_shipment",
+        "m5_6_sales_chinese_quarter_synonym",
+        "m5_6_sales_ytd_prefix_synonym",
+        "m5_6_inventory_stock_synonym",
+        "m5_6_consigned_inventory_synonym",
+        "m5_6_budget_achievement_current_year_boundary",
+        "m5_6_production_by_model_type",
+        "m5_6_inventory_by_base_period_end",
+        "m5_6_sales_by_base_breakdown",
+        "m5_6_sales_monthly_trend",
+        "m5_6_production_ytd_boundary",
+        "m5_6_sales_future_month_blocked",
+        "m5_6_missing_time_default_years_scope",
+        "m5_6_missing_time_no_time_default_scope_guard",
+        "m5_6_unsupported_mom",
+        "m5_6_clarification_unknown_metric",
+        "m5_6_sqlplan_unpublished_month_guard",
+        "m5_6_sqlplan_internal_debug_key_guard",
+    }
+    assert expected_expansion_ids <= set(sample_ids)
+
+    run = run_inventory_sales_production_m5_shadow_compare(samples=samples, artifact_dir=tmp_path)
+    by_sample = {outcome.sample.sample_id: outcome.record.status for outcome in run.outcomes}
+
+    assert run.report["total"] == len(samples)
+    assert run.report["matched_count"] >= 16
+    assert run.report["fail_closed_count"] >= 10
+    assert run.report["expected_status_mismatch_count"] == 0
+    assert by_sample["m5_6_sales_future_month_blocked"] == "queryplan_unsupported"
+    assert by_sample["m5_6_missing_time_default_years_scope"] == "sqlplan_candidate_unavailable"
+    assert by_sample["m5_6_missing_time_no_time_default_scope_guard"] == "queryplan_clarification"
+    assert by_sample["m5_6_unsupported_mom"] == "queryplan_unsupported"
+    assert by_sample["m5_6_clarification_unknown_metric"] == "queryplan_clarification"
+    assert by_sample["m5_6_sqlplan_unpublished_month_guard"] == "sqlplan_validation_failed"
+    assert by_sample["m5_6_sqlplan_internal_debug_key_guard"] == "sqlplan_validation_failed"
 
 
 def test_m5_shadow_default_runner_uses_independent_sqlplan_fixtures(tmp_path: Path) -> None:
@@ -259,6 +322,27 @@ def test_m5_shadow_safe_text_redaction_handles_lowercase_sql_and_secret_shapes()
     assert "secret_key='abc123'" not in rendered
     assert "api-key=abc123" not in rendered
     assert "apikey=abc123" not in rendered
+
+
+def test_m5_shadow_redacts_period_values_from_validation_error_codes(tmp_path: Path) -> None:
+    """SQLPlan 边界错误码进入 artifacts 前也不能持久化具体年月边界值。"""
+
+    sample = InventorySalesProductionM5ShadowCompareSample(
+        sample_id="regression_unpublished_month_error_code_redaction",
+        description="未发布月份错误码必须脱敏期间值",
+        question="2026年5月销量是多少？",
+        question_category="time_boundary_guard",
+        expected_status="sqlplan_validation_failed",
+        candidate_override=m5_shadow_compare._unpublished_month_guard_candidate_payload(),
+    )
+
+    run = run_inventory_sales_production_m5_shadow_compare(samples=[sample], artifact_dir=tmp_path)
+    persisted = run.records_path.read_text(encoding="utf-8") + "\n" + run.report_path.read_text(encoding="utf-8")
+
+    assert run.outcomes[0].record.status == "sqlplan_validation_failed"
+    assert "sqlplan_unpublished_month_blocks_sql_direct" in persisted
+    assert "sqlplan_unpublished_month_blocks_sql_direct::2026::5::4" not in persisted
+    assert "::2026::5::4" not in persisted
 
 
 def test_m5_shadow_artifacts_are_shadow_only_and_redacted(tmp_path: Path) -> None:
