@@ -291,6 +291,8 @@ def build_default_inventory_sales_production_m5_shadow_samples(
         ),
     ]
     samples.extend(_build_m5_6_shadow_expansion_samples())
+    # S4: NL 变体 shadow 样本——同一业务语义、不同自然语言表述，验证 LLM 与规则规划器输出一致性
+    samples.extend(_build_nl_variant_shadow_samples())
     if max_samples is not None:
         return samples[: max(0, max_samples)]
     return samples
@@ -1104,6 +1106,190 @@ def _dedupe_safe_texts(values: list[str]) -> list[str]:
         if normalized and normalized not in safe_values:
             safe_values.append(normalized)
     return safe_values
+
+
+def _build_nl_variant_shadow_samples() -> list[InventorySalesProductionM5ShadowCompareSample]:
+    """构造 S4 NL 变体 shadow 样本——同一业务语义、不同自然语言表述。
+
+    说明：
+        1. 每条样本对应一个自然语言变体问法，与现有标准问题业务语义等价；
+        2. candidate_override 复用对应标准问题的 SQLPlan 候选，验证 LLM 规划器与规则规划器输出一致性；
+        3. category 统一标记为 "nl_variant" 以便在报告中区分；
+        4. 覆盖产量、销量、库存、寄存、开票、预算达成、基地拆分等核心指标的自然语言变体。
+    """
+    return [
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_sales_shipment_synonym",
+            description="S4 '卖了/出货/发运' 等价销量变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2024年卖了多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_sales_delivery_synonym",
+            description="S4 '出货量/发运量' 等价销量变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2025年出货量是多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_production_output_synonym",
+            description="S4 '产出/生产了多少' 等价产量变体",
+            question="2023年产出是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["production_actual_including_oem"],
+                dimensions=[],
+                period_type="year",
+                year=2023,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_production_actual_synonym",
+            description="S4 '实际生产了多少' 等价产量变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2025年实际生产了多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_inventory_stock_synonym",
+            description="S4 '存货' 等价库存变体",
+            question="2026年4月存货是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_inventory_snapshot",
+                metrics=["ending_inventory_volume"],
+                dimensions=[],
+                period_type="month",
+                year=2026,
+                month=4,
+                business_rules=["period_end_inventory_snapshot"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_consigned_deposit_synonym",
+            description="S4 '寄存仓/寄存合计' 等价寄存变体",
+            question="2026年4月寄存仓有多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_inventory_snapshot",
+                metrics=["consigned_inventory_volume"],
+                dimensions=[],
+                period_type="month",
+                year=2026,
+                month=4,
+                business_rules=["period_end_inventory_snapshot"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_invoice_billed_synonym",
+            description="S4 '已开票/开票了多少' 等价开票变体",
+            question="2025年已开票销量是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["invoice_sales_volume"],
+                dimensions=[],
+                period_type="year",
+                year=2025,
+                business_flags={"explicit_invoice": True},
+                business_rules=["explicit_invoice_metric"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_budget_completion_synonym",
+            description="S4 '预算完成率/目标完成情况' 等价预算达成率变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2023年预算完成率是多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_production_by_base_breakdown",
+            description="S4 '按基地/各基地产量' 等价基地拆分变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2025年各基地生产了多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_sales_by_base_breakdown_synonym",
+            description="S4 '按基地的发货量' 等价销量按基地拆分变体",
+            question="2024年按基地的发货量是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_breakdown",
+                metrics=["shipment_by_base"],
+                dimensions=["base_name"],
+                period_type="year",
+                year=2024,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_monthly_trend_month_word",
+            description="S4 '每月销量' 等价趋势变体",
+            question="2026年每月销量是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_trend",
+                metrics=["shipment_volume"],
+                dimensions=["business_month"],
+                period_type="year",
+                year=2026,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_yoy_growth_synonym",
+            description="S4 '同比增长' 等价同比变体",
+            question="2025年产量同比增长率是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_period_compare",
+                metrics=["production_actual_including_oem"],
+                dimensions=["business_month"],
+                period_type="month_range",
+                year=2025,
+                month_filter_values=list(range(1, 13)),
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_month_range_half_year",
+            description="S4 '上半年销量' 等价月区间变体",
+            question="2025年上半年销量是多少？",
+            question_category="nl_variant",
+            expected_status="plan_mismatch",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_period_compare",
+                metrics=["shipment_volume"],
+                dimensions=["business_month"],
+                period_type="month_range",
+                year=2025,
+                month_filter_values=[1, 2, 3, 4, 5, 6],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_ytd_up_to_month_synonym",
+            description="S4 '前N个月/截至N月累计' 等价 YTD 变体",
+            question="2026年前4个月累计产量是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["production_actual_including_oem"],
+                dimensions=[],
+                period_type="ytd",
+                year=2026,
+                month_filter_values=[1, 2, 3, 4],
+                business_rules=["ytd_by_published_months"],
+            ),
+        ),
+    ]
 
 
 __all__ = [
