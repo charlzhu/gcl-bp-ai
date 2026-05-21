@@ -5,6 +5,14 @@
 """
 
 from backend.app.domains.logistics.services.nl2sql.business_rules import LogisticsNl2SqlBusinessRules
+from backend.app.domains.logistics.services.nl2sql.domain_registry import (
+    DomainCatalogRegistration,
+    Nl2SqlDomainRegistry,
+)
+from backend.app.domains.logistics.services.nl2sql.domain_router import (
+    Nl2SqlDomainRoute,
+    Nl2SqlDomainRouter,
+)
 from backend.app.domains.logistics.services.nl2sql.candidate_sql_gate import (
     LogisticsCandidateSqlGate,
     LogisticsCandidateSqlGateResult,
@@ -100,6 +108,28 @@ from backend.app.domains.logistics.services.nl2sql.sql_renderer import (
     LogisticsSqlRenderer,
     render_logistics_sql,
 )
+from backend.app.domains.logistics.services.nl2sql.m14_shadow_comparator import (
+    LogisticsNl2SqlShadowComparison,
+    LogisticsNl2SqlShadowComparator,
+    LogisticsNl2SqlShadowComparatorConfig,
+    ShadowCompareMode,
+)
+from backend.app.domains.logistics.services.nl2sql.m14_shadow_alerter import (
+    LogisticsNl2SqlShadowAlerter,
+    LogisticsNl2SqlShadowAlerterConfig,
+    LogisticsNl2SqlShadowAlertRecord,
+    LogisticsNl2SqlShadowAlertStats,
+)
+from backend.app.domains.logistics.services.nl2sql.m14_data_qa_shadow_compare import (
+    compare_nl2sql_shadow_and_attach,
+    get_global_shadow_alerter,
+)
+from backend.app.domains.logistics.services.nl2sql.m15_grayscale_gate import (
+    GrayscaleQuestionType,
+    LogisticsNl2SqlGrayscaleConfig,
+    LogisticsNl2SqlGrayscaleDecision,
+    LogisticsNl2SqlGrayscaleGate,
+)
 from backend.app.domains.logistics.services.nl2sql.sql_safety import (
     LogisticsSqlSafetyChecker,
     LogisticsSqlSafetyResult,
@@ -179,4 +209,22 @@ __all__ = [
     "run_logistics_nl2sql_shadow_smoke",
     "summarize_evaluation_logs",
     "validate_logistics_sql_plan_candidate",
+    # M14 模块
+    "LogisticsNl2SqlShadowComparison",
+    "LogisticsNl2SqlShadowComparator",
+    "LogisticsNl2SqlShadowComparatorConfig",
+    "ShadowCompareMode",
+    "LogisticsNl2SqlShadowAlerter",
+    "LogisticsNl2SqlShadowAlerterConfig",
+    "LogisticsNl2SqlShadowAlertRecord",
+    "LogisticsNl2SqlShadowAlertStats",
+    "compare_nl2sql_shadow_and_attach",
+    "get_global_shadow_alerter",
+    # M15 模块
+    "GrayscaleQuestionType",
+    "LogisticsNl2SqlGrayscaleConfig",
+    "LogisticsNl2SqlGrayscaleDecision",
+    "LogisticsNl2SqlGrayscaleGate",
+    "LogisticsNl2SqlGrayscaleDecisionResult",
+    "GRAYSCALE_TYPES_ENV_FLAG",
 ]
