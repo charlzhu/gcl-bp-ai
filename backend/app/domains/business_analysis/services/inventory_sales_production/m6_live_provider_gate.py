@@ -733,6 +733,12 @@ class InventorySalesProductionM6ReadonlyMiddleDbShadowExecutor:
         """初始化 executor。参数 session_factory 用于测试或 CLI 注入数据库会话工厂。"""
 
         self.session_factory = session_factory
+        # M6 live shadow gate 只做验收期影子验证，不接管正式 QA 链路。
+        self.shadow_only = True
+        # 显式暴露“不写正式问答”的合同，便于 review/static test 防止后续误接主链路。
+        self.formal_qa_executed = False
+        # 显式暴露“不写 query log”的合同，shadow 只写脱敏验收材料。
+        self.write_query_log = False
 
     def execute(self, plan: InventorySalesProductionSqlPlan) -> list[dict[str, Any]]:
         """执行只读中间库 shadow 查询。
@@ -860,6 +866,7 @@ class InventorySalesProductionM6LiveShadowGateRunner:
     def _run_one(self, sample: InventorySalesProductionM6LiveShadowSample) -> dict[str, Any]:
         """执行单条样例；异常按 shadow_error fail-closed。"""
 
+        provider_live_called = False
         try:
             generation = self.sqlplan_generator.generate(sample.question)
             provider_live_called = bool(generation.provider_live_called)
@@ -885,7 +892,7 @@ class InventorySalesProductionM6LiveShadowGateRunner:
             return {
                 "sample_id": sample.sample_id,
                 "actual_status": "shadow_error",
-                "provider_live_called": False,
+                "provider_live_called": provider_live_called,
                 "sqlplan_validation_ok": False,
                 "error_message": _safe_public_reason(str(exc)),
                 "readonly_middle_db_shadow_executed": False,
@@ -1084,6 +1091,7 @@ def _safe_public_reason(value: Any) -> str:
         "empty_rerank_scores",
         "provider_candidate_not_object",
         "candidate_parse_failed",
+        "probe_status_missing",
     }
     if public_reason in allowed_public_reasons:
         return public_reason
@@ -1105,6 +1113,14 @@ def _provider_gate_from_probe_result(
 
     if isinstance(value, dict):
         status_text = str(value.get("status") or "").upper()
+        if not status_text:
+            return InventorySalesProductionM6ProviderGateResult(
+                name=name,
+                status="FAIL",
+                reason="probe_status_missing",
+            )
+        if status_text == "OK":
+            status_text = "PASS"
         if status_text in {"PASS", "FAIL", "BLOCKED"}:
             reason = _safe_public_reason(value.get("reason")) if value.get("reason") else None
             status: Literal["PASS", "FAIL", "BLOCKED"] = "BLOCKED"

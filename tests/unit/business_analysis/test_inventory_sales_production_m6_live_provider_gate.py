@@ -4,6 +4,7 @@ import importlib
 import json
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 CATALOG_VERSION = "business_analysis_inventory_sales_production_catalog.v1"
@@ -66,7 +67,7 @@ def test_m6_provider_smoke_reports_embedding_vector_rerank_llm_separately_and_re
         embedding_probe=lambda: [0.1, 0.2, 0.3],
         vector_store_probe=lambda: {"collection": "isp_catalog_secret_collection", "status": "ok"},
         rerank_probe=lambda: [{"index": 0, "score": 0.99}],
-        llm_probe=lambda: {"provider": "bailian", "model": "deepseek", "api_key": "sk-live-secret"},
+        llm_probe=lambda: {"status": "PASS", "provider": "bailian", "model": "deepseek", "api_key": "***"},
     )
     result = runner.run()
 
@@ -149,6 +150,27 @@ def test_m6_provider_smoke_redacts_plain_unknown_exception_text_by_default() -> 
     assert "shadow_error_redacted" in safe_json
     for leaked in ("upstream gateway", "abc123", "tenant route", "retry later"):
         assert leaked not in safe_json
+
+
+
+def test_m6_provider_smoke_fail_closes_dict_probe_without_explicit_status() -> None:
+    """dict probe 缺少显式 PASS/FAIL/BLOCKED 时必须 fail-closed，不能因非空字典误判通过。"""
+
+    m6 = _m6_module()
+    runner = m6.InventorySalesProductionM6ProviderSmokeRunner(
+        embedding_probe=lambda: {"collection": "internal_isp_catalog", "count": 1},
+        vector_store_probe=lambda: {"status": "PASS"},
+        rerank_probe=lambda: {"status": "PASS"},
+        llm_probe=lambda: {"status": "PASS"},
+    )
+
+    result = runner.run()
+    safe_json = m6.render_safe_m6_provider_smoke_summary_json(result).lower()
+
+    assert result.gates[0].status == "FAIL"
+    assert result.ok is False
+    assert "probe_status_missing" in safe_json
+    assert "internal_isp_catalog" not in safe_json
 
 
 
@@ -262,6 +284,56 @@ def test_m6_live_shadow_gate_runs_provider_candidate_validator_and_readonly_midd
     assert run.report_path.exists()
 
 
+def test_m6_live_shadow_gate_preserves_provider_called_when_readonly_shadow_raises(tmp_path: Path) -> None:
+    """只读 shadow 执行异常时仍必须保留 provider 已调用状态，并输出脱敏失败记录。"""
+
+    m6 = _m6_module()
+
+    class RaisingReadonlyShadowExecutor:
+        """测试用 executor：模拟只读中间库执行阶段异常。"""
+
+        def execute(self, plan: object) -> list[dict[str, object]]:
+            """抛出带连接/SQL 片段的异常，验证 M6 记录不会泄漏细节。"""
+
+            raise RuntimeError("mysql://user:secret@127.0.0.1/db select * from dwd_ba_isp_monthly_fact")
+
+    runner = m6.InventorySalesProductionM6LiveShadowGateRunner(
+        sqlplan_generator=m6.InventorySalesProductionM6FakeSqlPlanGenerator.success_for_metric("shipment_volume"),
+        readonly_shadow_executor=RaisingReadonlyShadowExecutor(),
+    )
+    run = runner.run(
+        samples=[
+            m6.InventorySalesProductionM6LiveShadowSample(
+                sample_id="m6_live_sales_year_summary_error",
+                question="2025年销量是多少？",
+                expected_status="shadow_error",
+            )
+        ],
+        artifact_dir=tmp_path,
+    )
+    record = json.loads(run.records_path.read_text(encoding="utf-8").splitlines()[0])
+    serialized = _safe_text(record)
+
+    assert run.report["provider_live_called"] is True
+    assert run.report["expected_status_mismatch_count"] == 0
+    assert record["provider_live_called"] is True
+    assert record["actual_status"] == "shadow_error"
+    assert "shadow_error_redacted" in serialized
+    for leaked in ("mysql://", "127.0.0.1", "select *", "dwd_ba_isp_monthly_fact", "secret"):
+        assert leaked not in serialized
+
+
+def test_m6_readonly_shadow_executor_declares_shadow_only_and_no_query_log_contract() -> None:
+    """M6 真实只读 executor 必须显式声明 shadow-only 且不写正式问答/query log。"""
+
+    m6 = _m6_module()
+    executor = m6.InventorySalesProductionM6ReadonlyMiddleDbShadowExecutor(session_factory=lambda: None)
+
+    assert executor.shadow_only is True
+    assert executor.formal_qa_executed is False
+    assert executor.write_query_log is False
+
+
 def test_m6_public_shadow_summary_redacts_internal_sqlplan_provider_and_secret_fragments() -> None:
     """M6 写入 outbox/历史/公开摘要前必须去除 SQLPlan 内部、表字段、provider、密钥和连接串细节。"""
 
@@ -342,7 +414,7 @@ def test_m6_cli_exposes_separate_provider_reindex_and_live_shadow_gate_switches(
     assert script_path.exists(), "missing M6 live provider gate CLI script"
 
     completed = subprocess.run(
-        ["/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python", str(script_path), "--help"],
+        [sys.executable, str(script_path), "--help"],
         check=True,
         capture_output=True,
         text=True,
@@ -367,7 +439,7 @@ def test_m6_cli_exposes_separate_provider_reindex_and_live_shadow_gate_switches(
     )
     blocked = subprocess.run(
         [
-            "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python",
+            sys.executable,
             str(script_path),
             "--provider-smoke",
         ],
