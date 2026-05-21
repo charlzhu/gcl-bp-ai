@@ -162,16 +162,42 @@ def get_logistics_data_qa_service(
 
 def get_inventory_sales_production_qa_service(
     db: Session = Depends(get_db),
+    settings: Settings = Depends(get_settings),
 ) -> InventorySalesProductionQaService:
     """产销存经营分析问答服务依赖。
 
-    当前用于 M4 紧急接入：
-    1. 自然语言只生成受控产销存 QueryPlan；
-    2. 业务事实和指标计算复用 M3 QueryExecutor；
-    3. 不直查 Excel 原始文件，不让 LLM 自由生成 SQL。
+    M8 灰度模式：
+        1. off/shadow/assist 模式仍使用规则规划器；
+        2. nl2sql 模式注入 S3 LLM Catalog Recall 规划器；
+        3. 默认 off（上线前不意外激活 NL2SQL 链路）。
     """
 
-    return InventorySalesProductionQaService(db=db)
+    live_gate_enabled = settings.isp_live_qa_gate_enabled
+    live_gate_mode = settings.isp_live_qa_gate_mode
+    if live_gate_enabled and live_gate_mode == "nl2sql":
+        # nl2sql 模式：使用 LLM Catalog Recall 规划器
+        from backend.app.domains.business_analysis.services.inventory_sales_production.nl2sql_query_planner import (
+            InventorySalesProductionNl2SqlQueryPlanner,
+        )
+
+        nl2sql_planner = InventorySalesProductionNl2SqlQueryPlanner(
+            llm_api_key=settings.llm_api_key or "",
+            llm_base_url=settings.llm_base_url or "",
+            llm_model=settings.llm_model or "qwen-max",
+            timeout=15.0,
+        )
+        return InventorySalesProductionQaService(
+            db=db,
+            nl2sql_planner=nl2sql_planner,
+            live_gate_enabled=True,
+            live_gate_mode="nl2sql",
+        )
+
+    return InventorySalesProductionQaService(
+        db=db,
+        live_gate_enabled=live_gate_enabled,
+        live_gate_mode=live_gate_mode,
+    )
 
 
 def get_plan_bom_import_service(

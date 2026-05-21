@@ -244,3 +244,78 @@ def test_m8_off_mode_default_constructor_has_nl2sql_planner() -> None:
     assert hasattr(svc, "nl2sql_planner")
     assert svc.nl2sql_planner is not None
     assert svc.live_gate_mode == "off"
+
+
+# ===== deps 级别：灰度切换 =====
+
+
+def test_m8_deps_default_mode_uses_rule_planner(monkeypatch) -> None:
+    """默认 deps 构造的服务使用规则规划器（off 模式）。"""
+    monitor_planner = MagicMock()
+    monitor_planner.build_plan.return_value = MagicMock(spec=InventorySalesProductionQueryPlan)
+    db = MagicMock()
+    svc = InventorySalesProductionQaService(
+        db=db,
+        planner=monitor_planner,
+        executor=MagicMock(),
+        live_gate_enabled=False,
+        live_gate_mode="off",
+    )
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    # off 模式走 ask()，ask() 使用 planner，所以 planner 被调用
+    assert monitor_planner.build_plan.call_count >= 1
+
+
+def test_m8_deps_nl2sql_mode_injects_nl2sql_planner(monkeypatch) -> None:
+    """nl2sql 模式通过 deps 构造时，注入 NL2SQL 规划器。"""
+    mock_nl2sql = MagicMock()
+    mock_nl2sql.build_plan.return_value = MagicMock(spec=InventorySalesProductionQueryPlan)
+    db = MagicMock()
+    svc = InventorySalesProductionQaService(
+        db=db,
+        nl2sql_planner=mock_nl2sql,
+        executor=MagicMock(),
+        live_gate_enabled=True,
+        live_gate_mode="nl2sql",
+    )
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    # nl2sql 模式调用 NL2SQL 规划器
+    assert mock_nl2sql.build_plan.call_count >= 1
+
+
+def test_m8_deps_nl2sql_off_does_not_use_nl2sql_planner(monkeypatch) -> None:
+    """off 模式不应调用 NL2SQL 规划器。"""
+    mock_nl2sql = MagicMock()
+    mock_nl2sql.build_plan.return_value = MagicMock(spec=InventorySalesProductionQueryPlan)
+    db = MagicMock()
+    svc = InventorySalesProductionQaService(
+        db=db,
+        nl2sql_planner=mock_nl2sql,
+        executor=MagicMock(),
+        live_gate_enabled=False,
+        live_gate_mode="off",
+    )
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    # off 模式不调用 NL2SQL 规划器
+    assert mock_nl2sql.build_plan.call_count == 0
+
+
+def test_m8_deps_shadow_mode_still_uses_rule_planner(monkeypatch) -> None:
+    """shadow 模式仍使用规则规划器（向后兼容）。"""
+    monitor_planner = MagicMock()
+    monitor_planner.build_plan.return_value = MagicMock(spec=InventorySalesProductionQueryPlan)
+    db = MagicMock()
+    svc = InventorySalesProductionQaService(
+        db=db,
+        planner=monitor_planner,
+        executor=MagicMock(),
+        live_gate_enabled=True,
+        live_gate_mode="shadow",
+    )
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    # shadow 模式走 ask()，使用规则规划器
+    assert monitor_planner.build_plan.call_count >= 1

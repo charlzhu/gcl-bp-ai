@@ -120,8 +120,9 @@ class Settings(BaseSettings):
     # off = 仅走 M4 确定性链路（当前默认）
     # shadow = M4 确定性链路作为正式答案，M6 live gate 结果仅记录
     # assist = 优先使用 M6 live gate，失败时自动 fallback 到 M4 确定性链路
+    # nl2sql = 使用 S3 LLM Catalog Recall 规划器，失败时 fallback 到规则规划器
     isp_live_qa_gate_enabled: bool = False
-    isp_live_qa_gate_mode: Literal["off", "shadow", "assist"] = "off"
+    isp_live_qa_gate_mode: Literal["off", "shadow", "assist", "nl2sql"] = "off"
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parent.parent.parent / ".env",
