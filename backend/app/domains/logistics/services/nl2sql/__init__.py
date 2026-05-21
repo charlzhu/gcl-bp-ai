@@ -70,6 +70,10 @@ from backend.app.domains.logistics.services.nl2sql.shadow_smoke import (
     build_default_logistics_nl2sql_shadow_smoke_samples,
     run_logistics_nl2sql_shadow_smoke,
 )
+from backend.app.domains.logistics.services.nl2sql.sql_ast_safety import (
+    LogisticsSqlAstSafetyChecker,
+    LogisticsSqlAstSafetyResult,
+)
 from backend.app.domains.logistics.services.nl2sql.sql_execution import (
     FakeLogisticsSqlExecutor,
     LogisticsSqlExecutionResult,
@@ -147,6 +151,9 @@ __all__ = [
     "build_default_logistics_nl2sql_shadow_smoke_samples",
     "build_logistics_nl2sql_evaluation_report",
     "check_logistics_candidate_sql",
+    "check_logistics_sql_safety",
+    "LogisticsSqlAstSafetyChecker",
+    "LogisticsSqlAstSafetyResult",
     "redact_evaluation_text",
     "render_safe_m8_summary_json",
     "render_logistics_sql",
