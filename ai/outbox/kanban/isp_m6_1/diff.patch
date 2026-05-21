@@ -1,0 +1,159 @@
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py b/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py
+index be2abe86..b320e327 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py
+@@ -889,10 +889,18 @@ class InventorySalesProductionM6LiveShadowGateRunner:
+                 "readonly_middle_db_shadow_executed": True,
+             }
+         except Exception as exc:  # noqa: BLE001 - shadow gate 必须失败关闭并输出公开安全原因。
++            # 如果 generator 已在异常前调用过 provider（live_called=True），
++            # 即使 setup 阶段抛异常也应保留 provider_live_called 状态，
++            # 方便审计追溯 provider 已发生的调用。
++            provider_called_before_error = (
++                provider_live_called
++                or bool(getattr(self.sqlplan_generator, "live_called", False))
++                or bool(getattr(self.sqlplan_generator, "provider_live_called", False))
++            )
+             return {
+                 "sample_id": sample.sample_id,
+                 "actual_status": "shadow_error",
+-                "provider_live_called": provider_live_called,
++                "provider_live_called": provider_called_before_error,
+                 "sqlplan_validation_ok": False,
+                 "error_message": _safe_public_reason(str(exc)),
+                 "readonly_middle_db_shadow_executed": False,
+@@ -1129,12 +1137,23 @@ def _provider_gate_from_probe_result(
+             elif status_text == "FAIL":
+                 status = "FAIL"
+             return InventorySalesProductionM6ProviderGateResult(name=name, status=status, reason=reason)
++        # dict 包含不符合上述条件的 status 字段时 fail-closed 为 FAIL
++        return InventorySalesProductionM6ProviderGateResult(
++            name=name,
++            status="FAIL",
++            reason=_safe_public_reason(value.get("reason") or "probe_status_invalid"),
++        )
++    # 非 dict 类型的 probe 默认 FAIL：list、float、string、tuple 等不可以因 bool(value)=True 误判通过
+     status = "PASS" if _probe_result_is_pass(value) else "FAIL"
+     return InventorySalesProductionM6ProviderGateResult(name=name, status=status)
+ 
+ 
+ def _probe_result_is_pass(value: Any) -> bool:
+-    """判断 probe 返回是否表示通过；空值或显式 FAIL/BLOCKED 不算通过。"""
++    """判断 probe 返回是否表示通过；空值或显式 FAIL/BLOCKED 不算通过。
++
++    业务逻辑：非 dict 类型（list、float、string、tuple）不能因 bool(value)=True
++    而被误判通过；只有显式 status=PASS 才视为通过。
++    """
+ 
+     if isinstance(value, dict):
+         status = str(value.get("status") or "").upper()
+@@ -1143,7 +1162,8 @@ def _probe_result_is_pass(value: Any) -> bool:
+         if status == "PASS":
+             return True
+         return bool(value)
+-    return bool(value)
++    # 非 dict 类型：只有显式布尔 True 才视为通过，list/float/string/tuple 不能自动通过
++    return isinstance(value, bool) and value
+ 
+ 
+ def _normalize_text(value: Any) -> str:
+diff --git a/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py b/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py
+index 24eb6a66..d8ac71b8 100644
+--- a/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py
++++ b/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py
+@@ -64,9 +64,9 @@ def test_m6_provider_smoke_reports_embedding_vector_rerank_llm_separately_and_re
+     m6 = _m6_module()
+ 
+     runner = m6.InventorySalesProductionM6ProviderSmokeRunner(
+-        embedding_probe=lambda: [0.1, 0.2, 0.3],
++        embedding_probe=lambda: {"status": "PASS"},
+         vector_store_probe=lambda: {"collection": "isp_catalog_secret_collection", "status": "ok"},
+-        rerank_probe=lambda: [{"index": 0, "score": 0.99}],
++        rerank_probe=lambda: {"status": "PASS"},
+         llm_probe=lambda: {"status": "PASS", "provider": "bailian", "model": "deepseek", "api_key": "***"},
+     )
+     result = runner.run()
+@@ -452,3 +452,83 @@ def test_m6_cli_exposes_separate_provider_reindex_and_live_shadow_gate_switches(
+     blocked_output = (blocked.stdout + blocked.stderr).lower()
+     assert "blocked" in blocked_output
+     assert "fake" not in blocked_output
++
++
++# ===== M6.1 加固测试 =====
++
++
++def test_m6_1_provider_gate_fail_closes_list_and_float_probe_without_explicit_status() -> None:
++    """非 dict 返回值若缺少显式 PASS/FAIL/BLOCKED，默认 fail-closed 为 FAIL 而非 PASS。
++
++    业务逻辑：review 建议 dict probe 默认 fail-closed。同理 list/float 等 truthy 值
++    也不应因 bool(value)=True 而误判通过。
++    """
++    m6 = _m6_module()
++    for probe_val in ([0.1, 0.2, 0.3], ["ok"], 0.99, "ok", (0.1,)):
++        result = m6._provider_gate_from_probe_result("embedding", probe_val)  # noqa: SLF001
++        assert result.status == "FAIL", f"expected FAIL for {type(probe_val).__name__}={probe_val!r}, got {result.status}"
++
++
++def test_m6_1_provider_gate_fail_closes_empty_list_and_zero_probe() -> None:
++    """空列表/零等 falsy 值继续按 FAIL 处理；该行为已覆盖，此处加固回归。"""
++    m6 = _m6_module()
++    for probe_val in ([], 0, 0.0, False, None, ""):
++        result = m6._provider_gate_from_probe_result("embedding", probe_val)  # noqa: SLF001
++        assert result.status == "FAIL", f"expected FAIL for {type(probe_val).__name__}={probe_val!r}, got {result.status}"
++
++
++def test_m6_1_dict_probe_with_non_standard_status_is_fail_closed() -> None:
++    """dict probe 即使包含 status 字段，如果值不是 PASS/FAIL/BLOCKED/OK，也应按 FAIL 处理。"""
++    m6 = _m6_module()
++    cases = [
++        {"status": "UP"},
++        {"status": "DOWN"},
++        {"status": "UNKNOWN"},
++        {"status": "in_progress"},
++        {"status": "timeout"},
++        {"status": ""},
++        {"status": None},
++    ]
++    for case in cases:
++        result = m6._provider_gate_from_probe_result("embedding", case)  # noqa: SLF001
++        assert result.status == "FAIL", f"expected FAIL for {case!r}, got {result.status}"
++
++
++def test_m6_1_live_shadow_gate_preserves_provider_called_when_generator_raises() -> None:
++    """generator.generate() 抛出异常时，如果 provider 已调用，_run_one 仍应保留此状态。
++
++    业务逻辑：review 建议异常分支尽量保留已发生的 provider_live_called 状态。
++    这里用已调用过的 fake generator 模拟异常，验证异常分支返回 provider_live_called=True。
++    """
++    m6 = _m6_module()
++    tmp_path = Path(__file__).resolve().parent / "_m6_1_generator_raises_tmp"
++
++    class GeneratorThatAlreadyCalledProvider:
++        """模拟 generate() 已调用 provider 但在后续抛异常的 generator。"""
++
++        def __init__(self) -> None:
++            self.live_called = True
++
++        def generate(self, question: str) -> object:
++            raise RuntimeError("shadow_readonly_connection_timeout")
++
++    runner = m6.InventorySalesProductionM6LiveShadowGateRunner(
++        sqlplan_generator=GeneratorThatAlreadyCalledProvider(),
++        readonly_shadow_executor=m6.InventorySalesProductionM6FakeReadonlyShadowExecutor(rows=[]),
++    )
++    samples = [
++        m6.InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_1_generator_raises",
++            question="2025年销量是多少？",
++            expected_status="shadow_error",
++        )
++    ]
++    run = runner.run(samples=samples, artifact_dir=tmp_path)
++    record = json.loads(run.records_path.read_text(encoding="utf-8").splitlines()[0])
++    assert record.get("provider_live_called") is True, (
++        f"generator 抛出异常时仍应保留 provider_live_called=True，实际为 {record.get('provider_live_called')}"
++    )
++    assert record.get("actual_status") == "shadow_error"
++    if tmp_path.exists():
++        import shutil
++        shutil.rmtree(tmp_path)

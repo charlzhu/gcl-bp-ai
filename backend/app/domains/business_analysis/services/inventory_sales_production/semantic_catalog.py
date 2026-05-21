@@ -21,6 +21,7 @@ ISP_SUPPORTED_QUERY_KEYS = (
     "ba_isp_metric_trend",
     "ba_isp_budget_achievement",
     "ba_isp_inventory_snapshot",
+    "ba_isp_period_compare",
 )
 ISP_SUPPORTED_STATUS = {"supported", "unsupported", "planned"}
 ISP_BLOCKED_ALLOWED_COLUMN_PREFIXES = ("source_", "raw_", "trace_")

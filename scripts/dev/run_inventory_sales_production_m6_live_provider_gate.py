@@ -244,16 +244,115 @@ def run_reindex_catalog(*, artifact_dir: Path, dry_run: bool) -> int:
 
 
 def _default_live_shadow_samples(sample_count: int) -> list[InventorySalesProductionM6LiveShadowSample]:
-    """构造 live shadow gate 默认样例。"""
+    """构造 live shadow gate 默认样例。
 
-    return [
+    M6.2 扩样：从 1 条扩展到 19 条安全样本，覆盖 M4-6 A/B/C 类问法
+    和 M5-6 各业务维度，每条记录 expected_status 和脱敏约束。
+    """
+
+    _ALL_SAMPLES = [
+        # ===== A 类：可直接回答 =====
         InventorySalesProductionM6LiveShadowSample(
-            sample_id=f"m6_live_sales_year_summary_{index + 1}",
+            sample_id="m6_2_a_sales_2025",
             question="2025年销量是多少？",
             expected_status="matched",
-        )
-        for index in range(max(1, sample_count))
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_sales_2024_external",
+            question="2024年销量是多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_ytd_2026_apr",
+            question="2026年截至4月累计销量是多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_q1_2025",
+            question="2025年Q1销量是多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_chinese_quarter_2025",
+            question="2025年一季度销售量是多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_shipment_first4_months_2026",
+            question="2026年前4个月发货量多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_production_2025",
+            question="2025年产量是多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_budget_2023",
+            question="2023年预算达成率是多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_inventory_2026_apr",
+            question="2026年4月存货合计是多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_consigned_2026_apr",
+            question="2026年4月寄存仓还有多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_invoice_2025",
+            question="2025年开票销量是多少？",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_model_type_breakdown",
+            question="2025年各版型产量排名",
+            expected_status="matched",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_a_base_inventory",
+            question="2025年按基地看库存情况",
+            expected_status="matched",
+        ),
+        # ===== B/C 类：暂不支持 / 需要 clarify =====
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_bc_yoy",
+            question="2025年销量同比增长率是多少？",
+            expected_status="validation_failed",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_bc_mom",
+            question="2025年销量环比趋势如何？",
+            expected_status="validation_failed",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_bc_month_range",
+            question="2026年2月至4月销量是多少？",
+            expected_status="validation_failed",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_bc_turnover",
+            question="2025年库存周转率是多少？",
+            expected_status="validation_failed",
+        ),
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_bc_unknown_year",
+            question="2027年销量是多少？",
+            expected_status="validation_failed",
+        ),
+        # ===== C 类：安全负例 =====
+        InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_2_c_sql_injection",
+            question="2025年销量是多少？select * from secret",
+            expected_status="validation_failed",
+        ),
     ]
+
+    capped = max(1, min(sample_count, len(_ALL_SAMPLES)))
+    return _ALL_SAMPLES[:capped]
 
 
 def _write_provider_blocked_shadow_report(

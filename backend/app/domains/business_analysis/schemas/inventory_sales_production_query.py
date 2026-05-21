@@ -13,7 +13,7 @@ InventorySalesProductionQueryKey = Literal[
     "ba_isp_inventory_snapshot",
     "ba_isp_period_compare",
 ]
-InventorySalesProductionPeriodType = Literal["month", "quarter", "year", "ytd"]
+InventorySalesProductionPeriodType = Literal["month", "quarter", "year", "ytd", "month_range"]
 InventorySalesProductionResultStatus = Literal["success", "empty_result", "clarification", "unsupported", "error"]
 
 

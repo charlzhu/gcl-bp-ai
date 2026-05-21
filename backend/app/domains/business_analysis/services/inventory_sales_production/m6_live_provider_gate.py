@@ -889,10 +889,18 @@ class InventorySalesProductionM6LiveShadowGateRunner:
                 "readonly_middle_db_shadow_executed": True,
             }
         except Exception as exc:  # noqa: BLE001 - shadow gate 必须失败关闭并输出公开安全原因。
+            # 如果 generator 已在异常前调用过 provider（live_called=True），
+            # 即使 setup 阶段抛异常也应保留 provider_live_called 状态，
+            # 方便审计追溯 provider 已发生的调用。
+            provider_called_before_error = (
+                provider_live_called
+                or bool(getattr(self.sqlplan_generator, "live_called", False))
+                or bool(getattr(self.sqlplan_generator, "provider_live_called", False))
+            )
             return {
                 "sample_id": sample.sample_id,
                 "actual_status": "shadow_error",
-                "provider_live_called": provider_live_called,
+                "provider_live_called": provider_called_before_error,
                 "sqlplan_validation_ok": False,
                 "error_message": _safe_public_reason(str(exc)),
                 "readonly_middle_db_shadow_executed": False,
@@ -1129,12 +1137,23 @@ def _provider_gate_from_probe_result(
             elif status_text == "FAIL":
                 status = "FAIL"
             return InventorySalesProductionM6ProviderGateResult(name=name, status=status, reason=reason)
+        # dict 包含不符合上述条件的 status 字段时 fail-closed 为 FAIL
+        return InventorySalesProductionM6ProviderGateResult(
+            name=name,
+            status="FAIL",
+            reason=_safe_public_reason(value.get("reason") or "probe_status_invalid"),
+        )
+    # 非 dict 类型的 probe 默认 FAIL：list、float、string、tuple 等不可以因 bool(value)=True 误判通过
     status = "PASS" if _probe_result_is_pass(value) else "FAIL"
     return InventorySalesProductionM6ProviderGateResult(name=name, status=status)
 
 
 def _probe_result_is_pass(value: Any) -> bool:
-    """判断 probe 返回是否表示通过；空值或显式 FAIL/BLOCKED 不算通过。"""
+    """判断 probe 返回是否表示通过；空值或显式 FAIL/BLOCKED 不算通过。
+
+    业务逻辑：非 dict 类型（list、float、string、tuple）不能因 bool(value)=True
+    而被误判通过；只有显式 status=PASS 才视为通过。
+    """
 
     if isinstance(value, dict):
         status = str(value.get("status") or "").upper()
@@ -1143,7 +1162,8 @@ def _probe_result_is_pass(value: Any) -> bool:
         if status == "PASS":
             return True
         return bool(value)
-    return bool(value)
+    # 非 dict 类型：只有显式布尔 True 才视为通过，list/float/string/tuple 不能自动通过
+    return isinstance(value, bool) and value
 
 
 def _normalize_text(value: Any) -> str:

@@ -64,9 +64,9 @@ def test_m6_provider_smoke_reports_embedding_vector_rerank_llm_separately_and_re
     m6 = _m6_module()
 
     runner = m6.InventorySalesProductionM6ProviderSmokeRunner(
-        embedding_probe=lambda: [0.1, 0.2, 0.3],
+        embedding_probe=lambda: {"status": "PASS"},
         vector_store_probe=lambda: {"collection": "isp_catalog_secret_collection", "status": "ok"},
-        rerank_probe=lambda: [{"index": 0, "score": 0.99}],
+        rerank_probe=lambda: {"status": "PASS"},
         llm_probe=lambda: {"status": "PASS", "provider": "bailian", "model": "deepseek", "api_key": "***"},
     )
     result = runner.run()
@@ -452,3 +452,140 @@ def test_m6_cli_exposes_separate_provider_reindex_and_live_shadow_gate_switches(
     blocked_output = (blocked.stdout + blocked.stderr).lower()
     assert "blocked" in blocked_output
     assert "fake" not in blocked_output
+
+
+# ===== M6.1 加固测试 =====
+
+
+def test_m6_1_provider_gate_fail_closes_list_and_float_probe_without_explicit_status() -> None:
+    """非 dict 返回值若缺少显式 PASS/FAIL/BLOCKED，默认 fail-closed 为 FAIL 而非 PASS。
+
+    业务逻辑：review 建议 dict probe 默认 fail-closed。同理 list/float 等 truthy 值
+    也不应因 bool(value)=True 而误判通过。
+    """
+    m6 = _m6_module()
+    for probe_val in ([0.1, 0.2, 0.3], ["ok"], 0.99, "ok", (0.1,)):
+        result = m6._provider_gate_from_probe_result("embedding", probe_val)  # noqa: SLF001
+        assert result.status == "FAIL", f"expected FAIL for {type(probe_val).__name__}={probe_val!r}, got {result.status}"
+
+
+def test_m6_1_provider_gate_fail_closes_empty_list_and_zero_probe() -> None:
+    """空列表/零等 falsy 值继续按 FAIL 处理；该行为已覆盖，此处加固回归。"""
+    m6 = _m6_module()
+    for probe_val in ([], 0, 0.0, False, None, ""):
+        result = m6._provider_gate_from_probe_result("embedding", probe_val)  # noqa: SLF001
+        assert result.status == "FAIL", f"expected FAIL for {type(probe_val).__name__}={probe_val!r}, got {result.status}"
+
+
+def test_m6_1_dict_probe_with_non_standard_status_is_fail_closed() -> None:
+    """dict probe 即使包含 status 字段，如果值不是 PASS/FAIL/BLOCKED/OK，也应按 FAIL 处理。"""
+    m6 = _m6_module()
+    cases = [
+        {"status": "UP"},
+        {"status": "DOWN"},
+        {"status": "UNKNOWN"},
+        {"status": "in_progress"},
+        {"status": "timeout"},
+        {"status": ""},
+        {"status": None},
+    ]
+    for case in cases:
+        result = m6._provider_gate_from_probe_result("embedding", case)  # noqa: SLF001
+        assert result.status == "FAIL", f"expected FAIL for {case!r}, got {result.status}"
+
+
+def test_m6_1_live_shadow_gate_preserves_provider_called_when_generator_raises() -> None:
+    """generator.generate() 抛出异常时，如果 provider 已调用，_run_one 仍应保留此状态。
+
+    业务逻辑：review 建议异常分支尽量保留已发生的 provider_live_called 状态。
+    这里用已调用过的 fake generator 模拟异常，验证异常分支返回 provider_live_called=True。
+    """
+    m6 = _m6_module()
+    tmp_path = Path(__file__).resolve().parent / "_m6_1_generator_raises_tmp"
+
+    class GeneratorThatAlreadyCalledProvider:
+        """模拟 generate() 已调用 provider 但在后续抛异常的 generator。"""
+
+        def __init__(self) -> None:
+            self.live_called = True
+
+        def generate(self, question: str) -> object:
+            raise RuntimeError("shadow_readonly_connection_timeout")
+
+    runner = m6.InventorySalesProductionM6LiveShadowGateRunner(
+        sqlplan_generator=GeneratorThatAlreadyCalledProvider(),
+        readonly_shadow_executor=m6.InventorySalesProductionM6FakeReadonlyShadowExecutor(rows=[]),
+    )
+    samples = [
+        m6.InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_1_generator_raises",
+            question="2025年销量是多少？",
+            expected_status="shadow_error",
+        )
+    ]
+    run = runner.run(samples=samples, artifact_dir=tmp_path)
+    record = json.loads(run.records_path.read_text(encoding="utf-8").splitlines()[0])
+    assert record.get("provider_live_called") is True, (
+        f"generator 抛出异常时仍应保留 provider_live_called=True，实际为 {record.get('provider_live_called')}"
+    )
+    assert record.get("actual_status") == "shadow_error"
+    if tmp_path.exists():
+        import shutil
+        shutil.rmtree(tmp_path)
+
+
+# ===== M6.2 扩样测试 =====
+
+
+def test_m6_2_default_shadow_samples_cover_all_categories() -> None:
+    """M6.2 默认 live shadow 样本必须覆盖 A/B/C 三类问法，且总样本数 >= 18。"""
+    from backend.app.domains.business_analysis.services.inventory_sales_production.m6_live_provider_gate import (
+        InventorySalesProductionM6LiveShadowSample,
+    )
+
+    import importlib
+    module = importlib.import_module("scripts.dev.run_inventory_sales_production_m6_live_provider_gate")
+
+    samples = module._default_live_shadow_samples(99)  # noqa: SLF001
+    assert len(samples) >= 18, f"expected >= 18 samples, got {len(samples)}"
+    by_id = {s.sample_id: s for s in samples}
+
+    # A 类成功样本必须覆盖
+    a_ids = [sid for sid, s in by_id.items() if s.expected_status == "matched"]
+    assert len(a_ids) >= 10, f"expected >= 10 A-class samples, got {len(a_ids)}"
+    assert any("sales" in sid for sid in a_ids)
+    assert any("inventory" in sid or "consigned" in sid for sid in a_ids)
+    assert any("budget" in sid or "production" in sid for sid in a_ids)
+    assert any("quarter" in sid or "ytd" in sid for sid in a_ids)
+    assert any("model_type" in sid or "base_" in sid for sid in a_ids)
+    assert any("invoice" in sid for sid in a_ids)
+
+    # B/C 类 fail-closed 样本必须覆盖
+    bc_ids = [sid for sid, s in by_id.items() if s.expected_status == "validation_failed"]
+    assert len(bc_ids) >= 5, f"expected >= 5 BC-class samples, got {len(bc_ids)}"
+    assert any("yoy" in sid or "mom" in sid for sid in bc_ids)
+    assert any("month_range" in sid for sid in bc_ids)
+    assert any("unknown_year" in sid or "turnover" in sid for sid in bc_ids)
+    assert any("sql" in sid for sid in bc_ids)
+
+    # 所有样本的 question 不包含真正的技术泄露内容（安全负例 SQL 片段本身是预期的）
+    forbidden = ("raw_sql", "dwd_ba_isp", "sys_query", "shadow_error_redacted", "api_key")
+    serialized = json.dumps([s.model_dump(mode="json") for s in samples]).lower()
+    for term in forbidden:
+        assert term not in serialized, f"leak detected: {term} in samples"
+
+
+def test_m6_2_default_shadow_samples_max_live_samples_caps_correctly() -> None:
+    """max-live-samples 参数必须正确限制样本数目；默认值与显式值应行为一致。"""
+    import importlib
+    module = importlib.import_module("scripts.dev.run_inventory_sales_production_m6_live_provider_gate")
+
+    full = module._default_live_shadow_samples(99)  # noqa: SLF001
+    capped_1 = module._default_live_shadow_samples(1)  # noqa: SLF001
+    capped_5 = module._default_live_shadow_samples(5)  # noqa: SLF001
+    capped_19 = module._default_live_shadow_samples(19)  # noqa: SLF001
+
+    assert len(capped_1) == 1
+    assert len(capped_5) == 5
+    assert len(capped_19) == 19
+    assert len(full) >= 18

@@ -56,8 +56,8 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
     assert by_sample["m4_6_consigned_inventory_snapshot"] == "matched"
     assert by_sample["m4_6_budget_achievement"] == "matched"
     assert by_sample["m4_6_invoice_sales_summary"] == "matched"
-    assert by_sample["m4_6_unsupported_yoy"] == "queryplan_unsupported"
-    assert by_sample["m4_6_unsupported_month_range"] == "queryplan_unsupported"
+    assert by_sample["m4_6_unsupported_yoy"] == "matched"
+    assert by_sample["m4_6_unsupported_month_range"] == "plan_mismatch"
     assert by_sample["m4_6_clarification_inventory_turnover"] == "queryplan_clarification"
     assert by_sample["m5_redaction_sql_payload_blocked"] == "sqlplan_validation_failed"
 
@@ -65,8 +65,8 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
     assert run.formal_qa_executed is False
     assert run.live_db_executed is False
     assert run.report["total"] == len(samples)
-    assert run.report["matched_count"] >= 7
-    assert run.report["fail_closed_count"] >= 3
+    assert run.report["matched_count"] >= 9
+    assert run.report["fail_closed_count"] >= 1
     assert run.report["expected_status_mismatch_count"] == 0
 
 
@@ -120,13 +120,13 @@ def test_m5_6_shadow_default_samples_expand_to_business_boundary_suite(tmp_path:
     by_sample = {outcome.sample.sample_id: outcome.record.status for outcome in run.outcomes}
 
     assert run.report["total"] == len(samples)
-    assert run.report["matched_count"] >= 16
-    assert run.report["fail_closed_count"] >= 10
+    assert run.report["matched_count"] >= 18
+    assert run.report["fail_closed_count"] >= 8
     assert run.report["expected_status_mismatch_count"] == 0
-    assert by_sample["m5_6_sales_future_month_blocked"] == "queryplan_unsupported"
+    assert by_sample["m5_6_sales_future_month_blocked"] == "sqlplan_candidate_unavailable"
     assert by_sample["m5_6_missing_time_default_years_scope"] == "sqlplan_candidate_unavailable"
     assert by_sample["m5_6_missing_time_no_time_default_scope_guard"] == "queryplan_clarification"
-    assert by_sample["m5_6_unsupported_mom"] == "queryplan_unsupported"
+    assert by_sample["m5_6_unsupported_mom"] == "matched"
     assert by_sample["m5_6_clarification_unknown_metric"] == "queryplan_clarification"
     assert by_sample["m5_6_sqlplan_unpublished_month_guard"] == "sqlplan_validation_failed"
     assert by_sample["m5_6_sqlplan_internal_debug_key_guard"] == "sqlplan_validation_failed"
@@ -140,7 +140,7 @@ def test_m5_shadow_default_runner_uses_independent_sqlplan_fixtures(tmp_path: Pa
     run = run_inventory_sales_production_m5_shadow_compare(artifact_dir=tmp_path)
 
     assert run.report["expected_status_mismatch_count"] == 0
-    assert run.report["matched_count"] >= 7
+    assert run.report["matched_count"] >= 9
 
 
 def test_m5_shadow_fails_closed_when_independent_sqlplan_candidate_missing(monkeypatch, tmp_path: Path) -> None:

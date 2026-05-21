@@ -232,6 +232,25 @@ class InventorySalesProductionAggregationPolicy:
                 warnings.append(f"{period.year} 年 Q{period.quarter} 仅使用已发布月份：{','.join(map(str, months))} 月。")
             return months, f"{period.year}-Q{period.quarter}", warnings, None
 
+        if period.period_type == "month_range":
+            start = period.start_month or 1
+            end = period.end_month or max(available_months)
+            if start > end:
+                return [], f"{period.year}月", [], self._blocked(
+                    "clarification",
+                    "月份区间起始月份不能大于结束月份。",
+                )
+            candidate_months = list(range(start, end + 1))
+            months = [month for month in candidate_months if month in available_months]
+            if not months:
+                return [], f"{period.year}-{start}-{end}", [], self._blocked(
+                    "clarification",
+                    f"{period.year} 年 {start}-{end} 月尚无已发布数据。",
+                )
+            if len(months) < len(candidate_months):
+                warnings.append(f"{period.year} 年 {start}-{end} 月区间仅使用已发布月份：{','.join(map(str, months))} 月。")
+            return months, f"{period.year}-{start}-{end}月", warnings, None
+
         end_month = period.end_month or max(available_months)
         months = [month for month in available_months if month <= end_month]
         if not months:
@@ -263,6 +282,8 @@ class InventorySalesProductionAggregationPolicy:
             return self._blocked("unsupported", "预算达成率需要实际产量作为主指标，预算只作为分母。")
         if plan.query_key == "ba_isp_budget_achievement" and dimensions:
             return self._blocked("unsupported", "MVP 阶段预算达成率暂不支持按维度拆分。")
+        if plan.query_key == "ba_isp_period_compare" and not dimensions:
+            return self._blocked("clarification", "期间对比需要说明按哪个维度拆分，例如基地或版型。")
         return None
 
     def _resolve_aggregation_type(self, plan: InventorySalesProductionQueryPlan, metric: BaIspMetric) -> str:
@@ -270,6 +291,8 @@ class InventorySalesProductionAggregationPolicy:
 
         if plan.query_key == "ba_isp_budget_achievement":
             return "calculated_ratio"
+        if plan.query_key == "ba_isp_period_compare":
+            return "period_compare"
         return metric.aggregation_type
 
     @staticmethod

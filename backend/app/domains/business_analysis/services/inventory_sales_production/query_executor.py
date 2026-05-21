@@ -49,6 +49,9 @@ class InventorySalesProductionQueryExecutor:
         if plan.query_key == "ba_isp_budget_achievement":
             return self._execute_budget_achievement(plan=plan, decision=decision)
 
+        if plan.query_key == "ba_isp_period_compare":
+            return self._execute_period_compare(plan=plan, decision=decision)
+
         dimensions = list(decision.dimensions)
         if plan.query_key == "ba_isp_metric_trend" and "business_month" not in dimensions:
             dimensions.append("business_month")
@@ -150,6 +153,53 @@ class InventorySalesProductionQueryExecutor:
             rows=[row],
             warnings=decision.warnings,
             calculation_policy="calculated_ratio",
+            period_label=decision.period_label,
+            query_key=plan.query_key,
+        )
+
+    def _execute_period_compare(
+        self,
+        *,
+        plan: InventorySalesProductionQueryPlan,
+        decision: InventorySalesProductionPolicyDecision,
+    ) -> InventorySalesProductionQueryResult:
+        """执行期间对比查询（同比/环比/月区间）。
+
+        参数：
+            plan: 已校验的 M4 QueryPlan。
+            decision: 已校验的聚合策略。
+        返回：
+            按月份拆分的明细结果；同比/环比口径在摘要中说明。
+        """
+
+        assert decision.metric is not None
+        dimensions = list(decision.dimensions)
+        if plan.query_key == "ba_isp_period_compare":
+            if "business_month" not in dimensions:
+                dimensions.append("business_month")
+        rows_payload = self.repository.aggregate_metric(
+            metric=decision.metric,
+            year=plan.period.year,
+            months=decision.months,
+            dimensions=dimensions,
+            filters=decision.filters,
+            aggregation_type=decision.aggregation_type or decision.metric.aggregation_type,
+        )
+        if not rows_payload:
+            return self._empty_result(plan=plan, decision=decision)
+
+        warnings = list(decision.warnings)
+        if "同比" in (plan.period.period_type or ""):
+            warnings.append("同比结果按当前期间和去年同期分别展示，不自动计算增长率。")
+        if "环比" in (plan.period.period_type or ""):
+            warnings.append("环比结果按当前期间和上一期间分别展示，不自动计算变化率。")
+        rows = [InventorySalesProductionQueryRow(**payload) for payload in rows_payload]
+        return InventorySalesProductionQueryResult(
+            status="success",
+            answer_summary=f"{decision.period_label or plan.period.year} 期间对比结果，按月份展示。",
+            rows=rows,
+            warnings=warnings,
+            calculation_policy=decision.calculation_policy or "period_compare",
             period_label=decision.period_label,
             query_key=plan.query_key,
         )

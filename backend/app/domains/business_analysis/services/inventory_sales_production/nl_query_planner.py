@@ -67,6 +67,22 @@ class InventorySalesProductionNlQueryPlanner:
             if "business_month" not in dimensions:
                 dimensions.append("business_month")
 
+        # M9：同比/环比映射到 period_compare query_key
+        if "同比" in normalized:
+            query_key = "ba_isp_period_compare"
+            if "business_month" not in dimensions:
+                dimensions.append("business_month")
+        if "环比" in normalized:
+            query_key = "ba_isp_period_compare"
+            if "business_month" not in dimensions:
+                dimensions.append("business_month")
+        # M9：月区间映射到 period_compare query_key
+        if self._MONTH_RANGE_PATTERN.search(normalized):
+            query_key = "ba_isp_period_compare"
+            period = self._extract_month_range_period(normalized, year) or period
+            if "business_month" not in dimensions:
+                dimensions.append("business_month")
+
         return InventorySalesProductionQueryPlan(
             query_key=query_key,  # type: ignore[arg-type]
             intent=self._resolve_intent(query_key),
@@ -143,6 +159,31 @@ class InventorySalesProductionNlQueryPlanner:
             return {"一": 1, "二": 2, "三": 3, "四": 4}[chinese_quarter_match.group(1)]
         return None
 
+    @staticmethod
+    def _extract_month_range_period(text: str, year: int) -> InventorySalesProductionPeriodSpec | None:
+        """提取任意月份区间（如 3-6 月、1月至8月等）。
+
+        参数：
+            text: 已归一化的用户问题文本。
+            year: 已提取的业务年份。
+        返回：
+            month_range PeriodSpec 或 None。
+        """
+
+        match = InventorySalesProductionNlQueryPlanner._MONTH_RANGE_PATTERN.search(text)
+        if not match:
+            return None
+        start = int(match.group(1))
+        end = int(match.group(2))
+        if start < 1 or end > 12 or start > end:
+            return None
+        return InventorySalesProductionPeriodSpec(
+            period_type="month_range",
+            year=year,
+            start_month=start,
+            end_month=end,
+        )
+
     def _resolve_metric_and_query_key(self, text: str) -> tuple[str, str, dict[str, object]]:
         """识别主指标和查询能力。"""
 
@@ -216,21 +257,6 @@ class InventorySalesProductionNlQueryPlanner:
     def _reject_known_unsupported(text: str) -> None:
         """阻断当前 Excel 数据不足的问题，避免系统编造公式结果。"""
 
-        if InventorySalesProductionNlQueryPlanner._MONTH_RANGE_PATTERN.search(text):
-            raise InventorySalesProductionPlanningError(
-                "unsupported",
-                "当前产销存版本暂不支持任意月份区间查询，请改问全年、季度、单月或截至某月累计。",
-            )
-        if "同比" in text:
-            raise InventorySalesProductionPlanningError(
-                "unsupported",
-                "同比增长率需要可比期间和业务确认的同比口径，当前产销存版本暂不支持同比类问题。",
-            )
-        if "环比" in text:
-            raise InventorySalesProductionPlanningError(
-                "unsupported",
-                "环比变化需要相邻期间和业务确认的环比口径，当前产销存版本暂不支持环比类问题。",
-            )
         if "库存周转" in text or "周转率" in text or "平均库存" in text:
             raise InventorySalesProductionPlanningError(
                 "clarification",

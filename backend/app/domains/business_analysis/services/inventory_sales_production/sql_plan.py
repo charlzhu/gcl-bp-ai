@@ -37,7 +37,7 @@ DEFAULT_ISP_YEARS = [2023, 2024, 2025, 2026]
 DEFAULT_ISP_MAX_PUBLISHED_MONTH_BY_YEAR = {2023: 12, 2024: 12, 2025: 12, 2026: 4}
 ALLOWED_YEAR_FILTER_OPERATORS = {"=", "in", "between"}
 ALLOWED_MONTH_FILTER_OPERATORS = {"=", "in"}
-ALLOWED_BUSINESS_FLAGS = {"explicit_invoice", "include_internal"}
+ALLOWED_BUSINESS_FLAGS = {"explicit_invoice", "include_internal", "yoy", "mom", "year_over_year", "month_over_month"}
 ALLOWED_BUSINESS_RULES = {
     "budget_achievement_recalculated",
     "explicit_invoice_metric",
@@ -57,11 +57,6 @@ INTERNAL_BUSINESS_RULE_RE = re.compile(
     re.IGNORECASE,
 )
 UNSUPPORTED_TIME_RULES = {
-    "year_over_year": "sqlplan_time_comparison_not_supported::year_over_year",
-    "month_over_month": "sqlplan_time_comparison_not_supported::month_over_month",
-    "yoy": "sqlplan_time_comparison_not_supported::yoy",
-    "mom": "sqlplan_time_comparison_not_supported::mom",
-    "arbitrary_month_range": "sqlplan_period_type_not_supported::month_range",
     "unpublished_month": "sqlplan_unpublished_month_blocks_sql_direct",
 }
 
@@ -473,10 +468,9 @@ class InventorySalesProductionSqlPlanValidator:
             blocked_error = UNSUPPORTED_TIME_RULES.get(rule_id)
             if blocked_error:
                 errors.append(blocked_error)
-        if plan.period_type == "month_range":
-            errors.append("sqlplan_period_type_not_supported::month_range")
-        elif plan.start_month is not None or plan.end_month is not None:
-            errors.append(f"sqlplan_period_start_end_range_not_supported::{plan.period_type}")
+        if plan.start_month is not None or plan.end_month is not None:
+            if plan.period_type != "month_range":
+                errors.append(f"sqlplan_period_start_end_range_not_supported::{plan.period_type}")
         if plan.period_type == "month":
             if plan.month is None:
                 errors.append("sqlplan_month_required")

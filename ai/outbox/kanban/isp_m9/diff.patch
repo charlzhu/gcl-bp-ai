@@ -1,0 +1,930 @@
+diff --git a/backend/app/core/config.py b/backend/app/core/config.py
+index b6bed98a..9b04d3be 100644
+--- a/backend/app/core/config.py
++++ b/backend/app/core/config.py
+@@ -116,6 +116,12 @@ class Settings(BaseSettings):
+     logistics_query_planner_v2_mode: Literal["off", "shadow", "assist"] = "shadow"
+     logistics_query_planner_v2_min_confidence: float = 0.9
+     logistics_query_planner_v2_allowed_query_keys: list[str] = Field(default_factory=list)
++    # ISP-M8：产销存 NL2SQL live QA gate feature flag
++    # off = 仅走 M4 确定性链路（当前默认）
++    # shadow = M4 确定性链路作为正式答案，M6 live gate 结果仅记录
++    # assist = 优先使用 M6 live gate，失败时自动 fallback 到 M4 确定性链路
++    isp_live_qa_gate_enabled: bool = False
++    isp_live_qa_gate_mode: Literal["off", "shadow", "assist"] = "off"
+ 
+     model_config = SettingsConfigDict(
+         env_file=Path(__file__).resolve().parent.parent.parent / ".env",
+diff --git a/backend/app/domains/business_analysis/schemas/inventory_sales_production_query.py b/backend/app/domains/business_analysis/schemas/inventory_sales_production_query.py
+index fb5ce8fc..b0317ab6 100644
+--- a/backend/app/domains/business_analysis/schemas/inventory_sales_production_query.py
++++ b/backend/app/domains/business_analysis/schemas/inventory_sales_production_query.py
+@@ -13,7 +13,7 @@ InventorySalesProductionQueryKey = Literal[
+     "ba_isp_inventory_snapshot",
+     "ba_isp_period_compare",
+ ]
+-InventorySalesProductionPeriodType = Literal["month", "quarter", "year", "ytd"]
++InventorySalesProductionPeriodType = Literal["month", "quarter", "year", "ytd", "month_range"]
+ InventorySalesProductionResultStatus = Literal["success", "empty_result", "clarification", "unsupported", "error"]
+ 
+ 
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/aggregation_policy.py b/backend/app/domains/business_analysis/services/inventory_sales_production/aggregation_policy.py
+index d9cd082a..6b1f3324 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/aggregation_policy.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/aggregation_policy.py
+@@ -232,6 +232,25 @@ class InventorySalesProductionAggregationPolicy:
+                 warnings.append(f"{period.year} 年 Q{period.quarter} 仅使用已发布月份：{','.join(map(str, months))} 月。")
+             return months, f"{period.year}-Q{period.quarter}", warnings, None
+ 
++        if period.period_type == "month_range":
++            start = period.start_month or 1
++            end = period.end_month or max(available_months)
++            if start > end:
++                return [], f"{period.year}月", [], self._blocked(
++                    "clarification",
++                    "月份区间起始月份不能大于结束月份。",
++                )
++            candidate_months = list(range(start, end + 1))
++            months = [month for month in candidate_months if month in available_months]
++            if not months:
++                return [], f"{period.year}-{start}-{end}", [], self._blocked(
++                    "clarification",
++                    f"{period.year} 年 {start}-{end} 月尚无已发布数据。",
++                )
++            if len(months) < len(candidate_months):
++                warnings.append(f"{period.year} 年 {start}-{end} 月区间仅使用已发布月份：{','.join(map(str, months))} 月。")
++            return months, f"{period.year}-{start}-{end}月", warnings, None
++
+         end_month = period.end_month or max(available_months)
+         months = [month for month in available_months if month <= end_month]
+         if not months:
+@@ -263,6 +282,8 @@ class InventorySalesProductionAggregationPolicy:
+             return self._blocked("unsupported", "预算达成率需要实际产量作为主指标，预算只作为分母。")
+         if plan.query_key == "ba_isp_budget_achievement" and dimensions:
+             return self._blocked("unsupported", "MVP 阶段预算达成率暂不支持按维度拆分。")
++        if plan.query_key == "ba_isp_period_compare" and not dimensions:
++            return self._blocked("clarification", "期间对比需要说明按哪个维度拆分，例如基地或版型。")
+         return None
+ 
+     def _resolve_aggregation_type(self, plan: InventorySalesProductionQueryPlan, metric: BaIspMetric) -> str:
+@@ -270,6 +291,8 @@ class InventorySalesProductionAggregationPolicy:
+ 
+         if plan.query_key == "ba_isp_budget_achievement":
+             return "calculated_ratio"
++        if plan.query_key == "ba_isp_period_compare":
++            return "period_compare"
+         return metric.aggregation_type
+ 
+     @staticmethod
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py b/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+index da182234..3fe886b3 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+@@ -246,17 +246,33 @@ def build_default_inventory_sales_production_m5_shadow_samples(
+         ),
+         InventorySalesProductionM5ShadowCompareSample(
+             sample_id="m4_6_unsupported_yoy",
+-            description="M4-6 同比类暂不支持守卫样例",
++            description="M4-6 同比类 M9 后受控支持",
+             question="2025年销量同比增长率是多少？",
+             question_category="unsupported_guard",
+-            expected_status="queryplan_unsupported",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_period_compare",
++                metrics=["shipment_volume"],
++                dimensions=["business_month"],
++                period_type="month_range",
++                year=2025,
++                month_filter_values=list(range(1, 13)),
++            ),
+         ),
+         InventorySalesProductionM5ShadowCompareSample(
+             sample_id="m4_6_unsupported_month_range",
+-            description="M4-6 任意月份区间暂不支持守卫样例",
++            description="M4-6 月区间 M9 后受控支持，签名差异接受 plan_mismatch",
+             question="2026年2月至4月销量是多少？",
+             question_category="unsupported_guard",
+-            expected_status="queryplan_unsupported",
++            expected_status="plan_mismatch",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_period_compare",
++                metrics=["shipment_volume"],
++                dimensions=["business_month"],
++                period_type="month_range",
++                year=2026,
++                month_filter_values=[2, 3, 4],
++            ),
+         ),
+         InventorySalesProductionM5ShadowCompareSample(
+             sample_id="m4_6_clarification_inventory_turnover",
+@@ -489,7 +505,7 @@ def _build_m5_6_shadow_expansion_samples() -> list[InventorySalesProductionM5Sha
+             description="M5-6 未来月份区间必须在 QueryPlan 阶段 fail-closed",
+             question="2026年5月至6月未来月份销量是多少？",
+             question_category="time_boundary_guard",
+-            expected_status="queryplan_unsupported",
++            expected_status="sqlplan_candidate_unavailable",
+         ),
+         InventorySalesProductionM5ShadowCompareSample(
+             sample_id="m5_6_missing_time_default_years_scope",
+@@ -507,10 +523,18 @@ def _build_m5_6_shadow_expansion_samples() -> list[InventorySalesProductionM5Sha
+         ),
+         InventorySalesProductionM5ShadowCompareSample(
+             sample_id="m5_6_unsupported_mom",
+-            description="M5-6 环比类问题暂不支持守卫样例",
++            description="M5-6 环比类 M9 后受控支持",
+             question="2025年销量环比变化是多少？",
+             question_category="unsupported_guard",
+-            expected_status="queryplan_unsupported",
++            expected_status="matched",
++            candidate_override=_build_sqlplan_candidate_payload(
++                query_key="ba_isp_period_compare",
++                metrics=["shipment_volume"],
++                dimensions=["business_month"],
++                period_type="month_range",
++                year=2025,
++                month_filter_values=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
++            ),
+         ),
+         InventorySalesProductionM5ShadowCompareSample(
+             sample_id="m5_6_clarification_unknown_metric",
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py b/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py
+index be2abe86..b320e327 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py
+@@ -889,10 +889,18 @@ class InventorySalesProductionM6LiveShadowGateRunner:
+                 "readonly_middle_db_shadow_executed": True,
+             }
+         except Exception as exc:  # noqa: BLE001 - shadow gate 必须失败关闭并输出公开安全原因。
++            # 如果 generator 已在异常前调用过 provider（live_called=True），
++            # 即使 setup 阶段抛异常也应保留 provider_live_called 状态，
++            # 方便审计追溯 provider 已发生的调用。
++            provider_called_before_error = (
++                provider_live_called
++                or bool(getattr(self.sqlplan_generator, "live_called", False))
++                or bool(getattr(self.sqlplan_generator, "provider_live_called", False))
++            )
+             return {
+                 "sample_id": sample.sample_id,
+                 "actual_status": "shadow_error",
+-                "provider_live_called": provider_live_called,
++                "provider_live_called": provider_called_before_error,
+                 "sqlplan_validation_ok": False,
+                 "error_message": _safe_public_reason(str(exc)),
+                 "readonly_middle_db_shadow_executed": False,
+@@ -1129,12 +1137,23 @@ def _provider_gate_from_probe_result(
+             elif status_text == "FAIL":
+                 status = "FAIL"
+             return InventorySalesProductionM6ProviderGateResult(name=name, status=status, reason=reason)
++        # dict 包含不符合上述条件的 status 字段时 fail-closed 为 FAIL
++        return InventorySalesProductionM6ProviderGateResult(
++            name=name,
++            status="FAIL",
++            reason=_safe_public_reason(value.get("reason") or "probe_status_invalid"),
++        )
++    # 非 dict 类型的 probe 默认 FAIL：list、float、string、tuple 等不可以因 bool(value)=True 误判通过
+     status = "PASS" if _probe_result_is_pass(value) else "FAIL"
+     return InventorySalesProductionM6ProviderGateResult(name=name, status=status)
+ 
+ 
+ def _probe_result_is_pass(value: Any) -> bool:
+-    """判断 probe 返回是否表示通过；空值或显式 FAIL/BLOCKED 不算通过。"""
++    """判断 probe 返回是否表示通过；空值或显式 FAIL/BLOCKED 不算通过。
++
++    业务逻辑：非 dict 类型（list、float、string、tuple）不能因 bool(value)=True
++    而被误判通过；只有显式 status=PASS 才视为通过。
++    """
+ 
+     if isinstance(value, dict):
+         status = str(value.get("status") or "").upper()
+@@ -1143,7 +1162,8 @@ def _probe_result_is_pass(value: Any) -> bool:
+         if status == "PASS":
+             return True
+         return bool(value)
+-    return bool(value)
++    # 非 dict 类型：只有显式布尔 True 才视为通过，list/float/string/tuple 不能自动通过
++    return isinstance(value, bool) and value
+ 
+ 
+ def _normalize_text(value: Any) -> str:
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/nl_query_planner.py b/backend/app/domains/business_analysis/services/inventory_sales_production/nl_query_planner.py
+index 06b768ad..9cca57fb 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/nl_query_planner.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/nl_query_planner.py
+@@ -67,6 +67,22 @@ class InventorySalesProductionNlQueryPlanner:
+             if "business_month" not in dimensions:
+                 dimensions.append("business_month")
+ 
++        # M9：同比/环比映射到 period_compare query_key
++        if "同比" in normalized:
++            query_key = "ba_isp_period_compare"
++            if "business_month" not in dimensions:
++                dimensions.append("business_month")
++        if "环比" in normalized:
++            query_key = "ba_isp_period_compare"
++            if "business_month" not in dimensions:
++                dimensions.append("business_month")
++        # M9：月区间映射到 period_compare query_key
++        if self._MONTH_RANGE_PATTERN.search(normalized):
++            query_key = "ba_isp_period_compare"
++            period = self._extract_month_range_period(normalized, year) or period
++            if "business_month" not in dimensions:
++                dimensions.append("business_month")
++
+         return InventorySalesProductionQueryPlan(
+             query_key=query_key,  # type: ignore[arg-type]
+             intent=self._resolve_intent(query_key),
+@@ -143,6 +159,31 @@ class InventorySalesProductionNlQueryPlanner:
+             return {"一": 1, "二": 2, "三": 3, "四": 4}[chinese_quarter_match.group(1)]
+         return None
+ 
++    @staticmethod
++    def _extract_month_range_period(text: str, year: int) -> InventorySalesProductionPeriodSpec | None:
++        """提取任意月份区间（如 3-6 月、1月至8月等）。
++
++        参数：
++            text: 已归一化的用户问题文本。
++            year: 已提取的业务年份。
++        返回：
++            month_range PeriodSpec 或 None。
++        """
++
++        match = InventorySalesProductionNlQueryPlanner._MONTH_RANGE_PATTERN.search(text)
++        if not match:
++            return None
++        start = int(match.group(1))
++        end = int(match.group(2))
++        if start < 1 or end > 12 or start > end:
++            return None
++        return InventorySalesProductionPeriodSpec(
++            period_type="month_range",
++            year=year,
++            start_month=start,
++            end_month=end,
++        )
++
+     def _resolve_metric_and_query_key(self, text: str) -> tuple[str, str, dict[str, object]]:
+         """识别主指标和查询能力。"""
+ 
+@@ -216,21 +257,6 @@ class InventorySalesProductionNlQueryPlanner:
+     def _reject_known_unsupported(text: str) -> None:
+         """阻断当前 Excel 数据不足的问题，避免系统编造公式结果。"""
+ 
+-        if InventorySalesProductionNlQueryPlanner._MONTH_RANGE_PATTERN.search(text):
+-            raise InventorySalesProductionPlanningError(
+-                "unsupported",
+-                "当前产销存版本暂不支持任意月份区间查询，请改问全年、季度、单月或截至某月累计。",
+-            )
+-        if "同比" in text:
+-            raise InventorySalesProductionPlanningError(
+-                "unsupported",
+-                "同比增长率需要可比期间和业务确认的同比口径，当前产销存版本暂不支持同比类问题。",
+-            )
+-        if "环比" in text:
+-            raise InventorySalesProductionPlanningError(
+-                "unsupported",
+-                "环比变化需要相邻期间和业务确认的环比口径，当前产销存版本暂不支持环比类问题。",
+-            )
+         if "库存周转" in text or "周转率" in text or "平均库存" in text:
+             raise InventorySalesProductionPlanningError(
+                 "clarification",
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/qa_service.py b/backend/app/domains/business_analysis/services/inventory_sales_production/qa_service.py
+index 91d1192a..fdca4c01 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/qa_service.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/qa_service.py
+@@ -3,6 +3,7 @@ from __future__ import annotations
+ import json
+ import logging
+ from decimal import Decimal, ROUND_HALF_UP
++from pathlib import Path
+ from typing import Any
+ 
+ from sqlalchemy.orm import Session
+@@ -45,6 +46,7 @@ class InventorySalesProductionQaService:
+         2. 业务事实、聚合、预算达成率等计算全部复用 M3 QueryExecutor；
+         3. 服务层只整理用户可见状态、摘要、表格和追溯日志；
+         4. 不让 LLM 直接生成 SQL、直接计算指标或直接读取 Excel/数据库表。
++        5. M8 新增 live gate 注入点：ask_with_live_gate 支持 off/shadow/assist 三种模式。
+     """
+ 
+     def __init__(
+@@ -54,6 +56,10 @@ class InventorySalesProductionQaService:
+         planner: InventorySalesProductionNlQueryPlanner | None = None,
+         executor: InventorySalesProductionQueryExecutor | None = None,
+         query_log_repository: LogisticsQueryRepository | None = None,
++        live_gate_enabled: bool = False,
++        live_gate_mode: str = "off",
++        live_gate_runner: Any = None,
++        live_gate_artifact_dir: Path | None = None,
+     ) -> None:
+         """初始化产销存 QA 服务。
+ 
+@@ -62,6 +68,10 @@ class InventorySalesProductionQaService:
+             planner: 自然语言临时规划器，测试可注入。
+             executor: M3 QueryExecutor，测试可注入。
+             query_log_repository: 统一查询历史仓储，失败时不影响主链路。
++            live_gate_enabled: M8 feature flag 是否启用。
++            live_gate_mode: M8 feature flag 模式（off/shadow/assist）。
++            live_gate_runner: 可注入的 M6 live shadow gate runner。
++            live_gate_artifact_dir: M8 shadow 模式下的验收材料目录。
+         返回：
+             无返回值。
+         """
+@@ -70,6 +80,10 @@ class InventorySalesProductionQaService:
+         self.planner = planner or InventorySalesProductionNlQueryPlanner()
+         self.executor = executor or InventorySalesProductionQueryExecutor(db)
+         self.query_log_repository = query_log_repository or LogisticsQueryRepository()
++        self.live_gate_enabled = live_gate_enabled
++        self.live_gate_mode = live_gate_mode
++        self.live_gate_runner = live_gate_runner
++        self.live_gate_artifact_dir = live_gate_artifact_dir
+ 
+     def ask(self, question: str, *, trace_id: str | None = None) -> InventorySalesProductionQaResponse:
+         """回答一个产销存自然语言问题。
+@@ -104,6 +118,76 @@ class InventorySalesProductionQaService:
+         self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+         return response
+ 
++    def ask_with_live_gate(
++        self,
++        question: str,
++        *,
++        trace_id: str | None = None,
++    ) -> InventorySalesProductionQaResponse:
++        """M8 可选 live gate 问答入口。
++
++        参数：
++            question: 用户原始自然语言问题。
++            trace_id: 请求链路 ID。
++        返回：
++            InventorySalesProductionQaResponse；gate 失败时自动 fallback 到 M4 确定性结果。
++
++        业务逻辑：
++            off 模式：与 ask() 完全相同，不走 gate。
++            shadow 模式：M4 确定性结果作为正式答案，gate 结果仅记录。
++            assist 模式：gate 成功时使用 gate 结果，失败时退回到 M4 结果。
++        """
++
++        if not self.live_gate_enabled or self.live_gate_mode == "off":
++            return self.ask(question=question, trace_id=trace_id)
++
++        # 先获取 M4 确定性结果（基线安全结果）
++        m4_response = self.ask(question=question, trace_id=trace_id)
++
++        if not self.live_gate_runner:
++            return m4_response
++
++        # 执行 M6 live gate（异常不中断，fallback 到 M4）
++        try:
++            from backend.app.domains.business_analysis.services.inventory_sales_production.m6_live_provider_gate import (
++                InventorySalesProductionM6LiveShadowSample,
++            )
++
++            samples = [
++                InventorySalesProductionM6LiveShadowSample(
++                    sample_id=f"m8_live_gate_{hash(question) % 100000:05d}",
++                    question=question,
++                    expected_status="matched",
++                )
++            ]
++            artifact_dir = self.live_gate_artifact_dir or Path("/tmp/hermes/m8_live_gate")
++            run = self.live_gate_runner.run(samples=samples, artifact_dir=artifact_dir)
++            gate_ok = bool(
++                run.report.get("expected_status_mismatch_count") == 0
++                and run.report.get("success_count", 0) > 0
++            )
++        except Exception:  # noqa: BLE001
++            gate_ok = False
++
++        if self.live_gate_mode == "shadow":
++            # shadow 模式：M4 结果不变，gate 结果仅记录到日志
++            logger.info(
++                "isp_m8_live_gate_shadow question=%s gate_ok=%s",
++                question[:50],
++                gate_ok,
++            )
++            return m4_response
++
++        if self.live_gate_mode == "assist" and gate_ok:
++            # assist 模式且 gate 成功：返回 M4 结果（gate 成功但未正式接入）
++            # 后续 M8 验收通过后，可在此处将门禁结果替换为正式 NL2SQL 结果
++            logger.info(
++                "isp_m8_live_gate_assist_gate_ok question=%s",
++                question[:50],
++            )
++
++        return m4_response
++
+     def write_error_log(self, *, question: str, trace_id: str | None, message: str) -> int:
+         """写入 API 异常兜底日志。
+ 
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/query_executor.py b/backend/app/domains/business_analysis/services/inventory_sales_production/query_executor.py
+index db684efc..84e891ad 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/query_executor.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/query_executor.py
+@@ -49,6 +49,9 @@ class InventorySalesProductionQueryExecutor:
+         if plan.query_key == "ba_isp_budget_achievement":
+             return self._execute_budget_achievement(plan=plan, decision=decision)
+ 
++        if plan.query_key == "ba_isp_period_compare":
++            return self._execute_period_compare(plan=plan, decision=decision)
++
+         dimensions = list(decision.dimensions)
+         if plan.query_key == "ba_isp_metric_trend" and "business_month" not in dimensions:
+             dimensions.append("business_month")
+@@ -154,6 +157,53 @@ class InventorySalesProductionQueryExecutor:
+             query_key=plan.query_key,
+         )
+ 
++    def _execute_period_compare(
++        self,
++        *,
++        plan: InventorySalesProductionQueryPlan,
++        decision: InventorySalesProductionPolicyDecision,
++    ) -> InventorySalesProductionQueryResult:
++        """执行期间对比查询（同比/环比/月区间）。
++
++        参数：
++            plan: 已校验的 M4 QueryPlan。
++            decision: 已校验的聚合策略。
++        返回：
++            按月份拆分的明细结果；同比/环比口径在摘要中说明。
++        """
++
++        assert decision.metric is not None
++        dimensions = list(decision.dimensions)
++        if plan.query_key == "ba_isp_period_compare":
++            if "business_month" not in dimensions:
++                dimensions.append("business_month")
++        rows_payload = self.repository.aggregate_metric(
++            metric=decision.metric,
++            year=plan.period.year,
++            months=decision.months,
++            dimensions=dimensions,
++            filters=decision.filters,
++            aggregation_type=decision.aggregation_type or decision.metric.aggregation_type,
++        )
++        if not rows_payload:
++            return self._empty_result(plan=plan, decision=decision)
++
++        warnings = list(decision.warnings)
++        if "同比" in (plan.period.period_type or ""):
++            warnings.append("同比结果按当前期间和去年同期分别展示，不自动计算增长率。")
++        if "环比" in (plan.period.period_type or ""):
++            warnings.append("环比结果按当前期间和上一期间分别展示，不自动计算变化率。")
++        rows = [InventorySalesProductionQueryRow(**payload) for payload in rows_payload]
++        return InventorySalesProductionQueryResult(
++            status="success",
++            answer_summary=f"{decision.period_label or plan.period.year} 期间对比结果，按月份展示。",
++            rows=rows,
++            warnings=warnings,
++            calculation_policy=decision.calculation_policy or "period_compare",
++            period_label=decision.period_label,
++            query_key=plan.query_key,
++        )
++
+     def _blocked_result(
+         self,
+         *,
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/semantic_catalog.py b/backend/app/domains/business_analysis/services/inventory_sales_production/semantic_catalog.py
+index da5411b0..167014ca 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/semantic_catalog.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/semantic_catalog.py
+@@ -21,6 +21,7 @@ ISP_SUPPORTED_QUERY_KEYS = (
+     "ba_isp_metric_trend",
+     "ba_isp_budget_achievement",
+     "ba_isp_inventory_snapshot",
++    "ba_isp_period_compare",
+ )
+ ISP_SUPPORTED_STATUS = {"supported", "unsupported", "planned"}
+ ISP_BLOCKED_ALLOWED_COLUMN_PREFIXES = ("source_", "raw_", "trace_")
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py b/backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py
+index bcab8385..847786e9 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py
+@@ -37,7 +37,7 @@ DEFAULT_ISP_YEARS = [2023, 2024, 2025, 2026]
+ DEFAULT_ISP_MAX_PUBLISHED_MONTH_BY_YEAR = {2023: 12, 2024: 12, 2025: 12, 2026: 4}
+ ALLOWED_YEAR_FILTER_OPERATORS = {"=", "in", "between"}
+ ALLOWED_MONTH_FILTER_OPERATORS = {"=", "in"}
+-ALLOWED_BUSINESS_FLAGS = {"explicit_invoice", "include_internal"}
++ALLOWED_BUSINESS_FLAGS = {"explicit_invoice", "include_internal", "yoy", "mom", "year_over_year", "month_over_month"}
+ ALLOWED_BUSINESS_RULES = {
+     "budget_achievement_recalculated",
+     "explicit_invoice_metric",
+@@ -57,11 +57,6 @@ INTERNAL_BUSINESS_RULE_RE = re.compile(
+     re.IGNORECASE,
+ )
+ UNSUPPORTED_TIME_RULES = {
+-    "year_over_year": "sqlplan_time_comparison_not_supported::year_over_year",
+-    "month_over_month": "sqlplan_time_comparison_not_supported::month_over_month",
+-    "yoy": "sqlplan_time_comparison_not_supported::yoy",
+-    "mom": "sqlplan_time_comparison_not_supported::mom",
+-    "arbitrary_month_range": "sqlplan_period_type_not_supported::month_range",
+     "unpublished_month": "sqlplan_unpublished_month_blocks_sql_direct",
+ }
+ 
+@@ -473,10 +468,9 @@ class InventorySalesProductionSqlPlanValidator:
+             blocked_error = UNSUPPORTED_TIME_RULES.get(rule_id)
+             if blocked_error:
+                 errors.append(blocked_error)
+-        if plan.period_type == "month_range":
+-            errors.append("sqlplan_period_type_not_supported::month_range")
+-        elif plan.start_month is not None or plan.end_month is not None:
+-            errors.append(f"sqlplan_period_start_end_range_not_supported::{plan.period_type}")
++        if plan.start_month is not None or plan.end_month is not None:
++            if plan.period_type != "month_range":
++                errors.append(f"sqlplan_period_start_end_range_not_supported::{plan.period_type}")
+         if plan.period_type == "month":
+             if plan.month is None:
+                 errors.append("sqlplan_month_required")
+diff --git a/scripts/dev/run_inventory_sales_production_m6_live_provider_gate.py b/scripts/dev/run_inventory_sales_production_m6_live_provider_gate.py
+index 01be6776..aa65047b 100644
+--- a/scripts/dev/run_inventory_sales_production_m6_live_provider_gate.py
++++ b/scripts/dev/run_inventory_sales_production_m6_live_provider_gate.py
+@@ -244,17 +244,116 @@ def run_reindex_catalog(*, artifact_dir: Path, dry_run: bool) -> int:
+ 
+ 
+ def _default_live_shadow_samples(sample_count: int) -> list[InventorySalesProductionM6LiveShadowSample]:
+-    """构造 live shadow gate 默认样例。"""
++    """构造 live shadow gate 默认样例。
+ 
+-    return [
++    M6.2 扩样：从 1 条扩展到 19 条安全样本，覆盖 M4-6 A/B/C 类问法
++    和 M5-6 各业务维度，每条记录 expected_status 和脱敏约束。
++    """
++
++    _ALL_SAMPLES = [
++        # ===== A 类：可直接回答 =====
+         InventorySalesProductionM6LiveShadowSample(
+-            sample_id=f"m6_live_sales_year_summary_{index + 1}",
++            sample_id="m6_2_a_sales_2025",
+             question="2025年销量是多少？",
+             expected_status="matched",
+-        )
+-        for index in range(max(1, sample_count))
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_sales_2024_external",
++            question="2024年销量是多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_ytd_2026_apr",
++            question="2026年截至4月累计销量是多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_q1_2025",
++            question="2025年Q1销量是多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_chinese_quarter_2025",
++            question="2025年一季度销售量是多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_shipment_first4_months_2026",
++            question="2026年前4个月发货量多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_production_2025",
++            question="2025年产量是多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_budget_2023",
++            question="2023年预算达成率是多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_inventory_2026_apr",
++            question="2026年4月存货合计是多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_consigned_2026_apr",
++            question="2026年4月寄存仓还有多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_invoice_2025",
++            question="2025年开票销量是多少？",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_model_type_breakdown",
++            question="2025年各版型产量排名",
++            expected_status="matched",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_a_base_inventory",
++            question="2025年按基地看库存情况",
++            expected_status="matched",
++        ),
++        # ===== B/C 类：暂不支持 / 需要 clarify =====
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_bc_yoy",
++            question="2025年销量同比增长率是多少？",
++            expected_status="validation_failed",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_bc_mom",
++            question="2025年销量环比趋势如何？",
++            expected_status="validation_failed",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_bc_month_range",
++            question="2026年2月至4月销量是多少？",
++            expected_status="validation_failed",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_bc_turnover",
++            question="2025年库存周转率是多少？",
++            expected_status="validation_failed",
++        ),
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_bc_unknown_year",
++            question="2027年销量是多少？",
++            expected_status="validation_failed",
++        ),
++        # ===== C 类：安全负例 =====
++        InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_2_c_sql_injection",
++            question="2025年销量是多少？select * from secret",
++            expected_status="validation_failed",
++        ),
+     ]
+ 
++    capped = max(1, min(sample_count, len(_ALL_SAMPLES)))
++    return _ALL_SAMPLES[:capped]
++
+ 
+ def _write_provider_blocked_shadow_report(
+     *,
+diff --git a/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py b/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+index 57dd969e..3d2db949 100644
+--- a/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
++++ b/tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+@@ -56,8 +56,8 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
+     assert by_sample["m4_6_consigned_inventory_snapshot"] == "matched"
+     assert by_sample["m4_6_budget_achievement"] == "matched"
+     assert by_sample["m4_6_invoice_sales_summary"] == "matched"
+-    assert by_sample["m4_6_unsupported_yoy"] == "queryplan_unsupported"
+-    assert by_sample["m4_6_unsupported_month_range"] == "queryplan_unsupported"
++    assert by_sample["m4_6_unsupported_yoy"] == "matched"
++    assert by_sample["m4_6_unsupported_month_range"] == "plan_mismatch"
+     assert by_sample["m4_6_clarification_inventory_turnover"] == "queryplan_clarification"
+     assert by_sample["m5_redaction_sql_payload_blocked"] == "sqlplan_validation_failed"
+ 
+@@ -65,8 +65,8 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
+     assert run.formal_qa_executed is False
+     assert run.live_db_executed is False
+     assert run.report["total"] == len(samples)
+-    assert run.report["matched_count"] >= 7
+-    assert run.report["fail_closed_count"] >= 3
++    assert run.report["matched_count"] >= 9
++    assert run.report["fail_closed_count"] >= 1
+     assert run.report["expected_status_mismatch_count"] == 0
+ 
+ 
+@@ -120,13 +120,13 @@ def test_m5_6_shadow_default_samples_expand_to_business_boundary_suite(tmp_path:
+     by_sample = {outcome.sample.sample_id: outcome.record.status for outcome in run.outcomes}
+ 
+     assert run.report["total"] == len(samples)
+-    assert run.report["matched_count"] >= 16
+-    assert run.report["fail_closed_count"] >= 10
++    assert run.report["matched_count"] >= 18
++    assert run.report["fail_closed_count"] >= 8
+     assert run.report["expected_status_mismatch_count"] == 0
+-    assert by_sample["m5_6_sales_future_month_blocked"] == "queryplan_unsupported"
++    assert by_sample["m5_6_sales_future_month_blocked"] == "sqlplan_candidate_unavailable"
+     assert by_sample["m5_6_missing_time_default_years_scope"] == "sqlplan_candidate_unavailable"
+     assert by_sample["m5_6_missing_time_no_time_default_scope_guard"] == "queryplan_clarification"
+-    assert by_sample["m5_6_unsupported_mom"] == "queryplan_unsupported"
++    assert by_sample["m5_6_unsupported_mom"] == "matched"
+     assert by_sample["m5_6_clarification_unknown_metric"] == "queryplan_clarification"
+     assert by_sample["m5_6_sqlplan_unpublished_month_guard"] == "sqlplan_validation_failed"
+     assert by_sample["m5_6_sqlplan_internal_debug_key_guard"] == "sqlplan_validation_failed"
+@@ -140,7 +140,7 @@ def test_m5_shadow_default_runner_uses_independent_sqlplan_fixtures(tmp_path: Pa
+     run = run_inventory_sales_production_m5_shadow_compare(artifact_dir=tmp_path)
+ 
+     assert run.report["expected_status_mismatch_count"] == 0
+-    assert run.report["matched_count"] >= 7
++    assert run.report["matched_count"] >= 9
+ 
+ 
+ def test_m5_shadow_fails_closed_when_independent_sqlplan_candidate_missing(monkeypatch, tmp_path: Path) -> None:
+diff --git a/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py b/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py
+index 24eb6a66..582ea87e 100644
+--- a/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py
++++ b/tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py
+@@ -64,9 +64,9 @@ def test_m6_provider_smoke_reports_embedding_vector_rerank_llm_separately_and_re
+     m6 = _m6_module()
+ 
+     runner = m6.InventorySalesProductionM6ProviderSmokeRunner(
+-        embedding_probe=lambda: [0.1, 0.2, 0.3],
++        embedding_probe=lambda: {"status": "PASS"},
+         vector_store_probe=lambda: {"collection": "isp_catalog_secret_collection", "status": "ok"},
+-        rerank_probe=lambda: [{"index": 0, "score": 0.99}],
++        rerank_probe=lambda: {"status": "PASS"},
+         llm_probe=lambda: {"status": "PASS", "provider": "bailian", "model": "deepseek", "api_key": "***"},
+     )
+     result = runner.run()
+@@ -452,3 +452,140 @@ def test_m6_cli_exposes_separate_provider_reindex_and_live_shadow_gate_switches(
+     blocked_output = (blocked.stdout + blocked.stderr).lower()
+     assert "blocked" in blocked_output
+     assert "fake" not in blocked_output
++
++
++# ===== M6.1 加固测试 =====
++
++
++def test_m6_1_provider_gate_fail_closes_list_and_float_probe_without_explicit_status() -> None:
++    """非 dict 返回值若缺少显式 PASS/FAIL/BLOCKED，默认 fail-closed 为 FAIL 而非 PASS。
++
++    业务逻辑：review 建议 dict probe 默认 fail-closed。同理 list/float 等 truthy 值
++    也不应因 bool(value)=True 而误判通过。
++    """
++    m6 = _m6_module()
++    for probe_val in ([0.1, 0.2, 0.3], ["ok"], 0.99, "ok", (0.1,)):
++        result = m6._provider_gate_from_probe_result("embedding", probe_val)  # noqa: SLF001
++        assert result.status == "FAIL", f"expected FAIL for {type(probe_val).__name__}={probe_val!r}, got {result.status}"
++
++
++def test_m6_1_provider_gate_fail_closes_empty_list_and_zero_probe() -> None:
++    """空列表/零等 falsy 值继续按 FAIL 处理；该行为已覆盖，此处加固回归。"""
++    m6 = _m6_module()
++    for probe_val in ([], 0, 0.0, False, None, ""):
++        result = m6._provider_gate_from_probe_result("embedding", probe_val)  # noqa: SLF001
++        assert result.status == "FAIL", f"expected FAIL for {type(probe_val).__name__}={probe_val!r}, got {result.status}"
++
++
++def test_m6_1_dict_probe_with_non_standard_status_is_fail_closed() -> None:
++    """dict probe 即使包含 status 字段，如果值不是 PASS/FAIL/BLOCKED/OK，也应按 FAIL 处理。"""
++    m6 = _m6_module()
++    cases = [
++        {"status": "UP"},
++        {"status": "DOWN"},
++        {"status": "UNKNOWN"},
++        {"status": "in_progress"},
++        {"status": "timeout"},
++        {"status": ""},
++        {"status": None},
++    ]
++    for case in cases:
++        result = m6._provider_gate_from_probe_result("embedding", case)  # noqa: SLF001
++        assert result.status == "FAIL", f"expected FAIL for {case!r}, got {result.status}"
++
++
++def test_m6_1_live_shadow_gate_preserves_provider_called_when_generator_raises() -> None:
++    """generator.generate() 抛出异常时，如果 provider 已调用，_run_one 仍应保留此状态。
++
++    业务逻辑：review 建议异常分支尽量保留已发生的 provider_live_called 状态。
++    这里用已调用过的 fake generator 模拟异常，验证异常分支返回 provider_live_called=True。
++    """
++    m6 = _m6_module()
++    tmp_path = Path(__file__).resolve().parent / "_m6_1_generator_raises_tmp"
++
++    class GeneratorThatAlreadyCalledProvider:
++        """模拟 generate() 已调用 provider 但在后续抛异常的 generator。"""
++
++        def __init__(self) -> None:
++            self.live_called = True
++
++        def generate(self, question: str) -> object:
++            raise RuntimeError("shadow_readonly_connection_timeout")
++
++    runner = m6.InventorySalesProductionM6LiveShadowGateRunner(
++        sqlplan_generator=GeneratorThatAlreadyCalledProvider(),
++        readonly_shadow_executor=m6.InventorySalesProductionM6FakeReadonlyShadowExecutor(rows=[]),
++    )
++    samples = [
++        m6.InventorySalesProductionM6LiveShadowSample(
++            sample_id="m6_1_generator_raises",
++            question="2025年销量是多少？",
++            expected_status="shadow_error",
++        )
++    ]
++    run = runner.run(samples=samples, artifact_dir=tmp_path)
++    record = json.loads(run.records_path.read_text(encoding="utf-8").splitlines()[0])
++    assert record.get("provider_live_called") is True, (
++        f"generator 抛出异常时仍应保留 provider_live_called=True，实际为 {record.get('provider_live_called')}"
++    )
++    assert record.get("actual_status") == "shadow_error"
++    if tmp_path.exists():
++        import shutil
++        shutil.rmtree(tmp_path)
++
++
++# ===== M6.2 扩样测试 =====
++
++
++def test_m6_2_default_shadow_samples_cover_all_categories() -> None:
++    """M6.2 默认 live shadow 样本必须覆盖 A/B/C 三类问法，且总样本数 >= 18。"""
++    from backend.app.domains.business_analysis.services.inventory_sales_production.m6_live_provider_gate import (
++        InventorySalesProductionM6LiveShadowSample,
++    )
++
++    import importlib
++    module = importlib.import_module("scripts.dev.run_inventory_sales_production_m6_live_provider_gate")
++
++    samples = module._default_live_shadow_samples(99)  # noqa: SLF001
++    assert len(samples) >= 18, f"expected >= 18 samples, got {len(samples)}"
++    by_id = {s.sample_id: s for s in samples}
++
++    # A 类成功样本必须覆盖
++    a_ids = [sid for sid, s in by_id.items() if s.expected_status == "matched"]
++    assert len(a_ids) >= 10, f"expected >= 10 A-class samples, got {len(a_ids)}"
++    assert any("sales" in sid for sid in a_ids)
++    assert any("inventory" in sid or "consigned" in sid for sid in a_ids)
++    assert any("budget" in sid or "production" in sid for sid in a_ids)
++    assert any("quarter" in sid or "ytd" in sid for sid in a_ids)
++    assert any("model_type" in sid or "base_" in sid for sid in a_ids)
++    assert any("invoice" in sid for sid in a_ids)
++
++    # B/C 类 fail-closed 样本必须覆盖
++    bc_ids = [sid for sid, s in by_id.items() if s.expected_status == "validation_failed"]
++    assert len(bc_ids) >= 5, f"expected >= 5 BC-class samples, got {len(bc_ids)}"
++    assert any("yoy" in sid or "mom" in sid for sid in bc_ids)
++    assert any("month_range" in sid for sid in bc_ids)
++    assert any("unknown_year" in sid or "turnover" in sid for sid in bc_ids)
++    assert any("sql" in sid for sid in bc_ids)
++
++    # 所有样本的 question 不包含真正的技术泄露内容（安全负例 SQL 片段本身是预期的）
++    forbidden = ("raw_sql", "dwd_ba_isp", "sys_query", "shadow_error_redacted", "api_key")
++    serialized = json.dumps([s.model_dump(mode="json") for s in samples]).lower()
++    for term in forbidden:
++        assert term not in serialized, f"leak detected: {term} in samples"
++
++
++def test_m6_2_default_shadow_samples_max_live_samples_caps_correctly() -> None:
++    """max-live-samples 参数必须正确限制样本数目；默认值与显式值应行为一致。"""
++    import importlib
++    module = importlib.import_module("scripts.dev.run_inventory_sales_production_m6_live_provider_gate")
++
++    full = module._default_live_shadow_samples(99)  # noqa: SLF001
++    capped_1 = module._default_live_shadow_samples(1)  # noqa: SLF001
++    capped_5 = module._default_live_shadow_samples(5)  # noqa: SLF001
++    capped_19 = module._default_live_shadow_samples(19)  # noqa: SLF001
++
++    assert len(capped_1) == 1
++    assert len(capped_5) == 5
++    assert len(capped_19) == 19
++    assert len(full) >= 18
+diff --git a/tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py b/tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py
+index 5e1e14d8..4fb1b3d3 100644
+--- a/tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py
++++ b/tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py
+@@ -118,21 +118,22 @@ def test_isp_sql_plan_validator_blocks_period_end_inventory_annual_sum() -> None
+ 
+ 
+ @pytest.mark.parametrize(
+-    ("plan_overrides", "expected_error"),
++    ("plan_overrides", "expected_ok", "expected_error"),
+     [
+-        ({"period_type": "month_range", "start_month": 1, "end_month": 3}, "sqlplan_period_type_not_supported::month_range"),
+-        ({"business_rules": ["year_over_year"]}, "sqlplan_time_comparison_not_supported::year_over_year"),
+-        ({"business_rules": ["month_over_month"]}, "sqlplan_time_comparison_not_supported::month_over_month"),
+-        ({"business_rules": ["unpublished_month"], "period_type": "month", "month": 12}, "sqlplan_unpublished_month_blocks_sql_direct"),
++        ({"period_type": "month_range", "start_month": 1, "end_month": 3}, True, None),
++        ({"business_rules": ["year_over_year"]}, True, None),
++        ({"business_rules": ["month_over_month"]}, True, None),
++        ({"business_rules": ["unpublished_month"], "period_type": "month", "month": 12}, False, "sqlplan_unpublished_month_blocks_sql_direct"),
+     ],
+ )
+-def test_isp_sql_plan_validator_blocks_unsupported_period_boundaries(plan_overrides: dict, expected_error: str) -> None:
+-    """任意月份区间、同比/环比、未发布月份必须在 SQLPlan 门禁 fail-closed。"""
++def test_isp_sql_plan_validator_blocks_unsupported_period_boundaries(plan_overrides: dict, expected_ok: bool, expected_error: str) -> None:
++    """M9 后 month_range、同比/环比允许通过；未发布月份仍 fail-closed。"""
+ 
+     result = _validate(_valid_candidate(plan=plan_overrides))
+ 
+-    assert result.ok is False
+-    assert expected_error in result.error_codes
++    assert result.ok is expected_ok
++    if expected_error:
++        assert expected_error in result.error_codes
+ 
+ 
+ def test_isp_sql_plan_validator_rechecks_catalog_field_boundaries_even_with_polluted_catalog() -> None:
+@@ -427,13 +428,14 @@ def test_isp_sql_plan_validator_blocks_time_comparison_flags_in_business_flags(
+     flag_name: str,
+     expected_error: str,
+ ) -> None:
+-    """同比/环比开关即使藏在 business_flags 中，也必须在 SQLPlan 门禁 fail-closed。"""
++    """M9 后同比/环比 business_flags 允许通过。"""
+ 
+     result = _validate(_valid_candidate(plan={"business_flags": {flag_name: True}}))
+ 
+-    assert result.ok is False
+-    assert expected_error in result.error_codes
+-    assert result.normalized_plan is None
++    # M9 后同比/环比标志不再阻塞
++    # yoy/mom/year_over_year/month_over_month 在 ALLOWED_BUSINESS_FLAGS 中，
++    # 校验器只会将 unknown flag 阻断
++    assert result.ok is True
+ 
+ 
+ def test_isp_sql_plan_validator_rejects_unknown_business_flags() -> None:

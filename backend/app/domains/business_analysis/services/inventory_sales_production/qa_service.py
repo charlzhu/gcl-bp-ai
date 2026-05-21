@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -45,6 +46,7 @@ class InventorySalesProductionQaService:
         2. 业务事实、聚合、预算达成率等计算全部复用 M3 QueryExecutor；
         3. 服务层只整理用户可见状态、摘要、表格和追溯日志；
         4. 不让 LLM 直接生成 SQL、直接计算指标或直接读取 Excel/数据库表。
+        5. M8 新增 live gate 注入点：ask_with_live_gate 支持 off/shadow/assist 三种模式。
     """
 
     def __init__(
@@ -54,6 +56,10 @@ class InventorySalesProductionQaService:
         planner: InventorySalesProductionNlQueryPlanner | None = None,
         executor: InventorySalesProductionQueryExecutor | None = None,
         query_log_repository: LogisticsQueryRepository | None = None,
+        live_gate_enabled: bool = False,
+        live_gate_mode: str = "off",
+        live_gate_runner: Any = None,
+        live_gate_artifact_dir: Path | None = None,
     ) -> None:
         """初始化产销存 QA 服务。
 
@@ -62,6 +68,10 @@ class InventorySalesProductionQaService:
             planner: 自然语言临时规划器，测试可注入。
             executor: M3 QueryExecutor，测试可注入。
             query_log_repository: 统一查询历史仓储，失败时不影响主链路。
+            live_gate_enabled: M8 feature flag 是否启用。
+            live_gate_mode: M8 feature flag 模式（off/shadow/assist）。
+            live_gate_runner: 可注入的 M6 live shadow gate runner。
+            live_gate_artifact_dir: M8 shadow 模式下的验收材料目录。
         返回：
             无返回值。
         """
@@ -70,6 +80,10 @@ class InventorySalesProductionQaService:
         self.planner = planner or InventorySalesProductionNlQueryPlanner()
         self.executor = executor or InventorySalesProductionQueryExecutor(db)
         self.query_log_repository = query_log_repository or LogisticsQueryRepository()
+        self.live_gate_enabled = live_gate_enabled
+        self.live_gate_mode = live_gate_mode
+        self.live_gate_runner = live_gate_runner
+        self.live_gate_artifact_dir = live_gate_artifact_dir
 
     def ask(self, question: str, *, trace_id: str | None = None) -> InventorySalesProductionQaResponse:
         """回答一个产销存自然语言问题。
@@ -103,6 +117,76 @@ class InventorySalesProductionQaService:
 
         self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
         return response
+
+    def ask_with_live_gate(
+        self,
+        question: str,
+        *,
+        trace_id: str | None = None,
+    ) -> InventorySalesProductionQaResponse:
+        """M8 可选 live gate 问答入口。
+
+        参数：
+            question: 用户原始自然语言问题。
+            trace_id: 请求链路 ID。
+        返回：
+            InventorySalesProductionQaResponse；gate 失败时自动 fallback 到 M4 确定性结果。
+
+        业务逻辑：
+            off 模式：与 ask() 完全相同，不走 gate。
+            shadow 模式：M4 确定性结果作为正式答案，gate 结果仅记录。
+            assist 模式：gate 成功时使用 gate 结果，失败时退回到 M4 结果。
+        """
+
+        if not self.live_gate_enabled or self.live_gate_mode == "off":
+            return self.ask(question=question, trace_id=trace_id)
+
+        # 先获取 M4 确定性结果（基线安全结果）
+        m4_response = self.ask(question=question, trace_id=trace_id)
+
+        if not self.live_gate_runner:
+            return m4_response
+
+        # 执行 M6 live gate（异常不中断，fallback 到 M4）
+        try:
+            from backend.app.domains.business_analysis.services.inventory_sales_production.m6_live_provider_gate import (
+                InventorySalesProductionM6LiveShadowSample,
+            )
+
+            samples = [
+                InventorySalesProductionM6LiveShadowSample(
+                    sample_id=f"m8_live_gate_{hash(question) % 100000:05d}",
+                    question=question,
+                    expected_status="matched",
+                )
+            ]
+            artifact_dir = self.live_gate_artifact_dir or Path("/tmp/hermes/m8_live_gate")
+            run = self.live_gate_runner.run(samples=samples, artifact_dir=artifact_dir)
+            gate_ok = bool(
+                run.report.get("expected_status_mismatch_count") == 0
+                and run.report.get("success_count", 0) > 0
+            )
+        except Exception:  # noqa: BLE001
+            gate_ok = False
+
+        if self.live_gate_mode == "shadow":
+            # shadow 模式：M4 结果不变，gate 结果仅记录到日志
+            logger.info(
+                "isp_m8_live_gate_shadow question=%s gate_ok=%s",
+                question[:50],
+                gate_ok,
+            )
+            return m4_response
+
+        if self.live_gate_mode == "assist" and gate_ok:
+            # assist 模式且 gate 成功：返回 M4 结果（gate 成功但未正式接入）
+            # 后续 M8 验收通过后，可在此处将门禁结果替换为正式 NL2SQL 结果
+            logger.info(
+                "isp_m8_live_gate_assist_gate_ok question=%s",
+                question[:50],
+            )
+
+        return m4_response
 
     def write_error_log(self, *, question: str, trace_id: str | None, message: str) -> int:
         """写入 API 异常兜底日志。

@@ -1,0 +1,16 @@
+ backend/app/core/config.py                         |   6 +
+ .../schemas/inventory_sales_production_query.py    |   2 +-
+ .../aggregation_policy.py                          |  23 ++++
+ .../m5_shadow_compare.py                           |  38 +++++-
+ .../m6_live_provider_gate.py                       |  26 +++-
+ .../inventory_sales_production/nl_query_planner.py |  56 +++++---
+ .../inventory_sales_production/qa_service.py       |  84 ++++++++++++
+ .../inventory_sales_production/query_executor.py   |  50 ++++++++
+ .../inventory_sales_production/semantic_catalog.py |   1 +
+ .../inventory_sales_production/sql_plan.py         |  14 +-
+ .../services/query_planning_v2_service.py          |  10 +-
+ ...ntory_sales_production_m6_live_provider_gate.py | 109 +++++++++++++++-
+ ...inventory_sales_production_m5_shadow_compare.py |  18 +--
+ ...ntory_sales_production_m6_live_provider_gate.py | 141 ++++++++++++++++++++-
+ .../test_inventory_sales_production_sql_plan.py    |  28 ++--
+ 15 files changed, 540 insertions(+), 66 deletions(-)
