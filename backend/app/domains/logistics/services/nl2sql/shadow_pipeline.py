@@ -32,6 +32,7 @@ from backend.app.domains.logistics.services.nl2sql.sql_plan import (
     LogisticsSqlPlanValidationResult,
     LogisticsSqlPlanValidator,
 )
+from backend.app.domains.logistics.services.nl2sql.sql_plan_repair import repair_logistics_sql_plan
 from backend.app.domains.logistics.services.nl2sql.sql_renderer import LogisticsRenderedSql, LogisticsSqlRenderer
 from backend.app.domains.logistics.services.nl2sql.sql_safety import LogisticsSqlSafetyChecker
 
@@ -279,6 +280,34 @@ class LogisticsNl2SqlShadowPipeline:
         if not validation_result.ok:
             validation_errors = validation_result.error_codes
             return finish_with_gate(
+                request=request,
+                trace_id=trace_id,
+                started=started,
+                status="validation_failed",
+                stage="validation",
+                error_codes=validation_errors,
+                error_message=None,
+                catalog_ids=catalog_ids,
+                catalog_versions=catalog_versions,
+                validation_errors=validation_errors,
+            )
+
+        # D4: SQLPlan Repair — 在 validation 通过后、render 前，对 candidate 执行可证明安全的修复
+        repair_result = repair_logistics_sql_plan(request.candidate)
+        if repair_result.repaired:
+            # 应用 repair patch 到 candidate
+            repair_patch = repair_result.patch
+            # 更新 candidate 的 plan 字段
+            for key, value in repair_patch.get("plan", {}).items():
+                request.candidate.setdefault("plan", {})[key] = value
+            # 更新 catalog_refs（如果修复了）
+            if "catalog_refs" in repair_patch:
+                request.candidate["catalog_refs"] = repair_patch["catalog_refs"]
+            # 重新执行 validation 以验证修复后的 plan
+            validation_result = self.validator.validate(request.candidate)
+            if not validation_result.ok:
+                validation_errors = validation_result.error_codes
+                return finish_with_gate(
                 request=request,
                 trace_id=trace_id,
                 started=started,
