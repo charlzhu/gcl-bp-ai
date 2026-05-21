@@ -1,0 +1,296 @@
+diff --git a/tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py b/tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py
+index eeb6a3cc..2b53833b 100644
+--- a/tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py
++++ b/tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py
+@@ -1,13 +1,19 @@
+ from __future__ import annotations
+ 
++from pathlib import Path
+ from typing import Any
+ 
+ from backend.app.domains.logistics.services.nl2sql.m10d_shadow_gate import (
+     LogisticsNl2SqlM10DShadowGate,
+     LogisticsNl2SqlM10DShadowGateConfig,
+ )
++from backend.app.domains.logistics.services.nl2sql.readonly_middle_db import (
++    LogisticsReadonlyMiddleDbConfig,
++    LogisticsReadonlyMiddleDbExecutor,
++    load_readonly_middle_db_config,
++)
+ from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
+-from backend.app.domains.logistics.services.nl2sql.sql_execution import FakeLogisticsSqlExecutor
++from backend.app.domains.logistics.services.nl2sql.sql_execution import FakeLogisticsSqlExecutor, LogisticsSqlExecutor
+ from backend.app.domains.logistics.services.nl2sql.sql_plan import LogisticsSqlPlanValidator
+ from backend.app.domains.logistics.services.nl2sql.sql_renderer import LogisticsRenderedSql, render_logistics_sql
+ 
+@@ -121,7 +127,7 @@ def test_m10d_gate_explain_failure_fail_closed_and_skips_trial_with_redacted_rep
+     executor = FakeLogisticsSqlExecutor(
+         raise_message=(
+             "EXPLAIN SELECT password=unit-secret token=tok_unitsecret "
+-            "FROM dws_logistics_detail_union mysql://user:secretpass@127.0.0.1/db"
++            "FROM dws_logistics_detail_union mysql://user:***@127.0.0.1/db"
+         )
+     )
+     gate = LogisticsNl2SqlM10DShadowGate(
+@@ -281,3 +287,261 @@ def _safe_rendered_sql() -> LogisticsRenderedSql:
+     )
+     assert validation.ok, validation.error_codes
+     return render_logistics_sql(validation)
++
++
++# =============================================================================
++# M10-D2 测试：真实只读中间库 EXPLAIN smoke gate
++# =============================================================================
++
++
++class _RejectRealExecutorFactory:
++    """如果 D2 gate 配置了 real_db_access_enabled=False，不应尝试创建真实 executor。"""
++
++    def __call__(self) -> LogisticsSqlExecutor:
++        raise AssertionError("real_db_access_enabled=False 时不应构造真实 executor")
++
++
++def test_m10d2_real_db_access_disabled_uses_fake_executor() -> None:
++    """real_db_access_enabled=False（默认）时即使 gate 开启，仍使用注入的 fake executor。
++
++    D2 核心保护：默认不连库。
++    """
++    executor = FakeLogisticsSqlExecutor(explain_rows=[{"select_type": "SIMPLE"}])
++    config = LogisticsNl2SqlM10DShadowGateConfig(
++        enabled=True,
++        explain_enabled=True,
++    )
++    gate = LogisticsNl2SqlM10DShadowGate(
++        config=config,
++        executor_factory=lambda: executor,
++    )
++
++    report = gate.run(rendered_sql=_safe_rendered_sql())
++
++    assert report.status == "success"
++    assert report.stage == "explain"
++    assert report.explain_status == "success"
++    assert report.error_codes == []
++    assert [call.mode for call in executor.calls] == ["explain"]
++
++
++def test_m10d2_real_db_access_enabled_no_env_falls_back_to_fake() -> None:
++    """real_db_access_enabled=True 但 env_path 指向不存在文件时，应静默 fallback 到 fake executor。
++
++    不抛出异常，不因 env 缺失而 fail-closed gate。
++    """
++    executor = FakeLogisticsSqlExecutor(explain_rows=[{"select_type": "SIMPLE"}])
++    config = LogisticsNl2SqlM10DShadowGateConfig(
++        enabled=True,
++        explain_enabled=True,
++        real_db_access_enabled=True,
++        env_path="/tmp/nonexistent_dir/.env",
++    )
++    gate = LogisticsNl2SqlM10DShadowGate(
++        config=config,
++        executor_factory=lambda: executor,
++    )
++
++    report = gate.run(rendered_sql=_safe_rendered_sql())
++    payload = report.model_dump_json()
++
++    assert report.status == "success"
++    assert report.stage == "explain"
++    assert report.explain_status == "success"
++    assert report.error_codes == []
++    assert [call.mode for call in executor.calls] == ["explain"]
++    assert "SELECT " not in payload
++
++
++# =============================================================================
++# M10-D2-2 测试：EXPLAIN smoke runner（基于真实 env 配置的 M10D shadow gate）
++# =============================================================================
++
++
++def test_m10d2_smoke_runner_env_unavailable_writes_deidentified_blocked_artifact(tmp_path: Path) -> None:
++    """env 不可用时 smoke runner 必须写入 blocked 状态 artifact，不泄露 SQL/参数/env 值。"""
++    from backend.app.domains.logistics.services.nl2sql.m10d2_explain_smoke import (
++        run_logistics_nl2sql_m10d2_explain_smoke,
++    )
++
++    result = run_logistics_nl2sql_m10d2_explain_smoke(
++        env_path=tmp_path / "missing.env",
++        artifact_dir=tmp_path / "m10d2-artifacts",
++    )
++
++    assert result.live_smoke_executed is False
++    assert result.environment_status == "environment_unavailable"
++    assert result.report.by_status == {"blocked": 1}
++    assert result.records_path.exists()
++    assert result.report_path.exists()
++    payload = (result.records_path.read_text(encoding="utf-8")
++               + result.report_path.read_text(encoding="utf-8"))
++    assert "password" not in payload.lower()
++    assert "mysql://" not in payload
++    assert "Bearer" not in payload
++    assert "sk-" not in payload
++
++
++def test_m10d2_smoke_runner_stub_executor_success_generates_deidentified_artifacts(tmp_path: Path) -> None:
++    """stub executor 成功时生成 EXPLAIN 成功记录，artifact 不泄露 SQL/表名/env 值。"""
++    from backend.app.domains.logistics.services.nl2sql.m10d2_explain_smoke import (
++        run_logistics_nl2sql_m10d2_explain_smoke,
++        LogisticsNl2SqlM10D2ExplainSmokeSample,
++    )
++    from backend.app.domains.logistics.services.nl2sql.sql_plan import LogisticsSqlPlanValidator
++    from backend.app.domains.logistics.services.nl2sql.sql_renderer import render_logistics_sql
++    from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++
++    catalog = LogisticsSemanticCatalogLoader().load()
++    validator = LogisticsSqlPlanValidator(catalog=catalog)
++    validation = validator.validate({
++        "schema_version": "logistics_sqlplan_candidate.v1",
++        "domain": "logistics",
++        "strategy": "sql_direct",
++        "catalog_version": "logistics_nl2sql_catalog.v1",
++        "catalog_refs": [
++            {"catalog_id": "table:dws_logistics_detail_union", "catalog_version": "logistics_nl2sql_catalog.v1"},
++            {"catalog_id": "metric:shipment_mw", "catalog_version": "logistics_nl2sql_catalog.v1"},
++            {"catalog_id": "dimension:biz_year", "catalog_version": "logistics_nl2sql_catalog.v1"},
++            {"catalog_id": "rule:default_time_range", "catalog_version": "logistics_nl2sql_catalog.v1"},
++        ],
++        "plan": {
++            "query_type": "aggregate",
++            "tables": ["dws_logistics_detail_union"],
++            "metrics": ["shipment_mw"],
++            "dimensions": [],
++            "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025, 2026]}],
++            "group_by": [],
++            "order_by": [],
++            "business_rules": ["default_time_range"],
++            "explicit_year_buckets": [2023, 2024, 2025, 2026],
++            "requested_unit": "MW",
++            "limit": None,
++        },
++    })
++    assert validation.ok, validation.error_codes
++
++    env_path = _write_d2_env(tmp_path)
++    artifact_dir = tmp_path / "m10d2-artifacts"
++    samples = [
++        LogisticsNl2SqlM10D2ExplainSmokeSample(
++            sample_id="m10d2_stub_aggregate",
++            description="stub aggregate EXPLAIN smoke",
++            rendered_sql=render_logistics_sql(validation),
++        ),
++    ]
++
++    result = run_logistics_nl2sql_m10d2_explain_smoke(
++        env_path=env_path,
++        artifact_dir=artifact_dir,
++        samples=samples,
++        executor_factory=lambda _config: _StubM10d2Executor(),
++    )
++
++    assert result.live_smoke_executed is True
++    assert result.environment_status == "available"
++    assert len(result.outcomes) >= 1
++    assert all(o.report.status == "success" and o.report.explain_status == "success"
++               for o in result.outcomes)
++    payload = (result.records_path.read_text(encoding="utf-8")
++               + result.report_path.read_text(encoding="utf-8"))
++    assert "SELECT " not in payload
++    assert "dws_logistics_detail_union" not in payload
++    assert "shipment_mw" not in payload
++    assert "db.internal" not in payload
++    assert "admin_user" not in payload
++    assert "unit-password" not in payload
++    assert "mysql://" not in payload
++    assert "Bearer" not in payload
++    assert "sk-" not in payload
++
++
++def test_m10d2_smoke_runner_stub_explain_failed_records_failure_without_leak(tmp_path: Path) -> None:
++    """EXPLAIN 失败时 smoke runner 进入 explain_failed，artifact 不含原始错误。"""
++    from backend.app.domains.logistics.services.nl2sql.m10d2_explain_smoke import (
++        run_logistics_nl2sql_m10d2_explain_smoke,
++        LogisticsNl2SqlM10D2ExplainSmokeSample,
++    )
++    from backend.app.domains.logistics.services.nl2sql.sql_plan import LogisticsSqlPlanValidator
++    from backend.app.domains.logistics.services.nl2sql.sql_renderer import render_logistics_sql
++    from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalogLoader
++
++    catalog = LogisticsSemanticCatalogLoader().load()
++    validator = LogisticsSqlPlanValidator(catalog=catalog)
++    validation = validator.validate({
++        "schema_version": "logistics_sqlplan_candidate.v1",
++        "domain": "logistics",
++        "strategy": "sql_direct",
++        "catalog_version": "logistics_nl2sql_catalog.v1",
++        "catalog_refs": [
++            {"catalog_id": "table:dws_logistics_detail_union", "catalog_version": "logistics_nl2sql_catalog.v1"},
++            {"catalog_id": "metric:shipment_mw", "catalog_version": "logistics_nl2sql_catalog.v1"},
++            {"catalog_id": "dimension:biz_year", "catalog_version": "logistics_nl2sql_catalog.v1"},
++            {"catalog_id": "rule:default_time_range", "catalog_version": "logistics_nl2sql_catalog.v1"},
++        ],
++        "plan": {
++            "query_type": "aggregate",
++            "tables": ["dws_logistics_detail_union"],
++            "metrics": ["shipment_mw"],
++            "dimensions": [],
++            "filters": [{"dimension": "biz_year", "operator": "in", "values": [2023, 2024, 2025, 2026]}],
++            "group_by": [],
++            "order_by": [],
++            "business_rules": ["default_time_range"],
++            "explicit_year_buckets": [2023, 2024, 2025, 2026],
++            "requested_unit": "MW",
++            "limit": None,
++        },
++    })
++    assert validation.ok, validation.error_codes
++
++    env_path = _write_d2_env(tmp_path)
++    artifact_dir = tmp_path / "m10d2-artifacts"
++    samples = [
++        LogisticsNl2SqlM10D2ExplainSmokeSample(
++            sample_id="m10d2_stub_aggregate",
++            description="stub aggregate EXPLAIN smoke",
++            rendered_sql=render_logistics_sql(validation),
++        ),
++    ]
++
++    result = run_logistics_nl2sql_m10d2_explain_smoke(
++        env_path=env_path,
++        artifact_dir=artifact_dir,
++        samples=samples,
++        executor_factory=lambda _config: _StubM10d2Executor(mode="explain_failed"),
++    )
++
++    assert result.live_smoke_executed is True
++    assert result.report.by_status.get("failed", 0) >= 1
++    payload = (result.records_path.read_text(encoding="utf-8")
++               + result.report_path.read_text(encoding="utf-8"))
++    assert "unit-password" not in payload
++    assert "db.internal" not in payload
++    assert "SELECT " not in payload
++
++
++class _StubM10d2Executor:
++    """M10-D2 smoke runner 单测用 stub executor，不连接真实库。"""
++
++    def __init__(self, *, mode: str = "success") -> None:
++        self.mode = mode
++
++    def explain(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++        if self.mode == "explain_failed":
++            raise RuntimeError("db.internal explain failed password=unit-password")
++        return [{"select_type": "SIMPLE"}]
++
++    def trial(self, sql: str, params: dict[str, Any]) -> list[dict[str, Any]]:
++        return [{"ok": 1}]
++
++
++def _write_d2_env(tmp_path: Path) -> Path:
++    """写入 D2 smoke 单测专用 .env。"""
++    env_path = tmp_path / ".env"
++    env_path.write_text(
++        "MYSQL_HOST=db.internal\nMYSQL_PORT=3307\nMYSQL_DB=logistics_ai\n"
++        "MYSQL_USER=admin_user\nMYSQL_PASSWORD=unit-password\nMYSQL_CHARSET=utf8mb4\n",
++        encoding="utf-8",
++    )
++    return env_path
