@@ -1,76 +1,253 @@
 catalog_version: logistics_nl2sql_catalog.v1
 domain: logistics
 metrics:
+  # ===== 发运量类 =====
   - metric_id: shipment_mw
     display_name: 发运量（MW）
-    aliases: [运量, 发货量, 运输量, 物流量, 出货量, 发运量, 瓦数, MW, mw, 件数]
+    aliases: [运量, 发货量, 运输量, 物流量, 出货量, 发运量, 瓦数, MW, mw, 件数, 发运瓦数]
     sql_expression: SUM(shipment_watt)
     unit: MW
     aggregation: sum
     table: dws_logistics_detail_union
     source_columns: [shipment_watt]
     business_note: 用户问发货量/运量/运输量/物流量/出货量/件数且未指定其他单位时，默认按 MW 回答。
+  - metric_id: shipment_count
+    display_name: 发运件数
+    aliases: [发运件数, 件数, 发货件数, 出货件数]
+    sql_expression: SUM(shipment_count)
+    unit: 件
+    aggregation: sum
+    table: dws_logistics_detail_union
+    source_columns: [shipment_count]
+    business_note: 按件统计的发运数量，与 MW 不同；用户直接问"发了多少件"时使用。
+  - metric_id: mw_summary
+    display_name: 发运量汇总（按维度）
+    aliases: [发运量汇总, 各维度发运量, MW汇总, 瓦数汇总]
+    sql_expression: SUM(shipment_watt)
+    unit: MW
+    aggregation: sum
+    table: dws_logistics_detail_union
+    source_columns: [shipment_watt]
+    business_note: '按区域/客户/承运商等维度拆分发运量汇总。对应 query_key: mw_summary, mw_by_region, mw_by_all_regions。'
+  - metric_id: mw_by_origin_and_carrier
+    display_name: 始发地+承运商发运量
+    aliases: [始发地承运商发运量, 各始发地承运商发运]
+    sql_expression: SUM(shipment_watt)
+    unit: MW
+    aggregation: sum
+    table: dws_logistics_detail_union
+    source_columns: [shipment_watt]
+    business_note: 按始发地和承运商交叉维度统计发运量。
+  - metric_id: customer_mw
+    display_name: 客户发运量
+    aliases: [客户发运量, 客户出货量, 发给客户的瓦数]
+    sql_expression: SUM(shipment_watt)
+    unit: MW
+    aggregation: sum
+    table: dws_logistics_detail_union
+    source_columns: [shipment_watt]
+    business_note: '按客户统计发运量。对应 query_key: customer_mw, customer_mw_ranking。'
+
+  # ===== 车次类 =====
   - metric_id: shipment_trip_count
     display_name: 车次
-    aliases: [车次, 趟次, 车辆数, 发运车次]
+    aliases: [车次, 趟次, 车辆数, 发运车次, 运输车次]
     sql_expression: SUM(shipment_trip_count)
     unit: 车
     aggregation: sum
     table: dws_logistics_detail_union
     source_columns: [shipment_trip_count]
     business_note: 线路均价分母使用车次汇总。
+  - metric_id: trip_count_summary
+    display_name: 车次汇总
+    aliases: [车次汇总, 总车次, 各维度车次]
+    sql_expression: SUM(shipment_trip_count)
+    unit: 车
+    aggregation: sum
+    table: dws_logistics_detail_union
+    source_columns: [shipment_trip_count]
+    business_note: '按区域/月份/车型等维度统计车次。对应 query_key: monthly_trip_count_summary, trip_count_by_region。'
+  - metric_id: vehicle_type_trip_count
+    display_name: 车型车次
+    aliases: [车型车次, 各车型车次, 按车型统计车次]
+    sql_expression: SUM(shipment_trip_count)
+    unit: 车
+    aggregation: sum
+    table: dws_logistics_detail_union
+    source_columns: [shipment_trip_count]
+    business_note: '按所需车型维度统计车次。对应 query_key: vehicle_type_trip_count。'
+
+  # ===== 费用类 =====
   - metric_id: total_fee
     display_name: 总费用
-    aliases: [总费用, 总运费, 运输费用, 运输成本, 费用]
+    aliases: [总费用, 总运费, 运输费用, 运输成本, 费用, 运费]
     sql_expression: SUM(total_fee)
     unit: 元
     aggregation: sum
     table: dws_logistics_detail_union
     source_columns: [total_fee]
     business_note: 统计总运费时按总费用汇总。
-  - metric_id: avg_fee_per_trip
-    display_name: 平均每车费用
-    aliases: [均价, 平均运费, 平均每车费用, 单车均费, 每车平均运费]
-    sql_expression: CASE WHEN SUM(shipment_trip_count) = 0 THEN NULL ELSE SUM(total_fee) / SUM(shipment_trip_count) END
-    unit: 元/车
-    aggregation: ratio
+  - metric_id: total_fee_summary
+    display_name: 费用汇总（按维度）
+    aliases: [费用汇总, 各维度费用, 按客户费用, 按区域费用]
+    sql_expression: SUM(total_fee)
+    unit: 元
+    aggregation: sum
     table: dws_logistics_detail_union
-    source_columns: [total_fee, shipment_trip_count]
-    business_note: 均价必须按 SUM(total_fee)/SUM(shipment_trip_count)，禁止用 AVG(total_fee)。
-  - metric_id: unit_price_per_vehicle
-    display_name: 单价/车
-    aliases: [报价, 单价, 运价, 单价/车, 线路报价, 线路单价]
-    sql_expression: unit_price_per_vehicle
-    unit: 元/车
-    aggregation: value
-    table: dwd_logistics_hist_shipment_detail
-    source_columns: [unit_price_per_vehicle]
-    business_note: 报价/单价/运价走源表单价/车字段，与均价严格区分。
+    source_columns: [total_fee]
+    business_note: '按客户/区域/承运商等维度拆分费用汇总。对应 query_key: total_fee_summary, total_fee_by_province。'
   - metric_id: extra_fee
     display_name: 附加费
-    aliases: [附加费, 额外费用, 异常费用]
+    aliases: [附加费, 额外费用, 异常费用, 杂费]
     sql_expression: SUM(extra_fee)
     unit: 元
     aggregation: sum
     table: dws_logistics_detail_union
     source_columns: [extra_fee]
     business_note: 附加费按中间库清洗后的 extra_fee 汇总。
-  - metric_id: row_count
-    display_name: 明细行数
-    aliases: [记录数, 明细数, 行数]
-    sql_expression: COUNT(*)
-    unit: 条
-    aggregation: count
+  - metric_id: sys_extra_fee_summary
+    display_name: 系统侧附加费汇总
+    aliases: [系统附加费, 系统额外费用]
+    sql_expression: SUM(extra_cost)
+    unit: 元
+    aggregation: sum
+    table: dwd_logistics_assign_detail
+    source_columns: [extra_cost]
+    business_note: 2026 系统侧委派明细中的额外费用汇总。
+
+  # ===== 均价/单价类 =====
+  - metric_id: avg_fee_per_trip
+    display_name: 平均每车费用
+    aliases: [均价, 平均运费, 平均每车费用, 单车均费, 每车平均运费, 单车均价]
+    sql_expression: CASE WHEN SUM(shipment_trip_count) = 0 THEN NULL ELSE SUM(total_fee) / SUM(shipment_trip_count) END
+    unit: 元/车
+    aggregation: ratio
     table: dws_logistics_detail_union
-    source_columns: []
-    business_note: 用于追溯匹配范围内的明细记录数。
+    source_columns: [total_fee, shipment_trip_count]
+    business_note: 均价必须按 SUM(total_fee)/SUM(shipment_trip_count)，禁止用 AVG(total_fee)。这是线路运价口径。
+  - metric_id: avg_fee_per_watt
+    display_name: 单瓦费用（均价/瓦）
+    aliases: [单瓦费用, 每瓦运费, 单价每瓦, 平均每瓦]
+    sql_expression: CASE WHEN SUM(shipment_watt) = 0 THEN NULL ELSE SUM(total_fee) / SUM(shipment_watt) END
+    unit: 元/MW
+    aggregation: ratio
+    table: dws_logistics_detail_union
+    source_columns: [total_fee, shipment_watt]
+    business_note: '按发运瓦数计算的平均单瓦费用。对应 query_key: avg_fee_per_watt_by_transport, unit_fee_per_watt。'
+  - metric_id: unit_price_per_vehicle
+    display_name: 单价/车
+    aliases: [报价, 单价, 运价, 单价/车, 线路报价, 线路单价, 每车报价]
+    sql_expression: unit_price_per_vehicle
+    unit: 元/车
+    aggregation: value
+    table: dwd_logistics_hist_shipment_detail
+    source_columns: [unit_price_per_vehicle]
+    business_note: 报价/单价/运价走源表单价/车字段，与均价严格区分。
+  - metric_id: route_pricing_analysis
+    display_name: 线路运价分析
+    aliases: [线路运价, 线路价格, 运价分析, 各线路价格]
+    sql_expression: unit_price_per_vehicle
+    unit: 元/车
+    aggregation: value
+    table: dwd_logistics_hist_shipment_detail
+    source_columns: [unit_price_per_vehicle]
+    business_note: '按线路（始发地-目的地）分析运价差异。对应 query_key: route_pricing_analysis。'
+
+  # ===== 排名类 =====
   - metric_id: carrier_rank_by_mw
     display_name: 承运商发运量排名
-    aliases: [哪个物流跑得最多, 承运商发运量排行, 物流公司发运量排行]
+    aliases: [哪个物流跑得最多, 承运商发运量排行, 物流公司发运量排行, 承运商排名]
     sql_expression: SUM(shipment_watt)
     unit: MW
     aggregation: rank
     table: dws_logistics_detail_union
     source_columns: [logistics_company_name, shipment_watt]
     sort_expression: SUM(shipment_watt) DESC
-    business_note: “哪个物流跑得最多”默认按承运商发运量排序。
+    business_note: '\"哪个物流跑得最多\"默认按承运商发运量排序。'
+  - metric_id: carrier_metric_ranking
+    display_name: 承运商多指标排名
+    aliases: [承运商综合排名, 承运商多维度排名]
+    sql_expression: SUM(shipment_watt)
+    unit: MW
+    aggregation: rank
+    table: dws_logistics_detail_union
+    source_columns: [logistics_company_name, shipment_watt, total_fee]
+    sort_expression: SUM(shipment_watt) DESC
+    business_note: '按发运量、费用等多项指标对承运商进行综合排名。对应 query_key: carrier_metric_ranking。'
+  - metric_id: top_customer_fee_and_mw
+    display_name: 头部客户费用与发运量
+    aliases: [大客户, 头部客户, 主要客户, TOP客户, 前几大客户]
+    sql_expression: SUM(total_fee)
+    unit: 元
+    aggregation: rank
+    table: dws_logistics_detail_union
+    source_columns: [customer_name, total_fee, shipment_watt]
+    sort_expression: SUM(total_fee) DESC
+    business_note: '按总费用降序排列客户，同时展示发运量。对应 query_key: top_customers_fee_and_mw_by_province。'
+
+  # ===== 行数/计数类 =====
+  - metric_id: row_count
+    display_name: 明细行数
+    aliases: [记录数, 明细数, 行数, 匹配行数]
+    sql_expression: COUNT(*)
+    unit: 条
+    aggregation: count
+    table: dws_logistics_detail_union
+    source_columns: []
+    business_note: 用于追溯匹配范围内的明细记录数。
+
+  # ===== 系统侧（2026）指标 =====
+  - metric_id: sys_total_fee
+    display_name: 系统侧总费用
+    aliases: [系统总费用, 系统运费, 系统费用]
+    sql_expression: SUM(supplier_price)
+    unit: 元
+    aggregation: sum
+    table: dwd_logistics_assign_detail
+    source_columns: [supplier_price]
+    business_note: '2026 系统侧委派明细中的供应商价格费用。对应 query_key: sys_total_fee_by_filters。'
+  - metric_id: sys_mw
+    display_name: 系统侧发运量
+    aliases: [系统发运量, 系统瓦数, 系统MW]
+    sql_expression: SUM(power)
+    unit: MW
+    aggregation: sum
+    table: dwd_logistics_ship_product
+    source_columns: [power]
+    business_note: '2026 系统侧产品表中的功率汇总。对应 query_key: sys_mw_and_trip_count, sys_mw_by_procurement_type。'
+  - metric_id: sys_trip_count
+    display_name: 系统侧车次
+    aliases: [系统车次, 系统趟次]
+    sql_expression: COUNT(DISTINCT ship_task_id)
+    unit: 车
+    aggregation: count
+    table: dwd_logistics_assign_task
+    source_columns: [ship_task_id]
+    business_note: 2026 系统侧按发运任务号去重统计车次。
+  - metric_id: sys_task_count
+    display_name: 系统侧任务数
+    aliases: [系统任务数, 系统发运任务数, 任务数量]
+    sql_expression: COUNT(DISTINCT task_id)
+    unit: 个
+    aggregation: count
+    table: dwd_logistics_ship_task
+    source_columns: [task_id]
+    business_note: 2026 系统侧发运任务总数，按任务号去重。
+  - metric_id: sys_supplier_price
+    display_name: 系统侧供应商价格
+    aliases: [系统供应商价格, 系统采购价]
+    sql_expression: SUM(supplier_price)
+    unit: 元
+    aggregation: sum
+    table: dwd_logistics_assign_detail
+    source_columns: [supplier_price]
+    business_note: 2026 系统侧委派明细中的供应商报价汇总。
+  - metric_id: sys_quantity
+    display_name: 系统侧数量
+    aliases: [系统数量, 系统发运数量]
+    sql_expression: SUM(quantity)
+    unit: 件
+    aggregation: sum
+    table: dwd_logistics_assign_detail
+    source_columns: [quantity]
+    business_note: 2026 系统侧委派明细中的产品数量汇总。
