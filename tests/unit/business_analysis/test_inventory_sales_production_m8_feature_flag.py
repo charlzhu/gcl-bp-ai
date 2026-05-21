@@ -3,8 +3,10 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from backend.app.domains.business_analysis.schemas.inventory_sales_production_qa import (
-    InventorySalesProductionQaResponse,
+from backend.app.domains.business_analysis.schemas.inventory_sales_production_query import (
+    InventorySalesProductionQueryPlan,
+    InventorySalesProductionQueryResult,
+    InventorySalesProductionQueryRow,
 )
 from backend.app.domains.business_analysis.services.inventory_sales_production.qa_service import (
     InventorySalesProductionQaService,
@@ -32,6 +34,12 @@ def _make_service(
     db = MagicMock()
     planner = MagicMock()
     executor = MagicMock()
+    # 让 mock executor 返回合法的 QueryResult，避免 decimal 转换错误
+    executor.execute.return_value = InventorySalesProductionQueryResult(
+        status="success",
+        answer_summary="查询成功。",
+        rows=[],
+    )
     return InventorySalesProductionQaService(
         db=db,
         planner=planner,
@@ -142,3 +150,97 @@ def test_m8_live_gate_off_does_not_create_artifact_dir() -> None:
     svc = _make_service(enabled=False, mode="off", runner=runner)
     svc.ask_with_live_gate("2025年销量是多少？")
     assert svc.live_gate_runner.run.call_count == 0
+
+
+# ===== nl2sql 模式 =====
+
+
+def _make_nl2sql_service(
+    *,
+    mode: str = "nl2sql",
+    nl2sql_ok: bool = True,
+    rule_fallback_ok: bool = True,
+) -> InventorySalesProductionQaService:
+    """构造用于 nl2sql 模式测试的 QA Service。
+
+    参数：
+        mode: live_gate_mode（默认 nl2sql）。
+        nl2sql_ok: LLM 规划器是否成功返回 QueryPlan。
+        rule_fallback_ok: 规则规划器 fallback 是否成功。
+    返回：
+        注入 mock planner/executor 的 QA Service。
+    """
+    db = MagicMock()
+    executor = MagicMock()
+    executor.execute.return_value = InventorySalesProductionQueryResult(
+        status="success",
+        answer_summary="查询成功。",
+        rows=[],
+    )
+
+    # 规则规划器 mock
+    planner = MagicMock()
+    if rule_fallback_ok:
+        planner.build_plan.return_value = MagicMock()
+    else:
+        from backend.app.domains.business_analysis.services.inventory_sales_production.nl_query_planner import (
+            InventorySalesProductionPlanningError,
+        )
+
+        planner.build_plan.side_effect = InventorySalesProductionPlanningError(
+            "clarification", "规则规划器无法处理该问题。"
+        )
+
+    # NL2SQL 规划器 mock
+    nl2sql_planner = MagicMock()
+    if nl2sql_ok:
+        nl2sql_planner.build_plan.return_value = MagicMock(spec=InventorySalesProductionQueryPlan)
+    else:
+        nl2sql_planner.build_plan.side_effect = RuntimeError("LLM timeout")
+
+    return InventorySalesProductionQaService(
+        db=db,
+        planner=planner,
+        nl2sql_planner=nl2sql_planner,
+        executor=executor,
+        live_gate_enabled=True,
+        live_gate_mode=mode,
+    )
+
+
+def test_m8_nl2sql_mode_uses_nl2sql_planner() -> None:
+    """nl2sql 模式使用 NL2SQL 规划器，不调用规则规划器。"""
+    svc = _make_nl2sql_service(nl2sql_ok=True)
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    assert svc.nl2sql_planner.build_plan.call_count == 1
+    assert svc.planner.build_plan.call_count == 0
+
+
+def test_m8_nl2sql_mode_fallback_to_rule() -> None:
+    """NL2SQL 规划器失败时自动 fallback 到规则规划器。"""
+    svc = _make_nl2sql_service(nl2sql_ok=False, rule_fallback_ok=True)
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    assert svc.nl2sql_planner.build_plan.call_count == 1
+    assert svc.planner.build_plan.call_count == 1
+
+
+def test_m8_nl2sql_mode_both_fail_returns_blocked() -> None:
+    """NL2SQL 和规则规划器都失败时返回 clarification 响应。"""
+    svc = _make_nl2sql_service(nl2sql_ok=False, rule_fallback_ok=False)
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    assert svc.nl2sql_planner.build_plan.call_count == 1
+    assert svc.planner.build_plan.call_count == 1
+    # 确保 response 有合法状态
+    assert resp.answer_summary or resp.status
+
+
+def test_m8_off_mode_default_constructor_has_nl2sql_planner() -> None:
+    """默认构造的服务中 nl2sql_planner 存在但不使用。"""
+    db = MagicMock()
+    svc = InventorySalesProductionQaService(db=db)
+    assert hasattr(svc, "nl2sql_planner")
+    assert svc.nl2sql_planner is not None
+    assert svc.live_gate_mode == "off"

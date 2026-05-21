@@ -161,12 +161,26 @@ METRIC_CATALOG: tuple[dict, ...] = (
 )
 
 METRIC_ALIASES: tuple[dict, ...] = (
+    # === 销量/发货量（默认销量=发货量） ===
     {"alias_text": "销量", "metric_code": "shipment_volume", "alias_type": "user_phrase", "priority": 10, "notes": "用户确认默认销量=发货量。"},
     {"alias_text": "销售量", "metric_code": "shipment_volume", "alias_type": "user_phrase", "priority": 10, "notes": "用户确认默认销售量=发货量。"},
     {"alias_text": "发货量", "metric_code": "shipment_volume", "alias_type": "user_phrase", "priority": 10},
     {"alias_text": "实际发出量", "metric_code": "shipment_volume", "alias_type": "raw_excel_item", "priority": 20},
+    {"alias_text": "卖了多少", "metric_code": "shipment_volume", "alias_type": "nl_variant", "priority": 30},
+    {"alias_text": "卖出去多少", "metric_code": "shipment_volume", "alias_type": "nl_variant", "priority": 30},
+    {"alias_text": "出货量", "metric_code": "shipment_volume", "alias_type": "nl_variant", "priority": 30},
+    {"alias_text": "销售的", "metric_code": "shipment_volume", "alias_type": "nl_variant", "priority": 30},
+    {"alias_text": "发运了多少", "metric_code": "shipment_volume", "alias_type": "nl_variant", "priority": 30},
+    # === 对外销量（剔除内部交易） ===
     {"alias_text": "组件事业部剔除内部交易", "metric_code": "shipment_external_excluding_internal", "alias_type": "user_phrase", "priority": 5, "notes": "2024 默认对外销量口径。"},
+    {"alias_text": "对外销量", "metric_code": "shipment_external_excluding_internal", "alias_type": "nl_variant", "priority": 20},
+    {"alias_text": "外部销售", "metric_code": "shipment_external_excluding_internal", "alias_type": "nl_variant", "priority": 30},
+    {"alias_text": "卖给客户的", "metric_code": "shipment_external_excluding_internal", "alias_type": "nl_variant", "priority": 30},
+    # === 开票销量 ===
     {"alias_text": "开票", "metric_code": "invoice_sales_volume", "alias_type": "user_phrase", "priority": 5, "requires_explicit_phrase": 1, "notes": "必须显式问开票。"},
+    {"alias_text": "已开票", "metric_code": "invoice_sales_volume", "alias_type": "nl_variant", "priority": 30, "requires_explicit_phrase": 1},
+    {"alias_text": "开票了多少", "metric_code": "invoice_sales_volume", "alias_type": "nl_variant", "priority": 30, "requires_explicit_phrase": 1},
+    # === 库存/存货 ===
     {"alias_text": "库存", "metric_code": "ending_inventory_volume", "alias_type": "synonym", "priority": 10, "notes": "库存、存货、库存（SAP数据）完全等价。"},
     {"alias_text": "存货", "metric_code": "ending_inventory_volume", "alias_type": "synonym", "priority": 10, "notes": "库存、存货、库存（SAP数据）完全等价。"},
     {"alias_text": "库存（SAP数据）", "metric_code": "ending_inventory_volume", "alias_type": "raw_excel_item", "priority": 10, "notes": "库存、存货、库存（SAP数据）完全等价。"},

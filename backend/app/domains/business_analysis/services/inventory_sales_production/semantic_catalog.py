@@ -10,6 +10,39 @@ from backend.app.domains.business_analysis.repositories.inventory_sales_producti
     METRIC_CATALOG,
 )
 
+# S1: NL2SQL Semantic Catalog 增强——指标 NL 描述和示例问法
+_METRIC_NL_DESCRIPTIONS: dict[str, str] = {
+    "production_actual_including_oem": "实际产量，包含委外/代工部分，单位为MW（兆瓦）。用户说生产了多少、产出量、实际生产量通常指这个指标。",
+    "production_actual_excluding_oem": "实际产量，不含委外/代工部分，单位为MW。",
+    "production_by_base": "按生产基地拆分的产量，每个基地一个值，包括合肥、阜宁、广德等。",
+    "production_outsourced": "委外加工产量，委托外部供应商生产的部分，单位为MW。",
+    "production_self": "自产产量，公司自有生产线生产的产量，单位为MW。",
+    "production_oem": "代工/受托加工产量，OEM、双经销、TW等生产模式的产出，单位为MW。",
+    "production_by_model_type": "按版型拆分的产量，版型如P型、N型、182N、183N、210N、210R等，单位为MW。",
+    "production_budget": "产量预算或目标值，来源于年度预算或综合计划书，单位为MW。用于计算预算达成率。",
+    "shipment_volume": "发货量/销量，用户确认默认销量=发货量，单位为MW。用户说卖了多少、出货了多少、发运了多少通常指这个指标。",
+    "shipment_by_base": "按生产基地拆分的发货量/销量，单位为MW。",
+    "shipment_external_excluding_internal": "对外销量，剔除集团内部交易部分。2024年用户默认采用此口径作为销量。",
+    "invoice_sales_volume": "开票销量，仅当用户明确提到开票时使用，不是默认销量口径，单位为MW。",
+    "ending_inventory_volume": "期末库存/存货，库存、存货、库存(SAP数据)完全等价。单位为MW，取期末时点值(非累计值)。",
+    "ending_inventory_by_base": "按生产基地拆分的期末库存/存货，单位为MW。",
+    "consigned_inventory_volume": "寄存库存，寄存仓与寄存合计完全等价。单位为MW，取期末时点值。",
+    "consigned_inventory_by_base": "按生产基地拆分的寄存库存，单位为MW。",
+    "operating_volume_unclassified": "未分类经营数量，兜底保留的历史特殊经营数量，单位为MW。",
+}
+_METRIC_EXAMPLE_QUESTIONS: dict[str, list[str]] = {
+    "production_actual_including_oem": ["2024年产量是多少？", "2025年生产了多少？", "今年实际产出"],
+    "production_by_base": ["各基地产量", "按基地的产量分布", "合肥基地生产了多少"],
+    "production_by_model_type": ["各版型产量", "按版型的生产情况", "P型和N型产量"],
+    "production_budget": ["2024年产量预算", "今年的生产目标是多少"],
+    "shipment_volume": ["2024年销量是多少？", "今年卖了多少？", "发货量数据", "出货量"],
+    "shipment_external_excluding_internal": ["2024年对外销量", "2024年销量（剔除内部交易）"],
+    "invoice_sales_volume": ["2025年开票销量", "开票了多少"],
+    "ending_inventory_volume": ["2024年库存", "存货数据", "期末库存"],
+    "consigned_inventory_volume": ["寄存库存", "寄存合计有多少"],
+    "production_budget_achievement_rate": ["2024年预算达成率", "预算完成率", "目标完成情况"],
+}
+
 ISP_ALLOWED_READ_TABLES = (
     "dwd_ba_isp_monthly_fact",
     "dim_ba_isp_metric",
@@ -80,8 +113,8 @@ class InventorySalesProductionCatalogMetric(BaseModel):
         depends_on_metrics: 计算类指标依赖的已注册标准指标编码。
         support_status: supported 表示当前可执行；planned/unsupported 只可记录不可执行。
         requires_explicit_phrase: 是否必须由显式用户词触发，例如开票销量。
-    返回：
-        可供 QueryPlan/NL2SQL 召回与校验使用的指标条目。
+        nl_description: NL2SQL 使用的指标业务描述，供 LLM 理解业务含义。
+        example_questions: 该指标的典型用户问法示例，供 LLM 指标解析参考。
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -99,6 +132,8 @@ class InventorySalesProductionCatalogMetric(BaseModel):
     support_status: str = "supported"
     default_for_sales: bool = False
     requires_explicit_phrase: bool = False
+    nl_description: str | None = None
+    example_questions: list[str] = Field(default_factory=list)
 
 
 class InventorySalesProductionCatalogDimension(BaseModel):
@@ -113,6 +148,8 @@ class InventorySalesProductionCatalogDimension(BaseModel):
     table: str = "dwd_ba_isp_monthly_fact"
     business_note: str | None = None
     support_status: str = "supported"
+    example_values: list[str] = Field(default_factory=list)
+    nl_description: str | None = None
 
 
 class InventorySalesProductionSemanticCatalog(BaseModel):
@@ -316,6 +353,7 @@ class InventorySalesProductionSemanticCatalogLoader:
         """将现有指标维表配置转换为 Semantic Catalog 指标条目。"""
 
         metric_code = str(metric["metric_code"])
+        desc = metric.get("description", "")
         return {
             "metric_id": metric_code,
             "display_name": metric["metric_name"],
@@ -335,10 +373,12 @@ class InventorySalesProductionSemanticCatalogLoader:
             "aggregation": metric.get("aggregation_type"),
             "unit": metric.get("unit_standard"),
             "metric_category": metric.get("metric_category"),
-            "business_note": metric.get("description"),
+            "business_note": desc,
             "support_status": "supported",
             "default_for_sales": bool(metric.get("is_default_for_sales")),
             "requires_explicit_phrase": requires_explicit_phrase,
+            "nl_description": _METRIC_NL_DESCRIPTIONS.get(metric_code, desc),
+            "example_questions": _METRIC_EXAMPLE_QUESTIONS.get(metric_code, []),
         }
 
     @staticmethod
@@ -459,20 +499,21 @@ class InventorySalesProductionSemanticCatalogLoader:
         """返回产销存 QueryPlan 当前支持的维度目录。"""
 
         return [
-            {"dimension_id": "business_year", "display_name": "年份", "aliases": ["年份", "年度", "按年", "每年", "分年"], "column": "business_year"},
+            {"dimension_id": "business_year", "display_name": "年份", "aliases": ["年份", "年度", "按年", "每年", "分年"], "column": "business_year", "example_values": ["2023", "2024", "2025", "2026"]},
             {
                 "dimension_id": "business_quarter",
                 "display_name": "季度",
                 "aliases": ["季度", "按季度", "每季度", "分季度", "Q1", "Q2", "Q3", "Q4", "一季度", "二季度", "三季度", "四季度"],
                 "column": "business_month",
                 "business_note": "季度维度由业务月份确定性折算，不暴露原始工作簿字段。",
+                "example_values": ["Q1/一季度(1-3月)", "Q2/二季度(4-6月)", "Q3/三季度(7-9月)", "Q4/四季度(10-12月)"],
             },
-            {"dimension_id": "base_name", "display_name": "基地", "aliases": ["基地", "各基地", "按基地", "分基地"], "column": "base_name"},
+            {"dimension_id": "base_name", "display_name": "基地", "aliases": ["基地", "各基地", "按基地", "分基地"], "column": "base_name", "example_values": ["合肥基地", "阜宁基地", "广德基地"], "nl_description": "公司的生产基地名称，用于按基地拆分查询。用户说各基地、按基地、分基地时使用此维度。"},
             {"dimension_id": "factory_name", "display_name": "工厂", "aliases": ["工厂", "按工厂", "各工厂", "分工厂"], "column": "factory_name"},
-            {"dimension_id": "model_type", "display_name": "版型", "aliases": ["版型", "各版型", "按版型", "分版型"], "column": "model_type"},
-            {"dimension_id": "production_mode", "display_name": "生产模式", "aliases": ["生产模式", "按生产模式"], "column": "production_mode"},
-            {"dimension_id": "trade_scope", "display_name": "交易范围", "aliases": ["交易范围", "内部交易", "对外"], "column": "trade_scope"},
-            {"dimension_id": "business_month", "display_name": "月份", "aliases": ["月份", "按月", "每月", "趋势"], "column": "business_month"},
+            {"dimension_id": "model_type", "display_name": "版型", "aliases": ["版型", "各版型", "按版型", "分版型"], "column": "model_type", "example_values": ["P型", "N型", "182N", "183N", "210N", "210R"], "nl_description": "光伏组件的版型/产品类型，用于按版型拆分查询。"},
+            {"dimension_id": "production_mode", "display_name": "生产模式", "aliases": ["生产模式", "按生产模式"], "column": "production_mode", "example_values": ["自产", "委外", "OEM代工", "受托加工"]},
+            {"dimension_id": "trade_scope", "display_name": "交易范围", "aliases": ["交易范围", "内部交易", "对外"], "column": "trade_scope", "example_values": ["内部销售", "对外销售"]},
+            {"dimension_id": "business_month", "display_name": "月份", "aliases": ["月份", "按月", "每月", "趋势"], "column": "business_month", "example_values": ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月", "12月"]},
         ]
 
     def _validate_catalog(self, catalog: InventorySalesProductionSemanticCatalog) -> None:

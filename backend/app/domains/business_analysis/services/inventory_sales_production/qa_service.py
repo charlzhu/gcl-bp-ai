@@ -20,6 +20,9 @@ from backend.app.domains.business_analysis.services.inventory_sales_production.n
     InventorySalesProductionNlQueryPlanner,
     InventorySalesProductionPlanningError,
 )
+from backend.app.domains.business_analysis.services.inventory_sales_production.nl2sql_query_planner import (
+    InventorySalesProductionNl2SqlQueryPlanner,
+)
 from backend.app.domains.business_analysis.services.inventory_sales_production.query_executor import (
     InventorySalesProductionQueryExecutor,
 )
@@ -54,6 +57,7 @@ class InventorySalesProductionQaService:
         db: Session,
         *,
         planner: InventorySalesProductionNlQueryPlanner | None = None,
+        nl2sql_planner: InventorySalesProductionNl2SqlQueryPlanner | None = None,
         executor: InventorySalesProductionQueryExecutor | None = None,
         query_log_repository: LogisticsQueryRepository | None = None,
         live_gate_enabled: bool = False,
@@ -65,11 +69,12 @@ class InventorySalesProductionQaService:
 
         参数：
             db: 当前数据库会话。
-            planner: 自然语言临时规划器，测试可注入。
+            planner: 自然语言规则规划器，测试可注入。
+            nl2sql_planner: LLM Catalog Recall 规划器（S3），仅在 live_gate 模式启用时使用。
             executor: M3 QueryExecutor，测试可注入。
             query_log_repository: 统一查询历史仓储，失败时不影响主链路。
             live_gate_enabled: M8 feature flag 是否启用。
-            live_gate_mode: M8 feature flag 模式（off/shadow/assist）。
+            live_gate_mode: M8 feature flag 模式（off/shadow/assist/nl2sql）。
             live_gate_runner: 可注入的 M6 live shadow gate runner。
             live_gate_artifact_dir: M8 shadow 模式下的验收材料目录。
         返回：
@@ -78,6 +83,7 @@ class InventorySalesProductionQaService:
 
         self.db = db
         self.planner = planner or InventorySalesProductionNlQueryPlanner()
+        self.nl2sql_planner = nl2sql_planner or InventorySalesProductionNl2SqlQueryPlanner()
         self.executor = executor or InventorySalesProductionQueryExecutor(db)
         self.query_log_repository = query_log_repository or LogisticsQueryRepository()
         self.live_gate_enabled = live_gate_enabled
@@ -124,7 +130,99 @@ class InventorySalesProductionQaService:
         *,
         trace_id: str | None = None,
     ) -> InventorySalesProductionQaResponse:
-        """M8 可选 live gate 问答入口。
+        """M8 可选 live gate / S3 NL2SQL 问答入口。
+
+        参数：
+            question: 用户原始自然语言问题。
+            trace_id: 请求链路 ID。
+        返回：
+            InventorySalesProductionQaResponse；gate/NL2SQL 失败时自动 fallback 到 M4 确定性结果。
+
+        业务逻辑：
+            off 模式：与 ask() 完全相同，不走 gate，使用规则规划器。
+            shadow 模式：使用规则规划器，NL2SQL 结果仅记录到日志。
+            assist 模式：使用规则规划器，gate 结果仅记录（向后兼容 M6）。
+            nl2sql 模式：使用 LLM Catalog Recall 规划器（S3），
+                    成功时返回 NL2SQL 结果，失败时 fallback 到规则规划器。
+        """
+
+        if not self.live_gate_enabled or self.live_gate_mode == "off":
+            return self.ask(question=question, trace_id=trace_id)
+
+        # nl2sql 模式：使用 LLM Catalog Recall 规划器
+        if self.live_gate_mode == "nl2sql":
+            return self._ask_with_nl2sql_planner(question=question, trace_id=trace_id)
+
+        # shadow/assist 模式：向后兼容 M6（规则规划器 + gate 记录）
+        return self._ask_with_shadow_gate(question=question, trace_id=trace_id)
+
+    def _ask_with_nl2sql_planner(
+        self,
+        question: str,
+        *,
+        trace_id: str | None = None,
+    ) -> InventorySalesProductionQaResponse:
+        """使用 LLM Catalog Recall 规划器（S3）回答问题。
+
+        参数：
+            question: 用户自然语言问题。
+            trace_id: 请求链路 ID。
+        返回：
+            InventorySalesProductionQaResponse；LLM 规划器失败时自动 fallback 到规则规划器。
+        """
+        # 尝试 LLM 规划器
+        try:
+            plan = self.nl2sql_planner.build_plan(question)
+            query_result = self.executor.execute(plan)
+            response = self._build_response_from_query_result(
+                question=question,
+                trace_id=trace_id,
+                query_result=query_result,
+            )
+            logger.info("isp_nl2sql_planner_success question=%s", question[:50])
+            self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+            return response
+        except InventorySalesProductionPlanningError:
+            # LLM 规划器返回 clarification/unsupported —— fallback 到规则规划器
+            pass
+        except Exception:  # noqa: BLE001
+            # LLM 规划器异常 —— fallback 到规则规划器
+            logger.warning("isp_nl2sql_planner_fallback question=%s", question[:50], exc_info=True)
+
+        # fallback 到规则规划器
+        try:
+            plan = self.planner.build_plan(question)
+            query_result = self.executor.execute(plan)
+            response = self._build_response_from_query_result(
+                question=question,
+                trace_id=trace_id,
+                query_result=query_result,
+            )
+            logger.info("isp_nl2sql_fallback_rule_success question=%s", question[:50])
+            self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+            return response
+        except InventorySalesProductionPlanningError as exc:
+            response = self._build_blocked_response(
+                question=question,
+                trace_id=trace_id,
+                status=exc.status,
+                message=exc.message,
+            )
+            self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+            return response
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("inventory_sales_production_qa_failed trace_id=%s", trace_id)
+            response = self._build_error_response(question=question, trace_id=trace_id, message=str(exc))
+            self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+            return response
+
+    def _ask_with_shadow_gate(
+        self,
+        question: str,
+        *,
+        trace_id: str | None = None,
+    ) -> InventorySalesProductionQaResponse:
+        """M6 live shadow gate 模式（向后兼容）。
 
         参数：
             question: 用户原始自然语言问题。
@@ -133,13 +231,9 @@ class InventorySalesProductionQaService:
             InventorySalesProductionQaResponse；gate 失败时自动 fallback 到 M4 确定性结果。
 
         业务逻辑：
-            off 模式：与 ask() 完全相同，不走 gate。
             shadow 模式：M4 确定性结果作为正式答案，gate 结果仅记录。
-            assist 模式：gate 成功时使用 gate 结果，失败时退回到 M4 结果。
+            assist 模式：gate 成功时记录，失败时退回到 M4 结果。
         """
-
-        if not self.live_gate_enabled or self.live_gate_mode == "off":
-            return self.ask(question=question, trace_id=trace_id)
 
         # 先获取 M4 确定性结果（基线安全结果）
         m4_response = self.ask(question=question, trace_id=trace_id)
