@@ -600,24 +600,39 @@ class LogisticsDataQaService:
             plan: 受控查询计划。
         返回：
             灰度决策结果；异常时返回 None（回退到正式回答）。
+
+        多域支持：
+            通过 Nl2SqlDomainRouter 识别问题所属域（logistics / business_analysis / plan_bom），
+            域信息传递给灰度门禁和 shadow adapter。
         """
         try:
+            # 从 domain_router 识别域
+            from backend.app.domains.logistics.services.nl2sql.domain_router import (
+                Nl2SqlDomainRouter,
+            )
+            domain_router = Nl2SqlDomainRouter()
+            route = domain_router.route(question)
+            domain = route.domain if route.should_process else "logistics"
+
             gate = self._build_grayscale_gate()
-            decision = gate.decide(formal=formal_result)
+            decision = gate.decide(formal=formal_result, domain=domain)
             if not decision.should_grayscale:
                 return LogisticsNl2SqlGrayscaleDecisionResult(
                     should_grayscale=False,
                     fallback_reason=decision.fallback_reason,
+                    domain=domain,
                 )
             shadow_summary = self.nl2sql_live_shadow_adapter.run_shadow(
                 question=question,
                 trace_id=trace_id,
                 formal_result=formal_result,
+                domain=domain,
             )
             if not shadow_summary.enabled or shadow_summary.status not in ("success", "skipped"):
                 return LogisticsNl2SqlGrayscaleDecisionResult(
                     should_grayscale=False,
                     fallback_reason="shadow_not_available",
+                    domain=domain,
                 )
             comparator = LogisticsNl2SqlShadowComparator()
             comparison = comparator.compare(formal=formal_result, shadow=shadow_summary)
@@ -625,6 +640,7 @@ class LogisticsDataQaService:
                 return LogisticsNl2SqlGrayscaleDecisionResult(
                     should_grayscale=False,
                     fallback_reason="shadow_quality_mismatch",
+                    domain=domain,
                 )
             replacement = LogisticsDataQaResult(
                 answer_summary=formal_result.answer_summary,
@@ -644,6 +660,7 @@ class LogisticsDataQaService:
             return LogisticsNl2SqlGrayscaleDecisionResult(
                 should_grayscale=True,
                 replacement_result=replacement,
+                domain=domain,
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("grayscale decision failed: %s", redact_evaluation_text(str(exc)))
