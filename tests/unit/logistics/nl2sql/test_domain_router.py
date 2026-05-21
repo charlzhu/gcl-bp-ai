@@ -143,6 +143,13 @@ class TestNl2SqlDomainRouter:
         assert route.domain == "unknown"
         assert route.reason_code == "no_domain_identified"
 
+    def test_business_analysis_domain_identified(self):
+        """经营分析的问题应被路由到 business_analysis 域。"""
+        router = Nl2SqlDomainRouter()
+        route = router.route("2023年产销存分析报表")
+        assert route.should_process is True
+        assert route.domain == "business_analysis"
+
     def test_router_with_rewrite_result_object(self):
         """兼容 LogisticsNl2SqlQueryRewriteResult 对象。"""
         registry = Nl2SqlDomainRegistry()

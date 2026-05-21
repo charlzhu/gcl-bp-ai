@@ -94,8 +94,7 @@ class Nl2SqlDomainRegistry:
             domain: 业务域名称。
 
         返回：
-            catalog 对象（域特有类型，如 LogisticsSemanticCatalog），
-            未注册或无 loader 则返回 None。
+            catalog 对象（域特有类型），未注册或无 loader 则返回 None。
         """
         reg = self._domains.get(domain)
         if reg is None or reg.catalog_loader is None:
@@ -126,6 +125,7 @@ __all__ = [
     "DomainCatalogRegistration",
     "Nl2SqlDomainRegistry",
     "register_logistics_domain",
+    "register_business_analysis_domain",
     "create_default_registry",
 ]
 
@@ -135,12 +135,11 @@ def register_logistics_domain(registry: Nl2SqlDomainRegistry) -> None:
 
     注册内容：
         - domain: logistics
-        - keywords: 物流域识别关键词（与 LogisticsNl2SqlDomainRouter 保持一致）
+        - keywords: 物流域识别关键词
         - catalog_loader: 懒加载物流 semantic catalog
         - templates_loader: 懒加载物流 query_templates
         - allowed_tables: 物流中间库允许读取的表
     """
-    # 懒加载避免循环 import
     from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
         LOGISTICS_NL2SQL_ALLOWED_READ_TABLES,
         LogisticsSemanticCatalogLoader,
@@ -174,14 +173,61 @@ def register_logistics_domain(registry: Nl2SqlDomainRegistry) -> None:
     ))
 
 
+def register_business_analysis_domain(registry: Nl2SqlDomainRegistry) -> None:
+    """注册经营分析（产销存）业务域到 registry。
+
+    注册内容：
+        - domain: business_analysis
+        - keywords: 经营分析域识别关键词
+        - catalog_loader: 懒加载产销存 semantic catalog（简要描述）
+        - templates_loader: 懒加载产销存 query_templates
+        - allowed_tables: 产销存中间库允许读取的表
+    """
+    from backend.app.domains.business_analysis.services.inventory_sales_production.semantic_catalog import (
+        ISP_ALLOWED_READ_TABLES,
+    )
+
+    def _load_catalog() -> list[dict]:
+        return [
+            {"table": "dwd_ba_isp_monthly_fact", "description": "产销存月度事实表"},
+            {"table": "dim_ba_isp_metric", "description": "标准指标维表"},
+            {"table": "dim_ba_isp_metric_alias", "description": "指标别名维表"},
+        ]
+
+    def _load_templates() -> list[dict]:
+        from pathlib import Path
+
+        import yaml
+
+        templates_path = (
+            Path(__file__).resolve().parents[3]
+            / "config" / "domains" / "business_analysis" / "query_templates.yaml"
+        )
+        if templates_path.exists():
+            data = yaml.safe_load(templates_path.read_text(encoding="utf-8"))
+            return (data or {}).get("templates", [])
+        return []
+
+    registry.register(DomainCatalogRegistration(
+        domain="business_analysis",
+        priority=10,
+        keywords=["经营分析", "毛利", "收入", "利润", "产销存", "销售量", "销量", "产量",
+                   "预算达成率", "库存周转率", "成本分析", "经营指标", "经营情况"],
+        catalog_loader=_load_catalog,
+        templates_loader=_load_templates,
+        allowed_tables=ISP_ALLOWED_READ_TABLES,
+    ))
+
+
 def create_default_registry() -> Nl2SqlDomainRegistry:
-    """创建包含物流域的默认注册表。
+    """创建包含物流域 + 产销存域的默认注册表。
 
     用途：
         1. 被 Nl2SqlDomainRouter 默认构造使用；
-        2. 保持现有行为（物流域 + 其他域 should_process=False）；
-        3. 后续 Phase B（business_analysis）和 Phase C（plan_bom）在此函数中追加注册。
+        2. 物流域 + 产销存域已注册；
+        3. 后续 Phase C（plan_bom）在此函数中追加注册。
     """
     registry = Nl2SqlDomainRegistry()
     register_logistics_domain(registry)
+    register_business_analysis_domain(registry)
     return registry
