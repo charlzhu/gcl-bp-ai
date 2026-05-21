@@ -125,4 +125,63 @@ class Nl2SqlDomainRegistry:
 __all__ = [
     "DomainCatalogRegistration",
     "Nl2SqlDomainRegistry",
+    "register_logistics_domain",
+    "create_default_registry",
 ]
+
+
+def register_logistics_domain(registry: Nl2SqlDomainRegistry) -> None:
+    """注册物流业务域到 registry。
+
+    注册内容：
+        - domain: logistics
+        - keywords: 物流域识别关键词（与 LogisticsNl2SqlDomainRouter 保持一致）
+        - catalog_loader: 懒加载物流 semantic catalog
+        - templates_loader: 懒加载物流 query_templates
+        - allowed_tables: 物流中间库允许读取的表
+    """
+    # 懒加载避免循环 import
+    from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
+        LOGISTICS_NL2SQL_ALLOWED_READ_TABLES,
+        LogisticsSemanticCatalogLoader,
+    )
+
+    def _load_catalog() -> Any:
+        loader = LogisticsSemanticCatalogLoader()
+        return loader.load()
+
+    def _load_templates() -> list[dict]:
+        from pathlib import Path
+
+        import yaml
+
+        templates_path = (
+            Path(__file__).resolve().parents[3]
+            / "config" / "domains" / "logistics" / "query_templates.yaml"
+        )
+        if templates_path.exists():
+            data = yaml.safe_load(templates_path.read_text(encoding="utf-8"))
+            return (data or {}).get("templates", [])
+        return []
+
+    registry.register(DomainCatalogRegistration(
+        domain="logistics",
+        priority=10,
+        keywords=["物流", "发运", "运输", "托运", "承运", "运费", "运价", "车次", "车辆", "发车"],
+        catalog_loader=_load_catalog,
+        templates_loader=_load_templates,
+        allowed_tables=LOGISTICS_NL2SQL_ALLOWED_READ_TABLES,
+    ))
+
+
+def create_default_registry() -> Nl2SqlDomainRegistry:
+    """创建包含物流域的默认注册表。
+
+    用途：
+        1. 被 Nl2SqlDomainRouter 默认构造使用；
+        2. 保持现有行为（物流域 + 其他域 should_process=False）；
+        3. 后续 Phase B（business_analysis）和 Phase C（plan_bom）在此函数中追加注册。
+    """
+    registry = Nl2SqlDomainRegistry()
+    register_logistics_domain(registry)
+    return registry

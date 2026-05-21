@@ -211,12 +211,14 @@ class LogisticsNl2SqlDomainRouter(Nl2SqlDomainRouter):
         # 先检查 registry 中的已注册域（Nl2SqlDomainRouter 基类逻辑）
         registry_result = super().route(text)
         if registry_result.should_process:
+            # registry 识别出域（物流/产销存/计划BOM）时，传递域但不保留 reason_code，
+            # 保持 LogisticsNl2SqlDomainRouter 原有的 reason_code=None 语义
             return LogisticsNl2SqlDomainRoute(
                 should_process=True,
                 domain=registry_result.domain,
                 source_system="middle_db",
                 mode="shadow",
-                reason_code=registry_result.reason_code,
+                reason_code=None,
             )
         return LogisticsNl2SqlDomainRoute(should_process=True, domain="logistics", source_system="middle_db", mode="shadow")
 

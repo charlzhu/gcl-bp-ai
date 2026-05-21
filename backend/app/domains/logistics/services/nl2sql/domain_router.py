@@ -54,9 +54,10 @@ class Nl2SqlDomainRouter:
     def __init__(self, registry: Nl2SqlDomainRegistry | None = None) -> None:
         from backend.app.domains.logistics.services.nl2sql.domain_registry import (
             Nl2SqlDomainRegistry,
+            create_default_registry,
         )
 
-        self._registry = registry or Nl2SqlDomainRegistry()
+        self._registry = registry or create_default_registry()
 
     def route(
         self,

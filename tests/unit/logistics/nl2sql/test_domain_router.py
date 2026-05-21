@@ -101,13 +101,13 @@ class TestNl2SqlDomainRegistry:
 class TestNl2SqlDomainRouter:
     """多域路由基类测试。"""
 
-    def test_default_router_no_registry(self):
-        """默认构造的 router（空 registry）应返回 should_process=False。"""
+    def test_default_router_has_logistics_registry(self):
+        """默认构造的 router 应自动注册物流域，物流问题 should_process=True。"""
         router = Nl2SqlDomainRouter()
         route = router.route("物流发运明细")
         assert isinstance(route, Nl2SqlDomainRoute)
-        assert route.should_process is False
-        assert route.domain == "unknown"
+        assert route.should_process is True
+        assert route.domain == "logistics"
 
     def test_router_with_logistics_registry(self):
         """注册物流域后，应正确路由物流问题。"""
