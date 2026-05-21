@@ -319,3 +319,47 @@ def test_m8_deps_shadow_mode_still_uses_rule_planner(monkeypatch) -> None:
     assert resp is not None
     # shadow 模式走 ask()，使用规则规划器
     assert monitor_planner.build_plan.call_count >= 1
+
+
+# ===== nl2sql_extended 模式 =====
+
+
+def test_m8_nl2sql_extended_uses_nl2sql_planner() -> None:
+    """nl2sql_extended 模式使用 NL2SQL 规划器，不调用规则规划器。"""
+    svc = _make_nl2sql_service(mode="nl2sql_extended", nl2sql_ok=True)
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    assert svc.nl2sql_planner.build_plan.call_count == 1
+    assert svc.planner.build_plan.call_count == 0
+
+
+def test_m8_nl2sql_extended_fallback_to_rule() -> None:
+    """NL2SQL 规划器失败时自动 fallback 到规则规划器。"""
+    svc = _make_nl2sql_service(mode="nl2sql_extended", nl2sql_ok=False, rule_fallback_ok=True)
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    assert svc.nl2sql_planner.build_plan.call_count == 1
+    assert svc.planner.build_plan.call_count == 1
+
+
+def test_m8_nl2sql_extended_both_fail_returns_blocked() -> None:
+    """NL2SQL 和规则规划器都失败时返回 clarification 响应。"""
+    svc = _make_nl2sql_service(mode="nl2sql_extended", nl2sql_ok=False, rule_fallback_ok=False)
+    resp = svc.ask_with_live_gate("2025年产量是多少？")
+    assert resp is not None
+    assert svc.nl2sql_planner.build_plan.call_count == 1
+    assert svc.planner.build_plan.call_count == 1
+    # 确保 response 有合法状态
+    assert resp.answer_summary or resp.status
+
+
+# ===== config.py 字面量验证 =====
+
+
+def test_m8_config_has_nl2sql_extended_literal() -> None:
+    """config.py 的 isp_live_qa_gate_mode 必须支持 nl2sql_extended 字面量。"""
+    from backend.app.core.config import Settings
+
+    # 验证 Literal 中包含 nl2sql_extended
+    settings = Settings(isp_live_qa_gate_mode="nl2sql_extended")
+    assert settings.isp_live_qa_gate_mode == "nl2sql_extended"

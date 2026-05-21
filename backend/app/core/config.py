@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     # assist = 优先使用 M6 live gate，失败时自动 fallback 到 M4 确定性链路
     # nl2sql = 使用 S3 LLM Catalog Recall 规划器，失败时 fallback 到规则规划器
     isp_live_qa_gate_enabled: bool = False
-    isp_live_qa_gate_mode: Literal["off", "shadow", "assist", "nl2sql"] = "off"
+    isp_live_qa_gate_mode: Literal["off", "shadow", "assist", "nl2sql", "nl2sql_extended"] = "off"
 
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parent.parent.parent / ".env",

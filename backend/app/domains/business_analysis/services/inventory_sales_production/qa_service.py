@@ -130,7 +130,7 @@ class InventorySalesProductionQaService:
         *,
         trace_id: str | None = None,
     ) -> InventorySalesProductionQaResponse:
-        """M8 可选 live gate / S3 NL2SQL 问答入口。
+        """M8 可选 live gate / S3 NL2SQL / S8 NL2SQL-Extended 问答入口。
 
         参数：
             question: 用户原始自然语言问题。
@@ -142,15 +142,18 @@ class InventorySalesProductionQaService:
             off 模式：与 ask() 完全相同，不走 gate，使用规则规划器。
             shadow 模式：使用规则规划器，NL2SQL 结果仅记录到日志。
             assist 模式：使用规则规划器，gate 结果仅记录（向后兼容 M6）。
-            nl2sql 模式：使用 LLM Catalog Recall 规划器（S3），
+            nl2sql 模式：使用 S3 LLM Catalog Recall 规划器（Nl2SqlQueryPlanner），
                     成功时返回 NL2SQL 结果，失败时 fallback 到规则规划器。
+            nl2sql_extended 模式：使用 S7 LLM 完整 SQLPlan 规划器（Nl2SqlSqlPlanPlanner），
+                    输出完整 SqlPlanCandidate 经 Validator 校验后执行，
+                    失败时 fallback 到规则规划器。
         """
 
         if not self.live_gate_enabled or self.live_gate_mode == "off":
             return self.ask(question=question, trace_id=trace_id)
 
-        # nl2sql 模式：使用 LLM Catalog Recall 规划器
-        if self.live_gate_mode == "nl2sql":
+        # nl2sql / nl2sql_extended 模式：都使用 NL2SQL 规划器（接口兼容）
+        if self.live_gate_mode in ("nl2sql", "nl2sql_extended"):
             return self._ask_with_nl2sql_planner(question=question, trace_id=trace_id)
 
         # shadow/assist 模式：向后兼容 M6（规则规划器 + gate 记录）

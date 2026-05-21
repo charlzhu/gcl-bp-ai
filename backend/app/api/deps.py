@@ -166,16 +166,17 @@ def get_inventory_sales_production_qa_service(
 ) -> InventorySalesProductionQaService:
     """产销存经营分析问答服务依赖。
 
-    M8 灰度模式：
+    M8 灰度模式 + S8 扩展：
         1. off/shadow/assist 模式仍使用规则规划器；
         2. nl2sql 模式注入 S3 LLM Catalog Recall 规划器；
-        3. 默认 off（上线前不意外激活 NL2SQL 链路）。
+        3. nl2sql_extended 模式注入 S7 LLM 完整 SQLPlan 规划器；
+        4. 默认 off（上线前不意外激活 NL2SQL 链路）。
     """
 
     live_gate_enabled = settings.isp_live_qa_gate_enabled
     live_gate_mode = settings.isp_live_qa_gate_mode
     if live_gate_enabled and live_gate_mode == "nl2sql":
-        # nl2sql 模式：使用 LLM Catalog Recall 规划器
+        # nl2sql 模式：使用 S3 LLM Catalog Recall 规划器
         from backend.app.domains.business_analysis.services.inventory_sales_production.nl2sql_query_planner import (
             InventorySalesProductionNl2SqlQueryPlanner,
         )
@@ -191,6 +192,25 @@ def get_inventory_sales_production_qa_service(
             nl2sql_planner=nl2sql_planner,
             live_gate_enabled=True,
             live_gate_mode="nl2sql",
+        )
+
+    if live_gate_enabled and live_gate_mode == "nl2sql_extended":
+        # nl2sql_extended 模式：使用 S7 LLM 完整 SQLPlan 规划器
+        from backend.app.domains.business_analysis.services.inventory_sales_production.nl2sql_sqlplan_planner import (
+            InventorySalesProductionNl2SqlSqlPlanPlanner,
+        )
+
+        nl2sql_planner = InventorySalesProductionNl2SqlSqlPlanPlanner(
+            llm_api_key=settings.llm_api_key or "",
+            llm_base_url=settings.llm_base_url or "",
+            llm_model=settings.llm_model or "qwen-max",
+            timeout=15.0,
+        )
+        return InventorySalesProductionQaService(
+            db=db,
+            nl2sql_planner=nl2sql_planner,
+            live_gate_enabled=True,
+            live_gate_mode="nl2sql_extended",
         )
 
     return InventorySalesProductionQaService(
