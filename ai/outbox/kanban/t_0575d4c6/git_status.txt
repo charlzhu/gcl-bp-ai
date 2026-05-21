@@ -1,0 +1,6 @@
+## feature/nl2sql-m10d-explain-trial-gates...origin/agent/bp-main
+ M ai/outbox/kanban/t_7895e090/m8-shadow-eval-records.jsonl
+ M backend/app/domains/logistics/services/nl2sql/__init__.py
+?? ai/outbox/kanban/t_0575d4c6/
+?? backend/app/domains/logistics/services/nl2sql/m10d_shadow_gate.py
+?? tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py

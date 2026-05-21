@@ -1,0 +1,79 @@
+{
+  "scanned_files": [
+    "backend/app/domains/logistics/services/nl2sql/__init__.py",
+    "backend/app/domains/logistics/services/nl2sql/m10d_shadow_gate.py",
+    "tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py"
+  ],
+  "finding_count": 9,
+  "blocking_count": 0,
+  "needs_review_count": 0,
+  "classifications": {
+    "redaction_logic": 1,
+    "test_redaction_probe": 8
+  },
+  "findings": [
+    {
+      "file": "backend/app/domains/logistics/services/nl2sql/m10d_shadow_gate.py",
+      "line": 397,
+      "pattern": "sensitive_word",
+      "classification": "redaction_logic",
+      "snippet": "if \"[SQL_REDACTED]\" in text or \"[DSN_REDACTED]\" in text or \"[REDACTED]\" in text:"
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py",
+      "line": 52,
+      "pattern": "sensitive_word",
+      "classification": "test_redaction_probe",
+      "snippet": "executor = FakeLogisticsSqlExecutor(explain_rows=[{\"select_type\": \"SIMPLE\", \"table\": \"secret_table\"}])"
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py",
+      "line": 75,
+      "pattern": "sensitive_word",
+      "classification": "test_redaction_probe",
+      "snippet": "assert \"secret_table\" not in payload"
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py",
+      "line": 123,
+      "pattern": "sensitive_word",
+      "classification": "test_redaction_probe",
+      "snippet": "\"EXPLAIN SELECT password=unit-secret token=tok_unitsecret \""
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py",
+      "line": 124,
+      "pattern": "db_url_literal",
+      "classification": "test_redaction_probe",
+      "snippet": "\"FROM dws_logistics_detail_union mysql://user:secretpass@127.0.0.1/db\""
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py",
+      "line": 124,
+      "pattern": "sensitive_word",
+      "classification": "test_redaction_probe",
+      "snippet": "\"FROM dws_logistics_detail_union mysql://user:secretpass@127.0.0.1/db\""
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py",
+      "line": 141,
+      "pattern": "sensitive_word",
+      "classification": "test_redaction_probe",
+      "snippet": "assert \"unit-secret\" not in payload"
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py",
+      "line": 142,
+      "pattern": "sensitive_word",
+      "classification": "test_redaction_probe",
+      "snippet": "assert \"tok_unitsecret\" not in payload"
+    },
+    {
+      "file": "tests/unit/logistics/nl2sql/test_m10d_shadow_gate.py",
+      "line": 143,
+      "pattern": "sensitive_word",
+      "classification": "test_redaction_probe",
+      "snippet": "assert \"secretpass\" not in payload"
+    }
+  ]
+}
