@@ -29,6 +29,12 @@ from backend.app.domains.logistics.services.nl2sql.evaluation_report import (
     build_logistics_nl2sql_evaluation_report,
     render_logistics_nl2sql_evaluation_report_markdown,
 )
+from backend.app.domains.logistics.services.nl2sql.m10d_shadow_gate import (
+    M10D_SHADOW_GATE_SCHEMA_VERSION,
+    LogisticsNl2SqlM10DShadowGate,
+    LogisticsNl2SqlM10DShadowGateConfig,
+    LogisticsNl2SqlM10DShadowGateReport,
+)
 from backend.app.domains.logistics.services.nl2sql.m7_readonly_smoke import (
     M7_READONLY_SMOKE_VERSION,
     LogisticsNl2SqlM7ReadonlySmokeOutcome,
@@ -102,6 +108,10 @@ __all__ = [
     "LogisticsNl2SqlEvaluationReportSampleOutcome",
     "LogisticsNl2SqlEvaluationReportTopError",
     "LogisticsNl2SqlBusinessRules",
+    "M10D_SHADOW_GATE_SCHEMA_VERSION",
+    "LogisticsNl2SqlM10DShadowGate",
+    "LogisticsNl2SqlM10DShadowGateConfig",
+    "LogisticsNl2SqlM10DShadowGateReport",
     "M7_READONLY_SMOKE_VERSION",
     "LogisticsNl2SqlM7ReadonlySmokeOutcome",
     "LogisticsNl2SqlM7ReadonlySmokeRunResult",
