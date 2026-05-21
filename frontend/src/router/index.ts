@@ -49,6 +49,10 @@ const routes = [
     path: '/trial-guide',
     component: () => import('@/views/trial/TrialGuidePage.vue'),
   },
+  {
+    path: '/isp-data',
+    component: () => import('@/views/inventory-sales-production/DataManagementPage.vue'),
+  },
 ]
 
 const router = createRouter({

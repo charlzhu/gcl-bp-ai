@@ -50,6 +50,10 @@
           <el-icon><Files /></el-icon>
           <span>BOM 数据管理</span>
         </el-menu-item>
+        <el-menu-item index="/isp-data" data-testid="nav-isp-data">
+          <el-icon><DataBoard /></el-icon>
+          <span>产销存数据管理</span>
+        </el-menu-item>
         <el-menu-item index="/trial-guide" data-testid="nav-trial-guide">
           <el-icon><Guide /></el-icon>
           <span>试运行说明</span>
@@ -92,7 +96,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
-import { ChatDotRound, Files, Guide } from '@element-plus/icons-vue'
+import { ChatDotRound, DataBoard, Files, Guide } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import brandLogoUrl from '@/assets/gcl-logo.svg'
@@ -122,6 +126,7 @@ const contextMenu = reactive({
 /** 当前主导航高亮项，旧路由进入时仍归一到业务主入口。 */
 const activePath = computed(() => {
   if (route.path.startsWith('/bom-data') || route.path.startsWith('/plan-bom')) return '/bom-data'
+  if (route.path.startsWith('/isp-data')) return '/isp-data'
   if (route.path.startsWith('/trial-guide')) return '/trial-guide'
   return '/smart-chat'
 })
