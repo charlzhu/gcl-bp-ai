@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import hashlib
 import time
 from typing import Any, Literal, Protocol
@@ -17,10 +18,15 @@ from backend.app.domains.logistics.services.nl2sql.evaluation_log import (
     LogisticsNl2SqlEvaluationLogSink,
     redact_evaluation_text,
 )
+from backend.app.domains.logistics.services.nl2sql.m10d_shadow_gate import (
+    LogisticsNl2SqlM10DShadowGate,
+    LogisticsNl2SqlM10DShadowGateConfig,
+)
 from backend.app.domains.logistics.services.nl2sql.semantic_catalog import LogisticsSemanticCatalog, LogisticsSemanticCatalogLoader
 from backend.app.domains.logistics.services.nl2sql.sql_execution import (
     FakeLogisticsSqlExecutor,
     LogisticsSqlExecutionService,
+    LogisticsSqlExecutor,
 )
 from backend.app.domains.logistics.services.nl2sql.sql_plan import (
     LogisticsSqlPlanValidationResult,
@@ -135,6 +141,9 @@ class LogisticsNl2SqlShadowPipeline:
         log_sink: LogisticsNl2SqlEvaluationLogSink | None = None,
         candidate_sql_gate: LogisticsCandidateSqlGateProtocol | None = None,
         pipeline_version: str = SHADOW_PIPELINE_VERSION,
+        m10d_real_db_access: bool = False,
+        m10d_env_path: str = "",
+        executor_factory: Callable[[], LogisticsSqlExecutor] | None = None,
     ) -> None:
         """初始化 shadow pipeline。
 
@@ -162,6 +171,9 @@ class LogisticsNl2SqlShadowPipeline:
         self.log_sink = log_sink or InMemoryLogisticsNl2SqlEvaluationLogSink()
         self.candidate_sql_gate = candidate_sql_gate or LogisticsCandidateSqlGate()
         self.pipeline_version = pipeline_version
+        self.config_m10d_real_db_access = m10d_real_db_access
+        self.config_m10d_env_path = m10d_env_path
+        self.executor_factory = executor_factory
 
     def run(self, request: LogisticsNl2SqlShadowPipelineRequest) -> LogisticsNl2SqlShadowPipelineResult:
         """执行一次 shadow pipeline。
@@ -319,6 +331,27 @@ class LogisticsNl2SqlShadowPipeline:
                 safety_errors=safety_errors,
                 warnings=warnings,
             )
+
+        # M10-D shadow gate：在 explain 前嵌入安全 gate，检查数据来源、复核 safety、封装 gate 报告
+        m10d_config = LogisticsNl2SqlM10DShadowGateConfig(
+            enabled=True,
+            explain_enabled=True,
+            trial_enabled=False,  # M10-D gate 只做 EXPLAIN，下游 pipeline 有独立 trial
+            real_db_access_enabled=self.config_m10d_real_db_access if hasattr(self, 'config_m10d_real_db_access') else False,
+            env_path=self.config_m10d_env_path if hasattr(self, 'config_m10d_env_path') else "",
+        )
+        m10d_gate = LogisticsNl2SqlM10DShadowGate(
+            config=m10d_config,
+            executor_factory=self.executor_factory if hasattr(self, 'executor_factory') else None,
+            safety_checker=self.safety_checker,
+        )
+        m10d_report = m10d_gate.run(
+            rendered_sql=rendered,
+            source_system=request.source_system,
+        )
+        # M10-D gate 失败时，pipeline 记录 m10d_gate 状态但不阻断解释（非 fail-closed，shadow-only 报告）
+        candidate_gate_reason_code = m10d_report.candidate_gate_reason_code
+        safety_reason_code = m10d_report.safety_reason_code
 
         explain_result = self.execution_service.explain(rendered)
         explain_ok = explain_result.ok
