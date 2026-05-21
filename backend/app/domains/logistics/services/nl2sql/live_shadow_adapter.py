@@ -296,6 +296,7 @@ class LogisticsNl2SqlLiveShadowAdapter:
         formal_result: LogisticsDataQaResult | None = None,
         formal_status: str | None = None,
         raw_candidate_sql: str | None = None,
+        domain: str = "logistics",
     ) -> LogisticsNl2SqlLiveShadowSummary:
         """执行一次正式 QA 旁路 shadow，并返回脱敏审计摘要。
 
@@ -305,6 +306,7 @@ class LogisticsNl2SqlLiveShadowAdapter:
             formal_result: 已完成的正式 QA 结果；只用于生成状态摘要，不读取 query_key。
             formal_status: 调用方显式传入的正式状态，优先级高于 formal_result 推导。
             raw_candidate_sql: 可选原始候选 SQL，只允许交给 M10-B gate 审计，绝不执行。
+            domain: 业务域名称，用于路由识别；默认 logistics。
         返回：
             `LogisticsNl2SqlLiveShadowSummary` 脱敏摘要。
         """
