@@ -118,10 +118,12 @@ def test_recall_llm_exception_returns_clarification(mock_openai_cls) -> None:
     assert qp is None
 
 
-@patch("openai.OpenAI")
-def test_recall_no_api_key_fallback(mock_openai_cls) -> None:
+def test_recall_no_api_key_fallback() -> None:
     """没有 API Key 时返回 clarification fallback。"""
     svc = InventorySalesProductionCatalogRecallService(api_key="")
+    # 如果 settings 中有正式 API Key，覆盖 api_key 为空字符串
+    if svc.api_key:
+        svc.api_key = ""
     result = svc.recall("2025年销量")
     assert result.clarification_needed is not None
     assert "API Key" in result.clarification_needed
