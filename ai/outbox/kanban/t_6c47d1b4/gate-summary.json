@@ -1,0 +1,74 @@
+{
+  "task_id": "t_6c47d1b4",
+  "title": "M10-D0：物流 NL2SQL EXPLAIN / readonly trial gate 设计审计",
+  "base_commit": "3011cdb398879ff893fdf53477e3113e88842baa",
+  "worktree": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/nl2sql-m10d0-design-audit",
+  "branch": "feature/nl2sql-m10d0-design-audit",
+  "mode": "design_audit_only",
+  "production_code_changed": false,
+  "database_query_executed": false,
+  "explain_executed": false,
+  "readonly_trial_executed": false,
+  "push_executed": false,
+  "merge_executed": false,
+  "ignored_dirty_worktree_touched": false,
+  "m10_baseline": {
+    "m10a_candidate_sql_gate": true,
+    "m10b_shadow_pipeline_gate": true,
+    "m10c_live_shadow_adapter": true
+  },
+  "recommended_gate_order": [
+    "rewrite_domain_route_catalog_recall_sqlplan_generator",
+    "candidate_sql_gate",
+    "sqlplan_validator",
+    "deterministic_renderer",
+    "sql_safety",
+    "explain_gate",
+    "readonly_trial_gate",
+    "shadow_report"
+  ],
+  "default_closed_policy": {
+    "explain_default_enabled": false,
+    "readonly_trial_default_enabled": false,
+    "real_database_access_default_enabled": false,
+    "unit_tests_require_real_database": false,
+    "unconfigured_behavior": "disabled_or_skipped"
+  },
+  "data_source_boundary": {
+    "assistant_middle_db_readonly_only": true,
+    "sap_oracle_mid_forbidden": true,
+    "production_write_db_forbidden": true,
+    "connection_secret_logging_forbidden": true
+  },
+  "allowed_report_fields": [
+    "enabled",
+    "status",
+    "stage",
+    "error_codes",
+    "explain_status",
+    "trial_status",
+    "row_count",
+    "row_cap_applied",
+    "timeout_ms",
+    "elapsed_ms",
+    "sql_hash",
+    "candidate_gate_reason_code",
+    "safety_reason_code",
+    "shadow_only"
+  ],
+  "forbidden_report_fields": [
+    "sql_text",
+    "params_value",
+    "table_name",
+    "field_name",
+    "sqlplan_raw",
+    "provider_debug",
+    "db_host",
+    "db_user",
+    "db_password",
+    "db_dsn",
+    "exception_raw",
+    "trial_row_value"
+  ],
+  "recommended_next_task": "M10-D1：物流 NL2SQL fake executor EXPLAIN / trial gate schema 与脱敏报告"
+}
