@@ -1,0 +1,3 @@
+static_scan_passed=true
+findings=0
+allowed_test_fixtures=3

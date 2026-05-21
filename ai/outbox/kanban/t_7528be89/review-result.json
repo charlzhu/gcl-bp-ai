@@ -1,0 +1,8 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "review_blockers": [],
+  "suggestions": [],
+  "summary": "通过：business_rules 白名单门禁已补齐，内部/debug/raw/sys/audit 规则变体已脱敏，时间规则继续 fail-closed，合法 shadow 业务规则未被误伤且保持 shadow-only。"
+}

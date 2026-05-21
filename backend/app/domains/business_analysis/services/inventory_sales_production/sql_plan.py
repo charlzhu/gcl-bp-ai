@@ -38,6 +38,24 @@ DEFAULT_ISP_MAX_PUBLISHED_MONTH_BY_YEAR = {2023: 12, 2024: 12, 2025: 12, 2026: 4
 ALLOWED_YEAR_FILTER_OPERATORS = {"=", "in", "between"}
 ALLOWED_MONTH_FILTER_OPERATORS = {"=", "in"}
 ALLOWED_BUSINESS_FLAGS = {"explicit_invoice", "include_internal"}
+ALLOWED_BUSINESS_RULES = {
+    "budget_achievement_recalculated",
+    "explicit_invoice_metric",
+    "period_end_inventory_snapshot",
+    "ytd_by_published_months",
+    "year_over_year",
+    "month_over_month",
+    "yoy",
+    "mom",
+    "arbitrary_month_range",
+    "unpublished_month",
+}
+INTERNAL_BUSINESS_RULE_RE = re.compile(
+    # business_rules 是 LLM candidate 可写入的治理标签列表；未知规则进入错误码前必须保守脱敏。
+    # 这里故意不依赖分隔符，避免 debug.trace、raw/debug、debugTrace、sysAuditHint 等变体回显。
+    r"debug|trace|internal|raw|sys|audit",
+    re.IGNORECASE,
+)
 UNSUPPORTED_TIME_RULES = {
     "year_over_year": "sqlplan_time_comparison_not_supported::year_over_year",
     "month_over_month": "sqlplan_time_comparison_not_supported::month_over_month",
@@ -212,6 +230,7 @@ class InventorySalesProductionSqlPlanValidator:
         errors.extend(self._validate_filters(plan, valid_ref_ids))
         errors.extend(self._validate_group_by(plan, valid_ref_ids))
         errors.extend(self._validate_order_by(plan, valid_ref_ids))
+        errors.extend(self._validate_business_rules(plan))
         errors.extend(self._validate_business_flags(plan))
         errors.extend(self._validate_query_key_support(plan))
         errors.extend(self._validate_period(plan))
@@ -399,6 +418,19 @@ class InventorySalesProductionSqlPlanValidator:
                     continue
                 self._require_ref(f"dimension:{item.dimension}", valid_ref_ids, errors)
                 errors.extend(self._validate_dimension_catalog_entry(dimension, plan_tables=set(plan.tables)))
+        return errors
+
+    @staticmethod
+    def _validate_business_rules(plan: InventorySalesProductionSqlPlan) -> list[str]:
+        """校验 business_rules 仅包含显式允许的业务规则标签，不接纳内部/debug 口径。"""
+
+        errors: list[str] = []
+        for rule_id in plan.business_rules:
+            blocked_error = UNSUPPORTED_TIME_RULES.get(rule_id)
+            if blocked_error:
+                errors.append(blocked_error)
+            if rule_id not in ALLOWED_BUSINESS_RULES:
+                errors.append(f"sqlplan_business_rule_not_allowed::{_safe_business_rule_error_value(rule_id)}")
         return errors
 
     @staticmethod
@@ -813,6 +845,17 @@ def _safe_error_path(parts: Any) -> str:
 
     safe_parts = [_safe_error_value(part) for part in parts]
     return ".".join(safe_parts) or "root"
+
+
+def _safe_business_rule_error_value(value: Any) -> str:
+    """business_rules 的错误片段额外屏蔽内部/debug/trace 语义，避免治理标签泄露到审计材料。"""
+
+    safe_value = _safe_error_value(value)
+    if safe_value == "redacted":
+        return safe_value
+    if INTERNAL_BUSINESS_RULE_RE.search(safe_value):
+        return "redacted"
+    return safe_value
 
 
 def _safe_error_value(value: Any) -> str:

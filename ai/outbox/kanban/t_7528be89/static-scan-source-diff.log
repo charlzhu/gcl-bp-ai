@@ -1,0 +1,4 @@
+static_scan_passed=true
+findings=0
+warnings=4
+exit_code=0

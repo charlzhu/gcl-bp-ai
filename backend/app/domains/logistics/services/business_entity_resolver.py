@@ -66,14 +66,58 @@ class LogisticsBusinessEntityResolver:
         "累计",
         "总",
     }
+    _COMMON_LOCATION_PREFIXES = (
+        "北京",
+        "上海",
+        "天津",
+        "重庆",
+        "苏州",
+        "南京",
+        "无锡",
+        "常州",
+        "杭州",
+        "宁波",
+        "合肥",
+        "芜湖",
+        "阜宁",
+        "广州",
+        "深圳",
+        "东莞",
+        "佛山",
+        "成都",
+        "武汉",
+        "郑州",
+        "西安",
+        "青岛",
+        "济南",
+        "厦门",
+        "福州",
+        "南昌",
+        "长沙",
+        "石家庄",
+        "太原",
+        "沈阳",
+        "大连",
+        "长春",
+        "哈尔滨",
+        "昆明",
+        "贵阳",
+        "南宁",
+        "海口",
+        "兰州",
+        "银川",
+        "西宁",
+        "乌鲁木齐",
+        "拉萨",
+    )
     _EXPLICIT_CARRIER_PATTERNS = (
         re.compile(
             r"(?:^|[，,。；;？?])(?:20\d{2}|\d{2})?年?(?P<name>[\u4e00-\u9fa5A-Za-z0-9·（）()]{2,30}?(?:物流|供应链|运输|货运|速运|快运))"
-            r"(?=在|的|发运|承运|运费|运输费用|总运费|总费用|承运量|运输量|发货量|各区域|分区域|各省|各城市|占|$)"
+            r"(?=在|的|每年|按年|按年份|各年|年度|分别|发运|承运|运费|运输费用|总运费|总费用|承运量|运输量|发货量|各区域|分区域|各省|各城市|占|$)"
         ),
         re.compile(
             r"(?P<name>[\u4e00-\u9fa5A-Za-z0-9·（）()]{2,30}?(?:物流|供应链|运输|货运|速运|快运))"
-            r"(?=在各区域|在各省|在各城市|在|的|发运|承运|运费|运输费用|总运费|总费用|承运量|运输量|发货量|占)"
+            r"(?=在各区域|在各省|在各城市|在|的|每年|按年|按年份|各年|年度|分别|发运|承运|运费|运输费用|总运费|总费用|承运量|运输量|发货量|占)"
         ),
     )
 
@@ -207,6 +251,10 @@ class LogisticsBusinessEntityResolver:
     def _clean_explicit_carrier_name(self, raw: str) -> str | None:
         """清洗显式承运商短语。"""
         raw_text = self._normalize_company_text(raw)
+        # 兜底正则可能从“23年-25年苏州晶茂物流”中的第二个“年”后开始命中，
+        # 得到“年苏州晶茂物流”或“25年苏州晶茂物流”。这里仅剥离开头的年份/年份范围残片，
+        # 中间仍含年份的短语继续 fail-closed，避免把业务描述误当承运商。
+        raw_text = re.sub(r"^(?:(?:20\d{2}|\d{2})?年|(?:20\d{2}|\d{2})年[-—至到](?:20\d{2}|\d{2})年?)", "", raw_text)
         # 显式语法只兜底“京东物流/德邦物流”这类短公司名；如果短语里混入年份、范围、结构词，
         # 说明它很可能是“江苏的物流总运费/历史物流”等业务描述，必须拒绝，避免回退成承运商过滤。
         if any(token in raw_text for token in ("年", "月", "到", "至", "从", "的物流", "历史物流", "物流发运")):
@@ -214,9 +262,33 @@ class LogisticsBusinessEntityResolver:
         text = re.sub(r"^(?:请问|请查询|请统计|帮我查一下|帮我看一下|查询|统计)", "", raw_text)
         text = re.sub(r"^\d{1,2}月份?", "", text)
         text = self._strip_carrier_suffix(self._strip_legal_suffix(text))
+        # 显式短语没有候选源上下文时，也需要处理“苏州晶茂物流”这类城市前缀简称；
+        # 仅剥离常见行政区前缀，避免把“天地华宇”等非地名前缀误裁短。
+        text = self._strip_common_location_prefix(text)
         if any(token in text for token in ("的", "区域", "历史", "发运", "累计", "全年", "各")):
             return None
         return text if self._is_valid_carrier_core(text) else None
+
+    def _strip_common_location_prefix(self, value: str) -> str:
+        """剥离承运商核心词前的常见行政区前缀。
+
+        参数：
+            value: 已去掉法律后缀和物流行业后缀后的承运商主体。
+        返回：
+            若主体以常见行政区开头且剩余部分仍是有效承运商核心词，返回剥离后的简称；否则返回原值。
+        业务逻辑：
+            历史台账承运商常同时出现“苏州晶茂物流有限公司”和“晶茂运输”两类写法；
+            用户显式说“苏州晶茂物流”时，下推“晶茂”可覆盖同一主体的不同历史写法。
+        """
+
+        text = self._normalize_company_text(value)
+        for prefix in self._COMMON_LOCATION_PREFIXES:
+            if not text.startswith(prefix) or len(text) <= len(prefix):
+                continue
+            candidate = text[len(prefix) :]
+            if self._is_valid_carrier_core(candidate):
+                return candidate
+        return text
 
     def _is_valid_alias(self, value: str) -> bool:
         """判断候选别名是否足够具体。"""

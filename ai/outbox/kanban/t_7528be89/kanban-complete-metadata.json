@@ -1,0 +1,43 @@
+{
+  "task_id": "t_7528be89",
+  "target_branch": "hermes/hermes-9fa1e059",
+  "target_head": "ad31f3e0",
+  "source_branch": "feature/isp-m5-6-shadow-expansion",
+  "source_head": "ad31f3e0",
+  "scope": "merge_and_reverify_inventory_sales_production_m5_m5_6_shadow",
+  "changed_files": [
+    "backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py",
+    "backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py",
+    "scripts/dev/run_inventory_sales_production_m5_shadow_compare.py",
+    "tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py",
+    "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py"
+  ],
+  "tests": {
+    "m5_m56_unit": "55 passed",
+    "shadow_runner": "total=31 matched=20 fail_closed=11 expected_mismatch=0 shadow_only=true formal_qa_executed=false live_db_executed=false",
+    "isp_m2_m3_m4_m46": "85 passed",
+    "logistics_focused": "22 passed",
+    "plan_bom_power_focused": "21 passed",
+    "py_compile": "passed",
+    "backend_compileall": "passed",
+    "static_scan": "passed findings=0",
+    "scoped_diff_check": "passed"
+  },
+  "review": {
+    "passed": true,
+    "security_concerns": [],
+    "logic_errors": [],
+    "review_blockers": []
+  },
+  "artifacts_dir": "ai/outbox/kanban/t_7528be89",
+  "not_done": [
+    "M6 live provider gate",
+    "live DB validation",
+    "NL2SQL formal user-visible QA takeover"
+  ],
+  "side_effects": {
+    "committed": false,
+    "pushed": false,
+    "deployed": false
+  }
+}

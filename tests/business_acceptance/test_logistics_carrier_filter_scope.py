@@ -139,6 +139,18 @@ def test_planner_keeps_year_range_and_explicit_carrier_for_yearly_mw_breakdown()
     assert plan.sort == [{"field": "biz_year", "direction": "asc"}]
 
 
+def test_planner_keeps_explicit_carrier_when_yearly_wording_uses_by_year() -> None:
+    """验证“按年份”相邻问法不会把显式承运商截断或误路由到宽口径 KPI。"""
+
+    plan = LogisticsDataQaPlanner().build_plan("23年-25年苏州晶茂物流按年份发运量是多少")
+
+    assert plan.query_key == "hist_mw_by_year"
+    assert plan.filters["years"] == [2023, 2024, 2025]
+    assert plan.filters["carrier_name"] == "晶茂"
+    assert plan.dimensions == ["biz_year"]
+    assert plan.group_by == ["biz_year"]
+
+
 def test_service_keeps_year_range_and_carrier_when_executing_yearly_mw_breakdown() -> None:
     """验证服务层执行逐年发运量时，不丢失 2023-2025 年份范围和显式承运商。"""
 

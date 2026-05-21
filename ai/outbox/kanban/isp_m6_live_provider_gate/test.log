@@ -1,0 +1,42 @@
+
+===== pytest inventory sales production =====
+COMMAND: /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_semantic_catalog.py tests/unit/business_analysis/test_inventory_sales_production_m4_qa_service.py tests/unit/business_analysis/test_inventory_sales_production_m4_api_registration.py tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py tests/business_acceptance/test_inventory_sales_production_m2_fact_import.py tests/frontend/test_business_chat_business_analysis_domain.py -q
+........................................................................ [ 59%]
+..................................................                       [100%]
+122 passed in 3.63s
+EXIT_CODE=0
+
+===== pytest logistics focused regression =====
+COMMAND: /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/logistics/nl2sql/test_m9_sqlplan_generation.py tests/business_acceptance/test_logistics_system_sync_normalization.py tests/business_acceptance/test_logistics_route_pricing_hefei_maanshan.py tests/business_acceptance/test_logistics_monthly_year_range.py tests/business_acceptance/test_logistics_local_carrier_scope.py tests/business_acceptance/test_logistics_llm_led_composite_decomposition.py tests/business_acceptance/test_logistics_field_scope_clarification.py tests/business_acceptance/test_logistics_e2e_robustness_fixes.py tests/business_acceptance/test_logistics_e2e_failure_repair_round1.py tests/business_acceptance/test_logistics_carrier_filter_scope.py tests/business_acceptance/test_logistics_business_entity_resolver.py -q
+........................................................................ [ 62%]
+............................................                             [100%]
+116 passed in 2.96s
+EXIT_CODE=0
+
+===== pytest plan bom and power =====
+COMMAND: /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_plan_power_m5_qa_integration.py tests/business_acceptance/test_plan_power_m4_config_resolver.py tests/business_acceptance/test_plan_power_m3_prediction_engine.py tests/business_acceptance/test_plan_power_m2_model_versioning.py tests/business_acceptance/test_plan_power_docx_question_regression.py tests/business_acceptance/test_plan_power_frontend_upload_entry.py tests/business_acceptance/test_plan_bom_upload_history_power_activation.py tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py -q
+........................................................................ [ 63%]
+.........................................                                [100%]
+=============================== warnings summary ===============================
+tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
+  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Unknown extension is not supported and will be removed
+    ws_parser.bind_all()
+
+tests/business_acceptance/test_plan_power_m3_prediction_engine.py::test_prediction_parity_for_ten_model_default_configurations
+  /opt/anaconda3/lib/python3.12/site-packages/openpyxl/reader/excel.py:237: UserWarning: Conditional Formatting extension is not supported and will be removed
+    ws_parser.bind_all()
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+113 passed, 2 warnings in 17.49s
+EXIT_CODE=0
+
+===== m6 provider reindex live shadow gate =====
+COMMAND: /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/run_m6_live_gate_with_main_env.py --provider-smoke --reindex-dry-run --live-provider-shadow-gate --max-live-samples 1 --artifact-dir ai/outbox/kanban/isp_m6_live_provider_gate
+{"gates": [{"name": "embedding", "status": "PASS"}, {"name": "vector_store", "status": "PASS"}, {"name": "rerank", "status": "PASS"}, {"name": "llm", "status": "PASS"}], "ok": true, "version": "business_analysis_inventory_sales_production_m6_live_provider_gate.v1"}
+{"document_count": 33, "dry_run": true, "gate": "catalog_reindex", "status": "PASS", "version": "business_analysis_inventory_sales_production_m6_live_provider_gate.v1"}
+{"expected_status_mismatch_count": 0, "formal_qa_executed": false, "provider_live_called": true, "readonly_middle_db_shadow_executed": true, "records_path": "ai/outbox/kanban/isp_m6_live_provider_gate/m6-live-provider-shadow-records.jsonl", "report_path": "ai/outbox/kanban/isp_m6_live_provider_gate/m6-live-provider-shadow-report.json", "sqlplan_validation_pass_count": 1, "success_count": 1, "total": 1, "version": "business_analysis_inventory_sales_production_m6_live_provider_gate.v1"}
+EXIT_CODE=0
+
+===== py compile scoped files =====
+COMMAND: /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m py_compile backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py scripts/dev/run_inventory_sales_production_m6_live_provider_gate.py tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py backend/app/domains/logistics/services/business_entity_resolver.py backend/app/domains/logistics/services/data_qa_planner.py tmp/hermes/run_m6_live_gate_with_main_env.py tmp/hermes/run_m6_static_scan.py
+EXIT_CODE=0

@@ -447,6 +447,56 @@ def test_isp_sql_plan_validator_rejects_unknown_business_flags() -> None:
 
 
 @pytest.mark.parametrize(
+    ("business_rule", "expected_error"),
+    [
+        ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
+        ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
+        ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
+        ("debug trace", "sqlplan_business_rule_not_allowed::redacted"),
+        ("debug.trace", "sqlplan_business_rule_not_allowed::redacted"),
+        ("raw/debug", "sqlplan_business_rule_not_allowed::redacted"),
+        ("debugTrace", "sqlplan_business_rule_not_allowed::redacted"),
+        ("sysAuditHint", "sqlplan_business_rule_not_allowed::redacted"),
+    ],
+)
+def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
+    business_rule: str,
+    expected_error: str,
+) -> None:
+    """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
+
+    result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
+
+    assert result.ok is False
+    assert expected_error in result.error_codes
+    joined_errors = "\n".join(result.error_codes).lower()
+    if expected_error.endswith("::redacted"):
+        # 内部治理词可能以空白、点号、斜杠或 camelCase 出现，错误码不能回显原始标签。
+        assert business_rule.lower() not in joined_errors
+    assert result.normalized_plan is None
+
+
+def test_isp_sql_plan_validator_accepts_known_business_rule_labels() -> None:
+    """M5/M5-6 shadow 使用的业务规则标签必须在白名单内可通过，避免误伤既有样例。"""
+
+    result = _validate(
+        _valid_candidate(
+            plan={
+                "business_rules": [
+                    "budget_achievement_recalculated",
+                    "ytd_by_published_months",
+                    "period_end_inventory_snapshot",
+                    "explicit_invoice_metric",
+                ]
+            }
+        )
+    )
+
+    assert result.ok is True, result.error_codes
+    assert result.normalized_plan is not None
+
+
+@pytest.mark.parametrize(
     ("plan_overrides", "expected_error"),
     [
         ({"period_type": "year", "month": 13}, "sqlplan_month_out_of_range::13"),

@@ -1,0 +1,136 @@
+diff --git a/backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py b/backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py
+index 77a2ad05..bcab8385 100644
+--- a/backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py
++++ b/backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py
+@@ -38,6 +38,24 @@ DEFAULT_ISP_MAX_PUBLISHED_MONTH_BY_YEAR = {2023: 12, 2024: 12, 2025: 12, 2026: 4
+ ALLOWED_YEAR_FILTER_OPERATORS = {"=", "in", "between"}
+ ALLOWED_MONTH_FILTER_OPERATORS = {"=", "in"}
+ ALLOWED_BUSINESS_FLAGS = {"explicit_invoice", "include_internal"}
++ALLOWED_BUSINESS_RULES = {
++    "budget_achievement_recalculated",
++    "explicit_invoice_metric",
++    "period_end_inventory_snapshot",
++    "ytd_by_published_months",
++    "year_over_year",
++    "month_over_month",
++    "yoy",
++    "mom",
++    "arbitrary_month_range",
++    "unpublished_month",
++}
++INTERNAL_BUSINESS_RULE_RE = re.compile(
++    # business_rules 是 LLM candidate 可写入的治理标签列表；未知规则进入错误码前必须保守脱敏。
++    # 这里故意不依赖分隔符，避免 debug.trace、raw/debug、debugTrace、sysAuditHint 等变体回显。
++    r"debug|trace|internal|raw|sys|audit",
++    re.IGNORECASE,
++)
+ UNSUPPORTED_TIME_RULES = {
+     "year_over_year": "sqlplan_time_comparison_not_supported::year_over_year",
+     "month_over_month": "sqlplan_time_comparison_not_supported::month_over_month",
+@@ -212,6 +230,7 @@ class InventorySalesProductionSqlPlanValidator:
+         errors.extend(self._validate_filters(plan, valid_ref_ids))
+         errors.extend(self._validate_group_by(plan, valid_ref_ids))
+         errors.extend(self._validate_order_by(plan, valid_ref_ids))
++        errors.extend(self._validate_business_rules(plan))
+         errors.extend(self._validate_business_flags(plan))
+         errors.extend(self._validate_query_key_support(plan))
+         errors.extend(self._validate_period(plan))
+@@ -401,6 +420,19 @@ class InventorySalesProductionSqlPlanValidator:
+                 errors.extend(self._validate_dimension_catalog_entry(dimension, plan_tables=set(plan.tables)))
+         return errors
+
++    @staticmethod
++    def _validate_business_rules(plan: InventorySalesProductionSqlPlan) -> list[str]:
++        """校验 business_rules 仅包含显式允许的业务规则标签，不接纳内部/debug 口径。"""
++
++        errors: list[str] = []
++        for rule_id in plan.business_rules:
++            blocked_error = UNSUPPORTED_TIME_RULES.get(rule_id)
++            if blocked_error:
++                errors.append(blocked_error)
++            if rule_id not in ALLOWED_BUSINESS_RULES:
++                errors.append(f"sqlplan_business_rule_not_allowed::{_safe_business_rule_error_value(rule_id)}")
++        return errors
++
+     @staticmethod
+     def _validate_business_flags(plan: InventorySalesProductionSqlPlan) -> list[str]:
+         """校验 business_flags 仅包含已知控制开关，并阻断同比/环比等时间比较能力。"""
+@@ -815,6 +847,17 @@ def _safe_error_path(parts: Any) -> str:
+     return ".".join(safe_parts) or "root"
+
+
++def _safe_business_rule_error_value(value: Any) -> str:
++    """business_rules 的错误片段额外屏蔽内部/debug/trace 语义，避免治理标签泄露到审计材料。"""
++
++    safe_value = _safe_error_value(value)
++    if safe_value == "redacted":
++        return safe_value
++    if INTERNAL_BUSINESS_RULE_RE.search(safe_value):
++        return "redacted"
++    return safe_value
++
++
+ def _safe_error_value(value: Any) -> str:
+     """返回可进入审计错误码的安全片段，SQL-like 输入只保留 redacted 标记。
+
+diff --git a/tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py b/tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py
+index 893e96db..5e1e14d8 100644
+--- a/tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py
++++ b/tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py
+@@ -446,6 +446,56 @@ def test_isp_sql_plan_validator_rejects_unknown_business_flags() -> None:
+     assert result.normalized_plan is None
+
+
++@pytest.mark.parametrize(
++    ("business_rule", "expected_error"),
++    [
++        ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
++        ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
++        ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
++        ("debug trace", "sqlplan_business_rule_not_allowed::redacted"),
++        ("debug.trace", "sqlplan_business_rule_not_allowed::redacted"),
++        ("raw/debug", "sqlplan_business_rule_not_allowed::redacted"),
++        ("debugTrace", "sqlplan_business_rule_not_allowed::redacted"),
++        ("sysAuditHint", "sqlplan_business_rule_not_allowed::redacted"),
++    ],
++)
++def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
++    business_rule: str,
++    expected_error: str,
++) -> None:
++    """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
++
++    result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
++
++    assert result.ok is False
++    assert expected_error in result.error_codes
++    joined_errors = "\n".join(result.error_codes).lower()
++    if expected_error.endswith("::redacted"):
++        # 内部治理词可能以空白、点号、斜杠或 camelCase 出现，错误码不能回显原始标签。
++        assert business_rule.lower() not in joined_errors
++    assert result.normalized_plan is None
++
++
++def test_isp_sql_plan_validator_accepts_known_business_rule_labels() -> None:
++    """M5/M5-6 shadow 使用的业务规则标签必须在白名单内可通过，避免误伤既有样例。"""
++
++    result = _validate(
++        _valid_candidate(
++            plan={
++                "business_rules": [
++                    "budget_achievement_recalculated",
++                    "ytd_by_published_months",
++                    "period_end_inventory_snapshot",
++                    "explicit_invoice_metric",
++                ]
++            }
++        )
++    )
++
++    assert result.ok is True, result.error_codes
++    assert result.normalized_plan is not None
++
++
+ @pytest.mark.parametrize(
+     ("plan_overrides", "expected_error"),
+     [

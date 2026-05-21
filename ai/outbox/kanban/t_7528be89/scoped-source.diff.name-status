@@ -1,0 +1,5 @@
+A	backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py
+A	backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py
+A	scripts/dev/run_inventory_sales_production_m5_shadow_compare.py
+A	tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+A	tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py

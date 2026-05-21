@@ -1,0 +1,612 @@
+python=/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python
+root=/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/hermes-9fa1e059
+branch=hermes/hermes-9fa1e059
+head=ad31f3e0e6e16983039334d8b1674287a07f52a5
+base=f24d39ae318cea9af081aa05b3edfdcdcf46ef33
+note=final rerun after focused diff/static-scan refresh; initial scan artifacts preserved separately
+
+===== status-start =====
+## hermes/hermes-9fa1e059
+?? ai/outbox/kanban/t_7528be89/
+
+===== m5-6-focused-sample-expansion =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py::test_m5_6_shadow_default_samples_expand_to_business_boundary_suite -q
+.                                                                        [100%]
+1 passed in 0.33s
+[exit_code] 0
+
+===== m5-m5-6-shadow-compare-unit =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py -q
+.............                                                            [100%]
+13 passed in 0.67s
+[exit_code] 0
+
+===== inventory-sales-production-m2-m3-m4-m4-6-regression =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_inventory_sales_production_m2_fact_import.py tests/unit/business_analysis/test_inventory_sales_production_m3_query_executor.py tests/unit/business_analysis/test_inventory_sales_production_m4_api_registration.py tests/unit/business_analysis/test_inventory_sales_production_m4_qa_service.py tests/business_acceptance/test_inventory_sales_production_m4_6_real_question_regression.py tests/unit/business_analysis/test_inventory_sales_production_semantic_catalog.py tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py -q
+........................................................................ [ 84%]
+.............                                                            [100%]
+85 passed in 2.03s
+[exit_code] 0
+
+===== logistics-focused-regression =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/unit/logistics/query_planner_v2/test_logistics_query_planner_v2.py tests/business_acceptance/test_logistics_monthly_year_range.py tests/business_acceptance/test_logistics_field_scope_clarification.py -q
+......................                                                   [100%]
+22 passed in 0.31s
+[exit_code] 0
+
+===== plan-bom-power-focused-regression =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m pytest tests/business_acceptance/test_plan_bom_qa_multi_candidate_compare.py tests/business_acceptance/test_plan_power_m5_qa_integration.py -q
+.....................                                                    [100%]
+21 passed in 1.68s
+[exit_code] 0
+
+===== py-compile-focused =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m py_compile backend/app/domains/business_analysis/services/inventory_sales_production/sql_plan.py backend/app/domains/business_analysis/services/inventory_sales_production/m5_shadow_compare.py scripts/dev/run_inventory_sales_production_m5_shadow_compare.py tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py
+[exit_code] 0
+
+===== m5-shadow-runner-all-samples =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python scripts/dev/run_inventory_sales_production_m5_shadow_compare.py --artifact-dir /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/hermes-9fa1e059/ai/outbox/kanban/t_7528be89
+{"by_status": {"matched": 20, "queryplan_clarification": 3, "queryplan_unsupported": 4, "sqlplan_candidate_unavailable": 1, "sqlplan_validation_failed": 3}, "expected_status_mismatch_count": 0, "fail_closed_count": 11, "formal_qa_executed": false, "live_db_executed": false, "matched_count": 20, "records_path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/hermes-9fa1e059/ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-records.jsonl", "report_path": "/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/hermes-9fa1e059/ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-report.md", "shadow_only": true, "total": 31, "version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1"}
+[exit_code] 0
+
+===== artifact-check =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python tmp/hermes/check_m5_shadow_artifacts.py /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/.worktrees/hermes-9fa1e059/ai/outbox/kanban/t_7528be89
+ARTIFACT_CHECK_PASS total_records=31 by_status={'matched': 20, 'queryplan_unsupported': 4, 'queryplan_clarification': 3, 'sqlplan_validation_failed': 3, 'sqlplan_candidate_unavailable': 1}
+[exit_code] 0
+
+===== backend-compileall =====
+$ /Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai/backend/.venv/bin/python -m compileall backend/app
+Listing 'backend/app'...
+Listing 'backend/app/api'...
+Listing 'backend/app/api/v1'...
+Listing 'backend/app/api/v1/endpoints'...
+Listing 'backend/app/core'...
+Listing 'backend/app/db'...
+Listing 'backend/app/domains'...
+Listing 'backend/app/domains/business_analysis'...
+Listing 'backend/app/domains/business_analysis/api'...
+Listing 'backend/app/domains/business_analysis/api/endpoints'...
+Listing 'backend/app/domains/business_analysis/repositories'...
+Listing 'backend/app/domains/business_analysis/schemas'...
+Listing 'backend/app/domains/business_analysis/services'...
+Listing 'backend/app/domains/business_analysis/services/inventory_sales_production'...
+Listing 'backend/app/domains/logistics'...
+Listing 'backend/app/domains/logistics/api'...
+Listing 'backend/app/domains/logistics/api/endpoints'...
+Listing 'backend/app/domains/logistics/config'...
+Listing 'backend/app/domains/logistics/config/domains'...
+Listing 'backend/app/domains/logistics/config/domains/business_analysis'...
+Listing 'backend/app/domains/logistics/config/domains/logistics'...
+Listing 'backend/app/domains/logistics/config/domains/material_management'...
+Listing 'backend/app/domains/logistics/config/domains/plan_bom'...
+Listing 'backend/app/domains/logistics/config/global'...
+Listing 'backend/app/domains/logistics/config/nl2sql_catalog'...
+Listing 'backend/app/domains/logistics/config/sql_templates'...
+Listing 'backend/app/domains/logistics/config/sql_templates/logistics'...
+Listing 'backend/app/domains/logistics/etl'...
+Listing 'backend/app/domains/logistics/repositories'...
+Listing 'backend/app/domains/logistics/schemas'...
+Listing 'backend/app/domains/logistics/services'...
+Listing 'backend/app/domains/logistics/services/nl2sql'...
+Listing 'backend/app/domains/logistics/services/query_planner_v2'...
+Listing 'backend/app/domains/material_management'...
+Listing 'backend/app/domains/plan_bom'...
+Listing 'backend/app/domains/plan_bom/api'...
+Listing 'backend/app/domains/plan_bom/api/endpoints'...
+Listing 'backend/app/domains/plan_bom/config'...
+Listing 'backend/app/domains/plan_bom/repositories'...
+Listing 'backend/app/domains/plan_bom/schemas'...
+Listing 'backend/app/domains/plan_bom/services'...
+Listing 'backend/app/domains/query_planning'...
+Listing 'backend/app/domains/query_planning/api'...
+Listing 'backend/app/domains/query_planning/api/endpoints'...
+Listing 'backend/app/domains/query_planning/schemas'...
+Listing 'backend/app/domains/query_planning/services'...
+Listing 'backend/app/integrations'...
+Listing 'backend/app/llm'...
+Listing 'backend/app/middleware'...
+Listing 'backend/app/models'...
+Listing 'backend/app/repositories'...
+Listing 'backend/app/schemas'...
+Listing 'backend/app/services'...
+Listing 'backend/app/tasks'...
+Listing 'backend/app/utils'...
+Listing 'backend/app/vector'...
+[exit_code] 0
+
+===== diff-check-focused =====
+[git_diff_check_focused_exit_code] 0
+
+===== diff-check-source-full =====
+ai/outbox/kanban/t_c7c1f8de/diff.patch:24: trailing whitespace.
++
+ai/outbox/kanban/t_c7c1f8de/diff.patch:25: trailing whitespace.
++
+ai/outbox/kanban/t_c7c1f8de/diff.patch:33: trailing whitespace.
++
+ai/outbox/kanban/t_c7c1f8de/diff.patch:53: trailing whitespace.
++
+ai/outbox/kanban/t_c7c1f8de/diff.patch:55: trailing whitespace.
++
+ai/outbox/kanban/t_c7c1f8de/diff.patch:62: trailing whitespace.
++
+ai/outbox/kanban/t_c7c1f8de/diff.patch:62: new blank line at EOF.
+[git_diff_check_source_full_exit_code] 2
+
+===== static-scan-focused-diff =====
+static_scan_passed=true
+findings=0
+warnings=1
+exit_code=0
+
+===== static-scan-source-full-diff =====
+static_scan_passed=true
+findings=0
+warnings=4
+exit_code=0
+
+===== status-end =====
+## hermes/hermes-9fa1e059
+?? ai/outbox/kanban/t_7528be89/
+
+===== post-review-red-business-rules =====
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_ test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[unsafe_rule-sqlplan_business_rule_not_allowed::unsafe_rule] _
+
+business_rule = 'unsafe_rule'
+expected_error = 'sqlplan_business_rule_not_allowed::unsafe_rule'
+
+    @pytest.mark.parametrize(
+        ("business_rule", "expected_error"),
+        [
+            ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
+            ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
+        ],
+    )
+    def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
+        business_rule: str,
+        expected_error: str,
+    ) -> None:
+        """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
+
+        result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
+
+>       assert result.ok is False
+E       AssertionError: assert True is False
+E        +  where True = InventorySalesProductionSqlPlanValidationResult(ok=True, normalized_plan=InventorySalesProductionSqlPlan(query_key='ba...ear=2024, month=None, quarter=None, start_month=None, end_month=None, calculation_policy='sum', limit=None), errors=[]).ok
+
+tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py:465: AssertionError
+_ test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[debug_trace-sqlplan_business_rule_not_allowed::redacted] _
+
+business_rule = 'debug_trace'
+expected_error = 'sqlplan_business_rule_not_allowed::redacted'
+
+    @pytest.mark.parametrize(
+        ("business_rule", "expected_error"),
+        [
+            ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
+            ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
+        ],
+    )
+    def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
+        business_rule: str,
+        expected_error: str,
+    ) -> None:
+        """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
+
+        result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
+
+>       assert result.ok is False
+E       AssertionError: assert True is False
+E        +  where True = InventorySalesProductionSqlPlanValidationResult(ok=True, normalized_plan=InventorySalesProductionSqlPlan(query_key='ba...ear=2024, month=None, quarter=None, start_month=None, end_month=None, calculation_policy='sum', limit=None), errors=[]).ok
+
+tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py:465: AssertionError
+_ test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[internal_debug_hint-sqlplan_business_rule_not_allowed::redacted] _
+
+business_rule = 'internal_debug_hint'
+expected_error = 'sqlplan_business_rule_not_allowed::redacted'
+
+    @pytest.mark.parametrize(
+        ("business_rule", "expected_error"),
+        [
+            ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
+            ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
+        ],
+    )
+    def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
+        business_rule: str,
+        expected_error: str,
+    ) -> None:
+        """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
+
+        result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
+
+>       assert result.ok is False
+E       AssertionError: assert True is False
+E        +  where True = InventorySalesProductionSqlPlanValidationResult(ok=True, normalized_plan=InventorySalesProductionSqlPlan(query_key='ba...ear=2024, month=None, quarter=None, start_month=None, end_month=None, calculation_policy='sum', limit=None), errors=[]).ok
+
+tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py:465: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[unsafe_rule-sqlplan_business_rule_not_allowed::unsafe_rule]
+FAILED tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[debug_trace-sqlplan_business_rule_not_allowed::redacted]
+FAILED tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[internal_debug_hint-sqlplan_business_rule_not_allowed::redacted]
+3 failed in 0.32s
+[exit_code] 1
+
+
+===== post-review-green-business-rules =====
+....                                                                     [100%]
+4 passed in 0.41s
+[exit_code] 0
+
+===== post-review-m5-m5-6-sqlplan-and-shadow-unit =====
+...........................................................              [100%]
+59 passed in 0.87s
+[exit_code] 0
+
+===== post-review-m5-m5-6-shadow-runner =====
+{"by_status": {"matched": 20, "queryplan_clarification": 3, "queryplan_unsupported": 4, "sqlplan_candidate_unavailable": 1, "sqlplan_validation_failed": 3}, "expected_status_mismatch_count": 0, "fail_closed_count": 11, "formal_qa_executed": false, "live_db_executed": false, "matched_count": 20, "records_path": "ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-records.jsonl", "report_path": "ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-report.md", "shadow_only": true, "total": 31, "version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1"}
+[exit_code] 0
+
+===== post-review-inventory-sales-production-M2-M3-M4-M4-6-regression =====
+........................................................................ [ 80%]
+.................                                                        [100%]
+89 passed in 1.88s
+[exit_code] 0
+
+===== post-review-logistics-focused-regression =====
+......................                                                   [100%]
+22 passed in 0.34s
+[exit_code] 0
+
+===== post-review-plan-bom-power-focused-regression =====
+.....................                                                    [100%]
+21 passed in 1.65s
+[exit_code] 0
+
+===== post-review-backend-py-compile =====
+[exit_code] 0
+
+===== post-review-backend-compileall =====
+Listing 'backend/app'...
+Listing 'backend/app/api'...
+Listing 'backend/app/api/v1'...
+Listing 'backend/app/api/v1/endpoints'...
+Listing 'backend/app/core'...
+Listing 'backend/app/db'...
+Listing 'backend/app/domains'...
+Listing 'backend/app/domains/business_analysis'...
+Listing 'backend/app/domains/business_analysis/api'...
+Listing 'backend/app/domains/business_analysis/api/endpoints'...
+Listing 'backend/app/domains/business_analysis/repositories'...
+Listing 'backend/app/domains/business_analysis/schemas'...
+Listing 'backend/app/domains/business_analysis/services'...
+Listing 'backend/app/domains/business_analysis/services/inventory_sales_production'...
+Listing 'backend/app/domains/logistics'...
+Listing 'backend/app/domains/logistics/api'...
+Listing 'backend/app/domains/logistics/api/endpoints'...
+Listing 'backend/app/domains/logistics/config'...
+Listing 'backend/app/domains/logistics/config/domains'...
+Listing 'backend/app/domains/logistics/config/domains/business_analysis'...
+Listing 'backend/app/domains/logistics/config/domains/logistics'...
+Listing 'backend/app/domains/logistics/config/domains/material_management'...
+Listing 'backend/app/domains/logistics/config/domains/plan_bom'...
+Listing 'backend/app/domains/logistics/config/global'...
+Listing 'backend/app/domains/logistics/config/nl2sql_catalog'...
+Listing 'backend/app/domains/logistics/config/sql_templates'...
+Listing 'backend/app/domains/logistics/config/sql_templates/logistics'...
+Listing 'backend/app/domains/logistics/etl'...
+Listing 'backend/app/domains/logistics/repositories'...
+Listing 'backend/app/domains/logistics/schemas'...
+Listing 'backend/app/domains/logistics/services'...
+Listing 'backend/app/domains/logistics/services/nl2sql'...
+Listing 'backend/app/domains/logistics/services/query_planner_v2'...
+Listing 'backend/app/domains/material_management'...
+Listing 'backend/app/domains/plan_bom'...
+Listing 'backend/app/domains/plan_bom/api'...
+Listing 'backend/app/domains/plan_bom/api/endpoints'...
+Listing 'backend/app/domains/plan_bom/config'...
+Listing 'backend/app/domains/plan_bom/repositories'...
+Listing 'backend/app/domains/plan_bom/schemas'...
+Listing 'backend/app/domains/plan_bom/services'...
+Listing 'backend/app/domains/query_planning'...
+Listing 'backend/app/domains/query_planning/api'...
+Listing 'backend/app/domains/query_planning/api/endpoints'...
+Listing 'backend/app/domains/query_planning/schemas'...
+Listing 'backend/app/domains/query_planning/services'...
+Listing 'backend/app/integrations'...
+Listing 'backend/app/llm'...
+Listing 'backend/app/middleware'...
+Listing 'backend/app/models'...
+Listing 'backend/app/repositories'...
+Listing 'backend/app/schemas'...
+Listing 'backend/app/services'...
+Listing 'backend/app/tasks'...
+Listing 'backend/app/utils'...
+Listing 'backend/app/vector'...
+[exit_code] 0
+
+===== post-review-static-scan =====
+{"passed": true, "findings": [], "allowed_test_fixtures": [{"rule": "hardcoded_secret_assignment", "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py", "line": 14514, "text": "            \"select * from table where token='abc123'\",", "reason": "synthetic redaction regression fixture"}, {"rule": "hardcoded_secret_assignment", "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py", "line": 14518, "text": "            \"secret_key='abc123'\",", "reason": "synthetic redaction regression fixture"}, {"rule": "hardcoded_secret_assignment", "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py", "line": 14533, "text": "    assert \"secret_key='abc123'\" not in rendered", "reason": "synthetic redaction regression fixture"}], "diff_path": "ai/outbox/kanban/t_7528be89/diff.patch", "artifact_paths": ["ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-records.jsonl", "ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-report.md"], "scope": "added source/script/test lines plus M5/M5-6 shadow artifacts"}
+[exit_code] 0
+
+===== post-review-red-business-rules-variant-redaction =====
+...FFFFF                                                                 [100%]
+=================================== FAILURES ===================================
+_ test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[debug trace-sqlplan_business_rule_not_allowed::redacted] _
+
+business_rule = 'debug trace'
+expected_error = 'sqlplan_business_rule_not_allowed::redacted'
+
+    @pytest.mark.parametrize(
+        ("business_rule", "expected_error"),
+        [
+            ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
+            ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug.trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("raw/debug", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debugTrace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("sysAuditHint", "sqlplan_business_rule_not_allowed::redacted"),
+        ],
+    )
+    def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
+        business_rule: str,
+        expected_error: str,
+    ) -> None:
+        """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
+
+        result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
+
+        assert result.ok is False
+>       assert expected_error in result.error_codes
+E       AssertionError: assert 'sqlplan_business_rule_not_allowed::redacted' in ['sqlplan_business_rule_not_allowed::debug trace']
+E        +  where ['sqlplan_business_rule_not_allowed::debug trace'] = InventorySalesProductionSqlPlanValidationResult(ok=False, normalized_plan=None, errors=['sqlplan_business_rule_not_allowed::debug trace']).error_codes
+
+tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py:471: AssertionError
+_ test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[debug.trace-sqlplan_business_rule_not_allowed::redacted] _
+
+business_rule = 'debug.trace'
+expected_error = 'sqlplan_business_rule_not_allowed::redacted'
+
+    @pytest.mark.parametrize(
+        ("business_rule", "expected_error"),
+        [
+            ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
+            ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug.trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("raw/debug", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debugTrace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("sysAuditHint", "sqlplan_business_rule_not_allowed::redacted"),
+        ],
+    )
+    def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
+        business_rule: str,
+        expected_error: str,
+    ) -> None:
+        """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
+
+        result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
+
+        assert result.ok is False
+>       assert expected_error in result.error_codes
+E       AssertionError: assert 'sqlplan_business_rule_not_allowed::redacted' in ['sqlplan_business_rule_not_allowed::debug.trace']
+E        +  where ['sqlplan_business_rule_not_allowed::debug.trace'] = InventorySalesProductionSqlPlanValidationResult(ok=False, normalized_plan=None, errors=['sqlplan_business_rule_not_allowed::debug.trace']).error_codes
+
+tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py:471: AssertionError
+_ test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[raw/debug-sqlplan_business_rule_not_allowed::redacted] _
+
+business_rule = 'raw/debug'
+expected_error = 'sqlplan_business_rule_not_allowed::redacted'
+
+    @pytest.mark.parametrize(
+        ("business_rule", "expected_error"),
+        [
+            ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
+            ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug.trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("raw/debug", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debugTrace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("sysAuditHint", "sqlplan_business_rule_not_allowed::redacted"),
+        ],
+    )
+    def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
+        business_rule: str,
+        expected_error: str,
+    ) -> None:
+        """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
+
+        result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
+
+        assert result.ok is False
+>       assert expected_error in result.error_codes
+E       AssertionError: assert 'sqlplan_business_rule_not_allowed::redacted' in ['sqlplan_business_rule_not_allowed::raw/debug']
+E        +  where ['sqlplan_business_rule_not_allowed::raw/debug'] = InventorySalesProductionSqlPlanValidationResult(ok=False, normalized_plan=None, errors=['sqlplan_business_rule_not_allowed::raw/debug']).error_codes
+
+tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py:471: AssertionError
+_ test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[debugTrace-sqlplan_business_rule_not_allowed::redacted] _
+
+business_rule = 'debugTrace'
+expected_error = 'sqlplan_business_rule_not_allowed::redacted'
+
+    @pytest.mark.parametrize(
+        ("business_rule", "expected_error"),
+        [
+            ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
+            ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug.trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("raw/debug", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debugTrace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("sysAuditHint", "sqlplan_business_rule_not_allowed::redacted"),
+        ],
+    )
+    def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
+        business_rule: str,
+        expected_error: str,
+    ) -> None:
+        """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
+
+        result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
+
+        assert result.ok is False
+>       assert expected_error in result.error_codes
+E       AssertionError: assert 'sqlplan_business_rule_not_allowed::redacted' in ['sqlplan_business_rule_not_allowed::debugTrace']
+E        +  where ['sqlplan_business_rule_not_allowed::debugTrace'] = InventorySalesProductionSqlPlanValidationResult(ok=False, normalized_plan=None, errors=['sqlplan_business_rule_not_allowed::debugTrace']).error_codes
+
+tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py:471: AssertionError
+_ test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[sysAuditHint-sqlplan_business_rule_not_allowed::redacted] _
+
+business_rule = 'sysAuditHint'
+expected_error = 'sqlplan_business_rule_not_allowed::redacted'
+
+    @pytest.mark.parametrize(
+        ("business_rule", "expected_error"),
+        [
+            ("unsafe_rule", "sqlplan_business_rule_not_allowed::unsafe_rule"),
+            ("debug_trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("internal_debug_hint", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debug.trace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("raw/debug", "sqlplan_business_rule_not_allowed::redacted"),
+            ("debugTrace", "sqlplan_business_rule_not_allowed::redacted"),
+            ("sysAuditHint", "sqlplan_business_rule_not_allowed::redacted"),
+        ],
+    )
+    def test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules(
+        business_rule: str,
+        expected_error: str,
+    ) -> None:
+        """business_rules 必须显式白名单，未知/内部调试规则不能随合法 plan 进入 normalized_plan。"""
+
+        result = _validate(_valid_candidate(plan={"business_rules": [business_rule]}))
+
+        assert result.ok is False
+>       assert expected_error in result.error_codes
+E       AssertionError: assert 'sqlplan_business_rule_not_allowed::redacted' in ['sqlplan_business_rule_not_allowed::sysAuditHint']
+E        +  where ['sqlplan_business_rule_not_allowed::sysAuditHint'] = InventorySalesProductionSqlPlanValidationResult(ok=False, normalized_plan=None, errors=['sqlplan_business_rule_not_allowed::sysAuditHint']).error_codes
+
+tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py:471: AssertionError
+=========================== short test summary info ============================
+FAILED tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[debug trace-sqlplan_business_rule_not_allowed::redacted]
+FAILED tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[debug.trace-sqlplan_business_rule_not_allowed::redacted]
+FAILED tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[raw/debug-sqlplan_business_rule_not_allowed::redacted]
+FAILED tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[debugTrace-sqlplan_business_rule_not_allowed::redacted]
+FAILED tests/unit/business_analysis/test_inventory_sales_production_sql_plan.py::test_isp_sql_plan_validator_rejects_unknown_or_internal_business_rules[sysAuditHint-sqlplan_business_rule_not_allowed::redacted]
+5 failed, 3 passed in 0.39s
+[exit_code] 1
+
+===== post-review-green-business-rules-variant-redaction =====
+.........                                                                [100%]
+9 passed in 0.29s
+[exit_code] 0
+
+===== post-review-rerun-sqlplan-unit-after-redaction-fix =====
+...................................................                      [100%]
+51 passed in 0.27s
+[exit_code] 0
+
+===== post-review-rerun-m5-m5-6-shadow-unit-after-redaction-fix =====
+................................................................         [100%]
+64 passed in 0.72s
+[exit_code] 0
+
+===== post-review-rerun-shadow-runner-after-redaction-fix =====
+{"by_status": {"matched": 20, "queryplan_clarification": 3, "queryplan_unsupported": 4, "sqlplan_candidate_unavailable": 1, "sqlplan_validation_failed": 3}, "expected_status_mismatch_count": 0, "fail_closed_count": 11, "formal_qa_executed": false, "live_db_executed": false, "matched_count": 20, "records_path": "ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-records.jsonl", "report_path": "ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-report.md", "shadow_only": true, "total": 31, "version": "business_analysis_inventory_sales_production_m5_shadow_compare.v1"}
+[exit_code] 0
+
+===== post-review-rerun-inventory-sales-production-regression-after-redaction-fix =====
+........................................................................ [ 76%]
+......................                                                   [100%]
+94 passed in 1.80s
+[exit_code] 0
+
+===== post-review-rerun-logistics-focused-after-redaction-fix =====
+......................                                                   [100%]
+22 passed in 0.27s
+[exit_code] 0
+
+===== post-review-rerun-plan-bom-power-focused-after-redaction-fix =====
+.....................                                                    [100%]
+21 passed in 1.78s
+[exit_code] 0
+
+===== post-review-rerun-py-compile-after-redaction-fix =====
+[exit_code] 0
+
+===== post-review-rerun-compileall-after-redaction-fix =====
+Listing 'backend/app'...
+Listing 'backend/app/api'...
+Listing 'backend/app/api/v1'...
+Listing 'backend/app/api/v1/endpoints'...
+Listing 'backend/app/core'...
+Listing 'backend/app/db'...
+Listing 'backend/app/domains'...
+Listing 'backend/app/domains/business_analysis'...
+Listing 'backend/app/domains/business_analysis/api'...
+Listing 'backend/app/domains/business_analysis/api/endpoints'...
+Listing 'backend/app/domains/business_analysis/repositories'...
+Listing 'backend/app/domains/business_analysis/schemas'...
+Listing 'backend/app/domains/business_analysis/services'...
+Listing 'backend/app/domains/business_analysis/services/inventory_sales_production'...
+Listing 'backend/app/domains/logistics'...
+Listing 'backend/app/domains/logistics/api'...
+Listing 'backend/app/domains/logistics/api/endpoints'...
+Listing 'backend/app/domains/logistics/config'...
+Listing 'backend/app/domains/logistics/config/domains'...
+Listing 'backend/app/domains/logistics/config/domains/business_analysis'...
+Listing 'backend/app/domains/logistics/config/domains/logistics'...
+Listing 'backend/app/domains/logistics/config/domains/material_management'...
+Listing 'backend/app/domains/logistics/config/domains/plan_bom'...
+Listing 'backend/app/domains/logistics/config/global'...
+Listing 'backend/app/domains/logistics/config/nl2sql_catalog'...
+Listing 'backend/app/domains/logistics/config/sql_templates'...
+Listing 'backend/app/domains/logistics/config/sql_templates/logistics'...
+Listing 'backend/app/domains/logistics/etl'...
+Listing 'backend/app/domains/logistics/repositories'...
+Listing 'backend/app/domains/logistics/schemas'...
+Listing 'backend/app/domains/logistics/services'...
+Listing 'backend/app/domains/logistics/services/nl2sql'...
+Listing 'backend/app/domains/logistics/services/query_planner_v2'...
+Listing 'backend/app/domains/material_management'...
+Listing 'backend/app/domains/plan_bom'...
+Listing 'backend/app/domains/plan_bom/api'...
+Listing 'backend/app/domains/plan_bom/api/endpoints'...
+Listing 'backend/app/domains/plan_bom/config'...
+Listing 'backend/app/domains/plan_bom/repositories'...
+Listing 'backend/app/domains/plan_bom/schemas'...
+Listing 'backend/app/domains/plan_bom/services'...
+Listing 'backend/app/domains/query_planning'...
+Listing 'backend/app/domains/query_planning/api'...
+Listing 'backend/app/domains/query_planning/api/endpoints'...
+Listing 'backend/app/domains/query_planning/schemas'...
+Listing 'backend/app/domains/query_planning/services'...
+Listing 'backend/app/integrations'...
+Listing 'backend/app/llm'...
+Listing 'backend/app/middleware'...
+Listing 'backend/app/models'...
+Listing 'backend/app/repositories'...
+Listing 'backend/app/schemas'...
+Listing 'backend/app/services'...
+Listing 'backend/app/tasks'...
+Listing 'backend/app/utils'...
+Listing 'backend/app/vector'...
+[exit_code] 0
+
+===== post-review-rerun-static-scan-after-redaction-fix =====
+{"passed": true, "findings": [], "allowed_test_fixtures": [{"rule": "hardcoded_secret_assignment", "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py", "line": 14514, "text": "            \"select * from table where token='abc123'\",", "reason": "synthetic redaction regression fixture"}, {"rule": "hardcoded_secret_assignment", "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py", "line": 14518, "text": "            \"secret_key='abc123'\",", "reason": "synthetic redaction regression fixture"}, {"rule": "hardcoded_secret_assignment", "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py", "line": 14533, "text": "    assert \"secret_key='abc123'\" not in rendered", "reason": "synthetic redaction regression fixture"}], "diff_path": "ai/outbox/kanban/t_7528be89/diff.patch", "artifact_paths": ["ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-records.jsonl", "ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-report.md"], "scope": "added source/script/test lines plus M5/M5-6 shadow artifacts"}
+[exit_code] 0
+
+===== post-review-rerun-static-scan-after-diff-refresh =====
+{"passed": true, "findings": [], "allowed_test_fixtures": [{"rule": "hardcoded_secret_assignment", "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py", "line": 14516, "text": "            \"select * from table where token='abc123'\",", "reason": "synthetic redaction regression fixture"}, {"rule": "hardcoded_secret_assignment", "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py", "line": 14520, "text": "            \"secret_key='abc123'\",", "reason": "synthetic redaction regression fixture"}, {"rule": "hardcoded_secret_assignment", "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py", "line": 14535, "text": "    assert \"secret_key='abc123'\" not in rendered", "reason": "synthetic redaction regression fixture"}], "diff_path": "ai/outbox/kanban/t_7528be89/diff.patch", "artifact_paths": ["ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-records.jsonl", "ai/outbox/kanban/t_7528be89/m5-inventory-sales-production-shadow-report.md"], "scope": "added source/script/test lines plus M5/M5-6 shadow artifacts"}
+[exit_code] 0

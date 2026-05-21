@@ -1,0 +1,35 @@
+{
+  "passed": true,
+  "findings": [],
+  "warnings": [
+    {
+      "line": 1102,
+      "file": "ai/outbox/kanban/t_3ca95bf9/diff.patch",
+      "kind": "hardcoded_secret",
+      "content": "+            \"select * from table where token='abc123'\",",
+      "classification": "redaction_fixture_or_archived_evidence"
+    },
+    {
+      "line": 7146,
+      "file": "ai/outbox/kanban/t_4131bbbb/diff.patch",
+      "kind": "hardcoded_secret",
+      "content": "+            \"select * from table where token='abc123'\",",
+      "classification": "redaction_fixture_or_archived_evidence"
+    },
+    {
+      "line": 8870,
+      "file": "ai/outbox/kanban/t_45ab3a93/diff.patch",
+      "kind": "hardcoded_secret",
+      "content": "+            \"select * from table where token='abc123'\",",
+      "classification": "redaction_fixture_or_archived_evidence"
+    },
+    {
+      "line": 14473,
+      "file": "tests/unit/business_analysis/test_inventory_sales_production_m5_shadow_compare.py",
+      "kind": "hardcoded_secret",
+      "content": "            \"select * from table where token='abc123'\",",
+      "classification": "redaction_fixture_or_archived_evidence"
+    }
+  ],
+  "warning_count": 4
+}

@@ -1,0 +1,7 @@
+target_base=f24d39ae318cea9af081aa05b3edfdcdcf46ef33
+target_head=ad31f3e0e6e16983039334d8b1674287a07f52a5
+source_head=ad31f3e0e6e16983039334d8b1674287a07f52a5
+merge_base=f24d39ae318cea9af081aa05b3edfdcdcf46ef33
+target_branch=hermes/hermes-9fa1e059
+source_branch=feature/isp-m5-6-shadow-expansion
+same_head=true
