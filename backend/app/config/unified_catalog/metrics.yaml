@@ -1,0 +1,86 @@
+# 统一语义资产 — 指标注册表
+# 业务域：物流（logistics）、计划 BOM（plan_bom）
+# 说明：本文件由人工审计，用于注册各业务域的指标定义。
+# 统一约束：禁止在此暴露 SQL、表名、字段名、query_key、planner 等技术实现细节。
+
+metrics:
+  # ========== 物流域指标 ==========
+  - metric_id: shipment_mw
+    display_name: 发货量
+    domain: logistics
+    aliases:
+      - 件数
+      - 发运量
+      - 出货量
+      - 运输量
+    unit: MW
+    description: 物流发运总兆瓦数，按 SUM(shipment_watt) 计算。
+
+  - metric_id: total_fee
+    display_name: 总费用
+    domain: logistics
+    aliases:
+      - 运费
+      - 费用合计
+      - 运输费用
+    unit: 元
+    description: 物流发运总费用，含运费、装卸费、保险费等。
+
+  - metric_id: avg_fee_per_trip
+    display_name: 车均费用
+    domain: logistics
+    aliases:
+      - 平均费用
+      - 单次费用
+      - 均价
+    unit: 元/车
+    description: 车均费用，按 SUM(total_fee) / SUM(shipment_trip_count) 计算。
+
+  - metric_id: unit_price_per_vehicle
+    display_name: 单价/车
+    domain: logistics
+    aliases:
+      - 报价
+      - 运价
+      - 单价
+      - 线路报价
+    unit: 元/车
+    description: 线路运价（单价/车），区别于车均费用。
+
+  - metric_id: shipment_trip_count
+    display_name: 车次数
+    domain: logistics
+    aliases:
+      - 发运车次
+      - 运输车次
+    unit: 车次
+    description: 物流发运总车次数。
+
+  - metric_id: carrier_rank_by_mw
+    display_name: 承运商发货排名
+    domain: logistics
+    aliases:
+      - 运量排名
+      - 发货排名
+    unit: null
+    description: 按发货量排序的承运商排名指标。
+
+  # ========== 计划 BOM 域指标 ==========
+  - metric_id: power_prediction
+    display_name: 功率预测
+    domain: plan_bom
+    aliases:
+      - 功率测算
+      - 功率预估
+      - 电站功率
+    unit: MW
+    description: 基于 BOM 配置和 Excel 模型计算的功率预测。
+
+  - metric_id: supplier_efficiency
+    display_name: 供应商效率
+    domain: plan_bom
+    aliases:
+      - 供应商匹配度
+      - 效率对比
+    unit: null
+    description: 不同供应商方案的效率对比指标。

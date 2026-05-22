@@ -1,0 +1,112 @@
+# 统一语义资产 — 维度注册表
+# 业务域：物流（logistics）、计划 BOM（plan_bom）
+# 说明：本文件由人工审计，用于注册各业务域的维度定义。
+# 统一约束：禁止在此暴露 SQL、表名、字段名、query_key、planner 等技术实现细节。
+
+dimensions:
+  # ========== 物流域维度 ==========
+  - dimension_id: carrier
+    display_name: 承运商
+    domain: logistics
+    aliases:
+      - 物流商
+      - 运输公司
+      - 承运方
+    description: 物流承运商维度。
+
+  - dimension_id: year
+    display_name: 年份
+    domain: logistics
+    aliases:
+      - 年度
+    description: 发运年份维度。
+
+  - dimension_id: origin_city
+    display_name: 始发城市
+    domain: logistics
+    aliases:
+      - 始发地
+      - 出发城市
+      - 出发地
+    description: 物流发运始发城市维度。
+
+  - dimension_id: dest_city
+    display_name: 目的城市
+    domain: logistics
+    aliases:
+      - 目的地
+      - 到达城市
+    description: 物流发运目的城市维度。
+
+  - dimension_id: route
+    display_name: 线路
+    domain: logistics
+    aliases:
+      - 运输线路
+      - 路线
+    description: 物流运输线路维度。
+
+  - dimension_id: product_type
+    display_name: 产品类型
+    domain: logistics
+    aliases:
+      - 品类
+      - 货物类型
+    description: 发运产品类型维度。
+
+  - dimension_id: entity
+    display_name: 委托人
+    domain: logistics
+    aliases:
+      - 委托方
+      - 客户
+    description: 委托人/客户维度。
+
+  # ========== 计划 BOM 域维度 ==========
+  - dimension_id: material_category
+    display_name: 物料类别
+    domain: plan_bom
+    aliases:
+      - 物料类型
+      - 产品类别
+      - 材料分类
+    description: BOM 中物料的分类维度，如组件、逆变器等。
+
+  - dimension_id: version_no
+    display_name: 版本号
+    domain: plan_bom
+    aliases:
+      - BOM版本
+      - 设计版本
+    description: BOM 设计版本号维度。
+
+  - dimension_id: order_no
+    display_name: 订单号
+    domain: plan_bom
+    aliases:
+      - 合同号
+    description: 订单/合同编号维度。
+
+  - dimension_id: project_name
+    display_name: 项目名称
+    domain: plan_bom
+    aliases:
+      - 电站名称
+      - 工程项目
+    description: 项目/电站名称维度。
+
+  - dimension_id: customer
+    display_name: 客户
+    domain: plan_bom
+    aliases:
+      - 业主
+      - 采购方
+    description: 客户/业主维度。
+
+  - dimension_id: supplier
+    display_name: 供应商
+    domain: plan_bom
+    aliases:
+      - 供货商
+      - 厂商
+    description: 供应商维度。
