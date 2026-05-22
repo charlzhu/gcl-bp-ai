@@ -1,0 +1,150 @@
+diff --git a/backend/app/core/config.py b/backend/app/core/config.py
+index b6bed98a..ce1a5bcf 100644
+--- a/backend/app/core/config.py
++++ b/backend/app/core/config.py
+@@ -112,7 +112,11 @@ class Settings(BaseSettings):
+     llm_answer_presentation_timeout: float = 6.0
+     llm_answer_presentation_max_retries: int = 0
+     query_planning_v2_response_meta_enabled: bool = False
+-    logistics_query_planner_v2_enabled: bool = False
++    business_qa_langgraph_enabled: bool = False
++    business_qa_graph_mode: Literal["off", "shadow", "assist", "on"] = "shadow"
++    business_qa_graph_domains: list[str] = Field(default_factory=lambda: ["logistics", "plan_bom", "plan_power"])
++    business_qa_graph_stream_events_enabled: bool = True
++    business_qa_graph_audit_enabled: bool = True
+     logistics_query_planner_v2_mode: Literal["off", "shadow", "assist"] = "shadow"
+     logistics_query_planner_v2_min_confidence: float = 0.9
+     logistics_query_planner_v2_allowed_query_keys: list[str] = Field(default_factory=list)
+diff --git a/frontend/src/views/business-chat/BusinessChatPage.vue b/frontend/src/views/business-chat/BusinessChatPage.vue
+index 77f742a5..999a4bae 100644
+--- a/frontend/src/views/business-chat/BusinessChatPage.vue
++++ b/frontend/src/views/business-chat/BusinessChatPage.vue
+@@ -454,6 +454,8 @@ import {
+ import { streamLogisticsDataQaQuery, type LogisticsDataQaResult } from '@/api/logistics'
+ import * as planBomApi from '@/api/planBom'
+ import type { PlanBomQaResponse } from '@/api/planBom'
++/* LQG-8：统一业务问数流式入口 */
++import { streamBusinessQa } from '@/api/businessQa'
+ import { renderBusinessMarkdown } from '@/utils/businessMarkdown'
+ import {
+   buildBusinessChatMessageId,
+@@ -801,23 +803,35 @@ async function submitQuestion(input?: string) {
+   })
+ 
+   try {
+-    if (resolvedDomain === 'logistics') {
++    /* LQG-8：物流与计划 BOM 统一走 business-qa/stream 入口；
++       经营分析/产销存继续使用原有独立流式接口。 */
++    if (resolvedDomain === 'logistics' || resolvedDomain === 'plan_bom') {
+       let completed = false
+-      await streamLogisticsDataQaQuery(
+-        { question: text },
++      await streamBusinessQa(
++        { question: text, domain_hint: resolvedDomain as 'logistics' | 'plan_bom' },
+         {
+           onMeta: (meta) => updateAssistantStreamMeta(sessionId, assistantId, meta),
+           onDelta: (chunk) => updateAssistantStreamingContent(sessionId, assistantId, chunk),
+           onDone: (streamData) => {
+-            const data = ((streamData as any)?.data || streamData) as LogisticsDataQaResult
++            const data = ((streamData as any)?.data || streamData) as Record<string, any>
+             completed = true
+-            completeAssistantMessage(sessionId, assistantId, {
+-              content: '',
+-              domain: resolvedDomain,
+-              status: data?.status?.code || 'OK',
+-              presentation: adaptLogisticsResult(data),
+-              rawResponse: data as unknown as Record<string, any>,
+-            })
++            if (resolvedDomain === 'logistics') {
++              completeAssistantMessage(sessionId, assistantId, {
++                content: '',
++                domain: resolvedDomain,
++                status: data?.status?.code || 'OK',
++                presentation: adaptLogisticsResult(data as any),
++                rawResponse: data as unknown as Record<string, any>,
++              })
++            } else {
++              completeAssistantMessage(sessionId, assistantId, {
++                content: '',
++                domain: resolvedDomain,
++                status: data?.status?.code || data?.classification || 'OK',
++                presentation: adaptPlanBomResult(data as any),
++                rawResponse: data as unknown as Record<string, any>,
++              })
++            }
+           },
+         },
+       )
+@@ -843,27 +857,6 @@ async function submitQuestion(input?: string) {
+         },
+       )
+       if (!completed) throw new Error('流式回答未正常结束，请稍后重试。')
+-    } else {
+-      let completed = false
+-      await planBomApi.streamPlanBomQuestion(
+-        { question: text },
+-        {
+-          onMeta: (meta) => updateAssistantStreamMeta(sessionId, assistantId, meta),
+-          onDelta: (chunk) => updateAssistantStreamingContent(sessionId, assistantId, chunk),
+-          onDone: (streamData) => {
+-            const data = ((streamData as any)?.data || streamData) as PlanBomQaResponse
+-            completed = true
+-            completeAssistantMessage(sessionId, assistantId, {
+-              content: '',
+-              domain: resolvedDomain,
+-              status: data?.status?.code || data?.classification || 'OK',
+-              presentation: adaptPlanBomResult(data),
+-              rawResponse: data as unknown as Record<string, any>,
+-            })
+-          },
+-        },
+-      )
+-      if (!completed) throw new Error('流式回答未正常结束，请稍后重试。')
+     }
+   } catch (error) {
+     failAssistantMessage(
+diff --git a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+index 3928114c..d061e34f 100644
+--- a/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
++++ b/tests/business_acceptance/test_plan_power_frontend_upload_entry.py
+@@ -410,7 +410,8 @@ def test_business_chat_uses_backend_llm_streaming_answer_pipeline() -> None:
+     assert "/logistics/data-qa/query/stream" in logistics_api
+     assert "/plan-bom/qa/ask/stream" in plan_bom_api
+     assert "streamLogisticsDataQaQuery" in chat
+-    assert "streamPlanBomQuestion" in chat
++    # LQG-8: 物流和计划 BOM 已统一到 streamBusinessQa
++    assert "streamBusinessQa" in chat
+     assert "function updateAssistantStreamingContent" in chat
+     assert "AI 正在生成回答" in template
+     assert "'streaming-answer': message.role === 'assistant' && message.loading" in template
+diff --git a/tests/frontend/test_business_chat_business_analysis_domain.py b/tests/frontend/test_business_chat_business_analysis_domain.py
+index 3a3413d6..f2402e7f 100644
+--- a/tests/frontend/test_business_chat_business_analysis_domain.py
++++ b/tests/frontend/test_business_chat_business_analysis_domain.py
+@@ -27,15 +27,23 @@ def test_business_chat_has_business_analysis_domain_switch_and_examples() -> Non
+ 
+ 
+ def test_business_chat_dispatches_inventory_sales_production_to_dedicated_stream_api() -> None:
+-    """产销存问题必须走独立流式接口，不能落入 BOM 的 else 分支。"""
++    """产销存问题必须走独立流式接口，不能落入 logistics/plan_bom 统一分支。
++
++    LQG-8 将 logistics 和 plan_bom 统一为 streamBusinessQa 入口，
++    但经营分析/产销存继续使用 streamInventorySalesProductionQuestion 独立流式接口。
++    """
+ 
+     component = _read(COMPONENT_PATH)
+ 
+     assert "streamInventorySalesProductionQuestion" in component
+     assert "resolvedDomain === 'business_analysis'" in component
++    # LQG-8: logistics/plan_bom 统一入口
++    assert "streamBusinessQa" in component
++    assert "resolvedDomain === 'logistics' || resolvedDomain === 'plan_bom'" in component
++    # 确保 business_analysis 分支在统一分支之后（先检查 logistics/plan_bom，再检查 business_analysis）
++    unified_branch = component.index("resolvedDomain === 'logistics' || resolvedDomain === 'plan_bom'")
+     business_branch = component.index("resolvedDomain === 'business_analysis'")
+-    plan_bom_branch = component.index("streamPlanBomQuestion")
+-    assert business_branch < plan_bom_branch
++    assert unified_branch < business_branch
+ 
+ 
+ def test_inventory_sales_production_frontend_api_contract() -> None:

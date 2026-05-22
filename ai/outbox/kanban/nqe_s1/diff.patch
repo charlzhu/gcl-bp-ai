@@ -1,0 +1,3 @@
+=== Untracked files ===
+New file: tests/unit/business_qa_graph/test_nqe_s1_nl2sql_shadow.py
+New file: backend/app/domains/business_qa_graph/nl2sql_adapter.py
