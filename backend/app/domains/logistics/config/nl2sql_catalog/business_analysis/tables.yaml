@@ -1,0 +1,77 @@
+catalog_version: business_analysis_nl2sql_catalog.v1
+domain: business_analysis
+tables:
+  - table_name: dwd_ba_isp_monthly_fact
+    display_name: 产销存月度事实表
+    domain: business_analysis
+    sub_domain: inventory_sales_production
+    source_system: middle_db
+    allowed_read: true
+    grain: 来源工作簿 + sheet + 原始行项目 + 标准指标 + 已发布月份
+    columns:
+      - {name: id, data_type: bigint, business_name: 技术主键, semantic_role: trace, nullable: false}
+      - {name: workbook_id, data_type: bigint, business_name: 来源工作簿 ID, semantic_role: trace, nullable: false}
+      - {name: sheet_id, data_type: bigint, business_name: 来源 Sheet ID, semantic_role: trace, nullable: true}
+      - {name: business_year, data_type: int, business_name: 业务年份, semantic_role: time, nullable: false}
+      - {name: business_month, data_type: int, business_name: 业务月份, semantic_role: time, nullable: false}
+      - {name: period_label, data_type: varchar, business_name: 期间标签, semantic_role: time, nullable: false}
+      - {name: period_start_date, data_type: date, business_name: 期间开始日期, semantic_role: time, nullable: false}
+      - {name: period_end_date, data_type: date, business_name: 期间结束日期, semantic_role: time, nullable: false}
+      - {name: data_cutoff_month, data_type: int, business_name: 截止月份, semantic_role: trace, nullable: false}
+      - {name: is_published_month, data_type: smallint, business_name: 是否已发布月份, semantic_role: rule_filter, nullable: false}
+      - {name: domain, data_type: varchar, business_name: 业务域, semantic_role: dimension, nullable: false}
+      - {name: sub_domain, data_type: varchar, business_name: 子业务域, semantic_role: dimension, nullable: false}
+      - {name: metric_code, data_type: varchar, business_name: 标准指标编码, semantic_role: dimension, nullable: false}
+      - {name: metric_name, data_type: varchar, business_name: 标准指标中文名, semantic_role: dimension, nullable: false}
+      - {name: metric_category, data_type: varchar, business_name: 指标分类, semantic_role: dimension, nullable: false}
+      - {name: aggregation_type, data_type: varchar, business_name: 聚合类型, semantic_role: dimension, nullable: false}
+      - {name: value_decimal, data_type: decimal, business_name: 标准数值, semantic_role: metric, nullable: false}
+      - {name: unit_standard, data_type: varchar, business_name: 标准单位, semantic_role: dimension, nullable: false}
+      - {name: base_name, data_type: varchar, business_name: 基地名称, semantic_role: dimension, nullable: true}
+      - {name: factory_name, data_type: varchar, business_name: 工厂名称, semantic_role: dimension, nullable: true}
+      - {name: model_type, data_type: varchar, business_name: 版型, semantic_role: dimension, nullable: true}
+      - {name: production_mode, data_type: varchar, business_name: 生产模式, semantic_role: dimension, nullable: true}
+      - {name: trade_scope, data_type: varchar, business_name: 交易范围, semantic_role: dimension, nullable: true}
+      - {name: is_outsourced, data_type: smallint, business_name: 是否委外/代工, semantic_role: rule_filter, nullable: false}
+      - {name: is_consigned, data_type: smallint, business_name: 是否寄存, semantic_role: rule_filter, nullable: false}
+      - {name: is_default_external_sales, data_type: smallint, business_name: 是否默认对外销量口径, semantic_role: rule_filter, nullable: false}
+      - {name: source_file_name, data_type: varchar, business_name: 来源文件名, semantic_role: trace, nullable: false}
+      - {name: source_file_sha256, data_type: varchar, business_name: 来源文件哈希, semantic_role: trace, nullable: false}
+      - {name: source_sheet, data_type: varchar, business_name: 来源 Sheet 名, semantic_role: trace, nullable: false}
+      - {name: source_row_index, data_type: int, business_name: 来源行号, semantic_role: trace, nullable: false}
+      - {name: source_col_index, data_type: int, business_name: 来源列号, semantic_role: trace, nullable: false}
+      - {name: source_cell_ref, data_type: varchar, business_name: 来源单元格, semantic_role: trace, nullable: false}
+      - {name: raw_category, data_type: varchar, business_name: 原始分类, semantic_role: trace, nullable: true}
+      - {name: raw_item, data_type: varchar, business_name: 原始项目, semantic_role: trace, nullable: false}
+      - {name: raw_unit, data_type: varchar, business_name: 原始单位, semantic_role: trace, nullable: true}
+      - {name: parser_version, data_type: varchar, business_name: 解析器版本, semantic_role: trace, nullable: false}
+      - {name: quality_flags, data_type: text, business_name: 质量标记, semantic_role: trace, nullable: true}
+      - {name: created_at, data_type: datetime, business_name: 创建时间, semantic_role: trace, nullable: false}
+      - {name: updated_at, data_type: datetime, business_name: 更新时间, semantic_role: trace, nullable: false}
+  - table_name: dim_ba_isp_metric
+    display_name: 标准指标维表
+    domain: business_analysis
+    sub_domain: inventory_sales_production
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个标准指标一条记录
+    columns:
+      - {name: metric_code, data_type: varchar, business_name: 标准指标编码, semantic_role: dimension, nullable: false}
+      - {name: metric_name, data_type: varchar, business_name: 标准指标名称, semantic_role: dimension, nullable: false}
+      - {name: metric_category, data_type: varchar, business_name: 指标分类, semantic_role: dimension, nullable: false}
+      - {name: aggregation_type, data_type: varchar, business_name: 聚合类型, semantic_role: dimension, nullable: false}
+      - {name: unit_standard, data_type: varchar, business_name: 标准单位, semantic_role: dimension, nullable: false}
+      - {name: description, data_type: text, business_name: 指标描述, semantic_role: trace, nullable: true}
+  - table_name: dim_ba_isp_metric_alias
+    display_name: 指标别名维表
+    domain: business_analysis
+    sub_domain: inventory_sales_production
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个别名一条记录
+    columns:
+      - {name: alias_text, data_type: varchar, business_name: 别名文本, semantic_role: dimension, nullable: false}
+      - {name: metric_code, data_type: varchar, business_name: 关联指标编码, semantic_role: dimension, nullable: false}
+      - {name: alias_type, data_type: varchar, business_name: 别名类型, semantic_role: dimension, nullable: false}
+      - {name: priority, data_type: int, business_name: 优先级, semantic_role: trace, nullable: false}
+      - {name: notes, data_type: text, business_name: 备注, semantic_role: trace, nullable: true}

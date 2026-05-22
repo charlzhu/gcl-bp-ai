@@ -1,0 +1,166 @@
+catalog_version: plan_bom_nl2sql_catalog.v1
+domain: plan_bom
+metrics:
+  # ===== BOM 材料类 =====
+  - metric_id: standard_usage
+    display_name: 标准用量
+    aliases: [用量, 标准用量, 材料用量, 所需数量]
+    table: plan_bom_material_line
+    source_columns: [standard_usage]
+    aggregation: sum
+    unit: 个/件
+    metric_category: material
+    business_note: 'BOM 材料的标准用量，表示单件产品对该材料的需要量。取值示例: 电池片72片/件、玻璃1片/件、EVA胶膜2片/件。'
+    calculation_formula: SUM(standard_usage)
+    calculation_notes: 对材料明细行中同一物料的标准用量求和。
+    relevant_columns: [standard_usage]
+  - metric_id: material_line_count
+    display_name: 材料行数
+    aliases: [物料行数, 材料数, 物料数量, 材料种类数]
+    table: plan_bom_material_line
+    source_columns: [id]
+    aggregation: count
+    unit: 行
+    metric_category: material
+    business_note: 'BOM 中材料明细行的总数量（不按用量求和），用于回答"有多少种材料"类问题。'
+    calculation_formula: COUNT(id) GROUP BY order_no
+    calculation_notes: 按 BOM 订单号分组统计材料行数。
+    relevant_columns: [id]
+  - metric_id: bom_version_count
+    display_name: BOM 版本数
+    aliases: [版本数, 版本数量, 历史版本数]
+    table: plan_bom_header
+    source_columns: [version_no]
+    aggregation: count_distinct
+    unit: 个
+    metric_category: material
+    business_note: '同一 BOM 的不同版本数量，按 version_no 去重计数。'
+    calculation_formula: COUNT(DISTINCT version_no) GROUP BY order_no
+    calculation_notes: 按订单号统计该 BOM 有多少个不同版本。
+    relevant_columns: [version_no]
+
+  # ===== 功率模型类 =====
+  - metric_id: base_power
+    display_name: 基础功率
+    aliases: [基础功率, 基础瓦数, 原始功率]
+    table: plan_power_model_sheet
+    source_columns: [base_power]
+    aggregation: sum
+    unit: W
+    metric_category: power
+    business_note: '功率模型中各版型的基础功率值，来源于 xlsm 缓存值。用于按版型查询基础功率。取值示例: 650W、655W、660W。'
+    calculation_formula: SUM(base_power) GROUP BY normalized_model_code
+    calculation_notes: 各版型的基础功率值，来源于 xlsm 公式缓存，非实时计算。
+    relevant_columns: [base_power]
+  - metric_id: cell_count
+    display_name: 电池片数量
+    aliases: [电池片数, 片数, 电池片数量, 单块件数]
+    table: plan_power_model_sheet
+    source_columns: [cell_count]
+    aggregation: sum
+    unit: 片
+    metric_category: power
+    business_note: '每组件的电池片数量，例如 66 / 78 / 132 等。用于按版型查询电池片配置。取值示例: [66, 72, 78, 108, 132]。'
+    calculation_formula: SUM(cell_count) GROUP BY normalized_model_code
+  - metric_id: area_default
+    display_name: 默认面积
+    aliases: [面积, 默认面积, 组件面积]
+    table: plan_power_model_sheet
+    source_columns: [area_default]
+    aggregation: sum
+    unit: m²
+    metric_category: power
+    business_note: '功率模型中各版型默认面积值，用于面积相关计算。取值示例: 2.5m²、2.8m²。'
+    calculation_formula: SUM(area_default)
+  - metric_id: std_dev_default
+    display_name: 默认标准差
+    aliases: [标准差, 默认标准差, 标准偏差]
+    table: plan_power_model_sheet
+    source_columns: [std_dev_default]
+    aggregation: sum
+    unit: W
+    metric_category: power
+    business_note: '功率模型中各版型默认标准差，用于评估功率分布离散程度。'
+    calculation_formula: SUM(std_dev_default)
+  - metric_id: efficiency_avg
+    display_name: 平均效率
+    aliases: [平均效率, 效率均值, 供应商平均效率]
+    table: plan_power_supplier_efficiency_distribution
+    source_columns: [efficiency_avg]
+    aggregation: avg
+    unit: '%'
+    metric_category: power
+    business_note: '供应商的平均效率值，用于回答"哪个供应商效率最高"类问题。取值示例: 24.5%、25.1%、24.8%。'
+    calculation_formula: AVG(efficiency_avg) GROUP BY supplier_name
+  - metric_id: efficiency_min
+    display_name: 效率下限
+    aliases: [效率下限, 最低效率, 最小效率]
+    table: plan_power_supplier_efficiency_distribution
+    source_columns: [efficiency_min]
+    aggregation: sum
+    unit: '%'
+    metric_category: power
+    business_note: '供应商的效率下限值，用于回答"供应商效率范围"类问题。'
+    calculation_formula: SUM(efficiency_min)
+  - metric_id: efficiency_max
+    display_name: 效率上限
+    aliases: [效率上限, 最高效率, 最大效率]
+    table: plan_power_supplier_efficiency_distribution
+    source_columns: [efficiency_max]
+    aggregation: sum
+    unit: '%'
+    metric_category: power
+    business_note: '供应商的效率上限值，用于回答"供应商效率范围"类问题。'
+    calculation_formula: SUM(efficiency_max)
+  - metric_id: distribution_weight
+    display_name: 分布权重
+    aliases: [权重, 分布权重, 效率分布权重]
+    table: plan_power_supplier_efficiency_distribution
+    source_columns: [distribution_weight]
+    aggregation: sum
+    unit: '%'
+    metric_category: power
+    business_note: '供应商效率分布的权重值，用于效率分布的加权计算。'
+    calculation_formula: SUM(distribution_weight)
+  - metric_id: center_power
+    display_name: 中心功率
+    aliases: [中心功率, 功率中心值, 档位中心]
+    table: plan_power_power_bin
+    source_columns: [center_power]
+    aggregation: sum
+    unit: W
+    metric_category: power
+    business_note: '功率档位的中心功率值，用于功率档位参照。取值示例: 642.5W、647.5W、652.5W。'
+    calculation_formula: SUM(center_power)
+  - metric_id: power_bin_count
+    display_name: 功率档位数
+    aliases: [档位数, 功率档位数量, 功率段数]
+    table: plan_power_power_bin
+    source_columns: [id]
+    aggregation: count
+    unit: 个
+    metric_category: power
+    business_note: '某个模型版本+版型的功率档位总数，用于回答"有多少个功率档位"类问题。取值示例: 5个档位、8个档位。'
+    calculation_formula: COUNT(id) GROUP BY version_id, normalized_model_code
+
+  # ===== 模型版本 =====
+  - metric_id: model_sheet_count
+    display_name: 有效模型页数
+    aliases: [模型页数, 有效 Sheet 数, 版型页数]
+    table: plan_power_model_version
+    source_columns: [model_sheet_count]
+    aggregation: sum
+    unit: 页
+    metric_category: model
+    business_note: 'xlsm 文件中有效模型页的数量，用于回答"该版本覆盖了多少个版型"类问题。'
+    calculation_formula: SUM(model_sheet_count)
+  - metric_id: warning_count
+    display_name: 解析警告数
+    aliases: [警告数, warning 数, 解析警告]
+    table: plan_power_model_version
+    source_columns: [warning_count]
+    aggregation: sum
+    unit: 个
+    metric_category: quality
+    business_note: 'xlsm 解析过程中产生的 warning 数量，用于版本质量评估。'
+    calculation_formula: SUM(warning_count)

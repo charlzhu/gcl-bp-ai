@@ -41,6 +41,7 @@ class LogisticsCatalogColumn(BaseModel):
     business_name: str | None = None
     semantic_role: str | None = None
     nullable: bool = True
+    field_value_examples: list[str] | None = None  # 字段取值示例，如 ["华南","华东","华北"]
 
 
 class LogisticsCatalogTable(BaseModel):
@@ -99,6 +100,10 @@ class LogisticsCatalogMetric(BaseModel):
     source_columns: list[str] = Field(default_factory=list)
     sort_expression: str | None = None
     business_note: str | None = None
+    field_value_examples: list[str] | None = None  # 字段取值示例，如 ["华南","华东","华北"]
+    relevant_columns: list[str] | None = None  # 关联列，对应 metric_info 的 relevant_columns
+    calculation_formula: str | None = None  # 计算公式，如 "SUM(total_fee) / SUM(shipment_trip_count)"
+    calculation_notes: str | None = None  # 计算说明/业务口径
 
 
 class LogisticsCatalogDimension(BaseModel):
@@ -112,6 +117,7 @@ class LogisticsCatalogDimension(BaseModel):
     column: str
     table: str | None = None
     business_note: str | None = None
+    field_value_examples: list[str] | None = None  # 字段取值示例，如 ["华东","华南","华北"]
 
 
 class LogisticsCatalogJoin(BaseModel):

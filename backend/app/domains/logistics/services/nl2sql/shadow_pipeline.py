@@ -37,6 +37,7 @@ from backend.app.domains.logistics.services.nl2sql.sql_renderer import Logistics
 from backend.app.domains.logistics.services.nl2sql.sql_safety import LogisticsSqlSafetyChecker
 
 SHADOW_PIPELINE_VERSION = "logistics_nl2sql_shadow.v1"
+_DOMAIN_ALLOWLIST = frozenset({"logistics", "business_analysis", "plan_bom"})
 ShadowPipelineStatus = Literal[
     "success",
     "unsupported",
@@ -225,7 +226,7 @@ class LogisticsNl2SqlShadowPipeline:
 
             return self._finish(candidate_sql_gate_result=candidate_sql_gate_result, **kwargs)
 
-        if request.domain != "logistics":
+        if request.domain not in _DOMAIN_ALLOWLIST:
             return finish_with_gate(
                 request=request,
                 trace_id=trace_id,
@@ -237,6 +238,23 @@ class LogisticsNl2SqlShadowPipeline:
                 catalog_ids=catalog_ids,
                 catalog_versions=catalog_versions,
             )
+
+        # 根据 domain 加载对应域的 catalog，确保 validator/renderer/safety 使用正确的 catalog
+        _domain_catalog: LogisticsSemanticCatalog | None = None
+        if request.domain != "logistics":
+            from backend.app.domains.logistics.services.nl2sql.domain_registry import create_default_registry
+            _registry = create_default_registry()
+            _reg = _registry.get_registration(request.domain)
+            if _reg and _reg.catalog_loader:
+                try:
+                    _domain_catalog = _reg.catalog_loader()
+                except Exception:
+                    _domain_catalog = None
+        if _domain_catalog is not None:
+            self.validator = LogisticsSqlPlanValidator(catalog=_domain_catalog)
+            self.renderer = LogisticsSqlRenderer(catalog=_domain_catalog)
+            self.safety_checker = LogisticsSqlSafetyChecker(catalog=_domain_catalog)
+        # 否则保持默认的 logistics catalog
         if request.source_system != "middle_db":
             return finish_with_gate(
                 request=request,
@@ -263,6 +281,20 @@ class LogisticsNl2SqlShadowPipeline:
             )
 
         strategy = str(request.candidate.get("strategy") or "")
+        if strategy == "power_prediction":
+            # 功率预测策略：不执行 SQL，直接返回 success
+            return finish_with_gate(
+                request=request,
+                trace_id=trace_id,
+                started=started,
+                status="success",
+                stage="power_prediction",
+                error_codes=[],
+                error_message=None,
+                catalog_ids=catalog_ids,
+                catalog_versions=catalog_versions,
+                row_count=1,
+            )
         if strategy != "sql_direct":
             return finish_with_gate(
                 request=request,

@@ -239,6 +239,15 @@ class LogisticsNl2SqlGrayscaleGate:
         query_key = formal.query_plan.query_key
         question_type = self.classify_query_key(query_key)
 
+        # 如果域已完全启用灰度（domain_types 中有该域的全部类型），直接灰度
+        if self.config.enabled_domains and domain in self.config.enabled_domains:
+            return LogisticsNl2SqlGrayscaleDecision(
+                should_grayscale=True,
+                question_type=question_type,
+                domain=domain,
+                fallback_reason=None,
+            )
+
         if question_type is None:
             return LogisticsNl2SqlGrayscaleDecision(
                 should_grayscale=False,

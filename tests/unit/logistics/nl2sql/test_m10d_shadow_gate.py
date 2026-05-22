@@ -325,32 +325,19 @@ def test_m10d2_real_db_access_disabled_uses_fake_executor() -> None:
     assert [call.mode for call in executor.calls] == ["explain"]
 
 
-def test_m10d2_real_db_access_enabled_no_env_falls_back_to_fake() -> None:
-    """real_db_access_enabled=True 但 env_path 指向不存在文件时，应静默 fallback 到 fake executor。
-
-    不抛出异常，不因 env 缺失而 fail-closed gate。
-    """
-    executor = FakeLogisticsSqlExecutor(explain_rows=[{"select_type": "SIMPLE"}])
+def test_m10d2_real_db_access_enabled_without_env_raises_runtime_error() -> None:
+    """real_db_access_enabled=True 但 env 不可用时应抛出 RuntimeError，不再静默 fallback。"""
     config = LogisticsNl2SqlM10DShadowGateConfig(
-        enabled=True,
-        explain_enabled=True,
+        enabled=False,
         real_db_access_enabled=True,
         env_path="/tmp/nonexistent_dir/.env",
     )
-    gate = LogisticsNl2SqlM10DShadowGate(
-        config=config,
-        executor_factory=lambda: executor,
-    )
-
-    report = gate.run(rendered_sql=_safe_rendered_sql())
-    payload = report.model_dump_json()
-
-    assert report.status == "success"
-    assert report.stage == "explain"
-    assert report.explain_status == "success"
-    assert report.error_codes == []
-    assert [call.mode for call in executor.calls] == ["explain"]
-    assert "SELECT " not in payload
+    import pytest
+    with pytest.raises(RuntimeError, match="real_db_access_enabled but middle_db config load failed"):
+        LogisticsNl2SqlM10DShadowGate(
+            config=config,
+            executor_factory=lambda: FakeLogisticsSqlExecutor(),
+        )._build_execution_service()
 
 
 # =============================================================================

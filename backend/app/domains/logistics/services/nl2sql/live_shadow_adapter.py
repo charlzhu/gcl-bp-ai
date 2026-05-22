@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaResult
 from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import LogisticsCatalogRecallService
+from backend.app.domains.logistics.services.nl2sql.domain_registry import create_default_registry
 from backend.app.domains.logistics.services.nl2sql.evaluation_log import redact_evaluation_text
 from backend.app.domains.logistics.services.nl2sql.m9_sqlplan_generation import (
     LogisticsNl2SqlDomainRouter,
@@ -347,6 +348,12 @@ class LogisticsNl2SqlLiveShadowAdapter:
                     formal_status=resolved_formal_status,
                     error_codes=[route.reason_code or "m10c_route_skipped"],
                 )
+
+            # 根据 route.domain 加载对应域的 catalog（业务域 catalog 已存储在 YAML 文件中）
+            from backend.app.domains.logistics.services.nl2sql.domain_registry import create_default_registry
+            _registry = create_default_registry()
+            _reg = _registry.get_registration(route.domain)
+            _domain_catalog = _reg.catalog_loader() if _reg and _reg.catalog_loader else None
 
             recall_result = self.recall_service_factory().recall(
                 question=question,

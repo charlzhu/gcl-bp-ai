@@ -111,7 +111,7 @@
 | m8_success_carrier_rank_by_mw | 按承运商统计发运量排名，验证哪个物流跑得最多的排名口径 | success | trial |  |
 | m8_success_origin_customer_topn_detail | 按始发地和客户输出明细 TopN，验证明细类 limit 与路线/客户维度覆盖 | success | trial |  |
 | m8_validation_quote_metric_requires_supported_hist_scope | 报价/单价/运价依赖历史明细单价表，M8 dws-only shadow 样例必须受控失败 | validation_failed | validation | sqlplan_metric_table_not_in_plan::unit_price_per_vehicle::dwd_logistics_hist_shipment_detail |
-| m8_safety_forbidden_update_sql_blocked | 渲染器异常输出写 SQL 时必须停在 safety gate，且不触达 executor | safety_failed | safety | sql_safety_not_select, sql_safety_forbidden_token::update, sql_safety_table_required, sql_safety_unqualified_identifier::update, sql_safety_unqualified_identifier::set, sql_safety_unqualified_identifier::shipment_watt |
+| m8_safety_forbidden_update_sql_blocked | 渲染器异常输出写 SQL 时必须停在 safety gate，且不触达 executor | safety_failed | safety | sql_safety_not_select, sql_safety_forbidden_token::update, sql_safety_table_required, sql_safety_unqualified_identifier::update, sql_safety_unqualified_identifier::set, sql_safety_unqualified_identifier::shipment_watt, sql_ast_safety_forbidden_statement::update |
 | m8_skipped_missing_candidate | 缺少 SQLPlan candidate 时跳过 SQL 阶段，保持 shadow 不影响主流程 | skipped | candidate | shadow_candidate_missing |
 | m8_unsupported_non_sql_direct_strategy | 非 sql_direct strategy 停在 candidate 边界 | unsupported | candidate | shadow_strategy_not_sql_direct::clarify |
 

@@ -196,10 +196,11 @@ class LogisticsNl2SqlDomainRouter(Nl2SqlDomainRouter):
             )
         if any(token in text for token in self.BUSINESS_ANALYSIS_TOKENS):
             return LogisticsNl2SqlDomainRoute(
-                should_process=False,
+                should_process=True,
                 domain="business_analysis",
                 source_system="middle_db",
-                reason_code="m9_domain_not_supported::business_analysis",
+                mode="shadow",
+                reason_code=None,
             )
         # 先检查 registry 中的已注册域（Nl2SqlDomainRouter 基类逻辑）
         # plan_bom / business_analysis 已注册到 registry，由基类自动识别

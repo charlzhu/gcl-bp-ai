@@ -1,0 +1,101 @@
+catalog_version: business_analysis_nl2sql_catalog.v1
+domain: business_analysis
+dimensions:
+  # ===== 时间维度 =====
+  - dimension_id: business_year
+    display_name: 业务年份
+    aliases: [年份, 年, 年度, 哪年]
+    column: business_year
+    table: dwd_ba_isp_monthly_fact
+    business_note: 产销存数据的业务年份，用于按年份过滤或分组。只使用已发布月份。
+    field_value_examples: ["2023", "2024", "2025", "2026"]
+  - dimension_id: business_month
+    display_name: 业务月份
+    aliases: [月份, 月, 月度, 哪个月]
+    column: business_month
+    table: dwd_ba_isp_monthly_fact
+    business_note: 产销存数据的业务月份（1-12），用于月度趋势或按月份过滤。
+    field_value_examples: ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]
+  - dimension_id: period_label
+    display_name: 期间标签
+    aliases: [期间, 期间标签, 年月, 年月标签]
+    column: period_label
+    table: dwd_ba_isp_monthly_fact
+    business_note: '期间标签，格式如"2025-12"，用于精确指定年月范围。'
+    field_value_examples: ["2024-01", "2024-12", "2025-06"]
+
+  # ===== 组织维度 =====
+  - dimension_id: base_name
+    display_name: 基地
+    aliases: [基地, 基地名称, 各基地, 生产地]
+    column: base_name
+    table: dwd_ba_isp_monthly_fact
+    business_note: '生产基地名称，如合肥、阜宁、广德等。用于按基地拆分产量/销量/库存。'
+    field_value_examples: ["合肥", "阜宁", "广德"]
+  - dimension_id: factory_name
+    display_name: 工厂
+    aliases: [工厂, 工厂名称, 分工厂, 车间]
+    column: factory_name
+    table: dwd_ba_isp_monthly_fact
+    business_note: 工厂或车间名称，用于按工厂维度拆分数据。
+    field_value_examples: ["合肥一厂", "阜宁组件厂", "广德工厂"]
+  - dimension_id: model_type
+    display_name: 版型
+    aliases: [版型, 产品版型, P型, N型, 182N, 183N, 210N, 210R]
+    column: model_type
+    table: dwd_ba_isp_monthly_fact
+    business_note: '光伏组件版型，如P型、N型、182N、183N、210N、210R等。用于按版型拆分产量/销量。'
+    field_value_examples: ["P型", "N型", "182N", "210N", "210R", "183N"]
+
+  # ===== 生产维度 =====
+  - dimension_id: production_mode
+    display_name: 生产模式
+    aliases: [生产模式, 生产方式, 自产, 委外, OEM, 代工, TW, 双经销]
+    column: production_mode
+    table: dwd_ba_isp_monthly_fact
+    business_note: '生产模式区分：自产、委外、代工/OEM、TW（双经销）、受托加工等。用于按生产模式聚合分析。'
+    field_value_examples: ["自产", "委外", "OEM", "TW"]
+  - dimension_id: trade_scope
+    display_name: 交易范围
+    aliases: [交易范围, 交易类型, 销售范围, 对内, 对外, 内部交易, 外部交易]
+    column: trade_scope
+    table: dwd_ba_isp_monthly_fact
+    business_note: '交易范围区分内部交易和外部销售，用于过滤"对外销量""剔除内部交易"等场景。'
+    field_value_examples: ["内部交易", "外部销售"]
+
+  # ===== 指标维度 =====
+  - dimension_id: metric_code
+    display_name: 标准指标编码
+    aliases: [指标编码, 指标代码, 标准编码]
+    column: metric_code
+    table: dwd_ba_isp_monthly_fact
+    business_note: '标准指标的唯一编码，如 production_actual_including_oem、shipment_volume 等。系统内部使用。'
+    field_value_examples: ["production_actual_including_oem", "shipment_volume", "ending_inventory_volume"]
+  - dimension_id: metric_name
+    display_name: 标准指标名称
+    aliases: [指标名称, 指标名, 中文指标名]
+    column: metric_name
+    table: dwd_ba_isp_monthly_fact
+    business_note: '标准指标的中文展示名称，如"实际产量（含委外）"、"发货量/销量"等。'
+    field_value_examples: ["实际产量（含委外）", "发货量/销量", "期末库存/存货"]
+  - dimension_id: metric_category
+    display_name: 指标分类
+    aliases: [指标分类, 指标类别, 大类]
+    column: metric_category
+    table: dwd_ba_isp_monthly_fact
+    business_note: '指标归类：production（产量）、shipment（发货/销量）、inventory（库存）、consignment（寄存）、budget（预算）、calculated（计算类）、quality（质量）。'
+    field_value_examples: ["production", "shipment", "inventory", "consignment", "budget", "calculated", "quality"]
+  - dimension_id: aggregation_type
+    display_name: 聚合类型
+    aliases: [聚合类型, 聚合方式, 汇总方式]
+    column: aggregation_type
+    table: dwd_ba_isp_monthly_fact
+    business_note: '聚合类型：flow_sum（流量求和）、period_end（期末值）、calculated_ratio（计算比率）。决定了查询如何聚合。'
+    field_value_examples: ["flow_sum", "period_end", "calculated_ratio"]
+  - dimension_id: unit_standard
+    display_name: 标准单位
+    aliases: [单位, 计量单位, MW]
+    column: unit_standard
+    table: dwd_ba_isp_monthly_fact
+    business_note: '标准计量单位，多数指标单位为 MW（兆瓦）。'
+    field_value_examples: ["MW", "件", "%", "月"]

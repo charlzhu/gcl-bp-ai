@@ -183,16 +183,73 @@ def register_business_analysis_domain(registry: Nl2SqlDomainRegistry) -> None:
         - templates_loader: 懒加载产销存 query_templates
         - allowed_tables: 产销存中间库允许读取的表
     """
+    from pathlib import Path
+
     from backend.app.domains.business_analysis.services.inventory_sales_production.semantic_catalog import (
         ISP_ALLOWED_READ_TABLES,
     )
 
-    def _load_catalog() -> list[dict]:
-        return [
-            {"table": "dwd_ba_isp_monthly_fact", "description": "产销存月度事实表"},
-            {"table": "dim_ba_isp_metric", "description": "标准指标维表"},
-            {"table": "dim_ba_isp_metric_alias", "description": "指标别名维表"},
-        ]
+    def _load_catalog() -> Any:
+        """加载产销存 nl2sql_catalog YAML 文件，返回 LogisticsSemanticCatalog 对象。"""
+        import yaml
+
+        from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
+            LOGISTICS_NL2SQL_ALLOWED_READ_TABLES,
+            LogisticsSemanticCatalog,
+        )
+
+        catalog_dir = (Path(__file__).resolve().parents[3] / "logistics"
+                       / "config" / "nl2sql_catalog" / "business_analysis")
+        raw_files = {}
+        for fname in ("tables.yaml", "metrics.yaml", "dimensions.yaml", "rules.yaml", "examples.yaml"):
+            path = catalog_dir / fname
+            if path.exists():
+                raw_files[fname] = yaml.safe_load(path.read_text(encoding="utf-8"))
+            else:
+                raw_files[fname] = {}
+
+        # 适配产销存自有 schema 到 LogisticsSemanticCatalog 兼容格式
+        tables = raw_files.get("tables.yaml", {}).get("tables", [])
+        metrics = raw_files.get("metrics.yaml", {}).get("metrics", [])
+        adapted_tables = []
+        for t in tables:
+            t_copy = dict(t)
+            t_copy.pop("sub_domain", None)
+            adapted_tables.append(t_copy)
+        adapted_metrics = []
+        for m in metrics:
+            m_copy = dict(m)
+            # 确保 sql_expression 字段
+            if "sql_expression" not in m_copy or not m_copy.get("sql_expression"):
+                m_copy["sql_expression"] = f"SUM({','.join(m_copy.get('source_columns', ['value']))})"
+            # metric_category → 拼入 business_note
+            cat = m_copy.pop("metric_category", None)
+            if cat:
+                existing_note = m_copy.get("business_note") or ""
+                m_copy["business_note"] = f"指标分类 {cat}。{existing_note}"
+            # default_for_sales → 拼入 business_note
+            default_sales = m_copy.pop("default_for_sales", None)
+            if default_sales:
+                existing_note = m_copy.get("business_note") or ""
+                m_copy["business_note"] = f"{existing_note} （默认销量口径）"
+            # requires_explicit_phrase → 拼入 business_note
+            explicit = m_copy.pop("requires_explicit_phrase", None)
+            if explicit:
+                existing_note = m_copy.get("business_note") or ""
+                m_copy["business_note"] = f"{existing_note} （需要显式用户词触发）"
+            adapted_metrics.append(m_copy)
+
+        payload = {
+            "catalog_version": "business_analysis_nl2sql_catalog.v1",
+            "domain": "business_analysis",
+            "tables": adapted_tables,
+            "metrics": adapted_metrics,
+            "dimensions": raw_files.get("dimensions.yaml", {}).get("dimensions", []),
+            "joins": [],
+            "rules": raw_files.get("rules.yaml", {}).get("rules", []),
+            "examples": raw_files.get("examples.yaml", {}).get("examples", []),
+        }
+        return LogisticsSemanticCatalog.model_validate(payload)
 
     def _load_templates() -> list[dict]:
         from pathlib import Path
@@ -229,17 +286,52 @@ def register_plan_bom_domain(registry: Nl2SqlDomainRegistry) -> None:
         - templates_loader: 懒加载 BOM query_templates
         - allowed_tables: BOM 中间库允许读取的表
     """
-    def _load_catalog() -> list[dict]:
-        return [
-            {"table": "plan_bom_header", "description": "BOM 头表，含订单号/版本号/生效日期"},
-            {"table": "plan_bom_material_line", "description": "BOM 材料明细表，含SAP编码/物料名称/用量"},
-            {"table": "plan_bom_revision", "description": "BOM 修订区表"},
-            {"table": "plan_power_model_version", "description": "功率模型版本表"},
-            {"table": "plan_power_model_sheet", "description": "功率模型 Sheet 表"},
-            {"table": "plan_power_factor_option", "description": "功率模型配置选项"},
-            {"table": "plan_power_supplier_efficiency_distribution", "description": "供应商效率分布"},
-            {"table": "plan_power_power_bin", "description": "功率档位表"},
-        ]
+    from pathlib import Path
+
+    def _load_catalog() -> Any:
+        """加载计划 BOM nl2sql_catalog YAML 文件，返回 LogisticsSemanticCatalog 对象。"""
+        import yaml
+
+        from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
+            LogisticsSemanticCatalog,
+        )
+
+        catalog_dir = (Path(__file__).resolve().parents[3] / "logistics"
+                       / "config" / "nl2sql_catalog" / "plan_bom")
+        raw_files = {}
+        for fname in ("tables.yaml", "metrics.yaml", "dimensions.yaml", "rules.yaml", "examples.yaml"):
+            path = catalog_dir / fname
+            if path.exists():
+                raw_files[fname] = yaml.safe_load(path.read_text(encoding="utf-8"))
+            else:
+                raw_files[fname] = {}
+
+        # 适配计划 BOM 自有 schema 到 LogisticsSemanticCatalog 兼容格式
+        metrics = raw_files.get("metrics.yaml", {}).get("metrics", [])
+        adapted_metrics = []
+        for m in metrics:
+            m_copy = dict(m)
+            # 确保 sql_expression 字段
+            if "sql_expression" not in m_copy or not m_copy.get("sql_expression"):
+                m_copy["sql_expression"] = f"SUM({','.join(m_copy.get('source_columns', ['value']))})"
+            # metric_category → 拼入 business_note
+            cat = m_copy.pop("metric_category", None)
+            if cat:
+                existing_note = m_copy.get("business_note") or ""
+                m_copy["business_note"] = f"指标分类 {cat}。{existing_note}"
+            adapted_metrics.append(m_copy)
+
+        payload = {
+            "catalog_version": "plan_bom_nl2sql_catalog.v1",
+            "domain": "plan_bom",
+            "tables": raw_files.get("tables.yaml", {}).get("tables", []),
+            "metrics": adapted_metrics,
+            "dimensions": raw_files.get("dimensions.yaml", {}).get("dimensions", []),
+            "joins": [],
+            "rules": raw_files.get("rules.yaml", {}).get("rules", []),
+            "examples": raw_files.get("examples.yaml", {}).get("examples", []),
+        }
+        return LogisticsSemanticCatalog.model_validate(payload)
 
     def _load_templates() -> list[dict]:
         from pathlib import Path

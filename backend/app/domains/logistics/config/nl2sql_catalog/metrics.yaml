@@ -11,6 +11,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [shipment_watt]
     business_note: 用户问发货量/运量/运输量/物流量/出货量/件数且未指定其他单位时，默认按 MW 回答。
+    calculation_formula: SUM(shipment_watt)
+    calculation_notes: 按发运瓦数求和，单位换算为 MW。
+    relevant_columns: [shipment_watt]
   - metric_id: shipment_count
     display_name: 发运件数
     aliases: [发运件数, 件数, 发货件数, 出货件数]
@@ -20,6 +23,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [shipment_count]
     business_note: 按件统计的发运数量，与 MW 不同；用户直接问"发了多少件"时使用。
+    calculation_formula: SUM(shipment_count)
+    calculation_notes: 按发运件数求和，件与 MW 为不同计量口径。
+    relevant_columns: [shipment_count]
   - metric_id: mw_summary
     display_name: 发运量汇总（按维度）
     aliases: [发运量汇总, 各维度发运量, MW汇总, 瓦数汇总]
@@ -29,6 +35,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [shipment_watt]
     business_note: '按区域/客户/承运商等维度拆分发运量汇总。对应 query_key: mw_summary, mw_by_region, mw_by_all_regions。'
+    calculation_formula: SUM(shipment_watt)
+    calculation_notes: 按区域/客户/承运商等维度分组后对发运瓦数求和。
+    relevant_columns: [shipment_watt, region_name, customer_name, logistics_company_name]
   - metric_id: mw_by_origin_and_carrier
     display_name: 始发地+承运商发运量
     aliases: [始发地承运商发运量, 各始发地承运商发运]
@@ -38,6 +47,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [shipment_watt]
     business_note: 按始发地和承运商交叉维度统计发运量。
+    calculation_formula: SUM(shipment_watt)
+    calculation_notes: 按 origin_place 和 logistics_company_name 交叉分组后对发运瓦数求和。
+    relevant_columns: [shipment_watt, origin_place, logistics_company_name]
   - metric_id: customer_mw
     display_name: 客户发运量
     aliases: [客户发运量, 客户出货量, 发给客户的瓦数]
@@ -47,6 +59,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [shipment_watt]
     business_note: '按客户统计发运量。对应 query_key: customer_mw, customer_mw_ranking。'
+    calculation_formula: SUM(shipment_watt)
+    calculation_notes: 按客户分组后对发运瓦数求和。
+    relevant_columns: [shipment_watt, customer_name]
 
   # ===== 车次类 =====
   - metric_id: shipment_trip_count
@@ -58,6 +73,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [shipment_trip_count]
     business_note: 线路均价分母使用车次汇总。
+    calculation_formula: SUM(shipment_trip_count)
+    calculation_notes: 按发运车次数求和，每条发运记录对应一个车次。
+    relevant_columns: [shipment_trip_count]
   - metric_id: trip_count_summary
     display_name: 车次汇总
     aliases: [车次汇总, 总车次, 各维度车次]
@@ -67,6 +85,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [shipment_trip_count]
     business_note: '按区域/月份/车型等维度统计车次。对应 query_key: monthly_trip_count_summary, trip_count_by_region。'
+    calculation_formula: SUM(shipment_trip_count)
+    calculation_notes: 按维度分组后对车次数求和。
+    relevant_columns: [shipment_trip_count, region_name, biz_month, required_vehicle_type]
   - metric_id: vehicle_type_trip_count
     display_name: 车型车次
     aliases: [车型车次, 各车型车次, 按车型统计车次]
@@ -76,6 +97,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [shipment_trip_count]
     business_note: '按所需车型维度统计车次。对应 query_key: vehicle_type_trip_count。'
+    calculation_formula: SUM(shipment_trip_count)
+    calculation_notes: 按 required_vehicle_type 维度对车次数求和。
+    relevant_columns: [shipment_trip_count, required_vehicle_type]
 
   # ===== 费用类 =====
   - metric_id: total_fee
@@ -87,6 +111,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [total_fee]
     business_note: 统计总运费时按总费用汇总。
+    calculation_formula: SUM(total_fee)
+    calculation_notes: 对 total_fee 字段求和，单位为元。
+    relevant_columns: [total_fee]
   - metric_id: total_fee_summary
     display_name: 费用汇总（按维度）
     aliases: [费用汇总, 各维度费用, 按客户费用, 按区域费用]
@@ -96,6 +123,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [total_fee]
     business_note: '按客户/区域/承运商等维度拆分费用汇总。对应 query_key: total_fee_summary, total_fee_by_province。'
+    calculation_formula: SUM(total_fee)
+    calculation_notes: 按维度分组后对 total_fee 求和。
+    relevant_columns: [total_fee, customer_name, region_name, logistics_company_name, province]
   - metric_id: extra_fee
     display_name: 附加费
     aliases: [附加费, 额外费用, 异常费用, 杂费]
@@ -105,6 +135,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [extra_fee]
     business_note: 附加费按中间库清洗后的 extra_fee 汇总。
+    calculation_formula: SUM(extra_fee)
+    calculation_notes: 对 extra_fee 字段求和，为中间库清洗后的额外费用。
+    relevant_columns: [extra_fee]
   - metric_id: sys_extra_fee_summary
     display_name: 系统侧附加费汇总
     aliases: [系统附加费, 系统额外费用]
@@ -114,6 +147,9 @@ metrics:
     table: dwd_logistics_assign_detail
     source_columns: [extra_cost]
     business_note: 2026 系统侧委派明细中的额外费用汇总。
+    calculation_formula: SUM(extra_cost)
+    calculation_notes: 2026 系统侧对 extra_cost 字段求和。
+    relevant_columns: [extra_cost]
 
   # ===== 均价/单价类 =====
   - metric_id: avg_fee_per_trip
@@ -125,6 +161,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [total_fee, shipment_trip_count]
     business_note: 均价必须按 SUM(total_fee)/SUM(shipment_trip_count)，禁止用 AVG(total_fee)。这是线路运价口径。
+    calculation_formula: SUM(total_fee) / SUM(shipment_trip_count)
+    calculation_notes: 总费用除以总车次，计算平均每车费用。禁止使用 AVG(total_fee) 函数。
+    relevant_columns: [total_fee, shipment_trip_count]
   - metric_id: avg_fee_per_watt
     display_name: 单瓦费用（均价/瓦）
     aliases: [单瓦费用, 每瓦运费, 单价每瓦, 平均每瓦]
@@ -134,6 +173,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [total_fee, shipment_watt]
     business_note: '按发运瓦数计算的平均单瓦费用。对应 query_key: avg_fee_per_watt_by_transport, unit_fee_per_watt。'
+    calculation_formula: SUM(total_fee) / SUM(shipment_watt)
+    calculation_notes: 总费用除以总发运瓦数，计算每 MW 的平均费用。
+    relevant_columns: [total_fee, shipment_watt]
   - metric_id: unit_price_per_vehicle
     display_name: 单价/车
     aliases: [报价, 单价, 运价, 单价/车, 线路报价, 线路单价, 每车报价]
@@ -143,6 +185,9 @@ metrics:
     table: dwd_logistics_hist_shipment_detail
     source_columns: [unit_price_per_vehicle]
     business_note: 报价/单价/运价走源表单价/车字段，与均价严格区分。
+    calculation_formula: unit_price_per_vehicle（源表字段直接取值）
+    calculation_notes: 单价不是计算值，而是源表中的固定报价字段。与均价（SUM/SUM）严格区分。
+    relevant_columns: [unit_price_per_vehicle]
   - metric_id: route_pricing_analysis
     display_name: 线路运价分析
     aliases: [线路运价, 线路价格, 运价分析, 各线路价格]
@@ -152,6 +197,9 @@ metrics:
     table: dwd_logistics_hist_shipment_detail
     source_columns: [unit_price_per_vehicle]
     business_note: '按线路（始发地-目的地）分析运价差异。对应 query_key: route_pricing_analysis。'
+    calculation_formula: unit_price_per_vehicle（按线路分组取单价）
+    calculation_notes: 按 origin_place+city 分组后，取各线路的报价情况。
+    relevant_columns: [unit_price_per_vehicle, origin_place, city]
 
   # ===== 排名类 =====
   - metric_id: carrier_rank_by_mw
@@ -163,7 +211,10 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: [logistics_company_name, shipment_watt]
     sort_expression: SUM(shipment_watt) DESC
-    business_note: '\"哪个物流跑得最多\"默认按承运商发运量排序。'
+    business_note: '"哪个物流跑得最多"默认按承运商发运量排序。'
+    calculation_formula: 按承运商分组后 SUM(shipment_watt) 降序排列
+    calculation_notes: 按承运商分组后对发运瓦数求和，然后降序排列。排名第1的为发运量最大的承运商。
+    relevant_columns: [logistics_company_name, shipment_watt]
   - metric_id: carrier_metric_ranking
     display_name: 承运商多指标排名
     aliases: [承运商综合排名, 承运商多维度排名]
@@ -174,6 +225,9 @@ metrics:
     source_columns: [logistics_company_name, shipment_watt, total_fee]
     sort_expression: SUM(shipment_watt) DESC
     business_note: '按发运量、费用等多项指标对承运商进行综合排名。对应 query_key: carrier_metric_ranking。'
+    calculation_formula: 按承运商分组后同时统计发运量和费用
+    calculation_notes: 按物流公司分组，同时展示发运量和费用数据，便于多指标综合对比。主排序按发运量降序。
+    relevant_columns: [logistics_company_name, shipment_watt, total_fee]
   - metric_id: top_customer_fee_and_mw
     display_name: 头部客户费用与发运量
     aliases: [大客户, 头部客户, 主要客户, TOP客户, 前几大客户]
@@ -184,6 +238,9 @@ metrics:
     source_columns: [customer_name, total_fee, shipment_watt]
     sort_expression: SUM(total_fee) DESC
     business_note: '按总费用降序排列客户，同时展示发运量。对应 query_key: top_customers_fee_and_mw_by_province。'
+    calculation_formula: 按客户分组后 SUM(total_fee) 降序排列
+    calculation_notes: 按客户分组，对总费用求和后降序排列。同时展示各客户的发运量。排名第1的为费用最高的头部客户。
+    relevant_columns: [customer_name, total_fee, shipment_watt]
 
   # ===== 行数/计数类 =====
   - metric_id: row_count
@@ -195,6 +252,9 @@ metrics:
     table: dws_logistics_detail_union
     source_columns: []
     business_note: 用于追溯匹配范围内的明细记录数。
+    calculation_formula: COUNT(*)
+    calculation_notes: 统计符合条件的总记录数，用于数据量和明细追溯。
+    relevant_columns: []
 
   # ===== 系统侧（2026）指标 =====
   - metric_id: sys_total_fee
@@ -206,6 +266,9 @@ metrics:
     table: dwd_logistics_assign_detail
     source_columns: [supplier_price]
     business_note: '2026 系统侧委派明细中的供应商价格费用。对应 query_key: sys_total_fee_by_filters。'
+    calculation_formula: SUM(supplier_price)
+    calculation_notes: 2026 系统侧对供应商价格求和。
+    relevant_columns: [supplier_price]
   - metric_id: sys_mw
     display_name: 系统侧发运量
     aliases: [系统发运量, 系统瓦数, 系统MW]
@@ -215,6 +278,9 @@ metrics:
     table: dwd_logistics_ship_product
     source_columns: [power]
     business_note: '2026 系统侧产品表中的功率汇总。对应 query_key: sys_mw_and_trip_count, sys_mw_by_procurement_type。'
+    calculation_formula: SUM(power)
+    calculation_notes: 2026 系统侧产品表功率汇总，按采购类型等维度拆分。
+    relevant_columns: [power]
   - metric_id: sys_trip_count
     display_name: 系统侧车次
     aliases: [系统车次, 系统趟次]
@@ -224,6 +290,9 @@ metrics:
     table: dwd_logistics_assign_task
     source_columns: [ship_task_id]
     business_note: 2026 系统侧按发运任务号去重统计车次。
+    calculation_formula: COUNT(DISTINCT ship_task_id)
+    calculation_notes: 2026 系统侧按发运任务号去重计数。
+    relevant_columns: [ship_task_id]
   - metric_id: sys_task_count
     display_name: 系统侧任务数
     aliases: [系统任务数, 系统发运任务数, 任务数量]
@@ -233,6 +302,9 @@ metrics:
     table: dwd_logistics_ship_task
     source_columns: [task_id]
     business_note: 2026 系统侧发运任务总数，按任务号去重。
+    calculation_formula: COUNT(DISTINCT task_id)
+    calculation_notes: 2026 系统侧发运任务总数，按 task_id 去重计数。
+    relevant_columns: [task_id]
   - metric_id: sys_supplier_price
     display_name: 系统侧供应商价格
     aliases: [系统供应商价格, 系统采购价]
@@ -242,6 +314,9 @@ metrics:
     table: dwd_logistics_assign_detail
     source_columns: [supplier_price]
     business_note: 2026 系统侧委派明细中的供应商报价汇总。
+    calculation_formula: SUM(supplier_price)
+    calculation_notes: 2026 系统侧供应商价格汇总。
+    relevant_columns: [supplier_price]
   - metric_id: sys_quantity
     display_name: 系统侧数量
     aliases: [系统数量, 系统发运数量]
@@ -251,3 +326,6 @@ metrics:
     table: dwd_logistics_assign_detail
     source_columns: [quantity]
     business_note: 2026 系统侧委派明细中的产品数量汇总。
+    calculation_formula: SUM(quantity)
+    calculation_notes: 2026 系统侧产品数量汇总。
+    relevant_columns: [quantity]

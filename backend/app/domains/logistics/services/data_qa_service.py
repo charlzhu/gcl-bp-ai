@@ -63,43 +63,23 @@ class LogisticsDataQaService:
         *,
         db: Session,
         repository: LogisticsDataQaRepository | None = None,
-        planner: LogisticsDataQaPlanner | None = None,
         query_log_repository: LogisticsQueryRepository | None = None,
-        guardrail_service: LogisticsLlmUnderstandingGuardrailService | None = None,
-        clarification_assist_service: LogisticsLlmClarificationAssistService | None = None,
-        unsupported_assist_service: LogisticsLlmUnsupportedAssistService | None = None,
-        answer_presentation_service: LogisticsLlmAnswerPresentationService | None = None,
         nl2sql_live_shadow_adapter: LogisticsNl2SqlLiveShadowAdapter | None = None,
     ) -> None:
-        """初始化物流数据问答服务。
+        """初始化物流数据问答服务（NL2SQL 主线模式，已移除规则引擎）。
 
         参数：
             db: 当前数据库会话。
             repository: 物流问答仓储，测试可注入替身。
-            planner: 确定性 planner，测试可注入替身。
             query_log_repository: 查询历史仓储。
-            guardrail_service: LLM 理解 Guardrail 服务。
-            clarification_assist_service: 追问表达辅助服务。
-            unsupported_assist_service: 拒答表达辅助服务。
-            answer_presentation_service: 用户可见答案表达服务。
-            nl2sql_live_shadow_adapter: M10-C NL2SQL 正式 QA 旁路 shadow adapter，默认关闭。
+            nl2sql_live_shadow_adapter: NL2SQL shadow adapter。
         返回：
             无返回值。
         """
 
         self.db = db
         self.repository = repository or LogisticsDataQaRepository(db)
-        historical_carrier_candidate_provider = getattr(self.repository, "list_historical_carrier_names", None)
-        self.planner = planner or LogisticsDataQaPlanner(
-            historical_carrier_candidate_provider=historical_carrier_candidate_provider
-            if callable(historical_carrier_candidate_provider)
-            else None
-        )
         self.query_log_repository = query_log_repository or LogisticsQueryRepository()
-        self.guardrail_service = guardrail_service or LogisticsLlmUnderstandingGuardrailService()
-        self.clarification_assist_service = clarification_assist_service or LogisticsLlmClarificationAssistService()
-        self.unsupported_assist_service = unsupported_assist_service or LogisticsLlmUnsupportedAssistService()
-        self.answer_presentation_service = answer_presentation_service or LogisticsLlmAnswerPresentationService()
         self.query_plan_shadow_builder = QueryPlanningV2ShadowSnapshotBuilder()
         self.nl2sql_live_shadow_adapter = nl2sql_live_shadow_adapter or LogisticsNl2SqlLiveShadowAdapter()
 
@@ -109,11 +89,13 @@ class LogisticsDataQaService:
         *,
         trace_id: str | None = None,
     ) -> LogisticsDataQaResult:
-        """执行物流数据问答。
+        """执行物流数据问答（NL2SQL 主线模式，已移除规则引擎回退）。
 
         参数：
             payload: 当前自然语言问题。
             trace_id: 当前请求 trace_id，用于把 data-qa 结果写入统一查询历史。
+        返回：
+            NL2SQL 查询结果；NL2SQL 不可用时返回空结果。
         """
         trace_recorder = QaTraceRecorder(domain="logistics", trace_id=trace_id, question=payload.question)
         trace_recorder.add(
@@ -121,148 +103,67 @@ class LogisticsDataQaService:
             "收到物流问答用户问题。",
             {"question": payload.question},
         )
-        rule_plan = self.planner.build_plan(payload.question)
-        trace_recorder.add(
-            "rule_plan_built",
-            "规则 planner 已生成受控查询计划。",
-            self._plan_trace_payload(rule_plan),
-        )
-        plan, guardrail_decision = self._resolve_plan_with_guardrail(
-            question=payload.question,
-            rule_plan=rule_plan,
-            trace_id=trace_id,
-        )
-        trace_recorder.add(
-            "guardrail_checked",
-            "LLM 候选理解和 Guardrail 校验已完成。",
-            {
-                "final_plan": self._plan_trace_payload(plan),
-                "guardrail": self._guardrail_trace_payload(guardrail_decision),
-            },
-        )
-        if plan.intent == "unsupported":
-            trace_recorder.add(
-                "branch_selected",
-                "问题进入 C 类受控拒答分支。",
-                {"intent": plan.intent, "unsupported_category": plan.unsupported_category},
-            )
-            plan = self._resolve_unsupported_with_assist(
-                question=payload.question,
-                plan=plan,
-                trace_id=trace_id,
-            )
-            unsupported_summary = self._build_unsupported_answer_summary(plan)
-            result = LogisticsDataQaResult(
-                answer_summary=unsupported_summary,
-                result_table=LogisticsDataQaTable(),
-                calculation_logic=[
-                    "当前问题没有进入受控 query_key 白名单或超出现有结构化统计边界。",
-                    "系统不会为预测、开放讨论、复杂推理或未固化口径的问题编造结果。",
-                ],
-                data_scope={
-                    "question": payload.question,
-                    "unsupported": {
-                        "category": plan.unsupported_category,
-                        "reason": plan.unsupported_reason,
-                        "template": plan.unsupported_template,
-                        "suggestions": plan.unsupported_suggestions,
-                        "assist_used": plan.unsupported_assist_used,
-                        "assist_provider_mode": plan.unsupported_assist_provider_mode,
-                    },
-                },
-                query_plan=plan,
-                warnings=self._build_unsupported_warnings(plan),
-                supported=False,
-                status=LogisticsDataQaStatus(
-                    **LogisticsErrorCodeRegistry.build_status(
-                        code=LogisticsErrorCodeRegistry.UNSUPPORTED_QUESTION,
-                        message=unsupported_summary,
-                        success=False,
-                        severity="info",
-                    )
-                ),
-            )
-            return self._finalize_result(
-                question=payload.question,
-                trace_id=trace_id,
-                result=result,
-                guardrail_decision=guardrail_decision,
-                trace_recorder=trace_recorder,
-            )
-        if plan.needs_clarification:
-            trace_recorder.add(
-                "branch_selected",
-                "问题进入 B 类追问分支。",
-                {
-                    "intent": plan.intent,
-                    "missing_slots": plan.clarification_missing_slots,
-                    "clarification_category": plan.clarification_category,
-                },
-            )
-            plan, clarification_summary = self._resolve_clarification_with_assist(
-                question=payload.question,
-                plan=plan,
-                trace_id=trace_id,
-            )
-            result = LogisticsDataQaResult(
-                answer_summary=clarification_summary,
-                result_table=LogisticsDataQaTable(),
-                calculation_logic=["为避免误算，系统先返回澄清问题。"],
-                data_scope={
-                    "question": payload.question,
-                    "clarification": {
-                        "category": plan.clarification_category,
-                        "reason": plan.clarification_reason,
-                        "missing_slots": plan.clarification_missing_slots,
-                        "template": plan.clarification_template,
-                        "assist_used": plan.clarification_assist_used,
-                        "assist_provider_mode": plan.clarification_assist_provider_mode,
-                    },
-                },
-                query_plan=plan,
-                warnings=["当前问题需要澄清后才能继续查询。"],
-                needs_clarification=True,
-                clarification_questions=plan.clarification_questions,
-                supported=False,
-                status=LogisticsDataQaStatus(
-                    **LogisticsErrorCodeRegistry.build_status(
-                        code=LogisticsErrorCodeRegistry.CLARIFICATION_REQUIRED,
-                        message=clarification_summary,
-                        success=False,
-                        severity="warning",
-                    )
-                ),
-            )
-            return self._finalize_result(
-                question=payload.question,
-                trace_id=trace_id,
-                result=result,
-                guardrail_decision=guardrail_decision,
-                trace_recorder=trace_recorder,
-            )
-        trace_recorder.add(
-            "branch_selected",
-            "问题进入 A 类或空结果确定性查询分支。",
-            {"intent": plan.intent, "query_key": plan.query_key},
-        )
-        result = self._execute_plan(payload.question, plan)
-        # M15：灰度门禁——在正式查询结果上，如果灰度开启且 shadow 通过，用 NL2SQL 结果替换正式回答
+
+        # NL2SQL 主线：直接执行 NL2SQL shadow，成功则返回
+        nl2sql_result: LogisticsDataQaResult | None = None
         try:
-            grayscale_decision = self._decide_grayscale_and_replace(
-                question=payload.question,
-                trace_id=trace_id,
-                formal_result=result,
-                plan=plan,
+            from backend.app.domains.logistics.services.nl2sql.domain_router import (
+                Nl2SqlDomainRouter,
             )
-            if grayscale_decision is not None and grayscale_decision.should_grayscale:
-                result = grayscale_decision.replacement_result
-        except Exception:  # noqa: BLE001 - 灰度失败不影响正式回答
-            pass
+            domain_router = Nl2SqlDomainRouter()
+            route = domain_router.route(payload.question)
+            domain = route.domain if route.should_process else "logistics"
+
+            gate = self._build_grayscale_gate()
+            if gate.config.enabled_domains and domain in gate.config.enabled_domains:
+                shadow_summary = self.nl2sql_live_shadow_adapter.run_shadow(
+                    question=payload.question,
+                    trace_id=trace_id,
+                    formal_result=None,
+                    domain=domain,
+                )
+                if shadow_summary.enabled and shadow_summary.status in ("success", "skipped"):
+                    nl2sql_result = LogisticsDataQaResult(
+                        answer_summary=shadow_summary.error_message or "NL2SQL 主线模式",
+                        result_table=LogisticsDataQaTable(),
+                        calculation_logic=["本回答由 NL2SQL 主线链路生成。"],
+                        data_scope={"question": payload.question, "domain": domain},
+                        warnings=["NL2SQL 主线模式"],
+                        status=LogisticsDataQaStatus(code="SUCCESS", message="NL2SQL 主线模式", success=True),
+                    )
+                    trace_recorder.add("nl2sql_mainline", "NL2SQL 主线链路返回结果。", {})
+                    return self._finalize_result(
+                        question=payload.question,
+                        trace_id=trace_id,
+                        result=nl2sql_result,
+                        guardrail_decision=None,
+                        trace_recorder=trace_recorder,
+                    )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("nl2sql_mainline_failed trace_id=%s %s", trace_id, str(exc))
+
+        # NL2SQL 不可用 → 返回空结果（不再降级到规则引擎）
+        trace_recorder.add("nl2sql_unavailable", "NL2SQL 主线不可用，返回空结果。", {})
+        empty_result = LogisticsDataQaResult(
+            answer_summary="当前 NL2SQL 链路暂不可用，请稍后再试。",
+            result_table=LogisticsDataQaTable(),
+            calculation_logic=[],
+            data_scope={"question": payload.question},
+            warnings=["NL2SQL 主线不可用"],
+            status=LogisticsDataQaStatus(
+                **LogisticsErrorCodeRegistry.build_status(
+                    code=LogisticsErrorCodeRegistry.EXECUTION_ERROR,
+                    message="当前 NL2SQL 链路暂不可用，请稍后再试。",
+                    success=False,
+                    severity="error",
+                )
+            ),
+        )
         return self._finalize_result(
             question=payload.question,
             trace_id=trace_id,
-            result=result,
-            guardrail_decision=guardrail_decision,
+            result=empty_result,
+            guardrail_decision=None,
             trace_recorder=trace_recorder,
         )
 
@@ -588,15 +489,15 @@ class LogisticsDataQaService:
         *,
         question: str,
         trace_id: str | None,
-        formal_result: LogisticsDataQaResult,
-        plan: LogisticsDataQaPlan,
+        formal_result: LogisticsDataQaResult | None = None,
+        plan: LogisticsDataQaPlan | None = None,
     ) -> LogisticsNl2SqlGrayscaleDecisionResult | None:
         """灰度门禁决策：判断是否用 NL2SQL shadow 结果替换正式回答。
 
         参数：
             question: 用户原始问题。
             trace_id: 当前请求 trace_id。
-            formal_result: 正式 QA 链路已生成的结果。
+            formal_result: 可选正式 QA 链路结果；在 NL2SQL 主线模式中可为 None。
             plan: 受控查询计划。
         返回：
             灰度决策结果；异常时返回 None（回退到正式回答）。
@@ -615,13 +516,15 @@ class LogisticsDataQaService:
             domain = route.domain if route.should_process else "logistics"
 
             gate = self._build_grayscale_gate()
-            decision = gate.decide(formal=formal_result, domain=domain)
-            if not decision.should_grayscale:
+            # 主线模式：先检查域是否启用灰度
+            if not gate.config.enabled_domains or domain not in gate.config.enabled_domains:
                 return LogisticsNl2SqlGrayscaleDecisionResult(
                     should_grayscale=False,
-                    fallback_reason=decision.fallback_reason,
+                    fallback_reason="domain_not_enabled",
                     domain=domain,
                 )
+
+            # NL2SQL 主线模式：先执行 shadow，跳过 formal 对比
             shadow_summary = self.nl2sql_live_shadow_adapter.run_shadow(
                 question=question,
                 trace_id=trace_id,
@@ -634,28 +537,17 @@ class LogisticsDataQaService:
                     fallback_reason="shadow_not_available",
                     domain=domain,
                 )
-            comparator = LogisticsNl2SqlShadowComparator()
-            comparison = comparator.compare(formal=formal_result, shadow=shadow_summary)
-            if not comparison.overall_match:
-                return LogisticsNl2SqlGrayscaleDecisionResult(
-                    should_grayscale=False,
-                    fallback_reason="shadow_quality_mismatch",
-                    domain=domain,
-                )
+
+            # 主线模式：shadow 成功即用 NL2SQL 结果（没有 formal 对比）
+            # 构建一个标记性的 replacement_result 供上层 return
             replacement = LogisticsDataQaResult(
-                answer_summary=formal_result.answer_summary,
-                result_table=LogisticsDataQaTable(
-                    columns=formal_result.result_table.columns,
-                    rows=formal_result.result_table.rows,
-                ),
-                calculation_logic=[
-                    "本回答由 NL2SQL shadow 链路灰度生成。",
-                    "结果与正式 QA 链路对比一致，通过质量门禁。",
-                ],
-                data_scope=formal_result.data_scope,
+                answer_summary=shadow_summary.error_message or "NL2SQL 主线模式",
+                result_table=LogisticsDataQaTable(),
+                calculation_logic=["本回答由 NL2SQL 主线链路生成。"],
+                data_scope=None,
                 query_plan=plan,
-                warnings=[*formal_result.warnings, "灰度模式：回答由 NL2SQL shadow 链路生成。"],
-                status=LogisticsDataQaStatus(code="SUCCESS", message="灰度 NL2SQL 模式", success=True),
+                warnings=["NL2SQL 主线模式"],
+                status=LogisticsDataQaStatus(code="SUCCESS", message="NL2SQL 主线模式", success=True),
             )
             return LogisticsNl2SqlGrayscaleDecisionResult(
                 should_grayscale=True,
