@@ -1,0 +1,1054 @@
+--- NEW FILE: backend/app/api/router.py ---
++     1|from fastapi import APIRouter
++     2|
++     3|from backend.app.api.v1 import chat, etl, health, logistics_data, logistics_query, system
++     4|from backend.app.domains.business_analysis.api import router as business_analysis_domain_router
++     5|from backend.app.domains.logistics.api import router as logistics_domain_router
++     6|from backend.app.domains.plan_bom.api import router as plan_bom_domain_router
++     7|from backend.app.domains.query_planning.api import router as query_planning_domain_router
++     8|from backend.app.domains.semantic_catalog.api import router as semantic_catalog_router
++     9|
++    10|api_router = APIRouter()
++    11|api_router.include_router(health.router, tags=["Health"])
++    12|api_router.include_router(system.router, tags=["System"])
++    13|api_router.include_router(etl.router, tags=["ETL"])
++    14|api_router.include_router(logistics_query.router, tags=["Logistics Query"])
++    15|api_router.include_router(logistics_data.router, tags=["Logistics Data"])
++    16|api_router.include_router(chat.router, tags=["Chat"])
++    17|api_router.include_router(logistics_domain_router.router, prefix="/logistics", tags=["Logistics Domain"])
++    18|api_router.include_router(plan_bom_domain_router.router, prefix="/plan-bom", tags=["Plan BOM Domain"])
++    19|api_router.include_router(business_analysis_domain_router, prefix="/business-analysis", tags=["Business Analysis Domain"])
++    20|api_router.include_router(query_planning_domain_router, prefix="/query-planning", tags=["Query Planning V2"])
++    21|api_router.include_router(semantic_catalog_router, tags=["Semantic Catalog"])
++    22|
+
+--- NEW FILE: backend/app/domains/semantic_catalog/__init__.py ---
++     1|"""
++     2|统一语义资产 Catalog（Unified Semantic Catalog）。
++     3|
++     4|业务定位：
++     5|    本模块提供跨业务域（物流、计划 BOM、经营分析、物管）的统一语义资产定义。
++     6|    它是 NL2SQL / QueryPlanningV2 的辅助能力层——描述"有哪些指标/维度/实体可用"，
++     7|    但不替代现有领域 catalog 的 SQLPlan 校验、表白名单等核心能力。
++     8|
++     9|模块组成：
++    10|    - schema: 核心数据结构（SemanticMetric、SemanticDimension、SemanticEntity）
++    11|    - catalog: 统一注册表（BusinessSemanticCatalog）
++    12|    - loader: YAML 文件加载器（SemanticCatalogYamlLoader）
++    13|    - bridge: 现有领域 catalog 桥接适配层
++    14|
++    15|约束：
++    16|    - 不做物管/SAP MID M2。
++    17|    - 不引入 ES。
++    18|    - 不替代 NL2SQL。
++    19|    - 保留旧接口和回退。
++    20|    - LLM 只读，不自由 SQL/查数/改事实。
++    21|"""
++    22|
++    23|from backend.app.domains.semantic_catalog.schema import (
++    24|    SemanticMetric,
++    25|    SemanticDimension,
++    26|    SemanticEntity,
++    27|    BusinessValueResolverProtocol,
++    28|)
++    29|from backend.app.domains.semantic_catalog.catalog import BusinessSemanticCatalog
++    30|from backend.app.domains.semantic_catalog.loader import (
++    31|    SemanticCatalogYamlLoader,
++    32|    DEFAULT_UNIFIED_CATALOG_DIR,
++    33|)
++    34|from backend.app.domains.semantic_catalog.bridge import (
++    35|    bridge_logistics_catalog_to_unified,
++    36|)
++    37|from backend.app.domains.semantic_catalog.value_resolver.base import (
++    38|    BusinessValueResolver,
++    39|)
++    40|from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
++    41|    LogisticsValueResolver,
++    42|)
++    43|from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
++    44|    PlanBomValueResolver,
++    45|)
++    46|
++    47|# 多候选消歧统一交互模块
++    48|from backend.app.domains.semantic_catalog.disambiguation import (
++    49|    DisambiguationCandidate,
++    50|    DisambiguationRequest,
++    51|    DisambiguationResponse,
++    52|    DisambiguationResolveRequest,
++    53|    DisambiguationResolveResponse,
++    54|    DisambiguationService,
++    55|    DisambiguationError,
++    56|)
++    57|
++    58|__all__ = [
++    59|    "SemanticMetric",
++    60|    "SemanticDimension",
++    61|    "SemanticEntity",
++    62|    "BusinessValueResolverProtocol",
++    63|    "BusinessSemanticCatalog",
++    64|    "SemanticCatalogYamlLoader",
++    65|    "DEFAULT_UNIFIED_CATALOG_DIR",
++    66|    "bridge_logistics_catalog_to_unified",
++    67|    "BusinessValueResolver",
++    68|    "LogisticsValueResolver",
++    69|    "PlanBomValueResolver",
++    70|    # 多候选消歧模块
++    71|    "DisambiguationCandidate",
++    72|    "DisambiguationRequest",
++    73|    "DisambiguationResponse",
++    74|    "DisambiguationResolveRequest",
++    75|    "DisambiguationResolveResponse",
++    76|    "DisambiguationService",
++    77|    "DisambiguationError",
++    78|]
++    79|
+
+--- NEW FILE: backend/app/domains/semantic_catalog/api.py ---
++     1|"""
++     2|多候选消歧 API 端点。
++     3|
++     4|业务逻辑：
++     5|    提供 POST /api/v1/disambiguation/resolve 端点，
++     6|    接收用户消歧选择并返回解析后的候选实体。
++     7|
++     8|    消歧流程：
++     9|    1. 前端调用业务问答 API，后端返回 needs_selection 状态 + 候选列表。
++    10|    2. 用户从候选列表中选择一项。
++    11|    3. 前端调用本端点确认选择，后端返回 resolved 状态 + 选中的实体值。
++    12|    4. 前端携带解析后的实体值重新发起业务问答。
++    13|
++    14|约束：
++    15|    - 不暴露 SQL、表名、字段名、query_key 等内部技术内容。
++    16|    - 不直接执行查询——只解析候选选择。
++    17|    - 返回的响应中不包含 LLM 自由文本。
++    18|"""
++    19|from __future__ import annotations
++    20|
++    21|from fastapi import APIRouter
++    22|
++    23|from backend.app.domains.semantic_catalog.disambiguation.schema import (
++    24|    DisambiguationCandidate,
++    25|    DisambiguationResolveRequest,
++    26|    DisambiguationResolveResponse,
++    27|)
++    28|from backend.app.domains.semantic_catalog.disambiguation.service import (
++    29|    DisambiguationService,
++    30|    DisambiguationError,
++    31|)
++    32|
++    33|router = APIRouter(prefix="/disambiguation", tags=["Disambiguation"])
++    34|
++    35|
++    36|@router.post("/resolve", response_model=DisambiguationResolveResponse)
++    37|def resolve_disambiguation(
++    38|    request: DisambiguationResolveRequest,
++    39|) -> DisambiguationResolveResponse:
++    40|    """消歧确认端点。
++    41|
++    42|    参数：
++    43|        request: 包含 session_id、selected_candidate_id 和原始问题。
++    44|
++    45|    返回：
++    46|        DisambiguationResolveResponse，包含解析后的候选实体。
++    47|
++    48|    业务逻辑：
++    49|        1. 从前端请求中提取用户选择的 candidate_id。
++    50|        2. 调用 DisambiguationService 解析选择。
++    51|        3. 返回 resolved 状态和选中的候选实体。
++    52|
++    53|    注：
++    54|        当前 MVP 版本中候选列表由前端随请求传入。
++    55|        后续可扩展为服务端会话级候选存储。
++    56|    """
++    57|    svc = DisambiguationService()
++    58|
++    59|    # 从请求中获取候选列表（前端随请求传入）
++    60|    candidates = request.candidates
++    61|
++    62|    try:
++    63|        resolved = svc.resolve_selection(candidates, request.selected_candidate_id)
++    64|    except DisambiguationError as e:
++    65|        # 消歧错误：candidate_id 不存在或候选列表为空
++    66|        # 返回 400 给前端显示友好错误提示
++    67|        from fastapi import HTTPException
++    68|
++    69|        raise HTTPException(status_code=400, detail=e.message) from e
++    70|
++    71|    return DisambiguationResolveResponse(
++    72|        session_id=request.session_id,
++    73|        status="resolved",
++    74|        selected=resolved,
++    75|        original_question=request.original_question,
++    76|    )
++    77|
+
+--- NEW FILE: backend/app/domains/semantic_catalog/disambiguation/__init__.py ---
++     1|"""
++     2|多候选消歧统一交互（Disambiguation）模块。
++     3|
++     4|业务定位：
++     5|    当业务值解析器（BusinessValueResolver）返回多个候选时，
++     6|    本模块提供统一的消歧流程——生成业务化追问文本、管理候选列表、
++     7|    根据用户选择解析最终实体值。前端复用 BusinessChatPage 的对话式体验，
++     8|    不新增独立弹出式选择器。
++     9|
++    10|模块组成：
++    11|    - schema: 消歧数据结构（DisambiguationCandidate、Request、Response 等）
++    12|    - service: 消歧服务（DisambiguationService）
++    13|
++    14|使用方式：
++    15|    # 1. 从值解析器获取候选
++    16|    candidates = resolver.resolve("carrier", "顺丰")
++    17|    # 2. 如果返回多个候选，进入消歧流程
++    18|    if len(candidates) > 1:
++    19|        svc = DisambiguationService()
++    20|        follow_up = svc.generate_follow_up(question, entity_type, candidates)
++    21|        # 返回 needs_selection 状态给前端
++    22|    # 3. 用户选择后
++    23|    resolved = svc.resolve_selection(candidates, selected_id)
++    24|
++    25|约束：
++    26|    - 不做物管/SAP MID M2。
++    27|    - 不引入 ES。
++    28|    - 不替代 NL2SQL。
++    29|    - 消歧服务不耦合具体数据源。
++    30|    - 追问文本不暴露 SQL、表名、字段名、query_key 等技术信息。
++    31|"""
++    32|from __future__ import annotations
++    33|
++    34|from backend.app.domains.semantic_catalog.disambiguation.schema import (
++    35|    DisambiguationCandidate,
++    36|    DisambiguationRequest,
++    37|    DisambiguationResponse,
++    38|    DisambiguationResolveRequest,
++    39|    DisambiguationResolveResponse,
++    40|)
++    41|from backend.app.domains.semantic_catalog.disambiguation.service import (
++    42|    DisambiguationService,
++    43|    DisambiguationError,
++    44|)
++    45|
++    46|__all__ = [
++    47|    "DisambiguationCandidate",
++    48|    "DisambiguationRequest",
++    49|    "DisambiguationResponse",
++    50|    "DisambiguationResolveRequest",
++    51|    "DisambiguationResolveResponse",
++    52|    "DisambiguationService",
++    53|    "DisambiguationError",
++    54|]
++    55|
+
+--- NEW FILE: backend/app/domains/semantic_catalog/disambiguation/schema.py ---
++     1|"""
++     2|多候选消歧统一交互 — Schema 定义。
++     3|
++     4|业务逻辑：
++     5|    本模块定义统一的多候选消歧数据结构。当业务值解析器（BusinessValueResolver）
++     6|    返回多个候选时，消歧服务使用这些 Schema 生成结构化的消歧请求和响应，
++     7|    让前端复用 BusinessChatPage 的对话式体验而不新增独立弹出式选择器。
++     8|
++     9|    Schema 分为三组：
++    10|    1. 候选实体：DisambiguationCandidate（单个消歧候选）
++    11|    2. 消歧流程：DisambiguationRequest / DisambiguationResponse（请求与响应）
++    12|    3. 消歧确认：DisambiguationResolveRequest / DisambiguationResolveResponse（用户选择确认）
++    13|
++    14|约束：
++    15|    - 不暴露 SQL、表名、字段名、query_key 等内部技术内容。
++    16|    - LLM 不直接计算或改写候选值。
++    17|    - 候选列表为空时服务层应返回空追问，不应生成假候选。
++    18|"""
++    19|from __future__ import annotations
++    20|
++    21|from pydantic import BaseModel, ConfigDict, Field
++    22|
++    23|
++    24|class DisambiguationCandidate(BaseModel):
++    25|    """消歧候选实体。
++    26|
++    27|    参数：
++    28|        candidate_id: 候选唯一标识，用于后续消歧确认。
++    29|            格式建议为 "{entity_type}_{去重键}"（如 "carrier_顺丰物流"）。
++    30|        entity_type: 实体类型，如 carrier、customer、order_identity、filename、
++    31|            customer_instance、version。
++    32|        entity_value: 实体的实际值，消歧确认后传递给下游服务使用。
++    33|        display_label: 业务展示标签，前端显示给用户看的文本。
++    34|        description: 可选的辅助说明（如订单日期、版本号等）。
++    35|    """
++    36|
++    37|    model_config = ConfigDict(extra="forbid")
++    38|
++    39|    candidate_id: str = Field(..., description="候选唯一标识")
++    40|    entity_type: str = Field(..., description="实体类型")
++    41|    entity_value: str = Field(..., description="实际值")
++    42|    display_label: str = Field(..., description="业务展示标签")
++    43|    description: str | None = Field(default=None, description="辅助说明信息")
++    44|
++    45|
++    46|class DisambiguationRequest(BaseModel):
++    47|    """消歧请求（服务内部使用）。
++    48|
++    49|    参数：
++    50|        session_id: 会话 ID，用于关联前后端交互。
++    51|        question: 原始用户问题，保留用于后续路由。
++    52|        domain: 业务域（logistics、plan_bom、business_analysis）。
++    53|        entity_type: 实体类型，与 DisambiguationCandidate 中的对应。
++    54|        candidates: 候选列表，至少包含 2 个候选才有消歧意义。
++    55|        context: 可选的额外上下文，如 user_id、trace_id 等。
++    56|    """
++    57|
++    58|    model_config = ConfigDict(extra="forbid")
++    59|
++    60|    session_id: str = Field(..., description="会话 ID")
++    61|    question: str = Field(..., description="原始用户问题")
++    62|    domain: str = Field(..., description="业务域")
++    63|    entity_type: str = Field(..., description="实体类型")
++    64|    candidates: list[DisambiguationCandidate] = Field(
++    65|        ..., min_length=1, description="候选列表（至少 1 个）"
++    66|    )
++    67|    context: dict | None = Field(default=None, description="额外上下文")
++    68|
++    69|
++    70|class DisambiguationResponse(BaseModel):
++    71|    """消歧响应（返回给前端）。
++    72|
++    73|    参数：
++    74|        session_id: 会话 ID。
++    75|        status: 消歧状态。
++    76|            - "needs_selection"：需要用户从候选列表中选择。
++    77|            - "resolved"：用户已完成选择，下游可继续执行。
++    78|        question: 原始用户问题。
++    79|        domain: 业务域。
++    80|        entity_type: 实体类型。
++    81|        candidates: 候选列表。
++    82|        follow_up_question: 业务化追问文本（如"找到多个匹配的承运商，请选择一个："）。
++    83|        resolved_candidate: 消歧完成后填充的用户选择结果；needs_selection 时为 None。
++    84|    """
++    85|
++    86|    model_config = ConfigDict(extra="forbid")
++    87|
++    88|    session_id: str = Field(..., description="会话 ID")
++    89|    status: str = Field(default="needs_selection", description="消歧状态")
++    90|    question: str = Field(..., description="原始用户问题")
++    91|    domain: str = Field(..., description="业务域")
++    92|    entity_type: str = Field(..., description="实体类型")
++    93|    candidates: list[DisambiguationCandidate] = Field(
++    94|        ..., description="候选列表"
++    95|    )
++    96|    follow_up_question: str = Field(..., description="业务化追问文本")
++    97|    resolved_candidate: DisambiguationCandidate | None = Field(
++    98|        default=None, description="消歧完成后的用户选择"
++    99|    )
++   100|
++   101|
++   102|class DisambiguationResolveRequest(BaseModel):
++   103|    """消歧确认请求（前端 → 后端）。
++   104|
++   105|    参数：
++   106|        session_id: 会话 ID。
++   107|        selected_candidate_id: 用户在候选列表中选择的 candidate_id。
++   108|        original_question: 可选的原始问题，用于后续路由。
++   109|        candidates: 可选的候选列表。前端在消歧 resolve 阶段需传入原候选列表
++   110|            供服务端校验。若未传入，服务端从会话存储中查找（当前 MVP 未实现会话存储，
++   111|            因此前端必须传入）。
++   112|    """
++   113|
++   114|    model_config = ConfigDict(extra="forbid")
++   115|
++   116|    session_id: str = Field(..., description="会话 ID")
++   117|    selected_candidate_id: str = Field(..., description="用户选择的候选 ID")
++   118|    original_question: str | None = Field(default=None, description="原始问题")
++   119|    candidates: list[DisambiguationCandidate] = Field(
++   120|        default_factory=list,
++   121|        description="候选列表，供服务端校验用户选择",
++   122|    )
++   123|
++   124|
++   125|class DisambiguationResolveResponse(BaseModel):
++   126|    """消歧确认响应（后端 → 前端）。
++   127|
++   128|    参数：
++   129|        session_id: 会话 ID。
++   130|        status: 固定为 "resolved"。
++   131|        selected: 用户选择的消歧候选。
++   132|        original_question: 原始问题，供前端继续问答流程。
++   133|    """
++   134|
++   135|    model_config = ConfigDict(extra="forbid")
++   136|
++   137|    session_id: str = Field(..., description="会话 ID")
++   138|    status: str = Field(default="resolved", description="消歧状态")
++   139|    selected: DisambiguationCandidate = Field(..., description="用户选择的候选")
++   140|    original_question: str | None = Field(default=None, description="原始问题")
++   141|
++   142|
++   143|__all__ = [
++   144|    "DisambiguationCandidate",
++   145|    "DisambiguationRequest",
++   146|    "DisambiguationResponse",
++   147|    "DisambiguationResolveRequest",
++   148|    "DisambiguationResolveResponse",
++   149|]
++   150|
+
+--- NEW FILE: backend/app/domains/semantic_catalog/disambiguation/service.py ---
++     1|"""
++     2|多候选消歧统一交互 — 服务层。
++     3|
++     4|业务逻辑：
++     5|    本模块提供统一的消歧服务 DisambiguationService。当业务值解析器
++     6|    返回多个候选时，消歧服务负责：
++     7|    1. 根据候选列表和实体类型生成业务化追问文本。
++     8|    2. 根据用户选择的 candidate_id 解析对应候选。
++     9|    3. 未知 candidate_id 或空候选列表时明确报错。
++    10|
++    11|    追问文本是中文业务语言，不包含 SQL、表名、字段名等内部技术内容。
++    12|    不同的实体类型（承运商、客户、订单等）有对应的追问模板。
++    13|
++    14|设计原则：
++    15|    1. 消歧服务不耦合具体数据源——只操作已解析出的候选列表。
++    16|    2. 追问文本使用预定义模板 + 回退逻辑，不依赖 LLM。
++    17|    3. 解析选择时 fail-closed：未知 candidate_id 必须抛异常，不能返回任意候选。
++    18|"""
++    19|from __future__ import annotations
++    20|
++    21|from backend.app.domains.semantic_catalog.disambiguation.schema import (
++    22|    DisambiguationCandidate,
++    23|)
++    24|
++    25|
++    26|class DisambiguationError(Exception):
++    27|    """消歧服务异常。
++    28|
++    29|    参数：
++    30|        message: 错误描述。
++    31|
++    32|    业务逻辑：
++    33|        消歧过程中遇到非法状态（如空候选列表、未知 candidate_id）时抛出。
++    34|        调用方应捕获此异常并返回合适的用户提示。
++    35|    """
++    36|
++    37|    def __init__(self, message: str) -> None:
++    38|        super().__init__(message)
++    39|        self.message = message
++    40|
++    41|
++    42|# ── 实体类型 → 追问模板映射 ──
++    43|
++    44|# 各实体类型对应的业务中文名称，用于追问文本
++    45|_ENTITY_LABELS: dict[str, str] = {
++    46|    "carrier": "承运商",
++    47|    "customer": "客户",
++    48|    "order_identity": "订单",
++    49|    "filename": "BOM 文件",
++    50|    "customer_instance": "客户实例",
++    51|    "version": "版本",
++    52|    "region": "区域",
++    53|    "route": "物流线路",
++    54|    "address": "收货地址",
++    55|}
++    56|
++    57|
++    58|def _entity_label(entity_type: str) -> str:
++    59|    """获取实体类型的业务中文名称。
++    60|
++    61|    参数：
++    62|        entity_type: 实体类型标识。
++    63|
++    64|    返回：
++    65|        中文业务名称；未知类型返回实体类型本身。
++    66|    """
++    67|    return _ENTITY_LABELS.get(entity_type, entity_type)
++    68|
++    69|
++    70|class DisambiguationService:
++    71|    """统一多候选消歧服务。
++    72|
++    73|    业务逻辑：
++    74|        不依赖数据库、LLM 或任何外部系统——只基于已解析的候选列表
++    75|        生成追问文本和解析用户选择。
++    76|    """
++    77|
++    78|    def generate_follow_up(
++    79|        self,
++    80|        question: str,
++    81|        entity_type: str,
++    82|        candidates: list[DisambiguationCandidate],
++    83|    ) -> str:
++    84|        """根据候选列表生成业务化追问文本。
++    85|
++    86|        参数：
++    87|            question: 原始用户问题（当前版本未直接用于追问生成，
++    88|                但保留参数以便后续增强）。
++    89|            entity_type: 实体类型。
++    90|            candidates: 消歧候选列表。
++    91|
++    92|        返回：
++    93|            中文业务追问文本。空候选时返回空字符串。
++    94|
++    95|        业务逻辑：
++    96|            1. 候选数量为 0 时返回空字符串——不应生成追问。
++    97|            2. 候选数量为 1 时返回确认式追问。
++    98|            3. 候选数量 >= 2 时返回标准多候选追问，包含可选实体值列表。
++    99|            4. 未知实体类型使用通用追问模板。
++   100|        """
++   101|        count = len(candidates)
++   102|        label = _entity_label(entity_type)
++   103|
++   104|        if count == 0:
++   105|            return ""
++   106|        if count == 1:
++   107|            return f"找到 1 个匹配的{label}：{candidates[0].display_label}。是否确认使用该{label}？"
++   108|
++   109|        # count >= 2：生成带候选列表的业务追问
++   110|        option_text = "、".join(
++   111|            f"{c.display_label}" for c in candidates[:5]
++   112|        )
++   113|        if count > 5:
++   114|            option_text += f" 等共 {count} 个"
++   115|
++   116|        return f"找到 {count} 个匹配的{label}：{option_text}。请选择一个{label}。"
++   117|
++   118|    def resolve_selection(
++   119|        self,
++   120|        candidates: list[DisambiguationCandidate],
++   121|        selected_id: str,
++   122|    ) -> DisambiguationCandidate:
++   123|        """根据用户选择的 candidate_id 解析对应候选。
++   124|
++   125|        参数：
++   126|            candidates: 消歧候选列表。
++   127|            selected_id: 用户选择的 candidate_id。
++   128|
++   129|        返回：
++   130|            匹配的 DisambiguationCandidate。
++   131|
++   132|        异常：
++   133|            DisambiguationError：候选列表为空或 candidate_id 不存在时抛出。
++   134|
++   135|        业务逻辑：
++   136|            fail-closed——unknown ID 或空列表必须抛异常，
++   137|            不可返回任意候选或 None。
++   138|        """
++   139|        if not candidates:
++   140|            raise DisambiguationError(
++   141|                "候选列表为空，无法进行消歧。请先通过实体解析器获取候选列表。"
++   142|            )
++   143|
++   144|        for c in candidates:
++   145|            if c.candidate_id == selected_id:
++   146|                return c
++   147|
++   148|        # 未找到匹配的 candidate_id
++   149|        known_ids = ", ".join(c.candidate_id for c in candidates)
++   150|        raise DisambiguationError(
++   151|            f"未找到 candidate_id='{selected_id}' 对应的候选。"
++   152|            f"可用的候选 ID：{known_ids}。"
++   153|        )
++   154|
++   155|
++   156|__all__ = ["DisambiguationService", "DisambiguationError"]
++   157|
+
+--- NEW FILE: tests/unit/semantic_catalog/test_disambiguation.py ---
++     1|"""
++     2|NQE-N3：多候选消歧统一交互 — 测试用例
++     3|
++     4|测试范围：
++     5|    1. DisambiguationCandidate/Request/Response/ResolveRequest Schema 定义正确。
++     6|    2. DisambiguationService 生成业务化追问文本（中文）。
++     7|    3. DisambiguationService 根据用户选择解析到正确候选。
++     8|    4. 未知 candidate_id 抛出明确错误。
++     9|    5. 空候选列表时正确处理（不生成追问）。
++    10|    6. 现有 semantic_catalog 测试不回退。
++    11|"""
++    12|from __future__ import annotations
++    13|
++    14|import pytest
++    15|
++    16|from backend.app.domains.semantic_catalog.disambiguation.schema import (
++    17|    DisambiguationCandidate,
++    18|    DisambiguationRequest,
++    19|    DisambiguationResponse,
++    20|    DisambiguationResolveRequest,
++    21|    DisambiguationResolveResponse,
++    22|)
++    23|from backend.app.domains.semantic_catalog.disambiguation.service import (
++    24|    DisambiguationService,
++    25|)
++    26|from backend.app.domains.semantic_catalog.disambiguation import (
++    27|    DisambiguationError,
++    28|)
++    29|
++    30|
++    31|# ==================== Schema 基础测试 ====================
++    32|
++    33|
++    34|class TestDisambiguationCandidate:
++    35|    """DisambiguationCandidate Schema 定义测试。"""
++    36|
++    37|    def test_create_candidate_minimal(self) -> None:
++    38|        """创建最小字段的消歧候选。"""
++    39|        cand = DisambiguationCandidate(
++    40|            candidate_id="carrier_顺丰物流",
++    41|            entity_type="carrier",
++    42|            entity_value="顺丰物流有限公司",
++    43|            display_label="顺丰物流有限公司",
++    44|        )
++    45|        assert cand.candidate_id == "carrier_顺丰物流"
++    46|        assert cand.entity_type == "carrier"
++    47|        assert cand.entity_value == "顺丰物流有限公司"
++    48|        assert cand.display_label == "顺丰物流有限公司"
++    49|        assert cand.description is None
++    50|
++    51|    def test_create_candidate_with_description(self) -> None:
++    52|        """创建带描述的消歧候选。"""
++    53|        cand = DisambiguationCandidate(
++    54|            candidate_id="order_12345",
++    55|            entity_type="order_identity",
++    56|            entity_value="SO-2025-001",
++    57|            display_label="SO-2025-001 华为2025年光伏项目",
++    58|            description="订单号 SO-2025-001，客户华为，版本A0",
++    59|        )
++    60|        assert cand.description == "订单号 SO-2025-001，客户华为，版本A0"
++    61|
++    62|    def test_create_candidate_order_identity(self) -> None:
++    63|        """订单实体候选格式正确。"""
++    64|        cand = DisambiguationCandidate(
++    65|            candidate_id="order_SO2025001",
++    66|            entity_type="order_identity",
++    67|            entity_value="SO2025001",
++    68|            display_label="SO2025001 华为2025光伏",
++    69|        )
++    70|        assert cand.entity_type == "order_identity"
++    71|
++    72|    def test_create_candidate_filename(self) -> None:
++    73|        """BOM 文件名候选格式正确。"""
++    74|        cand = DisambiguationCandidate(
++    75|            candidate_id="file_GCL_2025_BOM_v2",
++    76|            entity_type="filename",
++    77|            entity_value="GCL_2025_BOM_v2.xlsx",
++    78|            display_label="GCL_2025_BOM_v2.xlsx",
++    79|        )
++    80|        assert cand.entity_type == "filename"
++    81|
++    82|
++    83|class TestDisambiguationRequest:
++    84|    """DisambiguationRequest Schema 定义测试。"""
++    85|
++    86|    def test_create_request_valid(self) -> None:
++    87|        """构造有效的消歧请求。"""
++    88|        candidates = [
++    89|            DisambiguationCandidate(
++    90|                candidate_id="c1", entity_type="carrier",
++    91|                entity_value="顺丰", display_label="顺丰物流",
++    92|            ),
++    93|            DisambiguationCandidate(
++    94|                candidate_id="c2", entity_type="carrier",
++    95|                entity_value="德邦", display_label="德邦物流",
++    96|            ),
++    97|        ]
++    98|        req = DisambiguationRequest(
++    99|            session_id="session-001",
++   100|            question="查顺丰的运费",
++   101|            domain="logistics",
++   102|            entity_type="carrier",
++   103|            candidates=candidates,
++   104|        )
++   105|        assert req.session_id == "session-001"
++   106|        assert req.question == "查顺丰的运费"
++   107|        assert req.domain == "logistics"
++   108|        assert len(req.candidates) == 2
++   109|
++   110|    def test_create_request_with_context(self) -> None:
++   111|        """带额外上下文的消歧请求。"""
++   112|        candidates = [
++   113|            DisambiguationCandidate(
++   114|                candidate_id="c1", entity_type="carrier",
++   115|                entity_value="顺丰", display_label="顺丰",
++   116|            ),
++   117|            DisambiguationCandidate(
++   118|                candidate_id="c2", entity_type="carrier",
++   119|                entity_value="德邦", display_label="德邦",
++   120|            ),
++   121|        ]
++   122|        req = DisambiguationRequest(
++   123|            session_id="s1",
++   124|            question="承运商运费",
++   125|            domain="logistics",
++   126|            entity_type="carrier",
++   127|            candidates=candidates,
++   128|            context={"user_id": "user-123", "trace_id": "trace-456"},
++   129|        )
++   130|        assert req.context == {"user_id": "user-123", "trace_id": "trace-456"}
++   131|
++   132|
++   133|class TestDisambiguationResponse:
++   134|    """DisambiguationResponse Schema 定义测试。"""
++   135|
++   136|    def test_response_needs_selection(self) -> None:
++   137|        """构造需要用户选择的消歧响应。"""
++   138|        candidates = [
++   139|            DisambiguationCandidate(
++   140|                candidate_id="c1", entity_type="carrier",
++   141|                entity_value="顺丰", display_label="顺丰物流",
++   142|            ),
++   143|            DisambiguationCandidate(
++   144|                candidate_id="c2", entity_type="carrier",
++   145|                entity_value="德邦", display_label="德邦物流",
++   146|            ),
++   147|        ]
++   148|        resp = DisambiguationResponse(
++   149|            session_id="s1",
++   150|            status="needs_selection",
++   151|            question="查顺丰的运费",
++   152|            domain="logistics",
++   153|            entity_type="carrier",
++   154|            candidates=candidates,
++   155|            follow_up_question="找到多个匹配的承运商，请选择一个：",
++   156|        )
++   157|        assert resp.status == "needs_selection"
++   158|        assert resp.resolved_candidate is None
++   159|        assert "承运商" in resp.follow_up_question
++   160|
++   161|    def test_response_resolved(self) -> None:
++   162|        """构造已消歧完成的响应。"""
++   163|        cand = DisambiguationCandidate(
++   164|            candidate_id="c1", entity_type="carrier",
++   165|            entity_value="顺丰物流有限公司", display_label="顺丰物流有限公司",
++   166|        )
++   167|        resp = DisambiguationResponse(
++   168|            session_id="s1",
++   169|            status="resolved",
++   170|            question="查顺丰的运费",
++   171|            domain="logistics",
++   172|            entity_type="carrier",
++   173|            candidates=[cand],
++   174|            follow_up_question="已选择：顺丰物流有限公司",
++   175|            resolved_candidate=cand,
++   176|        )
++   177|        assert resp.status == "resolved"
++   178|        assert resp.resolved_candidate is not None
++   179|        assert resp.resolved_candidate.candidate_id == "c1"
++   180|
++   181|
++   182|class TestDisambiguationResolveRequest:
++   183|    """DisambiguationResolveRequest Schema 定义测试。"""
++   184|
++   185|    def test_create_resolve_request(self) -> None:
++   186|        """构造消歧确认请求。"""
++   187|        req = DisambiguationResolveRequest(
++   188|            session_id="session-001",
++   189|            selected_candidate_id="c1",
++   190|            original_question="查顺丰的运费",
++   191|        )
++   192|        assert req.session_id == "session-001"
++   193|        assert req.selected_candidate_id == "c1"
++   194|        assert req.original_question == "查顺丰的运费"
++   195|
++   196|    def test_create_resolve_request_minimal(self) -> None:
++   197|        """最小字段的消歧确认请求（original_question 可选）。"""
++   198|        req = DisambiguationResolveRequest(
++   199|            session_id="s1",
++   200|            selected_candidate_id="c2",
++   201|        )
++   202|        assert req.session_id == "s1"
++   203|        assert req.selected_candidate_id == "c2"
++   204|        assert req.original_question is None
++   205|
++   206|
++   207|class TestDisambiguationResolveResponse:
++   208|    """DisambiguationResolveResponse Schema 定义测试。"""
++   209|
++   210|    def test_create_resolve_response(self) -> None:
++   211|        """构造消歧确认响应。"""
++   212|        cand = DisambiguationCandidate(
++   213|            candidate_id="c1", entity_type="carrier",
++   214|            entity_value="顺丰物流", display_label="顺丰物流有限公司",
++   215|        )
++   216|        resp = DisambiguationResolveResponse(
++   217|            session_id="s1",
++   218|            status="resolved",
++   219|            selected=cand,
++   220|            original_question="查顺丰的运费",
++   221|        )
++   222|        assert resp.status == "resolved"
++   223|        assert resp.selected.candidate_id == "c1"
++   224|        assert resp.original_question == "查顺丰的运费"
++   225|
++   226|
++   227|# ==================== DisambiguationService 测试 ====================
++   228|
++   229|
++   230|class TestDisambiguationServiceGenerateFollowUp:
++   231|    """DisambiguationService.generate_follow_up 测试。"""
++   232|
++   233|    @pytest.fixture
++   234|    def svc(self) -> DisambiguationService:
++   235|        """创建测试用的消歧服务实例。"""
++   236|        return DisambiguationService()
++   237|
++   238|    @pytest.fixture
++   239|    def carrier_candidates(self) -> list[DisambiguationCandidate]:
++   240|        """承运商候选列表。"""
++   241|        return [
++   242|            DisambiguationCandidate(
++   243|                candidate_id="carrier_1",
++   244|                entity_type="carrier",
++   245|                entity_value="顺丰物流有限公司",
++   246|                display_label="顺丰物流有限公司",
++   247|            ),
++   248|            DisambiguationCandidate(
++   249|                candidate_id="carrier_2",
++   250|                entity_type="carrier",
++   251|                entity_value="德邦物流股份有限公司",
++   252|                display_label="德邦物流股份有限公司",
++   253|            ),
++   254|        ]
++   255|
++   256|    @pytest.fixture
++   257|    def order_candidates(self) -> list[DisambiguationCandidate]:
++   258|        """订单候选列表。"""
++   259|        return [
++   260|            DisambiguationCandidate(
++   261|                candidate_id="order_1",
++   262|                entity_type="order_identity",
++   263|                entity_value="SO2025001",
++   264|                display_label="SO2025001 华为2025年光伏项目",
++   265|            ),
++   266|            DisambiguationCandidate(
++   267|                candidate_id="order_2",
++   268|                entity_type="order_identity",
++   269|                entity_value="SO2025002",
++   270|                display_label="SO2025002 中兴2025年光伏项目",
++   271|            ),
++   272|        ]
++   273|
++   274|    def test_generate_follow_up_for_carrier(
++   275|        self, svc: DisambiguationService, carrier_candidates: list[DisambiguationCandidate]
++   276|    ) -> None:
++   277|        """承运商多候选时生成中文业务追问。"""
++   278|        follow_up = svc.generate_follow_up(
++   279|            question="查顺丰的运费",
++   280|            entity_type="carrier",
++   281|            candidates=carrier_candidates,
++   282|        )
++   283|        assert isinstance(follow_up, str)
++   284|        assert len(follow_up) > 0
++   285|        assert "承运商" in follow_up or "carrier" in follow_up.lower()
++   286|
++   287|    def test_generate_follow_up_for_order(
++   288|        self, svc: DisambiguationService, order_candidates: list[DisambiguationCandidate]
++   289|    ) -> None:
++   290|        """订单多候选时生成中文业务追问。"""
++   291|        follow_up = svc.generate_follow_up(
++   292|            question="查SO2025的订单详情",
++   293|            entity_type="order_identity",
++   294|            candidates=order_candidates,
++   295|        )
++   296|        assert isinstance(follow_up, str)
++   297|        assert len(follow_up) > 0
++   298|
++   299|    def test_generate_follow_up_for_customer_instance(
++   300|        self, svc: DisambiguationService
++   301|    ) -> None:
++   302|        """客户实例多候选时生成业务追问。"""
++   303|        candidates = [
++   304|            DisambiguationCandidate(
++   305|                candidate_id="cust_1",
++   306|                entity_type="customer_instance",
++   307|                entity_value="华为技术有限公司",
++   308|                display_label="华为技术有限公司",
++   309|            ),
++   310|            DisambiguationCandidate(
++   311|                candidate_id="cust_2",
++   312|                entity_type="customer_instance",
++   313|                entity_value="华为数字能源技术有限公司",
++   314|                display_label="华为数字能源技术有限公司",
++   315|            ),
++   316|        ]
++   317|        follow_up = svc.generate_follow_up(
++   318|            question="华为的订单",
++   319|            entity_type="customer_instance",
++   320|            candidates=candidates,
++   321|        )
++   322|        assert "客户" in follow_up or "华为" in follow_up
++   323|
++   324|    def test_generate_follow_up_for_filename(
++   325|        self, svc: DisambiguationService
++   326|    ) -> None:
++   327|        """文件名多候选时生成业务追问。"""
++   328|        candidates = [
++   329|            DisambiguationCandidate(
++   330|                candidate_id="file_1",
++   331|                entity_type="filename",
++   332|                entity_value="GCL_2025_BOM_v2.xlsx",
++   333|                display_label="GCL_2025_BOM_v2.xlsx",
++   334|            ),
++   335|            DisambiguationCandidate(
++   336|                candidate_id="file_2",
++   337|                entity_type="filename",
++   338|                entity_value="GCL_2025_BOM_v3.xlsx",
++   339|                display_label="GCL_2025_BOM_v3.xlsx",
++   340|            ),
++   341|        ]
++   342|        follow_up = svc.generate_follow_up(
++   343|            question="查BOM文件",
++   344|            entity_type="filename",
++   345|            candidates=candidates,
++   346|        )
++   347|        assert "文件" in follow_up or "BOM" in follow_up
++   348|
++   349|    def test_generate_follow_up_includes_candidate_count(
++   350|        self, svc: DisambiguationService, carrier_candidates: list[DisambiguationCandidate]
++   351|    ) -> None:
++   352|        """追问文本提及候选数量。"""
++   353|        follow_up = svc.generate_follow_up(
++   354|            question="查物流",
++   355|            entity_type="carrier",
++   356|            candidates=carrier_candidates,
++   357|        )
++   358|        # 追问应包含候选数量或选择提示
++   359|        assert "2" in follow_up or "两" in follow_up or "选择" in follow_up
++   360|
++   361|    def test_generate_follow_up_unknown_entity_type(
++   362|        self, svc: DisambiguationService
++   363|    ) -> None:
++   364|        """未知实体类型时生成通用追问。"""
++   365|        candidates = [
++   366|            DisambiguationCandidate(
++   367|                candidate_id="x_1",
++   368|                entity_type="unknown_type",
++   369|                entity_value="值1",
++   370|                display_label="值1",
++   371|            ),
++   372|            DisambiguationCandidate(
++   373|                candidate_id="x_2",
++   374|                entity_type="unknown_type",
++   375|                entity_value="值2",
++   376|                display_label="值2",
++   377|            ),
++   378|        ]
++   379|        follow_up = svc.generate_follow_up(
++   380|            question="查询",
++   381|            entity_type="unknown_type",
++   382|            candidates=candidates,
++   383|        )
++   384|        assert isinstance(follow_up, str)
++   385|        assert len(follow_up) > 0
++   386|
++   387|    def test_generate_follow_up_empty_candidates(
++   388|        self, svc: DisambiguationService
++   389|    ) -> None:
++   390|        """空候选列表返回空追问。"""
++   391|        follow_up = svc.generate_follow_up(
++   392|            question="查询",
++   393|            entity_type="carrier",
++   394|            candidates=[],
++   395|        )
++   396|        assert follow_up == ""
++   397|
++   398|
++   399|class TestDisambiguationServiceResolveSelection:
++   400|    """DisambiguationService.resolve_selection 测试。"""
++   401|
++   402|    @pytest.fixture
++   403|    def svc(self) -> DisambiguationService:
++   404|        return DisambiguationService()
++   405|
++   406|    @pytest.fixture
++   407|    def candidates(self) -> list[DisambiguationCandidate]:
++   408|        return [
++   409|            DisambiguationCandidate(
++   410|                candidate_id="c1",
++   411|                entity_type="carrier",
++   412|                entity_value="顺丰物流有限公司",
++   413|                display_label="顺丰物流有限公司",
++   414|            ),
++   415|            DisambiguationCandidate(
++   416|                candidate_id="c2",
++   417|                entity_type="carrier",
++   418|                entity_value="德邦物流股份有限公司",
++   419|                display_label="德邦物流股份有限公司",
++   420|            ),
++   421|            DisambiguationCandidate(
++   422|                candidate_id="c3",
++   423|                entity_type="carrier",
++   424|                entity_value="安能物流有限公司",
++   425|                display_label="安能物流有限公司",
++   426|            ),
++   427|        ]
++   428|
++   429|    def test_resolve_selection_first_candidate(
++   430|        self, svc: DisambiguationService, candidates: list[DisambiguationCandidate]
++   431|    ) -> None:
++   432|        """选择第一个候选成功。"""
++   433|        result = svc.resolve_selection(candidates, "c1")
++   434|        assert result.candidate_id == "c1"
++   435|        assert result.entity_value == "顺丰物流有限公司"
++   436|
++   437|    def test_resolve_selection_last_candidate(
++   438|        self, svc: DisambiguationService, candidates: list[DisambiguationCandidate]
++   439|    ) -> None:
++   440|        """选择最后一个候选成功。"""
++   441|        result = svc.resolve_selection(candidates, "c3")
++   442|        assert result.candidate_id == "c3"
++   443|        assert result.entity_value == "安能物流有限公司"
++   444|
++   445|    def test_resolve_selection_unknown_id_raises(
++   446|        self, svc: DisambiguationService, candidates: list[DisambiguationCandidate]
++   447|    ) -> None:
++   448|        """选择不存在的 candidate_id 抛出 DisambiguationError。"""
++   449|        with pytest.raises(DisambiguationError, match="candidate_id"):
++   450|            svc.resolve_selection(candidates, "nonexistent")
++   451|
++   452|    def test_resolve_selection_empty_candidates_raises(
++   453|        self, svc: DisambiguationService
++   454|    ) -> None:
++   455|        """空候选列表中做选择抛出错误。"""
++   456|        with pytest.raises(DisambiguationError):
++   457|            svc.resolve_selection([], "any_id")
++   458|
++   459|    def test_resolve_selection_with_order_candidates(
++   460|        self, svc: DisambiguationService
++   461|    ) -> None:
++   462|        """订单候选选择成功。"""
++   463|        candidates = [
++   464|            DisambiguationCandidate(
++   465|                candidate_id="order_a",
++   466|                entity_type="order_identity",
++   467|                entity_value="SO2025001",
++   468|                display_label="SO2025001 华为2025年光伏项目",
++   469|            ),
++   470|            DisambiguationCandidate(
++   471|                candidate_id="order_b",
++   472|                entity_type="order_identity",
++   473|                entity_value="SO2025002",
++   474|                display_label="SO2025002 中兴2025年光伏项目",
++   475|            ),
++   476|        ]
++   477|        result = svc.resolve_selection(candidates, "order_b")
++   478|        assert result.candidate_id == "order_b"
++   479|        assert result.entity_type == "order_identity"
++   480|
++   481|
++   482|class TestDisambiguationServiceFullFlow:
++   483|    """完整消歧流程测试。"""
++   484|
++   485|    @pytest.fixture
++   486|    def svc(self) -> DisambiguationService:
++   487|        return DisambiguationService()
++   488|
++   489|    def test_full_flow_generate_and_resolve(self, svc: DisambiguationService) -> None:
++   490|        """完整流程：生成追问 → 用户选择 → 消歧完成。"""
++   491|        candidates = [
++   492|            DisambiguationCandidate(
++   493|                candidate_id="c_a", entity_type="carrier",
++   494|                entity_value="顺丰物流", display_label="顺丰物流有限公司",
++   495|            ),
++   496|            DisambiguationCandidate(
++   497|                candidate_id="c_b", entity_type="carrier",
++   498|                entity_value="德邦物流", display_label="德邦物流股份有限公司",
++   499|            ),
++   500|        ]
++   501|
