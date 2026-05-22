@@ -66,9 +66,9 @@ def test_domain_router_allows_only_logistics_middle_db_shadow_route() -> None:
     assert allowed.reason_code is None
 
     bom = router.route("BOM 615功率预测是多少？")
-    assert bom.should_process is False
+    assert bom.should_process is True
     assert bom.domain == "plan_bom"
-    assert bom.reason_code == "m9_domain_not_supported::plan_bom"
+    assert bom.reason_code is None
 
     oracle = router.route("直查 SAP Oracle MID 物流源表")
     assert oracle.should_process is False
@@ -87,9 +87,9 @@ def test_domain_router_fail_closed_for_non_logistics_domains_without_blocking_de
     assert material.reason_code == "m9_domain_not_supported::material_management"
 
     business = router.route("经营分析收入利润预算达成率怎么看？")
-    assert business.should_process is False
+    assert business.should_process is True
     assert business.domain == "business_analysis"
-    assert business.reason_code == "m9_domain_not_supported::business_analysis"
+    assert business.reason_code is None
 
     logistics_department = router.route("经营计划部门 2025 年发运量是多少 MW？")
     assert logistics_department.should_process is True

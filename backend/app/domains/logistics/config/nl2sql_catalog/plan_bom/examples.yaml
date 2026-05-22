@@ -1,0 +1,57 @@
+catalog_version: plan_bom_nl2sql_catalog.v1
+domain: plan_bom
+examples:
+  - example_id: bom_material_list_query
+    display_name: BOM 材料明细查询
+    question: 订单号 XXX 的材料明细列表
+    query_type: detail
+    metrics: [standard_usage]
+    dimensions: [order_no, version_no, material_name, sap_code, material_category]
+    group_by: [order_no, version_no, sap_code]
+    business_rules: [bom_order_no_is_review_no]
+    notes: 查询指定 BOM 订单号的材料明细清单，包含物料名称、SAP 编码、标准用量。
+  - example_id: bom_version_history
+    display_name: BOM 版本历史查询
+    question: 评审号 XXX 有哪些版本
+    query_type: detail
+    metrics: [bom_version_count]
+    dimensions: [order_no, version_no, effective_date]
+    group_by: [order_no]
+    business_rules: [bom_current_version_by_effective_date]
+    notes: 查询指定评审号的所有版本列表及生效日期。
+  - example_id: bom_material_category_filter
+    display_name: BOM 按材料归类筛选
+    question: 订单号 XXX 中电池片类的材料有哪些
+    query_type: detail
+    metrics: [standard_usage]
+    dimensions: [order_no, material_name, material_category, sap_code]
+    group_by: [order_no, sap_code]
+    business_rules: [bom_material_catalog_auto_classify]
+    notes: 按材料归类字段筛选特定类别的 BOM 材料。
+  - example_id: bom_revision_content
+    display_name: BOM 修订内容查询
+    question: 评审号 XXX 从 A0 到 A1 改了什么
+    query_type: detail
+    metrics: []
+    dimensions: [order_no, version_no, revision_content, reviser]
+    group_by: [order_no, version_no]
+    business_rules: [bom_revision_track]
+    notes: 查询 BOM 修订记录中的修订内容。
+  - example_id: bom_power_prediction_context
+    display_name: 功率预测参数提取
+    question: 某版型搭配某供应商的功率预测
+    query_type: summary
+    metrics: [base_power, center_power, efficiency_avg]
+    dimensions: [normalized_model_code, supplier_name, power_bin_label]
+    group_by: [normalized_model_code, supplier_name]
+    business_rules: [bom_power_calculation_by_engine, bom_power_not_single_row_query]
+    notes: '功率预测类问题：LLM 只提取版型编码、供应商名称、配置因子等参数，实际计算由后端功率引擎执行。此示例仅用于参数提取参考。'
+  - example_id: bom_supplier_efficiency_rank
+    display_name: 供应商效率排名查询
+    question: 各供应商的平均效率排名
+    query_type: breakdown
+    metrics: [efficiency_avg]
+    dimensions: [supplier_name, normalized_model_code]
+    group_by: [supplier_name]
+    business_rules: []
+    notes: 查询各供应商的平均效率值并排序。

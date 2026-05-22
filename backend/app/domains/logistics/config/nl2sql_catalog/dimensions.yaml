@@ -1,46 +1,138 @@
 catalog_version: logistics_nl2sql_catalog.v1
 domain: logistics
 dimensions:
+  # ===== 时间维度 =====
   - dimension_id: biz_year
     display_name: 年份
-    aliases: [年份, 年, 年度]
+    aliases: [年份, 年, 年度, 哪年]
     column: biz_year
     table: dws_logistics_detail_union
     business_note: 默认时间范围由规则目录控制，显式年份直接过滤 biz_year。
+    field_value_examples: ["2023", "2024", "2025", "2026"]
   - dimension_id: biz_month
     display_name: 年月
-    aliases: [月份, 月, 年月, 月度]
+    aliases: [月份, 月, 年月, 月度, 哪个月]
     column: biz_month
     table: dws_logistics_detail_union
-    business_note: 月度趋势、月度对比使用 biz_month。
+    business_note: '月度趋势、月度对比使用 biz_month，格式如 "2024-01"。'
+    field_value_examples: ["2024-01", "2024-06", "2025-12"]
+  - dimension_id: biz_date
+    display_name: 业务日期
+    aliases: [日期, 业务日期, 发运日期, 具体日期]
+    column: biz_date
+    table: dws_logistics_detail_union
+    business_note: 精确到日的业务日期，用于按具体日期过滤或排序。
+    field_value_examples: ["2024-03-15", "2024-07-21", "2025-01-10"]
+
+  # ===== 组织维度 =====
   - dimension_id: logistics_company_name
     display_name: 承运商
-    aliases: [承运商, 物流公司, 物流, 物流供应商]
+    aliases: [承运商, 物流公司, 物流, 物流供应商, 承运公司]
     column: logistics_company_name
     table: dws_logistics_detail_union
-    business_note: “哪个物流跑得最多”按该维度分组。
-  - dimension_id: region_name
-    display_name: 区域
-    aliases: [区域, 片区, 各区域, 分区域]
-    column: region_name
-    table: dws_logistics_detail_union
+    business_note: '按承运商分组，回答"哪个物流跑得最多"类问题；所有物流服务商均在此维度。'
+    field_value_examples: ["XX物流有限公司", "XX运输公司", "XX货运有限公司"]
   - dimension_id: customer_name
     display_name: 客户
-    aliases: [客户, 客户名称]
+    aliases: [客户, 客户名称, 发货方, 收货方]
     column: customer_name
     table: dws_logistics_detail_union
+    business_note: 物流服务的委托客户或收货客户，用于按客户统计发运量/费用/排名。
+    field_value_examples: ["XX光伏科技", "XX新能源", "XX电力"]
+  - dimension_id: expand_dept
+    display_name: 扩充部门
+    aliases: [扩充部门, 经营计划, 业务部门, 管理部门]
+    column: expand_dept
+    table: dwd_logistics_ship_task
+    business_note: 2026 系统侧字段；当用户提到"经营计划"时优先映射该维度；按部门拆分运营成本和发运任务。
+    field_value_examples: ["经营计划部", "生产管理部", "物流部"]
+  - dimension_id: entrusted_person
+    display_name: 委托人
+    aliases: [委托人, 经办人, 业务员, 联系人员]
+    column: entrusted_person
+    table: dwd_logistics_ship_task
+    business_note: 2026 系统侧字段；当用户提到人名（如"刘娟"）时优先匹配该维度；按具体经办人统计任务量和费用。
+    field_value_examples: ["刘娟", "张三", "李四"]
+
+  # ===== 地点维度 =====
+  - dimension_id: region_name
+    display_name: 区域
+    aliases: [区域, 片区, 各区域, 分区域, 地域]
+    column: region_name
+    table: dws_logistics_detail_union
+    business_note: 业务管理区域（华东、华南、华北等），用于按区域汇总发运量/费用/车次。
+    field_value_examples: ["华东", "华南", "华北", "华中", "西南", "西北"]
   - dimension_id: origin_place
     display_name: 始发地
-    aliases: [始发地, 起运地, 从哪里发, 发出地]
+    aliases: [始发地, 起运地, 从哪里发, 发出地, 发货地]
     column: origin_place
     table: dws_logistics_detail_union
+    business_note: 货物发运的起始地点（如安徽阜宁、安徽合肥），用于按始发地统计发运情况。
+    field_value_examples: ["安徽阜宁", "安徽合肥"]
   - dimension_id: city
     display_name: 目的城市
-    aliases: [城市, 目的城市, 到达城市]
+    aliases: [城市, 目的城市, 到达城市, 到货城市]
     column: city
     table: dwd_logistics_hist_shipment_detail
+    business_note: 货物到达的目的地城市，仅历史侧（2023-2025）数据有此字段；按目的城市统计到货量/费用。
+    field_value_examples: ["上海", "北京", "广州", "南京", "杭州"]
+  - dimension_id: province
+    display_name: 省份
+    aliases: [省份, 省, 目的地省份, 到货省]
+    column: province
+    table: dwd_logistics_hist_shipment_detail
+    business_note: 货物到达的目的地省份，用于按省份统计发运分布。
+    field_value_examples: ["江苏省", "浙江省", "广东省", "安徽省"]
+  - dimension_id: warehouse_name
+    display_name: 仓库
+    aliases: [仓库, 库房, 发货仓库]
+    column: warehouse_name
+    table: dws_logistics_detail_union
+    business_note: 发货仓库名称，按仓库维度统计发运情况。
+    field_value_examples: ["合肥仓库", "阜宁仓库", "广德仓库"]
+
+  # ===== 运输维度 =====
   - dimension_id: transport_mode
     display_name: 运输方式
-    aliases: [运输方式, 水路, 陆运, 铁路]
+    aliases: [运输方式, 水路, 陆运, 铁路, 海运, 汽运, 火车]
     column: transport_mode
     table: dws_logistics_detail_union
+    business_note: 运输方式分类（公路、铁路、水路），用于按运输方式拆分发运量/费用/车次。
+    field_value_examples: ["公路", "铁路", "水路"]
+  - dimension_id: required_vehicle_type
+    display_name: 车型要求
+    aliases: [车型, 车辆类型, 所需车型, 车类型]
+    column: required_vehicle_type
+    table: dwd_logistics_hist_shipment_detail
+    business_note: 历史侧要求的车辆类型（如 13.5米平板、17.5米平板），按车型统计发运需求和费用。
+    field_value_examples: ["13.5米平板", "17.5米平板", "9.6米高栏"]
+  - dimension_id: plate_number
+    display_name: 车牌号
+    aliases: [车牌, 车牌号, 车辆牌照]
+    column: plate_number
+    table: dws_logistics_detail_union
+    business_note: 承运车辆车牌号，用于按车辆追踪发运任务和费用。
+    field_value_examples: ["皖A·12345", "苏B·67890", "沪C·11111"]
+
+  # ===== 业务凭证维度 =====
+  - dimension_id: contract_no
+    display_name: 合同号
+    aliases: [合同号, 合同编号, 合同]
+    column: contract_no
+    table: dws_logistics_detail_union
+    business_note: 运输合同编号，用于按合同统计费用和发运量。
+    field_value_examples: ["HT-2024-001", "HT-2025-002", "HT-2026-003"]
+  - dimension_id: inquiry_no
+    display_name: 询价号
+    aliases: [询价号, 询价编号]
+    column: inquiry_no
+    table: dws_logistics_detail_union
+    business_note: 询价单编号，用于关联询价和实际发运。
+    field_value_examples: ["XJ-2024-001", "XJ-2025-002"]
+  - dimension_id: project_name
+    display_name: 项目名称
+    aliases: [项目, 项目名称, 工程]
+    column: project_name
+    table: dwd_logistics_ship_task
+    business_note: 2026 系统侧字段；按项目维度统计发运任务和费用。
+    field_value_examples: ["XX光伏基地项目", "XX新能源发电项目"]

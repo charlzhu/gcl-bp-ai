@@ -180,13 +180,6 @@ class LogisticsNl2SqlDomainRouter(Nl2SqlDomainRouter):
     def route(self, question: str | LogisticsNl2SqlQueryRewriteResult) -> LogisticsNl2SqlDomainRoute:
         text = question.normalized_question if isinstance(question, LogisticsNl2SqlQueryRewriteResult) else str(question or "")
         lowered = text.lower()
-        if any(token in text for token in ("BOM", "Bom", "bom", "功率", "版型", "评审号")):
-            return LogisticsNl2SqlDomainRoute(
-                should_process=False,
-                domain="plan_bom",
-                source_system="middle_db",
-                reason_code="m9_domain_not_supported::plan_bom",
-            )
         if any(token in lowered for token in ("sap", "oracle", "mid")) or any(token in text for token in ("源表", "直查")):
             return LogisticsNl2SqlDomainRoute(
                 should_process=False,
@@ -203,12 +196,14 @@ class LogisticsNl2SqlDomainRouter(Nl2SqlDomainRouter):
             )
         if any(token in text for token in self.BUSINESS_ANALYSIS_TOKENS):
             return LogisticsNl2SqlDomainRoute(
-                should_process=False,
+                should_process=True,
                 domain="business_analysis",
                 source_system="middle_db",
-                reason_code="m9_domain_not_supported::business_analysis",
+                mode="shadow",
+                reason_code=None,
             )
         # 先检查 registry 中的已注册域（Nl2SqlDomainRouter 基类逻辑）
+        # plan_bom / business_analysis 已注册到 registry，由基类自动识别
         registry_result = super().route(text)
         if registry_result.should_process:
             # registry 识别出域（物流/产销存/计划BOM）时，传递域但不保留 reason_code，

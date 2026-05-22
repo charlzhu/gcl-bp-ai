@@ -298,6 +298,10 @@ class LogisticsCatalogRecallDocumentBuilder:
         column: LogisticsCatalogColumn,
     ) -> LogisticsCatalogRecallDocument:
         title = column.business_name or column.name
+        # 构造取值示例文本
+        examples_text = ""
+        if column.field_value_examples:
+            examples_text = "取值示例 " + "，".join(column.field_value_examples[:10])
         content = self._content(
             "字段",
             title,
@@ -305,6 +309,7 @@ class LogisticsCatalogRecallDocumentBuilder:
             f"类型 {column.data_type}",
             f"语义角色 {column.semantic_role}" if column.semantic_role else "",
             f"所属表 {table.display_name}",
+            examples_text,
         )
         return LogisticsCatalogRecallDocument(
             catalog_id=f"column:{table.table_name}.{column.name}",
@@ -326,6 +331,19 @@ class LogisticsCatalogRecallDocumentBuilder:
         )
 
     def _metric_document(self, catalog_version: str, metric: LogisticsCatalogMetric) -> LogisticsCatalogRecallDocument:
+        # 构造取值示例、计算公式、关联列文本
+        examples_text = ""
+        if metric.field_value_examples:
+            examples_text = "取值示例 " + "，".join(metric.field_value_examples[:10])
+        formula_text = ""
+        if metric.calculation_formula:
+            formula_text = "计算公式 " + metric.calculation_formula
+        calculation_text = ""
+        if metric.calculation_notes:
+            calculation_text = "计算说明 " + metric.calculation_notes
+        relevant_text = ""
+        if metric.relevant_columns:
+            relevant_text = "关联字段 " + "，".join(metric.relevant_columns[:20])
         content = self._content(
             "指标",
             metric.display_name,
@@ -334,6 +352,10 @@ class LogisticsCatalogRecallDocumentBuilder:
             f"单位 {metric.unit}" if metric.unit else "",
             f"聚合 {metric.aggregation}" if metric.aggregation else "",
             _business_safe_text(metric.business_note or ""),
+            examples_text,
+            formula_text,
+            calculation_text,
+            relevant_text,
             "依赖字段 " + "，".join(metric.source_columns) if metric.source_columns else "",
         )
         return LogisticsCatalogRecallDocument(
@@ -358,6 +380,10 @@ class LogisticsCatalogRecallDocumentBuilder:
         catalog_version: str,
         dimension: LogisticsCatalogDimension,
     ) -> LogisticsCatalogRecallDocument:
+        # 构造取值示例文本
+        examples_text = ""
+        if dimension.field_value_examples:
+            examples_text = "取值示例 " + "，".join(dimension.field_value_examples[:10])
         content = self._content(
             "维度",
             dimension.display_name,
@@ -365,6 +391,7 @@ class LogisticsCatalogRecallDocumentBuilder:
             f"同义词 {'，'.join(dimension.aliases)}" if dimension.aliases else "",
             f"字段 {dimension.table}.{dimension.column}" if dimension.table else f"字段 {dimension.column}",
             dimension.business_note or "",
+            examples_text,
         )
         return LogisticsCatalogRecallDocument(
             catalog_id=f"dimension:{dimension.dimension_id}",
@@ -730,6 +757,7 @@ class LogisticsCatalogRecallService:
         vector_top_k: int | None = None,
         rerank_top_k: int | None = None,
         rerank_min_score: float | None = None,
+        enable_keyword_fallback: bool = False,
     ) -> None:
         self.catalog_loader = catalog_loader or LogisticsSemanticCatalogLoader()
         self.document_builder = document_builder or LogisticsCatalogRecallDocumentBuilder()
@@ -741,6 +769,7 @@ class LogisticsCatalogRecallService:
         self.rerank_min_score = settings.nl2sql_rerank_min_score if rerank_min_score is None else rerank_min_score
         self._allowed_catalog_ids_cache: set[str] | None = None
         self._canonical_documents_cache: dict[str, LogisticsCatalogRecallDocument] | None = None
+        self._enable_keyword_fallback = enable_keyword_fallback
 
     def index_catalog(self, *, catalog: LogisticsSemanticCatalog | Any | None = None) -> LogisticsCatalogRecallResult:
         """把 catalog 文档写入 Milvus；任一依赖不可用时 fail-closed。"""
@@ -801,6 +830,8 @@ class LogisticsCatalogRecallService:
             return LogisticsCatalogRecallResult(status="empty", error="query_empty")
         availability_error = self._recall_availability_error()
         if availability_error:
+            if self._enable_keyword_fallback:
+                return self._keyword_fallback_recall(query)
             return LogisticsCatalogRecallResult(status="disabled", error=availability_error)
         try:
             vectors = self.embedding_client.embed_texts([query])
@@ -825,6 +856,55 @@ class LogisticsCatalogRecallService:
             return LogisticsCatalogRecallResult(status="error", error=_safe_error("recall_validation_error", exc))
         except Exception as exc:  # noqa: BLE001
             return LogisticsCatalogRecallResult(status="error", error=_safe_error("recall_error", exc))
+
+    def _keyword_fallback_recall(self, query: str) -> LogisticsCatalogRecallResult:
+        """当向量检索不可用时，通过 keyword 匹配本地 canonical documents 做简易召回。
+
+        参数：
+            query: 已构建的查询文本。
+        返回：
+            与向量 recall 相同结构的召回结果。
+        业务逻辑：
+            1. 只在 enable_keyword_fallback=True 时被调用。
+            2. 对 query 做简单 token 化，匹配 canonical documents 的 keywords/title/content。
+            3. 得分>0 才返回，否则返回 empty。
+        """
+        try:
+            documents = self._canonical_documents()
+            if not documents:
+                return LogisticsCatalogRecallResult(status="empty", error="catalog_documents_empty")
+            query_lower = query.lower()
+            query_tokens = {t.strip(".,!?\"'()[]{}") for t in query_lower.split() if len(t.strip(".,!?\"'()[]{}")) > 1}
+            scored: list[tuple[float, str]] = []
+            for doc_id, doc in documents.items():
+                score = 0.0
+                # keyword 精确匹配
+                for kw in doc.keywords:
+                    if kw.lower() in query_lower:
+                        score += 5.0
+                # title 匹配
+                title_lower = doc.title.lower()
+                for token in query_tokens:
+                    if token in title_lower:
+                        score += 3.0
+                if score > 0:
+                    scored.append((score, doc_id))
+            if not scored:
+                return LogisticsCatalogRecallResult(status="empty", error="keyword_fallback_no_match")
+            scored.sort(key=lambda x: x[0], reverse=True)
+            top_n = min(self.vector_top_k, len(scored))
+            hits: list[LogisticsCatalogRecallHit] = []
+            for _, doc_id in scored[:top_n]:
+                doc = documents[doc_id]
+                hits.append(LogisticsCatalogRecallHit(
+                    document=doc,
+                    vector_score=0.0,
+                    rerank_score=None,
+                    source="keyword_fallback",
+                ))
+            return LogisticsCatalogRecallResult(status="ok", hits=hits)
+        except Exception as exc:  # noqa: BLE001
+            return LogisticsCatalogRecallResult(status="error", error=_safe_error("keyword_fallback_error", exc))
 
     def _index_availability_error(self) -> str | None:
         if not self.embedding_client.is_available():
@@ -862,16 +942,19 @@ class LogisticsCatalogRecallService:
                 raise ValueError(f"catalog_hit_not_allowed::{hit.document.catalog_id}")
 
     def _canonicalize_hits(self, hits: list[LogisticsCatalogRecallHit]) -> list[LogisticsCatalogRecallHit]:
-        """按 catalog_id 回查当前 catalog，丢弃 Milvus 中不可信的 title/content/metadata。"""
+        """按 catalog_id 回查当前 catalog，丢弃 Milvus 中不可信的 title/content/metadata。
+        不在 canonical 中的 hit 被跳过而非抛异常，以支持多域 catalog 的混合召回。
+        """
 
         canonical_documents = self._canonical_documents()
         canonical_hits: list[LogisticsCatalogRecallHit] = []
         for hit in hits:
             canonical_document = canonical_documents.get(hit.document.catalog_id)
             if canonical_document is None:
-                raise ValueError(f"catalog_hit_not_allowed::{hit.document.catalog_id}")
+                # 不在当前 canonical 中的 catalog_id 直接跳过（多域混合召回场景）
+                continue
             if hit.document.catalog_version != canonical_document.catalog_version:
-                raise ValueError(f"catalog_version_mismatch::{hit.document.catalog_id}")
+                continue
             canonical_hits.append(
                 LogisticsCatalogRecallHit(
                     document=canonical_document,

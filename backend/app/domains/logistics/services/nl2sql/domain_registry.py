@@ -94,8 +94,7 @@ class Nl2SqlDomainRegistry:
             domain: 业务域名称。
 
         返回：
-            catalog 对象（域特有类型，如 LogisticsSemanticCatalog），
-            未注册或无 loader 则返回 None。
+            catalog 对象（域特有类型），未注册或无 loader 则返回 None。
         """
         reg = self._domains.get(domain)
         if reg is None or reg.catalog_loader is None:
@@ -126,6 +125,7 @@ __all__ = [
     "DomainCatalogRegistration",
     "Nl2SqlDomainRegistry",
     "register_logistics_domain",
+    "register_business_analysis_domain",
     "create_default_registry",
 ]
 
@@ -135,12 +135,11 @@ def register_logistics_domain(registry: Nl2SqlDomainRegistry) -> None:
 
     注册内容：
         - domain: logistics
-        - keywords: 物流域识别关键词（与 LogisticsNl2SqlDomainRouter 保持一致）
+        - keywords: 物流域识别关键词
         - catalog_loader: 懒加载物流 semantic catalog
         - templates_loader: 懒加载物流 query_templates
         - allowed_tables: 物流中间库允许读取的表
     """
-    # 懒加载避免循环 import
     from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
         LOGISTICS_NL2SQL_ALLOWED_READ_TABLES,
         LogisticsSemanticCatalogLoader,
@@ -174,14 +173,211 @@ def register_logistics_domain(registry: Nl2SqlDomainRegistry) -> None:
     ))
 
 
+def register_business_analysis_domain(registry: Nl2SqlDomainRegistry) -> None:
+    """注册经营分析（产销存）业务域到 registry。
+
+    注册内容：
+        - domain: business_analysis
+        - keywords: 经营分析域识别关键词
+        - catalog_loader: 懒加载产销存 semantic catalog（简要描述）
+        - templates_loader: 懒加载产销存 query_templates
+        - allowed_tables: 产销存中间库允许读取的表
+    """
+    from pathlib import Path
+
+    from backend.app.domains.business_analysis.services.inventory_sales_production.semantic_catalog import (
+        ISP_ALLOWED_READ_TABLES,
+    )
+
+    def _load_catalog() -> Any:
+        """加载产销存 nl2sql_catalog YAML 文件，返回 LogisticsSemanticCatalog 对象。"""
+        import yaml
+
+        from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
+            LOGISTICS_NL2SQL_ALLOWED_READ_TABLES,
+            LogisticsSemanticCatalog,
+        )
+
+        catalog_dir = (Path(__file__).resolve().parents[3] / "logistics"
+                       / "config" / "nl2sql_catalog" / "business_analysis")
+        raw_files = {}
+        for fname in ("tables.yaml", "metrics.yaml", "dimensions.yaml", "rules.yaml", "examples.yaml"):
+            path = catalog_dir / fname
+            if path.exists():
+                raw_files[fname] = yaml.safe_load(path.read_text(encoding="utf-8"))
+            else:
+                raw_files[fname] = {}
+
+        # 适配产销存自有 schema 到 LogisticsSemanticCatalog 兼容格式
+        tables = raw_files.get("tables.yaml", {}).get("tables", [])
+        metrics = raw_files.get("metrics.yaml", {}).get("metrics", [])
+        adapted_tables = []
+        for t in tables:
+            t_copy = dict(t)
+            t_copy.pop("sub_domain", None)
+            adapted_tables.append(t_copy)
+        adapted_metrics = []
+        for m in metrics:
+            m_copy = dict(m)
+            # 确保 sql_expression 字段
+            if "sql_expression" not in m_copy or not m_copy.get("sql_expression"):
+                m_copy["sql_expression"] = f"SUM({','.join(m_copy.get('source_columns', ['value']))})"
+            # metric_category → 拼入 business_note
+            cat = m_copy.pop("metric_category", None)
+            if cat:
+                existing_note = m_copy.get("business_note") or ""
+                m_copy["business_note"] = f"指标分类 {cat}。{existing_note}"
+            # default_for_sales → 拼入 business_note
+            default_sales = m_copy.pop("default_for_sales", None)
+            if default_sales:
+                existing_note = m_copy.get("business_note") or ""
+                m_copy["business_note"] = f"{existing_note} （默认销量口径）"
+            # requires_explicit_phrase → 拼入 business_note
+            explicit = m_copy.pop("requires_explicit_phrase", None)
+            if explicit:
+                existing_note = m_copy.get("business_note") or ""
+                m_copy["business_note"] = f"{existing_note} （需要显式用户词触发）"
+            adapted_metrics.append(m_copy)
+
+        payload = {
+            "catalog_version": "business_analysis_nl2sql_catalog.v1",
+            "domain": "business_analysis",
+            "tables": adapted_tables,
+            "metrics": adapted_metrics,
+            "dimensions": raw_files.get("dimensions.yaml", {}).get("dimensions", []),
+            "joins": [],
+            "rules": raw_files.get("rules.yaml", {}).get("rules", []),
+            "examples": raw_files.get("examples.yaml", {}).get("examples", []),
+        }
+        return LogisticsSemanticCatalog.model_validate(payload)
+
+    def _load_templates() -> list[dict]:
+        from pathlib import Path
+
+        import yaml
+
+        templates_path = (
+            Path(__file__).resolve().parents[3]
+            / "config" / "domains" / "business_analysis" / "query_templates.yaml"
+        )
+        if templates_path.exists():
+            data = yaml.safe_load(templates_path.read_text(encoding="utf-8"))
+            return (data or {}).get("templates", [])
+        return []
+
+    registry.register(DomainCatalogRegistration(
+        domain="business_analysis",
+        priority=10,
+        keywords=["经营分析", "毛利", "收入", "利润", "产销存", "销售量", "销量", "产量",
+                   "预算达成率", "库存周转率", "成本分析", "经营指标", "经营情况"],
+        catalog_loader=_load_catalog,
+        templates_loader=_load_templates,
+        allowed_tables=ISP_ALLOWED_READ_TABLES,
+    ))
+
+
+def register_plan_bom_domain(registry: Nl2SqlDomainRegistry) -> None:
+    """注册计划 BOM（含功率测算）业务域到 registry。
+
+    注册内容：
+        - domain: plan_bom
+        - keywords: BOM 域识别关键词
+        - catalog_loader: 懒加载 BOM 表描述
+        - templates_loader: 懒加载 BOM query_templates
+        - allowed_tables: BOM 中间库允许读取的表
+    """
+    from pathlib import Path
+
+    def _load_catalog() -> Any:
+        """加载计划 BOM nl2sql_catalog YAML 文件，返回 LogisticsSemanticCatalog 对象。"""
+        import yaml
+
+        from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
+            LogisticsSemanticCatalog,
+        )
+
+        catalog_dir = (Path(__file__).resolve().parents[3] / "logistics"
+                       / "config" / "nl2sql_catalog" / "plan_bom")
+        raw_files = {}
+        for fname in ("tables.yaml", "metrics.yaml", "dimensions.yaml", "rules.yaml", "examples.yaml"):
+            path = catalog_dir / fname
+            if path.exists():
+                raw_files[fname] = yaml.safe_load(path.read_text(encoding="utf-8"))
+            else:
+                raw_files[fname] = {}
+
+        # 适配计划 BOM 自有 schema 到 LogisticsSemanticCatalog 兼容格式
+        metrics = raw_files.get("metrics.yaml", {}).get("metrics", [])
+        adapted_metrics = []
+        for m in metrics:
+            m_copy = dict(m)
+            # 确保 sql_expression 字段
+            if "sql_expression" not in m_copy or not m_copy.get("sql_expression"):
+                m_copy["sql_expression"] = f"SUM({','.join(m_copy.get('source_columns', ['value']))})"
+            # metric_category → 拼入 business_note
+            cat = m_copy.pop("metric_category", None)
+            if cat:
+                existing_note = m_copy.get("business_note") or ""
+                m_copy["business_note"] = f"指标分类 {cat}。{existing_note}"
+            adapted_metrics.append(m_copy)
+
+        payload = {
+            "catalog_version": "plan_bom_nl2sql_catalog.v1",
+            "domain": "plan_bom",
+            "tables": raw_files.get("tables.yaml", {}).get("tables", []),
+            "metrics": adapted_metrics,
+            "dimensions": raw_files.get("dimensions.yaml", {}).get("dimensions", []),
+            "joins": [],
+            "rules": raw_files.get("rules.yaml", {}).get("rules", []),
+            "examples": raw_files.get("examples.yaml", {}).get("examples", []),
+        }
+        return LogisticsSemanticCatalog.model_validate(payload)
+
+    def _load_templates() -> list[dict]:
+        from pathlib import Path
+
+        import yaml
+
+        templates_path = (
+            Path(__file__).resolve().parents[3]
+            / "config" / "domains" / "plan_bom" / "query_templates.yaml"
+        )
+        if templates_path.exists():
+            data = yaml.safe_load(templates_path.read_text(encoding="utf-8"))
+            return (data or {}).get("templates", [])
+        return []
+
+    registry.register(DomainCatalogRegistration(
+        domain="plan_bom",
+        priority=10,
+        keywords=["BOM", "版型", "功率", "评审号", "物料清单", "材料明细",
+                   "功率测算", "功率预测", "功率档位", "供应商效率", "标板基准",
+                   "搭配虚拟件", "版号", "物料匹配"],
+        catalog_loader=_load_catalog,
+        templates_loader=_load_templates,
+        allowed_tables=(
+            "plan_bom_header",
+            "plan_bom_material_line",
+            "plan_bom_revision",
+            "plan_power_model_version",
+            "plan_power_model_sheet",
+            "plan_power_factor_option",
+            "plan_power_supplier_efficiency_distribution",
+            "plan_power_power_bin",
+        ),
+    ))
+
+
 def create_default_registry() -> Nl2SqlDomainRegistry:
-    """创建包含物流域的默认注册表。
+    """创建包含物流域 + 产销存域 + 计划 BOM 域的默认注册表。
 
     用途：
         1. 被 Nl2SqlDomainRouter 默认构造使用；
-        2. 保持现有行为（物流域 + 其他域 should_process=False）；
-        3. 后续 Phase B（business_analysis）和 Phase C（plan_bom）在此函数中追加注册。
+        2. 物流域 + 产销存域 + 计划BOM域已注册；
+        3. 后续 Phase D（material_management）在此函数中追加注册。
     """
     registry = Nl2SqlDomainRegistry()
     register_logistics_domain(registry)
+    register_business_analysis_domain(registry)
+    register_plan_bom_domain(registry)
     return registry

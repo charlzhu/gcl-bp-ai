@@ -33,6 +33,12 @@ from backend.app.domains.plan_bom.services.power_prediction_engine import PowerP
 from backend.app.domains.plan_bom.services.power_recommendation_service import PowerRecommendationService, PowerRecommendationResult
 from backend.app.domains.plan_bom.services.query_service import PlanBomQueryService
 from backend.app.domains.query_planning.services.shadow_snapshot_builder import QueryPlanningV2ShadowSnapshotBuilder
+from backend.app.domains.logistics.services.nl2sql.m15_grayscale_gate import (
+    LogisticsNl2SqlGrayscaleConfig,
+)
+from backend.app.domains.logistics.services.nl2sql.live_shadow_adapter import (
+    LogisticsNl2SqlLiveShadowAdapter,
+)
 from backend.app.services.qa_trace import QaTraceRecorder
 
 
@@ -202,6 +208,33 @@ class PlanBomQaService:
                 {"intent": nlu.intent, "slots": nlu.slots},
             )
             response = self._clarification_response(question=question, nlu=nlu)
+
+        # NL2SQL 主线模式：先执行 NL2SQL shadow，成功则替换规则引擎结果
+        try:
+            import os
+            from dotenv import load_dotenv
+            load_dotenv(os.getenv("BACKEND_ENV_PATH", ""), override=True)
+            _ba_config = LogisticsNl2SqlGrayscaleConfig.from_env()
+            if _ba_config.enabled_domains and "plan_bom" in _ba_config.enabled_domains:
+                _adapter = LogisticsNl2SqlLiveShadowAdapter()
+                _shadow = _adapter.run_shadow(
+                    question=question,
+                    trace_id=trace_recorder.trace_id,
+                    domain="plan_bom",
+                )
+                if _shadow.enabled and _shadow.status in ("success", "skipped"):
+                    response = PlanBomQaResponse(
+                        question=question,
+                        classification="A",
+                        status=PlanBomQaStatus(code="OK", message="查询成功"),
+                        nlu=nlu,
+                        answer_summary=_shadow.error_message or "NL2SQL 主线模式",
+                        warnings=["NL2SQL 主线模式：本回答由 NL2SQL 链路生成。"],
+                    )
+                    return self._complete_traced_response(response=response, trace_recorder=trace_recorder)
+        except Exception as exc:
+            logger.warning("nl2sql_mainline_failed trace_id=%s %s", trace_recorder.trace_id, exc)
+
         return self._complete_traced_response(response=response, trace_recorder=trace_recorder)
 
     def _single_order_response(self, *, question: str, nlu: PlanBomNluCandidate) -> PlanBomQaResponse:

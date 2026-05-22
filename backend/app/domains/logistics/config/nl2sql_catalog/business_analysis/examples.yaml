@@ -1,0 +1,66 @@
+catalog_version: business_analysis_nl2sql_catalog.v1
+domain: business_analysis
+examples:
+  - example_id: ba_isp_production_summary
+    display_name: 产销存产量汇总查询
+    question: 2024年各月的实际产量是多少
+    query_type: summary
+    metrics: [production_actual_including_oem]
+    dimensions: [business_month]
+    group_by: [business_month]
+    business_rules: [isp_published_month_only]
+    notes: 查询2024年每个月的总产量，取已发布月份。
+  - example_id: ba_isp_sales_by_base
+    display_name: 按基地拆分销量
+    question: 2024年各基地的发货量排名
+    query_type: breakdown
+    metrics: [shipment_volume]
+    dimensions: [base_name, business_year]
+    group_by: [base_name]
+    business_rules: [isp_sales_default_means_shipment, isp_published_month_only]
+    notes: 按基地分组展示2024年发货量，从高到低排序。
+  - example_id: ba_isp_inventory_trend
+    display_name: 期末库存月度趋势
+    question: 2024年各月的期末库存趋势
+    query_type: trend
+    metrics: [ending_inventory_volume]
+    dimensions: [business_month, business_year]
+    group_by: [business_month]
+    business_rules: [isp_inventory_synonyms, isp_published_month_only]
+    notes: 按月展示2024年期末库存变化趋势。
+  - example_id: ba_isp_budget_achievement
+    display_name: 预算达成率查询
+    question: 2024年各月的预算达成率
+    query_type: summary
+    metrics: [budget_achievement_rate]
+    dimensions: [business_month, business_year]
+    group_by: [business_month]
+    business_rules: [isp_budget_achievement_calculated]
+    notes: 预算达成率由后端计算引擎产生，此处为参数提取样本。
+  - example_id: ba_isp_model_type_breakdown
+    display_name: 版型产量拆分
+    question: 2024年各版型的产量
+    query_type: breakdown
+    metrics: [production_by_model_type]
+    dimensions: [model_type, business_year]
+    group_by: [model_type]
+    business_rules: [isp_published_month_only]
+    notes: 按版型分组展示2024年产量。
+  - example_id: ba_isp_external_sales_2024
+    display_name: 2024年对外销量
+    question: 2024年组件事业部剔除内部交易的对外销量
+    query_type: summary
+    metrics: [shipment_external_excluding_internal]
+    dimensions: [business_year]
+    group_by: []
+    business_rules: [isp_2024_default_external_sales, isp_published_month_only]
+    notes: 2024年对外销量使用组件事业部剔除内部交易口径。
+  - example_id: ba_isp_consigned_inventory_by_base
+    display_name: 基地寄存库存查询
+    question: 2024年各基地的寄存库存
+    query_type: breakdown
+    metrics: [consigned_inventory_volume]
+    dimensions: [base_name, business_year]
+    group_by: [base_name]
+    business_rules: [isp_consigned_inventory_synonyms, isp_published_month_only]
+    notes: 按基地拆分寄存库存。

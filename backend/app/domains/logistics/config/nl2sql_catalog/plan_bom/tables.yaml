@@ -1,0 +1,142 @@
+catalog_version: plan_bom_nl2sql_catalog.v1
+domain: plan_bom
+tables:
+  - table_name: plan_bom_header
+    display_name: BOM 头表
+    domain: plan_bom
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个 BOM 实例 + 版本 + 来源一条记录
+    columns:
+      - {name: id, data_type: bigint, business_name: 技术主键, semantic_role: trace, nullable: false}
+      - {name: order_no, data_type: varchar, business_name: 订单/评审号, semantic_role: dimension, nullable: false}
+      - {name: version_no, data_type: varchar, business_name: 版本号, semantic_role: dimension, nullable: false}
+      - {name: order_identity_key, data_type: varchar, business_name: 内部实例键, semantic_role: trace, nullable: false}
+      - {name: file_instance_key, data_type: varchar, business_name: 文件实例键, semantic_role: trace, nullable: false}
+      - {name: file_no, data_type: varchar, business_name: BOM 文件号, semantic_role: dimension, nullable: true}
+      - {name: order_name, data_type: varchar, business_name: 订单/评审号名称, semantic_role: dimension, nullable: true}
+      - {name: effective_date, data_type: date, business_name: 生效日期, semantic_role: time, nullable: true}
+      - {name: source_type, data_type: varchar, business_name: 来源类型, semantic_role: dimension, nullable: false}
+      - {name: source_tag, data_type: varchar, business_name: 来源标记, semantic_role: dimension, nullable: false}
+      - {name: import_batch_id, data_type: varchar, business_name: 导入批次号, semantic_role: trace, nullable: false}
+      - {name: raw_file_name, data_type: varchar, business_name: 原始文件名, semantic_role: trace, nullable: true}
+      - {name: raw_sheet_name, data_type: varchar, business_name: 原始 Sheet 名, semantic_role: trace, nullable: true}
+      - {name: is_active, data_type: smallint, business_name: 是否有效, semantic_role: rule_filter, nullable: false}
+      - {name: created_at, data_type: datetime, business_name: 创建时间, semantic_role: trace, nullable: false}
+      - {name: updated_at, data_type: datetime, business_name: 更新时间, semantic_role: trace, nullable: false}
+  - table_name: plan_bom_material_line
+    display_name: BOM 材料明细表
+    domain: plan_bom
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个 BOM 实例 + 版本 + SAP 编码一条记录
+    columns:
+      - {name: id, data_type: bigint, business_name: 技术主键, semantic_role: trace, nullable: false}
+      - {name: order_no, data_type: varchar, business_name: 订单/评审号, semantic_role: dimension, nullable: false}
+      - {name: version_no, data_type: varchar, business_name: 版本号, semantic_role: dimension, nullable: false}
+      - {name: sap_code, data_type: varchar, business_name: SAP 编码, semantic_role: dimension, nullable: false}
+      - {name: line_no, data_type: varchar, business_name: 行号, semantic_role: trace, nullable: true}
+      - {name: material_name, data_type: varchar, business_name: 物料名称, semantic_role: dimension, nullable: false}
+      - {name: material_category, data_type: varchar, business_name: 物料归类, semantic_role: dimension, nullable: true}
+      - {name: description, data_type: text, business_name: 规格描述, semantic_role: dimension, nullable: true}
+      - {name: standard_usage, data_type: decimal, business_name: 标准用量, semantic_role: metric, nullable: true}
+      - {name: unit, data_type: varchar, business_name: 单位, semantic_role: dimension, nullable: true}
+      - {name: production_loss, data_type: varchar, business_name: 生产损耗, semantic_role: dimension, nullable: true}
+      - {name: remark, data_type: text, business_name: 备注, semantic_role: trace, nullable: true}
+      - {name: replacement_marker, data_type: varchar, business_name: 替代标识, semantic_role: dimension, nullable: true}
+      - {name: source_type, data_type: varchar, business_name: 来源类型, semantic_role: dimension, nullable: false}
+      - {name: source_tag, data_type: varchar, business_name: 来源标记, semantic_role: dimension, nullable: false}
+      - {name: import_batch_id, data_type: varchar, business_name: 导入批次号, semantic_role: trace, nullable: false}
+  - table_name: plan_bom_revision
+    display_name: BOM 修订区表
+    domain: plan_bom
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个 BOM 实例 + 版本 + 修订批次一条记录
+    columns:
+      - {name: id, data_type: bigint, business_name: 技术主键, semantic_role: trace, nullable: false}
+      - {name: order_no, data_type: varchar, business_name: 订单/评审号, semantic_role: dimension, nullable: false}
+      - {name: version_no, data_type: varchar, business_name: 版本号, semantic_role: dimension, nullable: false}
+      - {name: revision_version, data_type: varchar, business_name: 修订版本, semantic_role: dimension, nullable: true}
+      - {name: revision_content, data_type: text, business_name: 修订内容, semantic_role: dimension, nullable: true}
+      - {name: reviser, data_type: varchar, business_name: 修订人, semantic_role: dimension, nullable: true}
+      - {name: effective_date, data_type: date, business_name: 修订生效日期, semantic_role: time, nullable: true}
+  - table_name: plan_power_model_version
+    display_name: 功率模型版本表
+    domain: plan_bom
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个 xlsm 源文件一条记录
+    columns:
+      - {name: id, data_type: bigint, business_name: 技术主键, semantic_role: trace, nullable: false}
+      - {name: file_name, data_type: varchar, business_name: xlsm 文件名, semantic_role: dimension, nullable: false}
+      - {name: file_hash, data_type: varchar, business_name: 文件哈希, semantic_role: trace, nullable: false}
+      - {name: source_type, data_type: varchar, business_name: 来源类型, semantic_role: dimension, nullable: false}
+      - {name: business_version_label, data_type: varchar, business_name: 业务版本标签, semantic_role: dimension, nullable: true}
+      - {name: formula_policy, data_type: varchar, business_name: 公式策略, semantic_role: dimension, nullable: false}
+      - {name: is_active, data_type: smallint, business_name: 是否激活版本, semantic_role: rule_filter, nullable: false}
+      - {name: parse_status, data_type: varchar, business_name: 解析状态, semantic_role: dimension, nullable: false}
+      - {name: sheet_count, data_type: int, business_name: 总 sheet 数, semantic_role: metric, nullable: false}
+      - {name: model_sheet_count, data_type: int, business_name: 有效模型页数, semantic_role: metric, nullable: false}
+      - {name: warning_count, data_type: int, business_name: 警告数, semantic_role: metric, nullable: false}
+      - {name: error_count, data_type: int, business_name: 错误数, semantic_role: metric, nullable: false}
+  - table_name: plan_power_model_sheet
+    display_name: 功率模型 Sheet 表
+    domain: plan_bom
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个模型版本 + sheet 一条记录
+    columns:
+      - {name: id, data_type: bigint, business_name: 技术主键, semantic_role: trace, nullable: false}
+      - {name: version_id, data_type: bigint, business_name: 模型版本 ID, semantic_role: trace, nullable: false}
+      - {name: sheet_name, data_type: varchar, business_name: Sheet 名, semantic_role: dimension, nullable: false}
+      - {name: normalized_model_code, data_type: varchar, business_name: 归一化版型编码, semantic_role: dimension, nullable: false}
+      - {name: cell_count, data_type: int, business_name: 电池片数量, semantic_role: metric, nullable: true}
+      - {name: base_power, data_type: decimal, business_name: 基础功率, semantic_role: metric, nullable: true}
+      - {name: center_power_cell, data_type: varchar, business_name: 中心功率单元格, semantic_role: trace, nullable: true}
+      - {name: area_default, data_type: decimal, business_name: 默认面积, semantic_role: metric, nullable: true}
+      - {name: std_dev_default, data_type: decimal, business_name: 默认标准差, semantic_role: metric, nullable: true}
+  - table_name: plan_power_factor_option
+    display_name: 功率模型配置选项表
+    domain: plan_bom
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个模型版型 + 配置因子 + 选项值一条记录
+    columns:
+      - {name: id, data_type: bigint, business_name: 技术主键, semantic_role: trace, nullable: false}
+      - {name: version_id, data_type: bigint, business_name: 模型版本 ID, semantic_role: trace, nullable: false}
+      - {name: sheet_id, data_type: bigint, business_name: Sheet ID, semantic_role: trace, nullable: true}
+      - {name: factor_code, data_type: varchar, business_name: 因子编码, semantic_role: dimension, nullable: false}
+      - {name: factor_label, data_type: varchar, business_name: 因子标签, semantic_role: dimension, nullable: false}
+      - {name: option_value, data_type: varchar, business_name: 选项值, semantic_role: dimension, nullable: false}
+      - {name: option_label, data_type: varchar, business_name: 选项标签, semantic_role: dimension, nullable: true}
+      - {name: option_order, data_type: int, business_name: 选项排序, semantic_role: trace, nullable: true}
+  - table_name: plan_power_supplier_efficiency_distribution
+    display_name: 供应商效率分布表
+    domain: plan_bom
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个供应商 + 效率档位一条记录
+    columns:
+      - {name: id, data_type: bigint, business_name: 技术主键, semantic_role: trace, nullable: false}
+      - {name: version_id, data_type: bigint, business_name: 模型版本 ID, semantic_role: trace, nullable: false}
+      - {name: sheet_id, data_type: bigint, business_name: Sheet ID, semantic_role: trace, nullable: true}
+      - {name: supplier_name, data_type: varchar, business_name: 供应商名称, semantic_role: dimension, nullable: false}
+      - {name: efficiency_min, data_type: decimal, business_name: 效率下限, semantic_role: metric, nullable: true}
+      - {name: efficiency_max, data_type: decimal, business_name: 效率上限, semantic_role: metric, nullable: true}
+      - {name: efficiency_avg, data_type: decimal, business_name: 平均效率, semantic_role: metric, nullable: true}
+      - {name: distribution_weight, data_type: decimal, business_name: 分布权重, semantic_role: metric, nullable: true}
+  - table_name: plan_power_power_bin
+    display_name: 功率档位表
+    domain: plan_bom
+    source_system: middle_db
+    allowed_read: true
+    grain: 每个模型版本 + 版型 + 功率档位一条记录
+    columns:
+      - {name: id, data_type: bigint, business_name: 技术主键, semantic_role: trace, nullable: false}
+      - {name: version_id, data_type: bigint, business_name: 模型版本 ID, semantic_role: trace, nullable: false}
+      - {name: sheet_id, data_type: bigint, business_name: Sheet ID, semantic_role: trace, nullable: true}
+      - {name: power_bin_label, data_type: varchar, business_name: 功率档位标签, semantic_role: dimension, nullable: false}
+      - {name: power_min, data_type: decimal, business_name: 功率下限, semantic_role: metric, nullable: true}
+      - {name: power_max, data_type: decimal, business_name: 功率上限, semantic_role: metric, nullable: true}
+      - {name: center_power, data_type: decimal, business_name: 中心功率, semantic_role: metric, nullable: true}

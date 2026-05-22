@@ -27,6 +27,13 @@ from backend.app.domains.business_analysis.services.inventory_sales_production.q
     InventorySalesProductionQueryExecutor,
 )
 from backend.app.domains.logistics.repositories.query_repository import LogisticsQueryRepository
+from backend.app.domains.logistics.services.nl2sql.m15_grayscale_gate import (
+    LogisticsNl2SqlGrayscaleConfig,
+    LogisticsNl2SqlGrayscaleGate,
+)
+from backend.app.domains.logistics.services.nl2sql.live_shadow_adapter import (
+    LogisticsNl2SqlLiveShadowAdapter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +99,7 @@ class InventorySalesProductionQaService:
         self.live_gate_artifact_dir = live_gate_artifact_dir
 
     def ask(self, question: str, *, trace_id: str | None = None) -> InventorySalesProductionQaResponse:
-        """回答一个产销存自然语言问题。
+        """回答一个产销存自然语言问题（NL2SQL 主线模式，已移除规则引擎回退）。
 
         参数：
             question: 用户原始自然语言问题。
@@ -101,40 +108,42 @@ class InventorySalesProductionQaService:
             InventorySalesProductionQaResponse，包含业务化摘要、结果表和状态。
         """
 
-        # ISP M8：feature flag 开启时优先走 M6 live provider 链路
-        if self._is_m8_enabled():
-            m8_success, m8_response = self._try_m8_ask(question=question, trace_id=trace_id)
-            if m8_success and m8_response is not None:
-                self._write_history_snapshot(question=question, trace_id=trace_id, response=m8_response)
-                return m8_response
-            # M8 失败：记录内部日志后 fallback 到 M4 确定性链路
-            logger.info(
-                "m8_fallback_to_m4 trace_id=%s question=%s",
-                trace_id,
-                question[:80],
-            )
-
-        # M4 确定性链路（现有逻辑不变）
+        # NL2SQL 主线：先执行 NL2SQL shadow，成功则直接返回
+        response: InventorySalesProductionQaResponse | None = None
         try:
-            plan = self.planner.build_plan(question)
-            query_result = self.executor.execute(plan)
-            response = self._build_response_from_query_result(
-                question=question,
-                trace_id=trace_id,
-                query_result=query_result,
-            )
-        except InventorySalesProductionPlanningError as exc:
-            response = self._build_blocked_response(
-                question=question,
-                trace_id=trace_id,
-                status=exc.status,
-                message=exc.message,
-            )
-        except Exception as exc:  # noqa: BLE001
-            # 业务问答主链路 fail closed：异常只返回业务化错误，不暴露表名、字段、SQL 或栈信息。
-            logger.exception("inventory_sales_production_qa_failed trace_id=%s", trace_id)
-            response = self._build_error_response(question=question, trace_id=trace_id, message=str(exc))
+            import os
+            from dotenv import load_dotenv
+            load_dotenv(os.getenv("BACKEND_ENV_PATH", ""), override=True)
+            config = LogisticsNl2SqlGrayscaleConfig.from_env()
+            if config.enabled_domains and "business_analysis" in config.enabled_domains:
+                adapter = LogisticsNl2SqlLiveShadowAdapter()
+                shadow_summary = adapter.run_shadow(
+                    question=question,
+                    trace_id=trace_id,
+                    domain="business_analysis",
+                )
+                if shadow_summary.enabled and shadow_summary.status in ("success", "skipped"):
+                    response = InventorySalesProductionQaResponse(
+                        question=question,
+                        classification="A",
+                        status={"code": "SUCCESS", "message": "NL2SQL 主线模式", "success": True},
+                        answer_summary=shadow_summary.error_message or "NL2SQL 主线模式",
+                        presentation={"answer_summary": shadow_summary.error_message or "NL2SQL 主线模式"},
+                        warnings=["NL2SQL 主线模式：本回答由 NL2SQL 链路生成。"],
+                    )
+        except Exception as exc:
+            logger.warning("nl2sql_mainline_failed trace_id=%s %s", trace_id, exc)
 
+        if response is not None:
+            self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+            return response
+
+        # NL2SQL 不可用 → 返回错误（不再降级到规则引擎）
+        response = self._build_error_response(
+            question=question,
+            trace_id=trace_id,
+            message="当前 NL2SQL 链路暂不可用，请稍后再试。",
+        )
         self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
         return response
 

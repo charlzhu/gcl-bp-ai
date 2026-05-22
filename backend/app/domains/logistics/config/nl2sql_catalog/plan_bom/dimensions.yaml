@@ -1,0 +1,146 @@
+catalog_version: plan_bom_nl2sql_catalog.v1
+domain: plan_bom
+dimensions:
+  # ===== BOM 维度 =====
+  - dimension_id: order_no
+    display_name: 订单/评审号
+    aliases: [订单号, 评审号, 订单, 评审, 单号, BOM 单号]
+    column: order_no
+    table: plan_bom_header
+    business_note: BOM 的订单号或评审号，是 BOM 的核心标识字段。用户口中的"评审号"最终也查该字段。
+    field_value_examples: ["PO-2024-001", "REV-2024-001"]
+  - dimension_id: version_no
+    display_name: 版本号
+    aliases: [版本, 版本号, 版号, BOM 版本]
+    column: version_no
+    table: plan_bom_header
+    business_note: 'BOM 版本号，例如 A0、A1、A10。按生效日期确定当前版本。用户说"最新版""当前版本"时需取最大日期版本。'
+    field_value_examples: ["A0", "A1", "A2", "B0"]
+  - dimension_id: order_name
+    display_name: 订单名称
+    aliases: [订单名称, 订单名, 工程名, 项目名]
+    column: order_name
+    table: plan_bom_header
+    business_note: 订单或评审号对应的名称，用于按名称搜索 BOM。
+    field_value_examples: ["XX光伏项目", "XX基地组件供货"]
+  - dimension_id: file_no
+    display_name: BOM 文件号
+    aliases: [文件号, BOM 编号, 文件编号]
+    column: file_no
+    table: plan_bom_header
+    business_note: BOM 源文件的文件号，用于追溯 BOM 来源。
+    field_value_examples: ["BOM-2024-001", "BOM-2025-002"]
+  - dimension_id: effective_date
+    display_name: 生效日期
+    aliases: [生效日期, 生效时间, 版本生效日期]
+    column: effective_date
+    table: plan_bom_header
+    business_note: BOM 版本的生效日期，用于判定哪个版本是当前有效版本（取最大日期）。
+    field_value_examples: ["2024-01-15", "2024-06-01", "2025-03-10"]
+  - dimension_id: source_type
+    display_name: 来源类型
+    aliases: [来源类型, 数据来源, 来源]
+    column: source_type
+    table: plan_bom_header
+    business_note: 'BOM 数据来源类型：excel 表示 Excel 导入，sap 表示 SAP 同步。'
+    field_value_examples: ["excel", "sap"]
+  - dimension_id: sap_code
+    display_name: SAP 编码
+    aliases: [SAP 编码, SAP 编号, 物料编码, 物料号]
+    column: sap_code
+    table: plan_bom_material_line
+    business_note: SAP 物料编码，BOM 材料明细行的唯一编码。
+    field_value_examples: ["10000001", "10000002", "20000001"]
+  - dimension_id: material_name
+    display_name: 物料名称
+    aliases: [物料名称, 材料名称, 物料名, 材料名]
+    column: material_name
+    table: plan_bom_material_line
+    business_note: BOM 材料的原始物料名称，用于模糊搜索材料。
+    field_value_examples: ["单晶硅片 182mm", "EVA 胶膜", "钢化玻璃 3.2mm", "接线盒"]
+  - dimension_id: material_category
+    display_name: 物料归类
+    aliases: [物料归类, 物料分类, 材料类别]
+    column: material_category
+    table: plan_bom_material_line
+    business_note: 系统对物料的归类字段，如电池片、玻璃、胶膜、接线盒、边框等大类。
+    field_value_examples: ["电池片", "玻璃", "胶膜", "接线盒", "边框", "焊带"]
+  - dimension_id: revision_content
+    display_name: 修订内容
+    aliases: [修订内容, 变更内容, 修订说明]
+    column: revision_content
+    table: plan_bom_revision
+    business_note: BOM 修订区的修订内容描述，用于回答"改了什么"类问题。
+    field_value_examples: ["更换电池片供应商", "调整玻璃厚度"]
+  - dimension_id: reviser
+    display_name: 修订人
+    aliases: [修订人, 修改人, 变更人]
+    column: reviser
+    table: plan_bom_revision
+    business_note: BOM 修订记录的修订人姓名。
+    field_value_examples: ["张三", "李四", "王五"]
+
+  # ===== 功率模型维度 =====
+  - dimension_id: file_name
+    display_name: xlsm 文件名
+    aliases: [文件名, xlsm 文件名, 功率模型文件名]
+    column: file_name
+    table: plan_power_model_version
+    business_note: 功率模型的原始 xlsm 文件名，用于定位模型版本。
+    field_value_examples: ["GCL功率测试基准_v6.0.xlsm", "210R_组件功率模型_v2.xlsm"]
+  - dimension_id: business_version_label
+    display_name: 业务版本标签
+    aliases: [业务版本, 版本标签, 模型版本标签]
+    column: business_version_label
+    table: plan_power_model_version
+    business_note: 功率模型的业务版本标签，如"TOPCon 26.04.13"。
+    field_value_examples: ["TOPCon 26.04.13", "PERC 25.08.10"]
+  - dimension_id: normalized_model_code
+    display_name: 归一化版型编码
+    aliases: [版型编码, 版型, 归一化编码, 模型编码]
+    column: normalized_model_code
+    table: plan_power_model_sheet
+    business_note: 归一化后的版型编码，用于按版型查询功率模型。
+    field_value_examples: ["182N-72", "210N-66", "210R-60"]
+  - dimension_id: sheet_name
+    display_name: Sheet 名
+    aliases: [Sheet 名, Excel Sheet, 工作表名]
+    column: sheet_name
+    table: plan_power_model_sheet
+    business_note: Excel 的原始 Sheet 名称。
+    field_value_examples: ["182N-72-TOPCon", "210N-66-PERC", "210R-60-TOPCon"]
+  - dimension_id: factor_code
+    display_name: 因子编码
+    aliases: [因子编码, 配置因子, 因子代号]
+    column: factor_code
+    table: plan_power_factor_option
+    business_note: 功率模型配置因子的编码，如光转效、CTM、温度系数等。
+    field_value_examples: ["CTM", "温度系数", "光转效", "封装损失"]
+  - dimension_id: factor_label
+    display_name: 因子标签
+    aliases: [因子标签, 因子名称, 因子说明]
+    column: factor_label
+    table: plan_power_factor_option
+    business_note: 功率模型配置因子的中文标签或说明。
+    field_value_examples: ["CTM 比率", "温度系数修正", "光转效调整"]
+  - dimension_id: option_value
+    display_name: 选项值
+    aliases: [选项值, 配置值, 因子值]
+    column: option_value
+    table: plan_power_factor_option
+    business_note: 配置因子的具体选项值。
+    field_value_examples: ["0.98", "0.995", "1.01"]
+  - dimension_id: supplier_name
+    display_name: 供应商名称
+    aliases: [供应商, 供应商名, 电池片供应商]
+    column: supplier_name
+    table: plan_power_supplier_efficiency_distribution
+    business_note: 电池片供应商名称，用于按供应商查询效率分布。
+    field_value_examples: ["通威", "爱旭", "润阳", "中润", "捷泰"]
+  - dimension_id: power_bin_label
+    display_name: 功率档位标签
+    aliases: [功率档位, 档位标签, 功率段]
+    column: power_bin_label
+    table: plan_power_power_bin
+    business_note: 功率档位的标签，如"640W-645W"、"645W-650W"等。
+    field_value_examples: ["640W-645W", "645W-650W", "650W-655W", "655W-660W"]

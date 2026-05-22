@@ -1,9 +1,69 @@
+# 经营分析（产销存）域 NL2SQL query_templates
+# 
+# 对应域：business_analysis.inventory_sales_production
+# 支持表：dwd_ba_isp_monthly_fact, dim_ba_isp_metric, dim_ba_isp_metric_alias
+# 支持 query_key: ba_isp_metric_summary, ba_isp_metric_breakdown, ba_isp_metric_trend,
+#                  ba_isp_budget_achievement, ba_isp_inventory_snapshot
+#
+# 指标分类：production（产量）、sales（销量）、inventory（库存）、cost（成本）
+
 templates:
-  - id: business_analysis.aggregate.kpi_overview
-    name: 经营指标统计（占位模板）
-    priority: 60
+  # === 经营指标统计（无拆分）===
+  - id: business_analysis.aggregate.metric_summary
+    name: 经营指标统计
+    priority: 50
+    mode: aggregate
+    required_slots: [single_period_or_year, metric_name]
+    metric_candidates: [production_actual_including_oem, production_actual_excluding_oem, sales_external, inventory_sap_value, cost_total]
+    keywords_any: ["产量", "销量", "库存", "成本", "利润", "毛利", "收入", "经营分析"]
+    group_by: [biz_month]
+
+  # === 经营指标按维度拆分 ===
+  - id: business_analysis.dimension.metric_breakdown
+    name: 经营指标维度拆分
+    priority: 50
+    mode: dimension
+    required_slots: [single_period_or_year, metric_name, dimension_context]
+    metric_candidates: [production_by_base, production_by_model, sales_by_region, sales_by_product]
+    keywords_any: ["按基地", "按工厂", "按产品", "按客户", "按类别", "拆分", "分布", "维度"]
+    group_by: [factory_name, base_name, model_type, production_mode]
+
+  # === 经营指标趋势 ===
+  - id: business_analysis.trend.metric_trend
+    name: 经营指标趋势
+    priority: 50
+    mode: trend
+    required_slots: [multi_period_range, metric_name]
+    metric_candidates: [production_actual_including_oem, sales_external, inventory_sap_value]
+    keywords_any: ["趋势", "同比", "环比", "逐月", "走势", "变化"]
+    group_by: [biz_month]
+
+  # === 预算达成率 ===
+  - id: business_analysis.budget.achievement
+    name: 预算达成率
+    priority: 45
     mode: aggregate
     required_slots: [single_period_or_year]
-    metric_candidates: [shipment_watt]
-    keywords_any: ["经营分析", "毛利", "收入", "利润"]
+    metric_candidates: [budget_achievement_rate]
+    keywords_any: ["预算", "达成率", "预算达成", "目标完成"]
+    group_by: [biz_month, factory_name]
+
+  # === 库存快照 ===
+  - id: business_analysis.inventory.snapshot
+    name: 库存期末快照
+    priority: 45
+    mode: aggregate
+    required_slots: [single_period_range]
+    metric_candidates: [inventory_sap_value, inventory_warehouse_value, consigned_inventory]
+    keywords_any: ["库存", "存货", "期末库存", "库存余额", "库龄"]
+    group_by: [biz_month, factory_name, warehouse_name]
+
+  # === 多指标对比 ===
+  - id: business_analysis.comparison.multi_metric
+    name: 多指标对比
+    priority: 40
+    mode: comparison
+    required_slots: [multi_metric_names, single_period_or_year]
+    metric_candidates: [production_actual_including_oem, sales_external, inventory_sap_value, cost_total]
+    keywords_any: ["对比", "比较", "同比", "对标"]
     group_by: [biz_month]

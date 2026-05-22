@@ -406,7 +406,7 @@ def test_shadow_pipeline_skips_unsupported_domain_or_source_without_sql_executio
     domain_result = pipeline.run(
         LogisticsNl2SqlShadowPipelineRequest(
             question="查计划 BOM",
-            domain="plan_bom",
+            domain="material_management",
             candidate=_valid_candidate(),
         )
     )
@@ -420,7 +420,7 @@ def test_shadow_pipeline_skips_unsupported_domain_or_source_without_sql_executio
 
     assert domain_result.status == "skipped"
     assert domain_result.stage == "domain"
-    assert "shadow_domain_not_supported::plan_bom" in domain_result.error_codes
+    assert "shadow_domain_not_supported::material_management" in domain_result.error_codes
     assert source_result.status == "skipped"
     assert source_result.stage == "source_system"
     assert "shadow_source_system_not_supported::sap_mid" in source_result.error_codes

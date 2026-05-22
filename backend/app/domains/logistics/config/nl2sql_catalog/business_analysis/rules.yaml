@@ -1,0 +1,59 @@
+catalog_version: business_analysis_nl2sql_catalog.v1
+domain: business_analysis
+rules:
+  - rule_id: isp_published_month_only
+    display_name: 只查询已发布月份
+    rule_type: filter
+    aliases: [已发布, 已发布月份, 有效月份]
+    action: 在 SQL WHERE 条件中增加 is_published_month=1 过滤
+    business_message: 产销存数据只统计已发布的月份，未发布月份不纳入计算。
+    relax_filters: false
+  - rule_id: isp_sales_default_means_shipment
+    display_name: 销量默认等同于发货量
+    rule_type: mapping
+    aliases: [销量, 销售量, 发货量]
+    action: 用户明确问"销量"或"销售量"时，默认映射到 shipment_volume（发货量）
+    business_message: 用户已确认：销售量/销量默认等同于发货量，不等于开票销量。
+    relax_filters: false
+  - rule_id: isp_2024_default_external_sales
+    display_name: 2024年默认对外销量=组件事业部剔除内部交易
+    rule_type: mapping
+    aliases: [2024对外销量, 2024默认口径, 组件事业部剔除内部交易]
+    action: 2024年的对外销量默认使用 is_default_external_sales=1 口径（组件事业部剔除内部交易）
+    business_message: 2024年对外销量口径为"组件事业部剔除内部交易"，不是总发货量。
+    relax_filters: false
+  - rule_id: isp_inventory_synonyms
+    display_name: 库存/存货/仓库库存 同义词
+    rule_type: mapping
+    aliases: [库存, 存货, 仓库库存, 期末库存, SAP库存]
+    action: 用户说库存、存货、期末库存、SAP库存时，统一映射到 ending_inventory_volume
+    business_message: 库存、存货、库存（SAP数据）完全等价，为同一指标的不同用户表达。
+    relax_filters: false
+  - rule_id: isp_consigned_inventory_synonyms
+    display_name: 寄存仓/寄存合计 同义词
+    rule_type: mapping
+    aliases: [寄存仓, 寄存合计, 寄存]
+    action: 用户说寄存仓、寄存合计、寄存时，统一映射到 consigned_inventory_volume
+    business_message: 寄存仓与寄存合计完全等价，为同一指标的不同用户表达。
+    relax_filters: false
+  - rule_id: isp_invoice_sales_requires_explicit
+    display_name: 开票销量需要显式用户词触发
+    rule_type: guard
+    aliases: [开票, 开票量, 开票销量]
+    action: 只有用户明确说"开票"时才使用 invoice_sales_volume，不能说"销量"就自动跳到开票
+    business_message: 开票销量需要用户明确提及"开票"才会使用，不默认匹配。
+    relax_filters: false
+  - rule_id: isp_inventory_turnover_not_supported
+    display_name: 库存周转率暂不支持直接计算
+    rule_type: guard
+    aliases: [库存周转, 存货周转率, 周转率, 库存周转率]
+    action: 告知用户目前缺乏完整期初期末库存数据，暂不支持直接计算周转率，反问用户所需口径
+    business_message: 库存周转率需要期初库存和期末库存数据，当前数据源不支持直接计算。请用户提供所需的口径和数据范围。
+    relax_filters: false
+  - rule_id: isp_budget_achievement_calculated
+    display_name: 预算达成率由后端计算引擎产生
+    rule_type: guard
+    aliases: [达成率, 预算达成率, 预算完成率, 完成率]
+    action: 预算达成率（产量/预算×100%）由后端确定性计算引擎计算，LLM 只负责问题理解和参数提取
+    business_message: 预算达成率由后端计算引擎按策略重算，不直接从数据库中存取值。
+    relax_filters: false

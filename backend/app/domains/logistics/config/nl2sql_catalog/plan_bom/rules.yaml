@@ -1,0 +1,52 @@
+catalog_version: plan_bom_nl2sql_catalog.v1
+domain: plan_bom
+rules:
+  - rule_id: bom_current_version_by_effective_date
+    display_name: 当前版本由生效日期确定
+    rule_type: mapping
+    aliases: [当前版本, 最新版本, 最新版, 当前有效版本]
+    action: '当用户问"当前版本"或"最新版"时，取 effective_date 最大的版本。如果有多个来源（Excel/SAP），按来源优先级折算。'
+    business_message: BOM 的当前版本不是由版本号大小决定，而是由生效日期（effective_date）决定，取最大日期者。
+    relax_filters: false
+  - rule_id: bom_order_no_is_review_no
+    display_name: 订单号与评审号同义
+    rule_type: mapping
+    aliases: [订单号, 评审号, 评审编号, 订单编号]
+    action: 用户说评审号或评审编号时，实质是查 order_no 字段，不需要区分是评审号还是订单号。
+    business_message: 用户口中的"订单号""评审号""评审编号"均查询同一字段 order_no。
+    relax_filters: false
+  - rule_id: bom_customer_instance_deduplication
+    display_name: 客户/BOM 名称/单号消歧规则
+    rule_type: mapping
+    aliases: [消歧, 客户实例, 文件名称, 单号名称]
+    action: 当用户提供客户名/BOM 文件名/单号名称时，用该信息缩窄候选范围，再按生效日期取最新版本。
+    business_message: BOM 消歧：当用户提供明确 BOM 文件名、客户实例、单号名称或版本号时，应据此缩窄同评审号候选，不混入不相关客户实例。
+    relax_filters: true
+  - rule_id: bom_power_calculation_by_engine
+    display_name: 功率预测由后端计算引擎执行
+    rule_type: guard
+    aliases: [功率预测, 功率计算, 功率匹配, 功率测算, 档位匹配]
+    action: LLM 只负责识别"功率预测""匹配"意图和提取参数（版型、供应商等），具体功率计算由后端确定性引擎执行。
+    business_message: 功率预测/测算/匹配由后端计算引擎根据 xlsm 公式执行，不是从数据库直接查询得到的结果。
+    relax_filters: false
+  - rule_id: bom_power_not_single_row_query
+    display_name: 功率预测不是简单查询
+    rule_type: guard
+    aliases: [GCL功率, 功率测试基准, 功率模型, 版型功率]
+    action: 功率预测结果需要运行 Excel xlsm 动态模型，不是从 plan_power_* 表直接 SELECT 能完成的简单查询，需要调用专用计算引擎。
+    business_message: 功率预测是一个计算过程，需要运行功率模型 Excel 公式，不能通过简单数据库查询获得结果。
+    relax_filters: false
+  - rule_id: bom_material_catalog_auto_classify
+    display_name: 物料归类由系统自动计算
+    rule_type: mapping
+    aliases: [物料归类, 材料归类, 自动归类]
+    action: material_category 字段由系统根据物料名称+描述自动计算，后续可按此字段过滤材料类别。
+    business_message: 物料归类（material_category）是系统按语义自动分类的字段，用于筛选电池片、玻璃、胶膜等大类。
+    relax_filters: false
+  - rule_id: bom_revision_track
+    display_name: BOM 修订追溯
+    rule_type: mapping
+    aliases: [修订历史, 变更记录, 版本差异, 版本对比]
+    action: 查询 plan_bom_revision 表获取修订内容，按 version_no 或 effective_date 排序展示版本变更历程。
+    business_message: BOM 修订记录在 plan_bom_revision 表中，通过 revision_content 查看每次修订内容。
+    relax_filters: false

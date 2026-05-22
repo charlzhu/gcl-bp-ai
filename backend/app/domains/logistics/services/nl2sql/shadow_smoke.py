@@ -143,8 +143,8 @@ def build_default_logistics_nl2sql_shadow_smoke_samples() -> list[LogisticsNl2Sq
             sample_id="skipped_non_logistics_domain",
             description="非 logistics domain，应跳过 shadow SQL 链路",
             request=LogisticsNl2SqlShadowPipelineRequest(
-                question="计划 BOM 查功率",
-                domain="plan_bom",
+                question="物管库存和出入库",
+                domain="material_management",
                 request_id="m6-non-logistics",
                 candidate=_valid_candidate(),
             ),

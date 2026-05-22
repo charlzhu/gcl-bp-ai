@@ -24,7 +24,7 @@ def test_shadow_smoke_runner_executes_full_default_sample_set_in_order_and_build
     assert run.report.total == len(samples)
     assert run.report.success_count == 1
     assert run.report.by_status["success"] == 1
-    assert run.report.by_status["skipped"] >= 3
+    assert run.report.by_status["skipped"] >= 2
     assert run.report.by_status["validation_failed"] >= 1
     assert run.report.by_status["safety_failed"] >= 1
     assert run.report.by_status["explain_failed"] >= 1

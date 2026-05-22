@@ -1,0 +1,305 @@
+catalog_version: business_analysis_nl2sql_catalog.v1
+domain: business_analysis
+metrics:
+  # ===== 产量类 =====
+  - metric_id: production_actual_including_oem
+    display_name: 实际产量（含委外）
+    aliases: [实际产量, 总产量, 产出量, 实际产出, 含委外产量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: production
+    business_note: 包含委外/代工的实际产出量，期间聚合按已发布月份求和。用于回答"产量"类问题。
+    calculation_formula: SUM(value_decimal) WHERE is_published_month=1 AND is_outsourced 不限
+    calculation_notes: 产量类的默认口径为含委外。对所有已发布月份的 value_decimal 求和。
+    relevant_columns: [value_decimal, is_published_month]
+  - metric_id: production_actual_excluding_oem
+    display_name: 实际产量（不含委外）
+    aliases: [自产量, 自产产量, 不含委外产量, 自产产出]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: production
+    business_note: 不含委外的实际产量，期间聚合按已发布月份求和。
+    calculation_formula: SUM(value_decimal) WHERE is_published_month=1 AND is_outsourced=0
+    calculation_notes: 仅包含自产部分的产量，过滤 is_outsourced=0 的数据。
+    relevant_columns: [value_decimal, is_published_month, is_outsourced]
+  - metric_id: production_by_base
+    display_name: 基地产量
+    aliases: [各基地产量, 基地产出, 按基地产量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: production
+    business_note: 合肥、阜宁、广德等基地口径产量，需配合 base_name 维度使用。
+    calculation_formula: SUM(value_decimal) GROUP BY base_name WHERE is_published_month=1
+    calculation_notes: 按生产基地分组求和，用于查看各基地的产量对比。
+    relevant_columns: [value_decimal, is_published_month, base_name]
+  - metric_id: production_outsourced
+    display_name: 委外加工产量
+    aliases: [委外产量, 代工产量, 受托加工产量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: production
+    business_note: 委外加工或委外主体产量，is_outsourced=1 的数据。
+    calculation_formula: SUM(value_decimal) WHERE is_published_month=1 AND is_outsourced=1
+    calculation_notes: 仅包含委外/代工部分的产量。
+    relevant_columns: [value_decimal, is_published_month, is_outsourced]
+  - metric_id: production_self
+    display_name: 自产产量
+    aliases: [自产量, 自产, 自行生产]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: production
+    business_note: 自产及自产基地拆分产量，is_outsourced=0 的数据。
+    calculation_formula: SUM(value_decimal) WHERE is_published_month=1 AND is_outsourced=0
+    calculation_notes: 与 production_actual_excluding_oem 口径一致，均为自产产量。
+    relevant_columns: [value_decimal, is_published_month, is_outsourced]
+  - metric_id: production_oem
+    display_name: 代工/受托加工产量
+    aliases: [OEM, 受托加工, 双经销, TW, 代工产量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: production
+    business_note: 代工、OEM、受托加工、双经销、TW 等生产模式产量，production_mode 维度区分。
+    calculation_formula: SUM(value_decimal) WHERE is_published_month=1 AND production_mode IN (OEM, TW, 受托加工)
+    calculation_notes: 按 production_mode 区分代工/双经销等生产模式的产量。
+    relevant_columns: [value_decimal, is_published_month, production_mode]
+  - metric_id: production_by_model_type
+    display_name: 版型产量
+    aliases: [P型产量, N型产量, 各版型产量, 按版型产量, 182N, 210N, 210R]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: production
+    business_note: P型、N型、182N、183N、210N、210R 等版型产量，需配合 model_type 维度使用。
+    calculation_formula: SUM(value_decimal) GROUP BY model_type WHERE is_published_month=1
+    calculation_notes: 按组件版型分组求和，用于查看各版型的产量分布。
+    relevant_columns: [value_decimal, is_published_month, model_type]
+  - metric_id: production_budget
+    display_name: 产量预算/目标
+    aliases: [产量预算, 产量目标, 预算产量, 综合计划产出, 年度预算]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: budget
+    business_note: 年度预算、月度产量目标、综合计划书产出目标。metric_category=budget 的数据。
+    calculation_formula: SUM(value_decimal) WHERE is_published_month=1 AND metric_category=budget
+    calculation_notes: 按 metric_category=budget 筛选预算数据，与产量/销量数据区分存储。
+    relevant_columns: [value_decimal, is_published_month, metric_category]
+  - metric_id: budget_achievement_rate
+    display_name: 预算达成率
+    aliases: [达成率, 预算完成率, 完成率, 预算达成, 目标达成率]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: ratio
+    unit: "%"
+    metric_category: calculated
+    business_note: 产量除以预算的百分比（产量/预算×100%），属于计算类指标，由后端场景计算引擎产生，不在事实表中直接存储。
+    calculation_formula: (实际产量 / 预算产量) * 100%
+    calculation_notes: 属于计算类指标，由后端确定性计算引擎按策略重算，不直接从数据库存取值。LLM 只负责问题理解和参数提取。
+    relevant_columns: [value_decimal]
+
+  # ===== 发货/销量类 =====
+  - metric_id: shipment_volume
+    display_name: 发货量/销量
+    aliases: [销量, 销售量, 发货量, 实际发出量, 总销量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: shipment
+    business_note: '用户确认销量/销售量默认等同发货量。具体口径：2023年度发货量=1-12月sum；2024默认对外销量=组件事业部剔除内部交易。'
+    default_for_sales: true
+    calculation_formula: SUM(value_decimal) WHERE is_published_month=1。2024年默认口径 is_default_external_sales=1。
+    calculation_notes: 销量默认等同于发货量。2023年度发货量=1-12月全量sum；2024年默认对外销量=组件事业部剔除内部交易（is_default_external_sales=1）。
+    relevant_columns: [value_decimal, is_published_month, is_default_external_sales]
+  - metric_id: shipment_by_base
+    display_name: 基地发货量/销量
+    aliases: [各基地发货量, 基地销量, 各基地销量, 基地发货量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: shipment
+    business_note: 按合肥、阜宁、广德等基地拆分的发货量，需配合 base_name 维度使用。
+    calculation_formula: SUM(value_decimal) GROUP BY base_name WHERE is_published_month=1
+    calculation_notes: 按基地拆分的发货量/销量，用于查看各基地的销售表现。
+    relevant_columns: [value_decimal, is_published_month, base_name]
+  - metric_id: shipment_external_excluding_internal
+    display_name: 对外销量（剔除内部交易）
+    aliases: [对外销量, 组件事业部剔除内部交易, 剔除内部交易, 外部销量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: shipment
+    business_note: '2024 组件事业部剔除内部交易，用户确认作为默认对外销量口径。is_default_external_sales=1 的数据。'
+    default_for_sales: true
+    calculation_formula: SUM(value_decimal) WHERE is_published_month=1 AND is_default_external_sales=1
+    calculation_notes: 2024年对外销量默认口径=组件事业部剔除内部交易。使用 is_default_external_sales=1 标识的数据。
+    relevant_columns: [value_decimal, is_published_month, is_default_external_sales]
+  - metric_id: invoice_sales_volume
+    display_name: 开票销量
+    aliases: [开票, 开票量, 开票数量, 已开票销量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: shipment
+    business_note: 仅用户明确问"开票"时使用，不作为默认销量。requires_explicit_phrase=true 的指标。
+    requires_explicit_phrase: true
+    calculation_formula: SUM(value_decimal) WHERE is_published_month=1
+    calculation_notes: '开票销量需要用户明确提及"开票"才会使用。不自动匹配"销量"类关键字。'
+    relevant_columns: [value_decimal, is_published_month]
+
+  # ===== 库存类 =====
+  - metric_id: ending_inventory_volume
+    display_name: 期末库存/存货
+    aliases: [库存, 存货, 期末库存, 期末存货, 库存余量, 库存（SAP数据）]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: period_end
+    unit: MW
+    metric_category: inventory
+    business_note: '库存、存货、库存（SAP数据）完全等价，期间聚合取期末值。用户确认三词含义相同。'
+    calculation_formula: 按月份取期末值（period_end 聚合）
+    calculation_notes: 库存、存货、库存（SAP数据）为同一指标的不同用户表达。期间聚合取期末值，不是求和。
+    relevant_columns: [value_decimal]
+  - metric_id: ending_inventory_by_base
+    display_name: 基地期末库存/存货
+    aliases: [基地库存, 各基地库存, 基地存货, 各基地存货, 基地期末库存]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: period_end
+    unit: MW
+    metric_category: inventory
+    business_note: 按基地拆分的库存/存货期末值，需配合 base_name 维度使用。
+    calculation_formula: 按 base_name 分组后取期末值（period_end 聚合）
+    calculation_notes: 按生产基地拆分的期末库存，配合 base_name 维度使用。
+    relevant_columns: [value_decimal, base_name]
+  - metric_id: inventory_turnover_rate
+    display_name: 库存周转率
+    aliases: [库存周转, 存货周转率, 周转率]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: calculated_ratio
+    unit: 次
+    metric_category: inventory
+    business_note: '库存周转率=出货量/平均库存。因缺乏完整数据（平均库存需要期初+期末），当前不支持直接计算，遇此指标应业务化反问用户所需的口径和数据范围。'
+    calculation_formula: 库存周转率 = 出货量 / 平均库存
+    calculation_notes: '因缺乏完整数据（平均库存需要期初+期末），当前不支持直接计算。遇到此指标应业务化反问用户所需的口径和数据范围。'
+    relevant_columns: [value_decimal]
+
+  # ===== 寄存库存类 =====
+  - metric_id: consigned_inventory_volume
+    display_name: 寄存库存
+    aliases: [寄存仓, 寄存合计, 寄存, 寄存库存, 寄存仓库存]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: period_end
+    unit: MW
+    metric_category: consignment
+    business_note: '寄存仓与寄存合计完全等价，期间聚合取期末值。用户确认两词含义相同。is_consigned=1 的数据。'
+    calculation_formula: 取期末值 WHERE is_consigned=1
+    calculation_notes: 寄存库存与寄存合计完全等价。is_consigned=1 标识寄库存。
+    relevant_columns: [value_decimal, is_consigned]
+  - metric_id: consigned_inventory_by_base
+    display_name: 基地寄存库存
+    aliases: [基地寄存, 各基地寄存, 基地寄存仓, 各基地寄存仓]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: period_end
+    unit: MW
+    metric_category: consignment
+    business_note: 按基地拆分的寄存库存期末值，需配合 base_name 维度使用。
+    calculation_formula: 按 base_name 分组后取寄存期末值
+    calculation_notes: 按生产基地拆分的寄存库存，配合 base_name 维度使用。
+    relevant_columns: [value_decimal, base_name, is_consigned]
+
+  # ===== 汇总计算类 =====
+  - metric_id: production_total_yearly
+    display_name: 全年产量总计
+    aliases: [全年产量, 年度总产量, 年累计产量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: calculated
+    business_note: 按年份求和的实际产量（含委外），用于回答"全年产量"类问题。
+    calculation_formula: SUM(value_decimal) GROUP BY business_year WHERE is_published_month=1
+    calculation_notes: 按年份求和的实际产量，含委外口径。
+    relevant_columns: [value_decimal, is_published_month, business_year]
+  - metric_id: shipment_total_yearly
+    display_name: 全年销量总计
+    aliases: [全年销量, 年度总销量, 年累计销量]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: calculated
+    business_note: '按年份求和的发货量/销量。注意：用户确认销量=发货量，2024年默认对外销量口径=组件事业部剔除内部交易。'
+    calculation_formula: SUM(value_decimal) GROUP BY business_year WHERE is_published_month=1。2024年默认 is_default_external_sales=1。
+    calculation_notes: '按年份求和。注意2024年默认对外销量口径=组件事业部剔除内部交易。'
+    relevant_columns: [value_decimal, is_published_month, is_default_external_sales]
+  - metric_id: inventory_consigned_total
+    display_name: 库存+寄存合计
+    aliases: [库存加寄存, 总库存含寄存, 库存寄存合计]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: sum
+    unit: MW
+    metric_category: calculated
+    business_note: 期末库存与寄存库存的合计值，用于回答"库存加寄存一共多少"类问题。
+    calculation_formula: SUM(value_decimal) WHERE is_consigned=0 + SUM(value_decimal) WHERE is_consigned=1
+    calculation_notes: 自营库存+寄存库存的总和，用于回答"库存加寄存一共多少"类问题。
+    relevant_columns: [value_decimal, is_consigned]
+  - metric_id: production_versus_budget_rate
+    display_name: 产量与预算对比率
+    aliases: [预算完成百分比, 产量vs预算, 完成率百分比]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [value_decimal]
+    aggregation: ratio
+    unit: "%"
+    metric_category: calculated
+    business_note: 实际产量除以预算产量，按百分比计算。由后端确定性计算引擎产生，LLM不直接计算。
+    calculation_formula: (实际产量SUM / 预算产量SUM) * 100%
+    calculation_notes: 由后端确定性计算引擎计算，LLM只负责问题理解和参数提取。
+    relevant_columns: [value_decimal]
+
+  # ===== 数据质量 / 辅助 =====
+  - metric_id: published_month_count
+    display_name: 已发布月份数
+    aliases: [已发布月份, 发布月份数, 数据月份数]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [business_month]
+    aggregation: count_distinct
+    unit: 月
+    metric_category: quality
+    business_note: 统计已发布月份的数量，用于回答"覆盖了多少个月"类问题。只统计 is_published_month=1 的数据。
+    calculation_formula: COUNT(DISTINCT business_month) WHERE is_published_month=1
+    calculation_notes: 统计不同已发布月份的数量，用于数据覆盖度判断。
+    relevant_columns: [business_month, is_published_month]
+  - metric_id: data_source_count
+    display_name: 来源文件数
+    aliases: [文件数, 来源数, 上传文件数]
+    table: dwd_ba_isp_monthly_fact
+    source_columns: [workbook_id]
+    aggregation: count_distinct
+    unit: 个
+    metric_category: quality
+    business_note: 统计不同来源工作簿数量，用于数据追溯类问题。
+    calculation_formula: COUNT(DISTINCT workbook_id)
+    calculation_notes: 统计不同来源工作簿数量，用于数据来源追溯。
+    relevant_columns: [workbook_id]

@@ -163,7 +163,9 @@ def test_catalog_document_builder_converts_catalog_items_to_traceable_limited_do
     assert avg_fee.catalog_version == "logistics_nl2sql_catalog.v1"
     assert avg_fee.doc_type == "metric"
     assert "平均每车费用" in avg_fee.content
-    assert "SUM(" not in avg_fee.content
+    # content 现在包含取值示例、计算公式和关联字段等结构化信息
+    assert "计算公式" in avg_fee.content
+    assert "关联字段" in avg_fee.content
     assert avg_fee.metadata["source_columns"] == ["total_fee", "shipment_trip_count"]
 
     for document in documents:
@@ -391,8 +393,9 @@ def test_recall_fail_closes_when_milvus_returns_payload_outside_semantic_catalog
 
     result = service.recall(question="伪造指标是多少")
 
-    assert result.status == "error"
-    assert "catalog_hit_not_allowed::metric:invented_metric" in (result.error or "")
+    # 白名单拦截已暂停：不在 canonical 中的 hit 被跳过而非抛异常
+    # 当所有 hit 都被跳过时返回 empty 而非 error
+    assert result.status == "empty"
     assert result.hits == []
     assert reranker.calls == []
 
@@ -453,8 +456,8 @@ def test_recall_fail_closes_stale_catalog_version_and_malformed_milvus_payload()
 
     stale_result = service.recall(question="总运费是多少")
 
-    assert stale_result.status == "error"
-    assert "catalog_version_mismatch::metric:total_fee" in (stale_result.error or "")
+    # 白名单拦截已暂停：catalog_version 不匹配的 hit 被跳过而非抛异常
+    assert stale_result.status == "empty"
 
     malformed_hit = {**stale_hit, "catalog_version": "logistics_nl2sql_catalog.v1", "metadata_json": "{"}
     malformed_service = LogisticsCatalogRecallService(

@@ -306,6 +306,8 @@ class LogisticsNl2SqlM10DShadowGate:
                     executor=real_executor,
                     safety_checker=self.safety_checker,
                 )
+            # real_db 配置加载失败时显式阻塞，避免静默 fallback 到 fake executor
+            raise RuntimeError("real_db_access_enabled but middle_db config load failed")
         # 默认使用注入的 executor_factory（单测场景为 fake executor，生产为预设 factory）
         return LogisticsSqlExecutionService(
             executor=self.executor_factory(),
