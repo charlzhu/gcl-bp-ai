@@ -20,6 +20,7 @@ from typing import Any
 from backend.app.core.config import get_settings
 from backend.app.domains.business_qa_graph.prompt_loader import load_prompt_or_default
 from backend.app.domains.business_qa_graph.nodes.zg_utils import _emit_progress, STEP_RECALL_METRIC
+from backend.app.domains.business_qa_graph.schemas.entities import MetricInfo
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +66,7 @@ def _expand_metric_keywords_with_llm(question: str) -> list[str]:
         return []
 
 
-def _milvus_search_metric(embedding: list[float], top_k: int = 8, score_threshold: float = 0.6) -> list[dict[str, Any]]:
+def _milvus_search_metric(embedding: list[float], top_k: int = 8, score_threshold: float = 0.6) -> list[MetricInfo]:
     """通过 Milvus 向量检索指标信息，过滤低质量匹配。
 
     参数：
@@ -83,7 +84,7 @@ def _milvus_search_metric(embedding: list[float], top_k: int = 8, score_threshol
         recall_service = LogisticsCatalogRecallService()
         raw_hits = recall_service.vector_store.search(embedding, top_k=top_k, score_threshold=0.6)
 
-        results = []
+        results: list[MetricInfo] = []
         for hit in raw_hits:
             doc_type = hit.get("doc_type", "") if isinstance(hit, dict) else getattr(hit, "doc_type", "")
             # 只保留 metric 类型的文档
@@ -106,14 +107,14 @@ def _milvus_search_metric(embedding: list[float], top_k: int = 8, score_threshol
             if not name:
                 name = hit.get("title", "") if isinstance(hit, dict) else getattr(hit, "title", "")
 
-            results.append({
-                "catalog_id": hit.get("catalog_id", "") if isinstance(hit, dict) else getattr(hit, "catalog_id", ""),
-                "name": name,
-                "description": content[:300],
-                "relevant_columns": metadata.get("relevant_columns", metadata.get("columns", [])),
-                "alias": metadata.get("aliases", metadata.get("alias", [])),
-                "unit": metadata.get("unit", ""),
-            })
+            results.append(MetricInfo(
+                catalog_id=hit.get("catalog_id", "") if isinstance(hit, dict) else getattr(hit, "catalog_id", ""),
+                name=name,
+                description=content[:300],
+                relevant_columns=metadata.get("relevant_columns", metadata.get("columns", [])),
+                alias=metadata.get("aliases", metadata.get("alias", [])),
+                unit=metadata.get("unit", ""),
+            ))
         return results
     except Exception as exc:
         logger.warning("recall_metric_milvus_failed error=%s", exc)
@@ -142,7 +143,7 @@ def recall_metric_node(state: dict[str, Any]) -> dict[str, Any]:
         )
 
         recall_service = LogisticsCatalogRecallService()
-        retrieved_map: dict[str, dict[str, Any]] = {}
+        retrieved_map: dict[str, MetricInfo] = {}
 
         for keyword in all_keywords:
             if not keyword.strip():
@@ -153,14 +154,15 @@ def recall_metric_node(state: dict[str, Any]) -> dict[str, Any]:
                     continue
                 metrics = _milvus_search_metric(vectors[0], top_k=6)
                 for metric in metrics:
-                    mid = metric.get("catalog_id", "")
+                    mid = metric.catalog_id
                     if mid and mid not in retrieved_map:
                         retrieved_map[mid] = metric
             except Exception as inner_exc:
                 logger.debug("recall_metric_keyword_failed keyword=%s error=%s", keyword, inner_exc)
                 continue
 
-        retrieved_metrics = list(retrieved_map.values())
+        # Graph state 保持 dict，兼容后续 merge/generate 节点。
+        retrieved_metrics = [metric.model_dump(mode="json") for metric in retrieved_map.values()]
         logger.info("recall_metric_success count=%d", len(retrieved_metrics))
         _emit_progress(state, STEP_RECALL_METRIC, "success")
         return {"retrieved_metrics": retrieved_metrics}

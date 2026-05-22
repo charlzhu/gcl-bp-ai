@@ -21,6 +21,7 @@ from typing import Any
 from backend.app.core.config import get_settings
 from backend.app.domains.business_qa_graph.prompt_loader import load_prompt_or_default
 from backend.app.domains.business_qa_graph.nodes.zg_utils import _emit_progress, STEP_RECALL_VALUE
+from backend.app.domains.business_qa_graph.schemas.entities import ValueInfo
 from sqlalchemy import text
 
 logger = logging.getLogger(__name__)
@@ -91,7 +92,7 @@ def _expand_value_keywords_with_llm(question: str) -> list[str]:
 def _sql_search_dimension_values(
     keyword: str,
     db_session: Any,
-) -> list[dict[str, Any]]:
+) -> list[ValueInfo]:
     """通过 SQL 查询中间库维度字典表，匹配维度取值。
 
     参数：
@@ -104,7 +105,7 @@ def _sql_search_dimension_values(
         对 _DIMENSION_VALUE_TABLES 中的每个字段，在每个表中执行
         SELECT DISTINCT {column} FROM {table} WHERE {column} LIKE '%keyword%' LIMIT 10
     """
-    results = []
+    results: list[ValueInfo] = []
     seen: set[str] = set()
 
     for column_name, tables in _DIMENSION_VALUE_TABLES.items():
@@ -124,13 +125,14 @@ def _sql_search_dimension_values(
                     if value_id in seen:
                         continue
                     seen.add(value_id)
-                    results.append({
-                        "value_id": value_id,
-                        "column_id": f"column:{column_name}",
-                        "column_name": column_name,
-                        "value": val,
-                        "table_name": table_name,
-                    })
+                    results.append(ValueInfo(
+                        value_id=value_id,
+                        column_id=f"column:{column_name}",
+                        column_name=column_name,
+                        value=val,
+                        table_name=table_name,
+                        match_score=100.0,
+                    ))
             except Exception as exc:
                 # 表或字段可能不存在，静默跳过
                 logger.debug(
@@ -154,7 +156,7 @@ def _fuzzy_search_dimension_values(
     *,
     score_cutoff: int = 70,
     limit: int = 5,
-) -> list[dict[str, Any]]:
+) -> list[ValueInfo]:
     """使用 rapidfuzz 对维度表做模糊匹配（替代 ES/ik_max_word 分词）。
 
     参数：
@@ -164,7 +166,7 @@ def _fuzzy_search_dimension_values(
         limit: 每张表最多返回的结果数。
 
     返回：
-        匹配的维度值列表，每项含 value_id、value、column_name、table_name。
+        匹配的维度值列表，每项含 value_id、value、column_name、table_name、match_score。
     """
     global _value_cache
     try:
@@ -179,18 +181,25 @@ def _fuzzy_search_dimension_values(
     if not _value_cache:
         return []
 
-    results: list[dict[str, Any]] = []
+    results: list[ValueInfo] = []
     for table_name, rows in _value_cache.items():
         # 对每行构建搜索文本
         texts = [" ".join(f"{k}:{v}" for k, v in row.items()) for row in rows]
         matches = process.extract(keyword, texts, scorer=fuzz.WRatio, limit=limit, score_cutoff=score_cutoff)
         for match_text, score, idx in matches:
             row = rows[idx].copy()
-            row["_match_score"] = score
-            results.append(row)
+            # rapidfuzz 分数保留到实体，便于后续排序、审计和兼容输出。
+            results.append(ValueInfo(
+                value_id=str(row.get("value_id", "")),
+                value=str(row.get("value", "")),
+                column_id=str(row.get("column_id", "")),
+                column_name=str(row.get("column_name", "")),
+                table_name=str(row.get("table_name", "")),
+                match_score=float(score),
+            ))
 
     # 按匹配分数降序排列
-    results.sort(key=lambda x: x.get("_match_score", 0), reverse=True)
+    results.sort(key=lambda x: x.match_score, reverse=True)
     return results[:limit * len(_value_cache)]
 
 
@@ -205,10 +214,20 @@ def _load_dimension_cache(db_session: Any) -> dict[str, list[dict[str, Any]]]:
                     text(f"SELECT DISTINCT {column_name} as value FROM {table_name} LIMIT 1000")
                 ).mappings().fetchall()
                 for row in rows:
+                    val = str(row.get("value", "")) if row.get("value") is not None else ""
+                    if not val:
+                        continue
                     key = f"{table_name}::{column_name}"
                     if key not in cache:
                         cache[key] = []
-                    cache[key].append(dict(row))
+                    # 缓存中保留完整实体字段，确保模糊召回可直接构造 ValueInfo。
+                    cache[key].append({
+                        "value_id": f"{table_name}.{column_name}:{val}",
+                        "column_id": f"column:{column_name}",
+                        "column_name": column_name,
+                        "value": val,
+                        "table_name": table_name,
+                    })
             except Exception:
                 continue
     return cache
@@ -238,7 +257,7 @@ def recall_value_node(state: dict[str, Any]) -> dict[str, Any]:
         logger.info("recall_value expanded_keywords=%s", all_keywords)
 
         # Step 2: rapidfuzz 模糊匹配维度值（替代 SQL LIKE，类似掌柜问数 ES 全文检索）
-        values_map: dict[str, dict[str, Any]] = {}
+        values_map: dict[str, ValueInfo] = {}
         threshold = _VALUE_FUZZY_THRESHOLD
         for keyword in all_keywords:
             if not keyword.strip():
@@ -246,7 +265,7 @@ def recall_value_node(state: dict[str, Any]) -> dict[str, Any]:
             try:
                 val_dicts = _fuzzy_search_dimension_values(keyword, db_session, score_cutoff=threshold)
                 for v in val_dicts:
-                    vid = v.get("value_id", "")
+                    vid = v.value_id
                     if vid and vid not in values_map:
                         values_map[vid] = v
             except Exception as inner_exc:
@@ -255,13 +274,14 @@ def recall_value_node(state: dict[str, Any]) -> dict[str, Any]:
                 try:
                     vals = _sql_search_dimension_values(keyword, db_session)
                     for v in vals:
-                        vid = v.get("value_id", "")
+                        vid = v.value_id
                         if vid and vid not in values_map:
                             values_map[vid] = v
                 except Exception:
                     continue
 
-        retrieved_values = list(values_map.values())
+        # Graph state 保持 dict，兼容后续 merge 节点按 get 读取。
+        retrieved_values = [value.model_dump(mode="json") for value in values_map.values()]
         logger.info("recall_value_success count=%d", len(retrieved_values))
         _emit_progress(state, STEP_RECALL_VALUE, "success")
         return {"retrieved_values": retrieved_values}

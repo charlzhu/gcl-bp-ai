@@ -21,6 +21,7 @@ from typing import Any
 from backend.app.core.config import get_settings
 from backend.app.domains.business_qa_graph.prompt_loader import load_prompt_or_default
 from backend.app.domains.business_qa_graph.nodes.zg_utils import _emit_progress, STEP_RECALL_COLUMN
+from backend.app.domains.business_qa_graph.schemas.entities import ColumnInfo
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ def _expand_keywords_with_llm(question: str) -> list[str]:
         return []
 
 
-def _milvus_search_column(embedding: list[float], top_k: int = 8, score_threshold: float = 0.6) -> list[dict[str, Any]]:
+def _milvus_search_column(embedding: list[float], top_k: int = 8, score_threshold: float = 0.6) -> list[ColumnInfo]:
     """通过 Milvus 向量检索字段/维度信息，过滤低质量匹配。
 
     参数：
@@ -86,7 +87,7 @@ def _milvus_search_column(embedding: list[float], top_k: int = 8, score_threshol
         recall_service = LogisticsCatalogRecallService()
         raw_hits = recall_service.vector_store.search(embedding, top_k=top_k, score_threshold=0.6)
         
-        results = []
+        results: list[ColumnInfo] = []
         for hit in raw_hits:
             # 向量分数过滤（掌柜问数 score_threshold=0.6）
             vector_score = getattr(hit, "vector_score", 0.0) if not isinstance(hit, dict) else hit.get("vector_score", 0.0)
@@ -112,16 +113,16 @@ def _milvus_search_column(embedding: list[float], top_k: int = 8, score_threshol
             if len(parts) >= 3:
                 name = parts[2].replace("维度标识 ", "").replace("指标标识 ", "").strip()
             
-            results.append({
-                "catalog_id": hit.get("catalog_id", "") if isinstance(hit, dict) else getattr(hit, "catalog_id", ""),
-                "name": name or (hit.get("title", "") if isinstance(hit, dict) else getattr(hit, "title", "")),
-                "type": metadata.get("data_type", "varchar"),
-                "role": doc_type,
-                "examples": metadata.get("examples", []),
-                "description": content[:200],
-                "alias": [],
-                "source_table": hit.get("source_table", "") if isinstance(hit, dict) else getattr(hit, "source_table", ""),
-            })
+            results.append(ColumnInfo(
+                catalog_id=hit.get("catalog_id", "") if isinstance(hit, dict) else getattr(hit, "catalog_id", ""),
+                name=name or (hit.get("title", "") if isinstance(hit, dict) else getattr(hit, "title", "")),
+                data_type=metadata.get("data_type", "varchar"),
+                role=doc_type,
+                examples=metadata.get("examples", []),
+                description=content[:200],
+                alias=[],
+                source_table=hit.get("source_table", "") if isinstance(hit, dict) else getattr(hit, "source_table", ""),
+            ))
         return results
     except Exception as exc:
         logger.warning("recall_column_milvus_failed error=%s", exc)
@@ -149,7 +150,7 @@ def recall_column_node(state: dict[str, Any]) -> dict[str, Any]:
         )
 
         recall_service = LogisticsCatalogRecallService()
-        retrieved_map: dict[str, dict[str, Any]] = {}
+        retrieved_map: dict[str, ColumnInfo] = {}
 
         for keyword in all_keywords:
             if not keyword.strip():
@@ -162,14 +163,15 @@ def recall_column_node(state: dict[str, Any]) -> dict[str, Any]:
                 # Milvus 检索
                 columns = _milvus_search_column(vectors[0], top_k=6)
                 for col in columns:
-                    cid = col.get("catalog_id", "")
+                    cid = col.catalog_id
                     if cid and cid not in retrieved_map:
                         retrieved_map[cid] = col
             except Exception as inner_exc:
                 logger.debug("recall_column_keyword_failed keyword=%s error=%s", keyword, inner_exc)
                 continue
 
-        retrieved_columns = list(retrieved_map.values())
+        # Graph state 仍写入旧 dict 结构，避免破坏 merge/generate 节点的既有读取逻辑。
+        retrieved_columns = [col.to_legacy_dict() for col in retrieved_map.values()]
         logger.info("recall_column_success count=%d", len(retrieved_columns))
         _emit_progress(state, STEP_RECALL_COLUMN, "success")
         return {"retrieved_columns": retrieved_columns}
