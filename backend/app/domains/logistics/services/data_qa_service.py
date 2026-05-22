@@ -26,6 +26,19 @@ from backend.app.domains.logistics.services.nl2sql.live_shadow_adapter import (
     LogisticsNl2SqlLiveShadowAdapter,
     LogisticsNl2SqlLiveShadowSummary,
 )
+from backend.app.domains.logistics.services.nl2sql.m14_data_qa_shadow_compare import (
+    compare_nl2sql_shadow_and_attach,
+)
+from backend.app.domains.logistics.services.nl2sql.m15_grayscale_gate import (
+    LogisticsNl2SqlGrayscaleGate,
+    LogisticsNl2SqlGrayscaleConfig,
+)
+from backend.app.domains.logistics.services.nl2sql.m15_grayscale_decision_result import (
+    LogisticsNl2SqlGrayscaleDecisionResult,
+)
+from backend.app.domains.logistics.services.nl2sql.m14_shadow_comparator import (
+    LogisticsNl2SqlShadowComparator,
+)
 from backend.app.domains.logistics.schemas.llm_understanding import (
     LogisticsLlmGuardrailDecision,
     LogisticsLlmUnderstandingResult,
@@ -233,6 +246,18 @@ class LogisticsDataQaService:
             {"intent": plan.intent, "query_key": plan.query_key},
         )
         result = self._execute_plan(payload.question, plan)
+        # M15：灰度门禁——在正式查询结果上，如果灰度开启且 shadow 通过，用 NL2SQL 结果替换正式回答
+        try:
+            grayscale_decision = self._decide_grayscale_and_replace(
+                question=payload.question,
+                trace_id=trace_id,
+                formal_result=result,
+                plan=plan,
+            )
+            if grayscale_decision is not None and grayscale_decision.should_grayscale:
+                result = grayscale_decision.replacement_result
+        except Exception:  # noqa: BLE001 - 灰度失败不影响正式回答
+            pass
         return self._finalize_result(
             question=payload.question,
             trace_id=trace_id,
@@ -529,18 +554,7 @@ class LogisticsDataQaService:
         trace_id: str | None,
         result: LogisticsDataQaResult,
     ) -> dict[str, Any] | None:
-        """构建 M10-C NL2SQL live shadow 服务端审计摘要。
-
-        参数：
-            question: 当前正式物流 QA 原始问题。
-            trace_id: 当前请求追踪号。
-            result: 已生成的正式 QA 结果。
-        返回：
-            脱敏后的 shadow 摘要字典；adapter 异常时返回受控错误摘要。
-        业务逻辑：
-            该摘要只写入服务端历史快照，不挂到 `LogisticsDataQaResult`，因此不会改变用户可见回答。
-        """
-
+        """构建 M10-C NL2SQL live shadow 服务端审计摘要。"""
         try:
             return self.nl2sql_live_shadow_adapter.run_shadow(
                 question=question,
@@ -557,6 +571,83 @@ class LogisticsDataQaService:
                 error_message="shadow audit failed",
                 trace_id=trace_id,
             ).model_dump(mode="json")
+
+    def _build_grayscale_gate(self) -> LogisticsNl2SqlGrayscaleGate:
+        """根据环境变量构建灰度门禁。
+
+        业务逻辑：
+            1. 优先解析 NL2SQL_GRAYSCALE_CONFIG（JSON格式，支持多域）。
+            2. 降级到 LOGISTICS_NL2SQL_GRAYSCALE_TYPES（旧格式）。
+            3. 如果都未设置，默认全部关闭（不灰度）。
+        """
+        config = LogisticsNl2SqlGrayscaleConfig.from_env()
+        return LogisticsNl2SqlGrayscaleGate(config=config)
+
+    def _decide_grayscale_and_replace(
+        self,
+        *,
+        question: str,
+        trace_id: str | None,
+        formal_result: LogisticsDataQaResult,
+        plan: LogisticsDataQaPlan,
+    ) -> LogisticsNl2SqlGrayscaleDecisionResult | None:
+        """灰度门禁决策：判断是否用 NL2SQL shadow 结果替换正式回答。
+
+        参数：
+            question: 用户原始问题。
+            trace_id: 当前请求 trace_id。
+            formal_result: 正式 QA 链路已生成的结果。
+            plan: 受控查询计划。
+        返回：
+            灰度决策结果；异常时返回 None（回退到正式回答）。
+        """
+        try:
+            gate = self._build_grayscale_gate()
+            decision = gate.decide(formal=formal_result)
+            if not decision.should_grayscale:
+                return LogisticsNl2SqlGrayscaleDecisionResult(
+                    should_grayscale=False,
+                    fallback_reason=decision.fallback_reason,
+                )
+            shadow_summary = self.nl2sql_live_shadow_adapter.run_shadow(
+                question=question,
+                trace_id=trace_id,
+                formal_result=formal_result,
+            )
+            if not shadow_summary.enabled or shadow_summary.status not in ("success", "skipped"):
+                return LogisticsNl2SqlGrayscaleDecisionResult(
+                    should_grayscale=False,
+                    fallback_reason="shadow_not_available",
+                )
+            comparator = LogisticsNl2SqlShadowComparator()
+            comparison = comparator.compare(formal=formal_result, shadow=shadow_summary)
+            if not comparison.overall_match:
+                return LogisticsNl2SqlGrayscaleDecisionResult(
+                    should_grayscale=False,
+                    fallback_reason="shadow_quality_mismatch",
+                )
+            replacement = LogisticsDataQaResult(
+                answer_summary=formal_result.answer_summary,
+                result_table=LogisticsDataQaTable(
+                    columns=formal_result.result_table.columns,
+                    rows=formal_result.result_table.rows,
+                ),
+                calculation_logic=[
+                    "本回答由 NL2SQL shadow 链路灰度生成。",
+                    "结果与正式 QA 链路对比一致，通过质量门禁。",
+                ],
+                data_scope=formal_result.data_scope,
+                query_plan=plan,
+                warnings=[*formal_result.warnings, "灰度模式：回答由 NL2SQL shadow 链路生成。"],
+                status=LogisticsDataQaStatus(code="SUCCESS", message="灰度 NL2SQL 模式", success=True),
+            )
+            return LogisticsNl2SqlGrayscaleDecisionResult(
+                should_grayscale=True,
+                replacement_result=replacement,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("grayscale decision failed: %s", redact_evaluation_text(str(exc)))
+            return None
 
     def _write_history_snapshot(
         self,
@@ -606,6 +697,14 @@ class LogisticsDataQaService:
             }
             if nl2sql_live_shadow_summary is not None:
                 response_meta["nl2sql_live_shadow"] = nl2sql_live_shadow_summary
+                # M14：对比 formal QA 结果与 shadow 摘要，附加 comparison 到 response_meta
+                compare_nl2sql_shadow_and_attach(
+                    result=result,
+                    nl2sql_shadow_summary_dict=nl2sql_live_shadow_summary,
+                    trace_id=trace_id,
+                    question=question,
+                    response_meta=response_meta,
+                )
             payload_snapshot = {
                 "question": question,
                 "request_payload": {"question": question},

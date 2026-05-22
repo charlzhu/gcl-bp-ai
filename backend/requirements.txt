@@ -28,3 +28,6 @@ playwright==1.51.0
 # 当前 BOM 主线如果没有实际启用 Milvus，可先注释掉；
 # 等你后面要跑向量库相关模块时再打开。
 pymilvus==2.3.5
+
+# M10-D3: SQLGlot AST 级 SQL 安全校验
+sqlglot==30.8.0

@@ -5,6 +5,14 @@
 """
 
 from backend.app.domains.logistics.services.nl2sql.business_rules import LogisticsNl2SqlBusinessRules
+from backend.app.domains.logistics.services.nl2sql.domain_registry import (
+    DomainCatalogRegistration,
+    Nl2SqlDomainRegistry,
+)
+from backend.app.domains.logistics.services.nl2sql.domain_router import (
+    Nl2SqlDomainRoute,
+    Nl2SqlDomainRouter,
+)
 from backend.app.domains.logistics.services.nl2sql.candidate_sql_gate import (
     LogisticsCandidateSqlGate,
     LogisticsCandidateSqlGateResult,
@@ -34,6 +42,15 @@ from backend.app.domains.logistics.services.nl2sql.m10d_shadow_gate import (
     LogisticsNl2SqlM10DShadowGate,
     LogisticsNl2SqlM10DShadowGateConfig,
     LogisticsNl2SqlM10DShadowGateReport,
+)
+from backend.app.domains.logistics.services.nl2sql.m10_shadow_gate_runner import (
+    M10_SHADOW_GATE_RUNNER_VERSION,
+    LogisticsNl2SqlM10ShadowGateOutcome,
+    LogisticsNl2SqlM10ShadowGateRunReport,
+    LogisticsNl2SqlM10ShadowGateRunResult,
+    LogisticsNl2SqlM10ShadowGateSample,
+    build_default_logistics_nl2sql_m10_shadow_gate_samples,
+    run_logistics_nl2sql_m10_shadow_gate,
 )
 from backend.app.domains.logistics.services.nl2sql.m7_readonly_smoke import (
     M7_READONLY_SMOKE_VERSION,
@@ -70,6 +87,10 @@ from backend.app.domains.logistics.services.nl2sql.shadow_smoke import (
     build_default_logistics_nl2sql_shadow_smoke_samples,
     run_logistics_nl2sql_shadow_smoke,
 )
+from backend.app.domains.logistics.services.nl2sql.sql_ast_safety import (
+    LogisticsSqlAstSafetyChecker,
+    LogisticsSqlAstSafetyResult,
+)
 from backend.app.domains.logistics.services.nl2sql.sql_execution import (
     FakeLogisticsSqlExecutor,
     LogisticsSqlExecutionResult,
@@ -86,6 +107,28 @@ from backend.app.domains.logistics.services.nl2sql.sql_renderer import (
     LogisticsRenderedSql,
     LogisticsSqlRenderer,
     render_logistics_sql,
+)
+from backend.app.domains.logistics.services.nl2sql.m14_shadow_comparator import (
+    LogisticsNl2SqlShadowComparison,
+    LogisticsNl2SqlShadowComparator,
+    LogisticsNl2SqlShadowComparatorConfig,
+    ShadowCompareMode,
+)
+from backend.app.domains.logistics.services.nl2sql.m14_shadow_alerter import (
+    LogisticsNl2SqlShadowAlerter,
+    LogisticsNl2SqlShadowAlerterConfig,
+    LogisticsNl2SqlShadowAlertRecord,
+    LogisticsNl2SqlShadowAlertStats,
+)
+from backend.app.domains.logistics.services.nl2sql.m14_data_qa_shadow_compare import (
+    compare_nl2sql_shadow_and_attach,
+    get_global_shadow_alerter,
+)
+from backend.app.domains.logistics.services.nl2sql.m15_grayscale_gate import (
+    GrayscaleQuestionType,
+    LogisticsNl2SqlGrayscaleConfig,
+    LogisticsNl2SqlGrayscaleDecision,
+    LogisticsNl2SqlGrayscaleGate,
 )
 from backend.app.domains.logistics.services.nl2sql.sql_safety import (
     LogisticsSqlSafetyChecker,
@@ -112,6 +155,13 @@ __all__ = [
     "LogisticsNl2SqlM10DShadowGate",
     "LogisticsNl2SqlM10DShadowGateConfig",
     "LogisticsNl2SqlM10DShadowGateReport",
+    "M10_SHADOW_GATE_RUNNER_VERSION",
+    "LogisticsNl2SqlM10ShadowGateOutcome",
+    "LogisticsNl2SqlM10ShadowGateRunReport",
+    "LogisticsNl2SqlM10ShadowGateRunResult",
+    "LogisticsNl2SqlM10ShadowGateSample",
+    "build_default_logistics_nl2sql_m10_shadow_gate_samples",
+    "run_logistics_nl2sql_m10_shadow_gate",
     "M7_READONLY_SMOKE_VERSION",
     "LogisticsNl2SqlM7ReadonlySmokeOutcome",
     "LogisticsNl2SqlM7ReadonlySmokeRunResult",
@@ -147,6 +197,9 @@ __all__ = [
     "build_default_logistics_nl2sql_shadow_smoke_samples",
     "build_logistics_nl2sql_evaluation_report",
     "check_logistics_candidate_sql",
+    "check_logistics_sql_safety",
+    "LogisticsSqlAstSafetyChecker",
+    "LogisticsSqlAstSafetyResult",
     "redact_evaluation_text",
     "render_safe_m8_summary_json",
     "render_logistics_sql",
@@ -156,4 +209,22 @@ __all__ = [
     "run_logistics_nl2sql_shadow_smoke",
     "summarize_evaluation_logs",
     "validate_logistics_sql_plan_candidate",
+    # M14 模块
+    "LogisticsNl2SqlShadowComparison",
+    "LogisticsNl2SqlShadowComparator",
+    "LogisticsNl2SqlShadowComparatorConfig",
+    "ShadowCompareMode",
+    "LogisticsNl2SqlShadowAlerter",
+    "LogisticsNl2SqlShadowAlerterConfig",
+    "LogisticsNl2SqlShadowAlertRecord",
+    "LogisticsNl2SqlShadowAlertStats",
+    "compare_nl2sql_shadow_and_attach",
+    "get_global_shadow_alerter",
+    # M15 模块
+    "GrayscaleQuestionType",
+    "LogisticsNl2SqlGrayscaleConfig",
+    "LogisticsNl2SqlGrayscaleDecision",
+    "LogisticsNl2SqlGrayscaleGate",
+    "LogisticsNl2SqlGrayscaleDecisionResult",
+    "GRAYSCALE_TYPES_ENV_FLAG",
 ]

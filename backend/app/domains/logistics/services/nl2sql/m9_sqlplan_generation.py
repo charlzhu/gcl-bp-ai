@@ -153,20 +153,24 @@ class LogisticsNl2SqlQueryRewriteService:
         )
 
 
-class LogisticsNl2SqlDomainRoute(BaseModel):
-    """M9 domain router 结果。"""
-
-    model_config = ConfigDict(extra="forbid")
-
-    should_process: bool
-    domain: str
-    source_system: str = "middle_db"
-    mode: str = "shadow"
-    reason_code: str | None = None
+from backend.app.domains.logistics.services.nl2sql.domain_router import (
+    Nl2SqlDomainRoute,
+    Nl2SqlDomainRouter,
+)
 
 
-class LogisticsNl2SqlDomainRouter:
-    """M9 最小领域路由：只允许物流中间库 shadow。"""
+class LogisticsNl2SqlDomainRoute(Nl2SqlDomainRoute):
+    """M9 domain router 结果（别名兼容，继承自 Nl2SqlDomainRoute）。"""
+
+
+
+class LogisticsNl2SqlDomainRouter(Nl2SqlDomainRouter):
+    """M9 领域路由：只允许物流中间库 shadow。
+
+    继承自 Nl2SqlDomainRouter，保留现有关键词和路由判断逻辑不变。
+    当 registry 注册了新域（如 business_analysis / plan_bom）后，
+    将逐步放开 should_process=False 的限制。
+    """
 
     # 物管/物控域关键词：M9 第一阶段只做物流，遇到库存/出入库等物管问题必须 fail-closed，不能误送物流 NL2SQL。
     MATERIAL_MANAGEMENT_TOKENS = ("物管", "物控", "物料", "库存", "出入库", "入库", "出库", "仓库", "库龄")
@@ -203,6 +207,18 @@ class LogisticsNl2SqlDomainRouter:
                 domain="business_analysis",
                 source_system="middle_db",
                 reason_code="m9_domain_not_supported::business_analysis",
+            )
+        # 先检查 registry 中的已注册域（Nl2SqlDomainRouter 基类逻辑）
+        registry_result = super().route(text)
+        if registry_result.should_process:
+            # registry 识别出域（物流/产销存/计划BOM）时，传递域但不保留 reason_code，
+            # 保持 LogisticsNl2SqlDomainRouter 原有的 reason_code=None 语义
+            return LogisticsNl2SqlDomainRoute(
+                should_process=True,
+                domain=registry_result.domain,
+                source_system="middle_db",
+                mode="shadow",
+                reason_code=None,
             )
         return LogisticsNl2SqlDomainRoute(should_process=True, domain="logistics", source_system="middle_db", mode="shadow")
 
@@ -980,6 +996,106 @@ def build_default_logistics_nl2sql_m9_shadow_samples() -> list[LogisticsNl2SqlM9
             category="validation",
             business_case="unsupported_tonnage",
         ),
+
+        # -- 新增 M9 扩展样例（P2：基线提升）--
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_total_fee_summary",
+            question="华东区域总费用是多少",
+            expected_status="success",
+            category="aggregate",
+            business_case="total_fee_summary",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_mw_summary",
+            question="2023年一年总共的运量是多少MW",
+            expected_status="success",
+            category="aggregate",
+            business_case="mw_summary",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_carrier_mw_by_year",
+            question="2023年英赋嘉发运多少量?",
+            expected_status="success",
+            category="ranking",
+            business_case="carrier_mw_by_year",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_origin_customer_topn",
+            question="2025年合肥发往宁波的承运商运费排名前5",
+            expected_status="success",
+            category="ranking",
+            business_case="origin_customer_topn",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_route_pricing",
+            question="2025年合肥至马鞍山17.5米车的平均运费",
+            expected_status="success",
+            category="detail",
+            business_case="route_pricing",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_multi_year_fee_compare",
+            question="23年、24年、25年合肥发广州17.5车运价分别是多少？",
+            expected_status="success",
+            category="breakdown",
+            business_case="multi_year_fee_compare",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_region_monthly_mw",
+            question="请按月份汇总发往贵州的发运量和总费用，并区分2023、2024、2025三个年度？",
+            expected_status="success",
+            category="breakdown",
+            business_case="region_monthly_mw",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_multi_metric_aggregate",
+            question="2025年各月发运量、运费和吨数总计",
+            expected_status="success",
+            category="aggregate",
+            business_case="multi_metric_aggregate",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_vehicle_type_summary",
+            question="请统计合肥始发各车型的车次、发运件数、总费用、平均每车装载托数，并用车型汇总表展示？",
+            expected_status="success",
+            category="detail",
+            business_case="vehicle_type_summary",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_extra_fee_by_month",
+            question="2026年1月份额外费用产生多少钱，分别是什么项目？什么原因产生的？",
+            expected_status="success",
+            category="detail",
+            business_case="extra_fee_by_month",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_guard_tonnage_fail_closed",
+            question="2025年各承运商运输吨位排名",
+            expected_status="validation_failed",
+            category="validation",
+            business_case="unsupported_tonnage",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_avg_fee_per_watt",
+            question="请把华东各运输方式平均元每瓦按从低到高列出来",
+            expected_status="success",
+            category="ranking",
+            business_case="avg_fee_per_watt",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_extra_fee_ratio",
+            question="请统计2023年备注中包含倒运、中转、换车、压车、放空的记录数量和费用金额？",
+            expected_status="success",
+            category="detail",
+            business_case="extra_fee_ratio",
+        ),
+        LogisticsNl2SqlM9ShadowSample(
+            sample_id="m9_success_customer_mw_by_year",
+            question="华润新能源（皮山）有限公司 项目 24年发运量是多少",
+            expected_status="success",
+            category="aggregate",
+            business_case="customer_mw_by_year",
+        ),
     ]
 
 
@@ -1044,7 +1160,11 @@ def run_logistics_nl2sql_m9_shadow_sqlplan_generation(
 
         if resolved_recall_service is None:
             # 首次进入召回阶段时才构造真实召回服务；rewrite/route 阶段被阻断的样例无需依赖外部 provider。
-            resolved_recall_service = LogisticsCatalogRecallService()
+            # 当 live_provider_smoke=False（离线模式）时，启用 keyword fallback
+            # 避免向量检索不可用时所有成功的 NL 样例都 recall_failed。
+            resolved_recall_service = LogisticsCatalogRecallService(
+                enable_keyword_fallback=not live_provider_smoke,
+            )
         recall_result = resolved_recall_service.recall(
             question=rewrite.original_question,
             normalized_question=rewrite.normalized_question,
