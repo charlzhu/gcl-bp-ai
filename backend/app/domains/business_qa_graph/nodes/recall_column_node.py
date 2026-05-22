@@ -70,14 +70,13 @@ def _expand_keywords_with_llm(question: str) -> list[str]:
         return []
 
 
-def _milvus_search_column(embedding: list[float], top_k: int = 8) -> list[dict[str, Any]]:
-    """通过 Milvus 向量检索字段/维度信息。
+def _milvus_search_column(embedding: list[float], top_k: int = 8, score_threshold: float = 0.6) -> list[dict[str, Any]]:
+    """通过 Milvus 向量检索字段/维度信息，过滤低质量匹配。
 
     参数：
         embedding: 查询文本的向量表示。
         top_k: 返回的最大结果数。
-    返回：
-        召回的字段信息列表，每项包含 catalog_id、name、type、role 等。
+        score_threshold: 最低向量相似度阈值（0-1），低于此值的结果丢弃。
     """
     try:
         from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
@@ -85,11 +84,14 @@ def _milvus_search_column(embedding: list[float], top_k: int = 8) -> list[dict[s
         )
 
         recall_service = LogisticsCatalogRecallService()
-        # 直接使用 recall_service 的 vector_store 进行搜索
-        raw_hits = recall_service.vector_store.search(embedding, top_k=top_k)
+        raw_hits = recall_service.vector_store.search(embedding, top_k=top_k, score_threshold=0.6)
         
         results = []
         for hit in raw_hits:
+            # 向量分数过滤（掌柜问数 score_threshold=0.6）
+            vector_score = getattr(hit, "vector_score", 0.0) if not isinstance(hit, dict) else hit.get("vector_score", 0.0)
+            if vector_score < score_threshold:
+                continue
             # 只保留 column/dimension 类型的文档
             doc_type = hit.get("doc_type", "") if isinstance(hit, dict) else getattr(hit, "doc_type", "")
             if doc_type not in ("column", "dimension"):

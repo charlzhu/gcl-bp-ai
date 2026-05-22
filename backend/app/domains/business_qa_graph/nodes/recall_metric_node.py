@@ -65,12 +65,13 @@ def _expand_metric_keywords_with_llm(question: str) -> list[str]:
         return []
 
 
-def _milvus_search_metric(embedding: list[float], top_k: int = 8) -> list[dict[str, Any]]:
-    """通过 Milvus 向量检索指标信息。
+def _milvus_search_metric(embedding: list[float], top_k: int = 8, score_threshold: float = 0.6) -> list[dict[str, Any]]:
+    """通过 Milvus 向量检索指标信息，过滤低质量匹配。
 
     参数：
         embedding: 查询文本的向量表示。
         top_k: 返回的最大结果数。
+        score_threshold: 最低向量相似度阈值（0-1），低于此值的结果会被过滤。
     返回：
         召回的指标信息列表。
     """
@@ -80,7 +81,7 @@ def _milvus_search_metric(embedding: list[float], top_k: int = 8) -> list[dict[s
         )
 
         recall_service = LogisticsCatalogRecallService()
-        raw_hits = recall_service.vector_store.search(embedding, top_k=top_k)
+        raw_hits = recall_service.vector_store.search(embedding, top_k=top_k, score_threshold=0.6)
 
         results = []
         for hit in raw_hits:

@@ -142,6 +142,78 @@ def _sql_search_dimension_values(
     return results
 
 
+# rapidfuzz 模糊匹配分数阈值（0-100，类似掌柜问数 ES score_threshold=0.6）
+_VALUE_FUZZY_THRESHOLD: int = 70
+# 维度值内存缓存（key: 表名, value: list of dict）
+_value_cache: dict[str, list[dict[str, Any]]] | None = None
+
+
+def _fuzzy_search_dimension_values(
+    keyword: str,
+    db_session: Any,
+    *,
+    score_cutoff: int = 70,
+    limit: int = 5,
+) -> list[dict[str, Any]]:
+    """使用 rapidfuzz 对维度表做模糊匹配（替代 ES/ik_max_word 分词）。
+
+    参数：
+        keyword: 搜索关键词（人名/地名/组织名等）。
+        db_session: 数据库会话（用于首次加载维度值）。
+        score_cutoff: 最低匹配分数（0-100），低于此阈值的结果丢弃。
+        limit: 每张表最多返回的结果数。
+
+    返回：
+        匹配的维度值列表，每项含 value_id、value、column_name、table_name。
+    """
+    global _value_cache
+    try:
+        from rapidfuzz import process, fuzz
+    except ImportError:
+        return []
+
+    # 首次调用时加载所有维度值到内存缓存
+    if _value_cache is None and db_session is not None:
+        _value_cache = _load_dimension_cache(db_session)
+
+    if not _value_cache:
+        return []
+
+    results: list[dict[str, Any]] = []
+    for table_name, rows in _value_cache.items():
+        # 对每行构建搜索文本
+        texts = [" ".join(f"{k}:{v}" for k, v in row.items()) for row in rows]
+        matches = process.extract(keyword, texts, scorer=fuzz.WRatio, limit=limit, score_cutoff=score_cutoff)
+        for match_text, score, idx in matches:
+            row = rows[idx].copy()
+            row["_match_score"] = score
+            results.append(row)
+
+    # 按匹配分数降序排列
+    results.sort(key=lambda x: x.get("_match_score", 0), reverse=True)
+    return results[:limit * len(_value_cache)]
+
+
+def _load_dimension_cache(db_session: Any) -> dict[str, list[dict[str, Any]]]:
+    """从中间库维度表中加载所有 distinct 维度值到内存。"""
+    from sqlalchemy import text
+    cache: dict[str, list[dict[str, Any]]] = {}
+    for column_name, tables in _DIMENSION_VALUE_TABLES.items():
+        for table_name in tables:
+            try:
+                rows = db_session.execute(
+                    text(f"SELECT DISTINCT {column_name} as value FROM {table_name} LIMIT 1000")
+                ).mappings().fetchall()
+                for row in rows:
+                    key = f"{table_name}::{column_name}"
+                    if key not in cache:
+                        cache[key] = []
+                    cache[key].append(dict(row))
+            except Exception:
+                continue
+    return cache
+
+
 def recall_value_node(state: dict[str, Any]) -> dict[str, Any]:
     """召回字段取值节点（掌柜问数对齐版，SQL 替代 ES）。"""
     _emit_progress(state, STEP_RECALL_VALUE, "running")
@@ -165,20 +237,29 @@ def recall_value_node(state: dict[str, Any]) -> dict[str, Any]:
         all_keywords = list(set(keywords + expanded))
         logger.info("recall_value expanded_keywords=%s", all_keywords)
 
-        # Step 2: SQL 查询维度字典
+        # Step 2: rapidfuzz 模糊匹配维度值（替代 SQL LIKE，类似掌柜问数 ES 全文检索）
         values_map: dict[str, dict[str, Any]] = {}
+        threshold = _VALUE_FUZZY_THRESHOLD
         for keyword in all_keywords:
             if not keyword.strip():
                 continue
             try:
-                vals = _sql_search_dimension_values(keyword, db_session)
-                for v in vals:
+                val_dicts = _fuzzy_search_dimension_values(keyword, db_session, score_cutoff=threshold)
+                for v in val_dicts:
                     vid = v.get("value_id", "")
                     if vid and vid not in values_map:
                         values_map[vid] = v
             except Exception as inner_exc:
-                logger.debug("recall_value_keyword_failed keyword=%s error=%s", keyword, inner_exc)
-                continue
+                logger.debug("recall_value_fuzzy_failed keyword=%s error=%s", keyword, inner_exc)
+                # rapidfuzz 失败时走 SQL LIKE 兜底
+                try:
+                    vals = _sql_search_dimension_values(keyword, db_session)
+                    for v in vals:
+                        vid = v.get("value_id", "")
+                        if vid and vid not in values_map:
+                            values_map[vid] = v
+                except Exception:
+                    continue
 
         retrieved_values = list(values_map.values())
         logger.info("recall_value_success count=%d", len(retrieved_values))
