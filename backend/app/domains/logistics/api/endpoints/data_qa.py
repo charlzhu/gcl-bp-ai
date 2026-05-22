@@ -1,14 +1,64 @@
+"""物流数据问答端点。
+
+NQE-S4：新增 logistics_nl2sql_assist_via_graph 灰度开关。
+开启时物流问答通过 Graph 编排执行，问题理解走 NL2SQL 候选路径，
+execute_node 仍调用 LogisticsDataQaService.query，shadow_compare_node 对比结果。
+"""
+
+from __future__ import annotations
+
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from backend.app.api.deps import get_logistics_data_qa_service
+from backend.app.core.config import get_settings
 from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
 from backend.app.domains.logistics.services.data_qa_service import LogisticsDataQaService
 from backend.app.domains.query_planning.services.response_meta_exposure_service import QueryPlanningV2ResponseMetaExposureService
 from backend.app.schemas.common import ApiResponse
 from backend.app.services.business_answer_stream_service import BusinessAnswerStreamService, build_json_line_event
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
+
+
+def _maybe_run_assist_graph(question: str, trace_id: str) -> None:
+    """NQE-S4：在 assist 模式下运行 Graph 编排，执行 NL2SQL shadow compare。
+
+    参数：
+        question: 用户原始问题。
+        trace_id: 追踪号，用于审计串联。
+    返回：无。
+    业务逻辑：
+        1. 仅当 business_qa_langgraph_enabled 和 logistics_nl2sql_assist_via_graph 均为 True 时运行。
+        2. Graph 运行是 best-effort 副效应，异常不中断主链路。
+        3. shadow compare 结果由 Graph 内部写入 JSONL，不返回给前端。
+    """
+    settings = get_settings()
+    if not settings.business_qa_langgraph_enabled or not settings.logistics_nl2sql_assist_via_graph:
+        return
+
+    try:
+        from backend.app.domains.business_qa_graph.runner import BusinessQaGraphRunner
+        from backend.app.domains.business_qa_graph.schemas.request import BusinessQaGraphRequest
+
+        runner = BusinessQaGraphRunner(assist_mode=True)
+        graph_request = BusinessQaGraphRequest(
+            question=question,
+            domain_hint="logistics",
+            trace_id=trace_id,
+        )
+        runner.run(graph_request)
+    except Exception:
+        # NQE-S4：assist graph 异常不中断主链路，静默记录日志
+        logger.warning(
+            "NQE-S4 assist graph 运行异常（不影响主链路）：question=%s",
+            question[:100] if question else "",
+            exc_info=True,
+        )
 
 
 @router.post("/query", response_model=ApiResponse)
@@ -17,7 +67,7 @@ def logistics_data_qa_query(
     request: Request,
     service: LogisticsDataQaService = Depends(get_logistics_data_qa_service),
 ) -> ApiResponse:
-    """物流数据问答入口。"""
+    """物流数据问答入口。NQE-S4：assist 模式下同步运行 Graph 编排做 NL2SQL shadow compare。"""
     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", ""))
     try:
         result = service.query(payload, trace_id=trace_id)
@@ -30,6 +80,10 @@ def logistics_data_qa_query(
         )
         if query_plan_v2_meta:
             result_payload["query_plan_v2_meta"] = query_plan_v2_meta
+
+        # NQE-S4：assist 模式下同步运行 Graph 编排（best-effort）
+        _maybe_run_assist_graph(question=payload.question, trace_id=trace_id)
+
         return ApiResponse.success(result_payload, trace_id=trace_id)
     except Exception as exc:  # noqa: BLE001
         # 物流数据问答正式页需要把错误态也纳入查询历史，便于业务回看。
@@ -43,7 +97,7 @@ def logistics_data_qa_query_stream(
     request: Request,
     service: LogisticsDataQaService = Depends(get_logistics_data_qa_service),
 ) -> StreamingResponse:
-    """物流数据问答流式入口。
+    """物流数据问答流式入口。NQE-S4：assist 模式下同步运行 Graph 编排做 NL2SQL shadow compare。
 
     说明：
         1. 先执行原有确定性查询链路，保证计算和表格仍来自后端；
@@ -70,6 +124,10 @@ def logistics_data_qa_query_stream(
                     "status_code": (result_payload.get("status") or {}).get("code"),
                 },
             )
+
+            # NQE-S4：assist 模式下同步运行 Graph 编排（best-effort）
+            _maybe_run_assist_graph(question=payload.question, trace_id=trace_id)
+
             chunks: list[str] = []
             fallback_answer = result_payload.get("answer_summary")
             presentation = result_payload.get("presentation")

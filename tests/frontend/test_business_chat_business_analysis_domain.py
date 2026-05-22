@@ -27,15 +27,23 @@ def test_business_chat_has_business_analysis_domain_switch_and_examples() -> Non
 
 
 def test_business_chat_dispatches_inventory_sales_production_to_dedicated_stream_api() -> None:
-    """产销存问题必须走独立流式接口，不能落入 BOM 的 else 分支。"""
+    """产销存问题必须走独立流式接口，不能落入 logistics/plan_bom 统一分支。
+
+    LQG-8 将 logistics 和 plan_bom 统一为 streamBusinessQa 入口，
+    但经营分析/产销存继续使用 streamInventorySalesProductionQuestion 独立流式接口。
+    """
 
     component = _read(COMPONENT_PATH)
 
     assert "streamInventorySalesProductionQuestion" in component
     assert "resolvedDomain === 'business_analysis'" in component
+    # LQG-8: logistics/plan_bom 统一入口
+    assert "streamBusinessQa" in component
+    assert "resolvedDomain === 'logistics' || resolvedDomain === 'plan_bom'" in component
+    # 确保 business_analysis 分支在统一分支之后（先检查 logistics/plan_bom，再检查 business_analysis）
+    unified_branch = component.index("resolvedDomain === 'logistics' || resolvedDomain === 'plan_bom'")
     business_branch = component.index("resolvedDomain === 'business_analysis'")
-    plan_bom_branch = component.index("streamPlanBomQuestion")
-    assert business_branch < plan_bom_branch
+    assert unified_branch < business_branch
 
 
 def test_inventory_sales_production_frontend_api_contract() -> None:
