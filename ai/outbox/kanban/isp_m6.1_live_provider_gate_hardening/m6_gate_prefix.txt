@@ -40,7 +40,15 @@ _INTERNAL_TOKEN_RE = re.compile(
 
 
 def _scan_technical_leaks(text: str) -> bool:
-    """扫描文本是否包含技术泄露或敏感信息。"""
+    """扫描文本是否包含技术泄露或敏感信息。
+
+    参数：text 为待扫描文本（脱敏前候选 payload、错误信息等）。
+    返回：True 表示检测到潜在泄露。
+
+    业务逻辑：复用模块级正则检测 API key、内部表名、SQL 片段、主机地址、
+    provider 名称等不应出现在公开记录中的技术细节。
+    """
+
     if _SECRET_VALUE_RE.search(text):
         return True
     if _SECRET_KEY_RE.search(text):
@@ -52,41 +60,3 @@ def _scan_technical_leaks(text: str) -> bool:
     if _INTERNAL_TOKEN_RE.search(text):
         return True
     return False
-
-
-class InventorySalesProductionM6CatalogRecallDocument(BaseModel):
-    """M6 产销存 catalog 可召回文档。"""
-    model_config = ConfigDict(extra="forbid")
-    catalog_id: str
-    catalog_version: str = "business_analysis_inventory_sales_production_catalog.v1"
-    domain: str = "business_analysis"
-    sub_domain: str = "inventory_sales_production"
-    doc_type: Literal["table", "metric", "dimension", "rule"]
-    title: str
-    retrieval_text: str
-    keywords: list[str] = Field(default_factory=list)
-    required_catalog_refs: list[str] = Field(default_factory=list)
-
-
-class InventorySalesProductionM6CatalogRecallHit(BaseModel):
-    """M6 catalog 召回命中项。"""
-    model_config = ConfigDict(extra="forbid")
-    document: InventorySalesProductionM6CatalogRecallDocument
-    score: float = 0.0
-    source: str = "local_keyword"
-
-
-class InventorySalesProductionM6CatalogRecallResult(BaseModel):
-    """M6 catalog 召回结果。"""
-    model_config = ConfigDict(extra="forbid")
-    status: Literal["ok", "empty"]
-    hits: list[InventorySalesProductionM6CatalogRecallHit]
-
-    def catalog_refs(self) -> list[str]:
-        """获取所有命中文档声明的 catalog 引用。"""
-        refs: set[str] = set()
-        for hit in self.hits:
-            refs.add(hit.document.catalog_id)
-            for ref in hit.document.required_catalog_refs:
-                refs.add(ref)
-        return sorted(refs)

@@ -452,3 +452,115 @@ def test_m6_cli_exposes_separate_provider_reindex_and_live_shadow_gate_switches(
     blocked_output = (blocked.stdout + blocked.stderr).lower()
     assert "blocked" in blocked_output
     assert "fake" not in blocked_output
+
+
+def test_m6_2_expanded_samples_count_and_coverage() -> None:
+    """M6.2 扩展样例必须覆盖至少 30 条自然语言问题，包含 A/B/C 类和守卫类别。"""
+    m6 = _m6_module()
+    samples = m6.expanded_live_shadow_samples()
+    assert len(samples) >= 30, f"expected >= 30 expanded samples, got {len(samples)}"
+
+    matched_ids = [s.sample_id for s in samples if s.expected_status == "matched"]
+    failed_ids = [s.sample_id for s in samples if s.expected_status == "validation_failed"]
+    assert len(matched_ids) >= 18, "expected >= 18 matched samples (A/B/C categories)"
+    assert len(failed_ids) >= 8, "expected >= 8 validation_failed samples (guards)"
+
+    # 验证样例 ID 不重复
+    all_ids = [s.sample_id for s in samples]
+    assert len(all_ids) == len(set(all_ids)), "sample_ids must be unique"
+
+    # 验证包含关键守卫类型
+    guard_ids = set(failed_ids)
+    assert "m6_2_unsupported_yoy" in guard_ids, "missing YoY unsupported guard"
+    assert "m6_2_clarification_inventory_turnover" in guard_ids, "missing clarification guard"
+    assert "m6_2_sales_future_month_blocked" in guard_ids, "missing future month guard"
+    assert "m6_2_missing_time_sales_default_scope" in guard_ids, "missing missing-time guard"
+
+
+def test_m6_2_scan_technical_leaks_detects_internal_patterns() -> None:
+    """技术泄露扫描必须检测内部表名、SQL 片段、连接串和 bearer token。"""
+    m6 = _m6_module()
+    scan = m6._scan_technical_leaks  # noqa: SLF001
+
+    assert scan("dwd_ba_isp_monthly_fact") is True, "should detect internal table name"
+    assert scan("dim_ba_isp_product") is True, "should detect dim internal table"
+    assert scan("ods_ba_isp_raw") is True, "should detect ODS table"
+    assert scan("SELECT * FROM dwd_ba_isp_monthly_fact") is True, "should detect SQL fragment"
+    assert scan("Bearer abcdefghijklmnop") is True, "should detect bearer token"
+    assert scan("jdbc:mysql://10.0.0.1:3306/db") is True, "should detect connection string"
+    assert scan("sk-abc123def456") is True, "should detect API key pattern"
+    assert scan("raw_sql") is True, "should detect raw_sql keyword"
+    assert scan("internal-gateway") is True, "should detect provider name"
+
+
+def test_m6_2_scan_technical_leaks_passes_clean_text() -> None:
+    """技术泄露扫描必须放过不包含敏感信息的正常业务问题。"""
+    m6 = _m6_module()
+    scan = m6._scan_technical_leaks  # noqa: SLF001
+
+    assert scan("") is False, "empty string should be clean"
+    assert scan("2025年销量是多少？") is False, "normal business question should be clean"
+    assert scan("2025年各基地销量是多少？") is False, "breakdown question should be clean"
+    assert scan("今年产量预算达成率") is False, "budget achievement question should be clean"
+
+
+def test_m6_2_detect_technical_leak_on_candidate_payload() -> None:
+    """detect_technical_leak 必须扫描 candidate payload 中所有字段的技术泄露。"""
+    m6 = _m6_module()
+
+    # 包含内部表名的 candidate 应被检测
+    assert m6.detect_technical_leak({"plan": {"tables": ["dwd_ba_isp_monthly_fact"]}}) is True
+
+    # 包含 SQL 片段的 candidate 应被检测
+    assert m6.detect_technical_leak({"raw_sql": "SELECT * FROM table"}) is True
+
+    # 正常 candidate 应通过
+    assert m6.detect_technical_leak({"plan": {"tables": ["my_table"], "metrics": ["sales"]}}) is False
+
+    # None 应返回 False
+    assert m6.detect_technical_leak(None) is False
+
+
+def test_m6_2_live_shadow_gate_records_include_technical_leak_detection(tmp_path: Path) -> None:
+    """M6.2 live shadow gate 记录必须包含 technical_leak_detected 字段。"""
+    m6 = _m6_module()
+
+    runner = m6.InventorySalesProductionM6LiveShadowGateRunner(
+        sqlplan_generator=m6.InventorySalesProductionM6FakeSqlPlanGenerator.success_for_metric("shipment_volume"),
+        readonly_shadow_executor=m6.InventorySalesProductionM6FakeReadonlyShadowExecutor(rows=[{"metric": "shipment_volume"}]),
+    )
+    run = runner.run(
+        samples=[
+            m6.InventorySalesProductionM6LiveShadowSample(
+                sample_id="m6_2_test_leak_record",
+                question="2025年销量是多少？",
+                expected_status="matched",
+            )
+        ],
+        artifact_dir=tmp_path,
+    )
+
+    records = [json.loads(line) for line in run.records_path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    assert len(records) == 1
+    record = records[0]
+    assert "technical_leak_detected" in record, "record must include technical_leak_detected field"
+    assert isinstance(record["technical_leak_detected"], bool), "technical_leak_detected must be boolean"
+
+    # 报告必须包含 technical_leak_count
+    assert "technical_leak_count" in run.report
+    assert isinstance(run.report["technical_leak_count"], int)
+
+
+def test_m6_2_cli_samples_preset_expanded_flag() -> None:
+    """M6 CLI 必须暴露 --samples-preset 选项，支持 default 和 expanded。"""
+    repo_root = Path(__file__).resolve().parents[3]
+    script_path = repo_root / "scripts" / "dev" / "run_inventory_sales_production_m6_live_provider_gate.py"
+
+    completed = subprocess.run(
+        [sys.executable, str(script_path), "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    help_text = completed.stdout
+    assert "--samples-preset" in help_text, "missing --samples-preset flag in CLI help"

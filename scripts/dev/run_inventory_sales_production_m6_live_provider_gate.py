@@ -26,6 +26,7 @@ from backend.app.domains.business_analysis.services.inventory_sales_production.m
     InventorySalesProductionM6ProviderSmokeRunner,
     InventorySalesProductionM6ReadonlyMiddleDbShadowExecutor,
     InventorySalesProductionM6SqlPlanGenerator,
+    expanded_live_shadow_samples,
     render_safe_m6_provider_smoke_summary_json,
 )
 
@@ -274,6 +275,7 @@ def _write_provider_blocked_shadow_report(
             "sqlplan_validation_ok": False,
             "error_codes": ["provider_blocked"],
             "readonly_middle_db_shadow_executed": False,
+            "technical_leak_detected": False,
         }
         for sample in samples
     ]
@@ -287,6 +289,7 @@ def _write_provider_blocked_shadow_report(
         "readonly_middle_db_shadow_executed": False,
         "formal_qa_executed": False,
         "expected_status_mismatch_count": len(samples),
+        "technical_leak_count": 0,
         "blocked_reason": "provider_blocked",
     }
     records_path.write_text("\n".join(json.dumps(item, ensure_ascii=False, sort_keys=True) for item in records) + "\n", encoding="utf-8")
@@ -294,14 +297,21 @@ def _write_provider_blocked_shadow_report(
     return InventorySalesProductionM6LiveShadowGateRun(report=report, records_path=records_path, report_path=report_path)
 
 
-def run_live_provider_shadow_gate(*, artifact_dir: Path, max_live_samples: int) -> int:
+def run_live_provider_shadow_gate(*, artifact_dir: Path, max_live_samples: int, samples_preset: str = "default") -> int:
     """执行 M6 live-provider SQLPlan shadow gate。
+
+    参数：artifact_dir 为验收材料目录；max_live_samples 为最大样例数；
+          samples_preset 为样例预设，'default' 使用默认重复样例，'expanded' 使用 M6.2 扩展样例集。
 
     业务逻辑：live gate 只允许真实 provider + 只读中间库；若 provider smoke 不全 PASS，
     直接写 BLOCKED 报告并以非零退出，禁止使用 fake generator 伪通过。
     """
 
-    samples = _default_live_shadow_samples(max_live_samples)
+    samples: list[InventorySalesProductionM6LiveShadowSample]
+    if samples_preset == "expanded":
+        samples = list(expanded_live_shadow_samples())[:max_live_samples] if max_live_samples > 0 else list(expanded_live_shadow_samples())
+    else:
+        samples = _default_live_shadow_samples(max_live_samples)
     smoke_result = _real_provider_smoke_runner().run()
     if not smoke_result.ok:
         blocked_run = _write_provider_blocked_shadow_report(artifact_dir=artifact_dir, samples=samples)
@@ -336,6 +346,12 @@ def main() -> int:
     parser.add_argument("--reindex-dry-run", action="store_true", help="build catalog documents without writing index artifacts")
     parser.add_argument("--live-provider-shadow-gate", action="store_true", help="run live-provider SQLPlan shadow gate")
     parser.add_argument("--max-live-samples", type=int, default=1, help="maximum live shadow samples, default: 1")
+    parser.add_argument(
+        "--samples-preset",
+        choices=["default", "expanded"],
+        default="default",
+        help="sample preset: 'default' uses repeated default samples, 'expanded' uses M6.2 expanded samples",
+    )
     args = parser.parse_args()
 
     artifact_dir = Path(args.artifact_dir)
@@ -345,7 +361,11 @@ def main() -> int:
     if args.reindex_catalog or args.reindex_dry_run:
         exit_codes.append(run_reindex_catalog(artifact_dir=artifact_dir, dry_run=bool(args.reindex_dry_run)))
     if args.live_provider_shadow_gate:
-        exit_codes.append(run_live_provider_shadow_gate(artifact_dir=artifact_dir, max_live_samples=args.max_live_samples))
+        exit_codes.append(run_live_provider_shadow_gate(
+            artifact_dir=artifact_dir,
+            max_live_samples=args.max_live_samples,
+            samples_preset=args.samples_preset,
+        ))
     if not exit_codes:
         parser.print_help()
         return 0

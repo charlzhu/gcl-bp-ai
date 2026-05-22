@@ -1,0 +1,49 @@
+{
+  "task": "ISP-M6.1: live provider gate 加固",
+  "status": "blocked_by_infrastructure",
+  "branch": "feature/isp-m6.1-live-provider-gate-hardening",
+  "base": "agent/bp-main",
+  "changes_required": 2,
+  "changes_already_applied": 1,
+  "details": {
+    "fix_1": {
+      "description": "_provider_gate_from_probe_result fail-closed for unrecognized dict probe statuses",
+      "file": "backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py",
+      "line": "~1189 (after PASS/FAIL/BLOCKED return, before fallthrough)",
+      "status": "NOT_APPLIED",
+      "reason": "infrastructure: cwd lost, patch/terminal unavailable"
+    },
+    "fix_2": {
+      "description": "SqlPlanGenerator.generate() preserves provider_live_called on normalize/validate exception",
+      "file": "backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py",
+      "line": "~675-690",
+      "status": "ALREADY_APPLIED",
+      "reason": "already present on agent/bp-main"
+    },
+    "fix_3": {
+      "description": "ReadonlyMiddleDbShadowExecutor.execute() explicit readonly protection and query-log suppression",
+      "file": "backend/app/domains/business_analysis/services/inventory_sales_production/m6_live_provider_gate.py",
+      "line": "~796 (after db = ..., before try:)",
+      "status": "NOT_APPLIED",
+      "reason": "infrastructure: cwd lost, patch/terminal unavailable"
+    },
+    "fix_4_test_python_path": {
+      "description": "Tests already use sys.executable (lines 417, 442); no change needed",
+      "status": "ALREADY_CORRECT"
+    }
+  },
+  "artifacts": [
+    "ai/outbox/kanban/isp_m6.1_live_provider_gate_hardening/m6.1-fixes.patch",
+    "ai/outbox/kanban/isp_m6.1_live_provider_gate_hardening/final-acceptance.md",
+    "ai/outbox/kanban/isp_m6.1_live_provider_gate_hardening/changes-summary.md"
+  ],
+  "next_steps": [
+    "1. Apply Fix 1 and Fix 3 manually or via re-dispatch with fresh workspace",
+    "2. Run focused tests: pytest tests/unit/business_analysis/test_inventory_sales_production_m6_live_provider_gate.py -v",
+    "3. Run compile: python -m py_compile m6_live_provider_gate.py",
+    "4. Run static scan on scoped files",
+    "5. Run adjacent domain regressions (logistics, plan_bom)",
+    "6. Generate diff.patch, test.log, static-scan.log",
+    "7. Review and complete"
+  ]
+}
