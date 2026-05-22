@@ -209,7 +209,6 @@ class BusinessQaDomainRegistry:
             "计划": "plan_bom",
             "power": "plan_bom",
             "plan_power": "plan_bom",
-            "power_prediction": "plan_bom",
             "功率": "plan_bom",
         }
         return aliases.get(hint, "unknown")

@@ -118,14 +118,7 @@ class Settings(BaseSettings):
     business_qa_graph_audit_enabled: bool = True
     query_planning_v2_response_meta_enabled: bool = False
     business_qa_langgraph_enabled: bool = False
-    business_qa_graph_mode: Literal["off", "shadow", "assist", "on"] = "shadow"
-    business_qa_graph_domains: list[str] = Field(default_factory=lambda: ["logistics", "plan_bom", "plan_power"])
-    business_qa_graph_stream_events_enabled: bool = True
-    business_qa_graph_audit_enabled: bool = True
-    # NQE-S4：物流 NL2SQL assist 灰度接入 Graph 开关
-    # 开启后 logistics 域将通过 Graph 编排执行，问题理解和计划生成走 NL2SQL 候选路径
-    # 默认关闭，旧接口行为完全不变
-    logistics_nl2sql_assist_via_graph: bool = False
+    logistics_query_planner_v2_enabled: bool = False
     logistics_query_planner_v2_mode: Literal["off", "shadow", "assist"] = "shadow"
     logistics_query_planner_v2_min_confidence: float = 0.9
     logistics_query_planner_v2_allowed_query_keys: list[str] = Field(default_factory=list)

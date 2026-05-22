@@ -50,11 +50,7 @@ class BusinessQaGraphState(TypedDict, total=False):
     domain_route: dict[str, Any]
     # LQG-3 新增：问题理解和计划构建阶段字段
     shadow_plan_raw: dict[str, Any]
-    understanding_status: Literal[
-        "PLANNED", "CLARIFY_NEEDED", "UNSUPPORTED", "UNSAFE",
-        # NQE-S2 新增：复合分解状态，表示问题已被拆分为多个子查询
-        "COMPOSITE_DECOMPOSED",
-    ]
+    understanding_status: Literal["PLANNED", "CLARIFY_NEEDED", "UNSUPPORTED", "UNSAFE"]
     # LQG-4 新增：统一校验和边界状态分支字段
     validation_result: Literal["ok", "clarify", "unsupported", "no_answer", "error"]
     """统一校验结果：ok 表示通过，clarify/unsupported/no_answer/error 表示需进入对应终端节点。"""
@@ -69,33 +65,6 @@ class BusinessQaGraphState(TypedDict, total=False):
     execution_result: dict[str, Any]
     """领域服务执行后的结果快照（不含 SQL/表名/raw/debug）。
     包含 answer_summary、result_table、warnings、needs_clarification 等业务化字段。"""
-
-    # NQE-S1 新增：NL2SQL SQLPlan shadow 结果
-    # 仅在 capabilities 包含 logistics_nl2sql_shadow 时由 nl2sql_adapter 写入
-    # shadow 结果不改变现有 NL2SQL-A/B/C/D 执行链路，仅用于审计记录
-    query_plan_v2: dict[str, Any]
-    """NL2SQL SQLPlan shadow 运行结果快照（不含 SQL/表名/raw/debug）。
-    包含 status、domain、source_system、error_codes 等安全摘要字段。"""
-
-    # NQE-S2 新增：复合分解与子结果合并字段
-    sub_plans: list[dict[str, Any]]
-    """复合分解后的子计划列表。每个子计划包含 question、query_key、plan 等字段。
-    仅在 understanding_status=COMPOSITE_DECOMPOSED 时有效。"""
-    sub_results: list[dict[str, Any]]
-    """各子计划执行后的结果列表。与 sub_plans 一一对应。
-    每个元素包含 answer_summary、columns、rows、row_count 等业务化字段。"""
-    composite_type: Literal["comparison", "trend", "composite", "none"]
-    """复合问题类型：comparison（对比，如去年vs今年）、trend（趋势，如逐月）、
-    composite（综合型，如多独立子问）、none（非复合问题）。"""
-
-    # NQE-S3 新增：NL2SQL shadow compare 结果字段
-    # shadow_compare_node 在 execute_node 之后运行，对比 NL2SQL 与旧链路结果
-    nl2sql_result: dict[str, Any]
-    """NL2SQL 链路的完整执行结果（不含 SQL/表名/raw/debug）。
-    由 shadow_compare_node 调用 NL2SQL adapter 获取并写入。"""
-    shadow_comparison: dict[str, Any]
-    """两套结果的对比摘要（不含 SQL/表名/raw/debug）。
-    包含 overall_match、status_match、row_count_match、key_numbers_diff 等字段。"""
 
 
 def build_business_qa_initial_state(request: BusinessQaGraphRequest) -> BusinessQaGraphState:
@@ -132,13 +101,4 @@ def build_business_qa_initial_state(request: BusinessQaGraphRequest) -> Business
         # LQG-5 初始字段
         "execution_status": "NOT_STARTED",
         "execution_result": {},
-        # NQE-S1 初始字段：NL2SQL SQLPlan shadow 结果
-        "query_plan_v2": {},
-        # NQE-S2 初始字段：复合分解与子结果
-        "sub_plans": [],
-        "sub_results": [],
-        "composite_type": "none",
-        # NQE-S3 初始字段：NL2SQL shadow compare
-        "nl2sql_result": {},
-        "shadow_comparison": {},
     }

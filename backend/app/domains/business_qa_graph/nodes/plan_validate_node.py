@@ -91,11 +91,6 @@ def plan_validate_node(state: BusinessQaGraphState) -> BusinessQaGraphState:
         clarification_questions = shadow_plan_raw.get("clarification_questions", []) or []
         return _route_clarify(state, missing_slots, clarification_questions, trace)
 
-    # NQE-S2：COMPOSITE_DECOMPOSED 状态是合法状态，跳过必填槽位校验
-    # （每个子计划的完整性由 decomposition_node 保证）
-    if understanding_status == "COMPOSITE_DECOMPOSED":
-        return _route_ok(state, trace)
-
     # ---- 第四步：必填槽位校验 ----
     intent = shadow_plan_raw.get("intent", "")
     slots = shadow_plan_raw.get("slots", {}) or {}

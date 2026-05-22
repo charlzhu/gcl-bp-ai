@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "domain_registry.py 中 '电池片' 同时出现在 _POWER_KEYWORDS 和 _POWER_SUPPLIER_RECOMMEND_KEYWORDS 中，当前 capability selection 可通过短回路正确区分，但值得留意这种双重归属的耦合性。",
+    "static-scan.log 只有 2 行输出，建议后续在 static-scan 工具中增加更详细的审计行列表（如 'Scanned N added lines for: API keys [0], SQL injection [0], pickle/eval [0], shell injection [0]'）以便审计追溯。"
+  ],
+  "summary": "LQG-2 审查通过。domain_registry 正确声明 logistics 和 plan_bom 两个域，全部 5 个 capability（logistics_data_qa、plan_bom_qa、plan_power_prediction、plan_power_supplier_recommendation、plan_power_factor_effect_compare）归入 plan_bom，无独立 power 域。_POWER_KEYWORDS 已移除单字符 'w'；_POWER_UNIT_PATTERN = r'\\d+(?:\\.\\d+)?(?:w|瓦)' 新增数字+W/瓦模式；_has_power_signal 先匹配关键词再匹配正则，正确使用类变量引用。LangGraph 编排严格 receive→domain_route→END，不执行查数、不调用 NL2SQL、不生成 SQL、不算功率。Runner 默认 disabled 已验证。16/16 测试全部通过。普通英文 'w' 和 'WMS' 的 guard test 均已通过。"
+}

@@ -66,23 +66,18 @@ def execute_node(
         return next_state
 
     if understanding_status != "PLANNED":
-        # NQE-S2：COMPOSITE_DECOMPOSED 也是合法的执行状态
-        if understanding_status != "COMPOSITE_DECOMPOSED":
-            event = BusinessQaGraphEvent(
-                node="execute",
-                event_type="execution_skipped",
-                message=f"understanding_status={understanding_status}，拒绝执行。",
-                payload={"understanding_status": understanding_status, "reason": "not_planned"},
-            )
-            next_state = dict(state)
-            next_state["trace"] = [*trace, event.model_dump(mode="json")]
-            return next_state
+        event = BusinessQaGraphEvent(
+            node="execute",
+            event_type="execution_skipped",
+            message=f"understanding_status={understanding_status}，拒绝执行。",
+            payload={"understanding_status": understanding_status, "reason": "not_planned"},
+        )
+        next_state = dict(state)
+        next_state["trace"] = [*trace, event.model_dump(mode="json")]
+        return next_state
 
     # ---- 按业务域分支执行 ---- 中文注释：根据 domain 选择对应的领域服务，并传递 capability 信息
     if domain == "logistics":
-        # NQE-S2：COMPOSITE_DECOMPOSED 时走复合执行路径
-        if understanding_status == "COMPOSITE_DECOMPOSED":
-            return _execute_logistics_composite(state, trace, capabilities, logistics_service)
         return _execute_logistics(state, trace, capabilities, logistics_service)
     if domain == "plan_bom":
         return _execute_plan_bom(state, trace, capabilities, plan_bom_service)
@@ -173,111 +168,6 @@ def _execute_logistics(
     else:
         next_state["user_visible_message"] = answer_summary
 
-    return next_state
-
-
-# NQE-S2 新增：复合执行路径 — 遍历 sub_plans 逐个执行并收集结果
-def _execute_logistics_composite(
-    state: BusinessQaGraphState,
-    trace: list[dict[str, Any]],
-    capabilities: list[str],
-    logistics_service: Any,
-) -> BusinessQaGraphState:
-    """执行物流复合查询：遍历 sub_plans 中的每个子问题并执行。
-
-    参数：
-        state: Graph 运行态，需包含 sub_plans。
-        trace: 已有 trace 列表。
-        capabilities: 当前执行的 capability 列表。
-        logistics_service: 物流领域服务实例。
-    返回：
-        写入 sub_results 的新 state。
-    业务逻辑：
-        1. 遍历 sub_plans 中的每个子问题。
-        2. 对每个子问题调用 LogisticsDataQaService.query()。
-        3. 收集清洗后的结果到 sub_results。
-        4. 任何子查询异常不影响其他子查询。
-    """
-    domain = state.get("domain", "unknown")
-    sub_plans = list(state.get("sub_plans", []))
-
-    # ---- 构造或使用已注入的 logistics_service ----
-    if logistics_service is None:
-        logistics_service = _default_logistics_service()
-        if logistics_service is None:
-            event = BusinessQaGraphEvent(
-                node="execute",
-                event_type="execution_skipped",
-                message="无法构造 LogisticsDataQaService（可能缺少数据库连接），跳过复合执行。",
-                payload={"domain": domain, "reason": "no_service_available"},
-            )
-            next_state: BusinessQaGraphState = dict(state)
-            next_state["trace"] = [*trace, event.model_dump(mode="json")]
-            next_state["execution_status"] = "NOT_STARTED"
-            return next_state
-
-    # ---- 遍历执行每个子查询 ----
-    sub_results = []
-    for i, sp in enumerate(sub_plans):
-        sub_question = sp.get("question", "")
-        if not sub_question:
-            sub_results.append({
-                "answer_summary": "",
-                "columns": [],
-                "rows": [],
-                "row_count": 0,
-                "supported": False,
-                "error": "empty_sub_question",
-            })
-            continue
-
-        try:
-            from backend.app.domains.logistics.schemas.data_qa import LogisticsDataQaQueryRequest
-
-            result = logistics_service.query(
-                LogisticsDataQaQueryRequest(question=sub_question),
-            )
-            sanitized = _sanitize_logistics_result(result)
-            sub_results.append(sanitized)
-        except Exception as exc:
-            logger.warning(
-                "复合执行：子查询 %d 失败（question=%s）：%s",
-                i, sub_question[:80], type(exc).__name__,
-                exc_info=True,
-            )
-            sub_results.append({
-                "answer_summary": "",
-                "columns": [],
-                "rows": [],
-                "row_count": 0,
-                "supported": False,
-                "error": "sub_query_execution_failed",
-            })
-
-    # ---- 写入结果 ----
-    event = BusinessQaGraphEvent(
-        node="execute",
-        event_type="execution_complete_composite",
-        message=f"复合查询执行完成：{len(sub_results)} 个子查询已执行。",
-        payload={
-            "domain": domain,
-            "capabilities": capabilities,
-            "sub_result_count": len(sub_results),
-            "successful_count": sum(1 for r in sub_results if not r.get("error")),
-        },
-    )
-
-    next_state = dict(state)
-    next_state["trace"] = [*trace, event.model_dump(mode="json")]
-    next_state["status"] = "EXECUTED"
-    next_state["execution_status"] = "EXECUTED"
-    next_state["sub_results"] = sub_results
-    # 复合执行时，execution_result 记录摘要
-    next_state["execution_result"] = {
-        "composite": True,
-        "sub_result_count": len(sub_results),
-        "successful_count": sum(1 for r in sub_results if not r.get("error")),
-    }
     return next_state
 
 

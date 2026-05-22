@@ -14,12 +14,6 @@ BusinessQaCapabilityId = Literal[
     "plan_power_prediction",
     "plan_power_supplier_recommendation",
     "plan_power_factor_effect_compare",
-    # NQE-S1 新增：物流 NL2SQL SQLPlan shadow 能力
-    # 该能力仅用于 Graph shadow 记录，不改变现有 NL2SQL-A/B/C/D 执行链路
-    "logistics_nl2sql_shadow",
-    # NQE-S2 新增：物流复合问题分解能力
-    # 使 Graph 能统一拆解对比/趋势/综合型复杂问法，通过 NL2SQL 子计划执行
-    "logistics_composite_decomposition",
 ]
 BusinessQaCapabilityRiskLevel = Literal["read_only_data_qa", "deterministic_calculation"]
 

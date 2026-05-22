@@ -71,25 +71,6 @@ def plan_build_node(state: BusinessQaGraphState) -> BusinessQaGraphState:
         next_state["status"] = "CLARIFY"
         return next_state
 
-    # NQE-S2：COMPOSITE_DECOMPOSED 状态 — 计划类型为复合分解，可进入执行
-    if understanding_status == "COMPOSITE_DECOMPOSED":
-        composite_type = state.get("composite_type", "composite")
-        sub_plan_count = len(state.get("sub_plans", []))
-        event = BusinessQaGraphEvent(
-            node="plan_build",
-            event_type="plan_built_composite",
-            message=f"复合查询计划已构建（{sub_plan_count} 个子计划），类型={composite_type}，等待后续执行节点处理。",
-            payload={
-                "understanding_status": understanding_status,
-                "composite_type": composite_type,
-                "sub_plan_count": sub_plan_count,
-            },
-        )
-        next_state = dict(state)
-        next_state["trace"] = [*trace, event.model_dump(mode="json")]
-        next_state["status"] = "PLAN_BUILT"
-        return next_state
-
     # ---- PLANNED：计划有效，可进入后续执行（LQG-5/6） ----
     if understanding_status == "PLANNED":
         event = BusinessQaGraphEvent(

@@ -20,29 +20,15 @@ class BusinessQaGraphRunner:
         graph: 可选 compiled graph，测试或后续卡可注入。
         settings: 配置对象，默认读取项目 settings。
         enabled: 可选显式开关；不传时读取 settings.business_qa_langgraph_enabled。
-        assist_mode: NQE-S4 新增，是否启用 NL2SQL assist 模式；
-            不传时读取 settings.logistics_nl2sql_assist_via_graph。
     返回：
         可调用 run 的 Graph 运行器实例。
     业务逻辑：
         默认配置关闭，确保 LQG-1 不影响旧物流/BOM 接口；只有显式打开时才执行骨架 graph。
-        NQE-S4：assist 模式下物流问题理解走 NL2SQL 候选路径，execute 仍用旧服务。
     """
 
-    def __init__(
-        self,
-        *,
-        graph: Any | None = None,
-        settings: Settings | None = None,
-        enabled: bool | None = None,
-        assist_mode: bool | None = None,
-    ) -> None:
+    def __init__(self, *, graph: Any | None = None, settings: Settings | None = None, enabled: bool | None = None) -> None:
         self.settings = settings or get_settings()
         self.enabled = self.settings.business_qa_langgraph_enabled if enabled is None else enabled
-        # NQE-S4：assist 模式读取 —— 默认从 settings 读取
-        self.assist_mode = (
-            self.settings.logistics_nl2sql_assist_via_graph if assist_mode is None else assist_mode
-        )
         # Graph 采用懒加载：默认关闭时不构建 LangGraph，避免 LQG-1 对旧链路产生任何运行时副作用。
         self._graph = graph
 
@@ -69,7 +55,7 @@ class BusinessQaGraphRunner:
                 boundary_notes=list(DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES),
             )
 
-        graph = self._graph or build_business_qa_graph(assist_mode=self.assist_mode)
+        graph = self._graph or build_business_qa_graph()
         self._graph = graph
         final_state = graph.invoke(build_business_qa_initial_state(request))
         return BusinessQaGraphResponse.from_state(final_state)
