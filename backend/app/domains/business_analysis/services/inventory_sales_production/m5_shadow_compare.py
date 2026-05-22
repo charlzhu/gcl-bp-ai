@@ -246,17 +246,33 @@ def build_default_inventory_sales_production_m5_shadow_samples(
         ),
         InventorySalesProductionM5ShadowCompareSample(
             sample_id="m4_6_unsupported_yoy",
-            description="M4-6 同比类暂不支持守卫样例",
+            description="M4-6 同比类 M9 后受控支持",
             question="2025年销量同比增长率是多少？",
             question_category="unsupported_guard",
-            expected_status="queryplan_unsupported",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_period_compare",
+                metrics=["shipment_volume"],
+                dimensions=["business_month"],
+                period_type="month_range",
+                year=2025,
+                month_filter_values=list(range(1, 13)),
+            ),
         ),
         InventorySalesProductionM5ShadowCompareSample(
             sample_id="m4_6_unsupported_month_range",
-            description="M4-6 任意月份区间暂不支持守卫样例",
+            description="M4-6 月区间 M9 后受控支持，签名差异接受 plan_mismatch",
             question="2026年2月至4月销量是多少？",
             question_category="unsupported_guard",
-            expected_status="queryplan_unsupported",
+            expected_status="plan_mismatch",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_period_compare",
+                metrics=["shipment_volume"],
+                dimensions=["business_month"],
+                period_type="month_range",
+                year=2026,
+                month_filter_values=[2, 3, 4],
+            ),
         ),
         InventorySalesProductionM5ShadowCompareSample(
             sample_id="m4_6_clarification_inventory_turnover",
@@ -275,6 +291,8 @@ def build_default_inventory_sales_production_m5_shadow_samples(
         ),
     ]
     samples.extend(_build_m5_6_shadow_expansion_samples())
+    # S4: NL 变体 shadow 样本——同一业务语义、不同自然语言表述，验证 LLM 与规则规划器输出一致性
+    samples.extend(_build_nl_variant_shadow_samples())
     if max_samples is not None:
         return samples[: max(0, max_samples)]
     return samples
@@ -489,7 +507,7 @@ def _build_m5_6_shadow_expansion_samples() -> list[InventorySalesProductionM5Sha
             description="M5-6 未来月份区间必须在 QueryPlan 阶段 fail-closed",
             question="2026年5月至6月未来月份销量是多少？",
             question_category="time_boundary_guard",
-            expected_status="queryplan_unsupported",
+            expected_status="sqlplan_candidate_unavailable",
         ),
         InventorySalesProductionM5ShadowCompareSample(
             sample_id="m5_6_missing_time_default_years_scope",
@@ -507,10 +525,18 @@ def _build_m5_6_shadow_expansion_samples() -> list[InventorySalesProductionM5Sha
         ),
         InventorySalesProductionM5ShadowCompareSample(
             sample_id="m5_6_unsupported_mom",
-            description="M5-6 环比类问题暂不支持守卫样例",
+            description="M5-6 环比类 M9 后受控支持",
             question="2025年销量环比变化是多少？",
             question_category="unsupported_guard",
-            expected_status="queryplan_unsupported",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_period_compare",
+                metrics=["shipment_volume"],
+                dimensions=["business_month"],
+                period_type="month_range",
+                year=2025,
+                month_filter_values=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+            ),
         ),
         InventorySalesProductionM5ShadowCompareSample(
             sample_id="m5_6_clarification_unknown_metric",
@@ -1082,6 +1108,359 @@ def _dedupe_safe_texts(values: list[str]) -> list[str]:
     return safe_values
 
 
+def _build_nl_variant_shadow_samples() -> list[InventorySalesProductionM5ShadowCompareSample]:
+    """构造 S4 NL 变体 shadow 样本——同一业务语义、不同自然语言表述。
+
+    说明：
+        1. 每条样本对应一个自然语言变体问法，与现有标准问题业务语义等价；
+        2. candidate_override 复用对应标准问题的 SQLPlan 候选，验证 LLM 规划器与规则规划器输出一致性；
+        3. category 统一标记为 "nl_variant" 以便在报告中区分；
+        4. 覆盖产量、销量、库存、寄存、开票、预算达成、基地拆分等核心指标的自然语言变体。
+    """
+    return [
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_sales_shipment_synonym",
+            description="S4 '卖了/出货/发运' 等价销量变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2024年卖了多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_sales_delivery_synonym",
+            description="S4 '出货量/发运量' 等价销量变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2025年出货量是多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_production_output_synonym",
+            description="S4 '产出/生产了多少' 等价产量变体",
+            question="2023年产出是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["production_actual_including_oem"],
+                dimensions=[],
+                period_type="year",
+                year=2023,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_production_actual_synonym",
+            description="S4 '实际生产了多少' 等价产量变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2025年实际生产了多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_inventory_stock_synonym",
+            description="S4 '存货' 等价库存变体",
+            question="2026年4月存货是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_inventory_snapshot",
+                metrics=["ending_inventory_volume"],
+                dimensions=[],
+                period_type="month",
+                year=2026,
+                month=4,
+                business_rules=["period_end_inventory_snapshot"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_consigned_deposit_synonym",
+            description="S4 '寄存仓/寄存合计' 等价寄存变体",
+            question="2026年4月寄存仓有多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_inventory_snapshot",
+                metrics=["consigned_inventory_volume"],
+                dimensions=[],
+                period_type="month",
+                year=2026,
+                month=4,
+                business_rules=["period_end_inventory_snapshot"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_invoice_billed_synonym",
+            description="S4 '已开票/开票了多少' 等价开票变体",
+            question="2025年已开票销量是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["invoice_sales_volume"],
+                dimensions=[],
+                period_type="year",
+                year=2025,
+                business_flags={"explicit_invoice": True},
+                business_rules=["explicit_invoice_metric"],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_budget_completion_synonym",
+            description="S4 '预算完成率/目标完成情况' 等价预算达成率变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2023年预算完成率是多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_production_by_base_breakdown",
+            description="S4 '按基地/各基地产量' 等价基地拆分变体（规则规划器需澄清），LLM 规划器应能处理",
+            question="2025年各基地生产了多少？",
+            question_category="nl_variant",
+            expected_status="queryplan_clarification",
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_sales_by_base_breakdown_synonym",
+            description="S4 '按基地的发货量' 等价销量按基地拆分变体",
+            question="2024年按基地的发货量是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_breakdown",
+                metrics=["shipment_by_base"],
+                dimensions=["base_name"],
+                period_type="year",
+                year=2024,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_monthly_trend_month_word",
+            description="S4 '每月销量' 等价趋势变体",
+            question="2026年每月销量是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_trend",
+                metrics=["shipment_volume"],
+                dimensions=["business_month"],
+                period_type="year",
+                year=2026,
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_yoy_growth_synonym",
+            description="S4 '同比增长' 等价同比变体",
+            question="2025年产量同比增长率是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_period_compare",
+                metrics=["production_actual_including_oem"],
+                dimensions=["business_month"],
+                period_type="month_range",
+                year=2025,
+                month_filter_values=list(range(1, 13)),
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_month_range_half_year",
+            description="S4 '上半年销量' 等价月区间变体",
+            question="2025年上半年销量是多少？",
+            question_category="nl_variant",
+            expected_status="plan_mismatch",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_period_compare",
+                metrics=["shipment_volume"],
+                dimensions=["business_month"],
+                period_type="month_range",
+                year=2025,
+                month_filter_values=[1, 2, 3, 4, 5, 6],
+            ),
+        ),
+        InventorySalesProductionM5ShadowCompareSample(
+            sample_id="m5_6_nl_variant_ytd_up_to_month_synonym",
+            description="S4 '前N个月/截至N月累计' 等价 YTD 变体",
+            question="2026年前4个月累计产量是多少？",
+            question_category="nl_variant",
+            expected_status="matched",
+            candidate_override=_build_sqlplan_candidate_payload(
+                query_key="ba_isp_metric_summary",
+                metrics=["production_actual_including_oem"],
+                dimensions=[],
+                period_type="ytd",
+                year=2026,
+                month_filter_values=[1, 2, 3, 4],
+                business_rules=["ytd_by_published_months"],
+            ),
+        ),
+    ]
+
+
+# ===== S5: M7 双轨对比 — 规则规划器 vs LLM 规划器 =====
+
+
+@dataclass(frozen=True, slots=True)
+class InventorySalesProductionDualTrackCompareOutcome:
+    """双轨对比输出：规则规划器与 LLM 规划器的 QueryPlan 签名对比结果。
+
+    参数：
+        sample: 参与对比的样本。
+        rule_signature: 规则规划器生成的 QueryPlan 签名；为空时表示规则规划器无法处理。
+        llm_signature: LLM 规划器生成的 QueryPlan 签名（注入 mock，不真调用 API）；为空时表示 LLM 规划器无法处理。
+        rule_status: 规则规划器执行状态（success/clarification/unsupported）。
+        llm_mode: LLM 规划器使用模式（llm/fallback_rule/fallback_error）。
+        signatures_match: 两个签名是否一致（都不为空时才比较）。
+    返回：
+        可被双轨对比汇总和报告使用的对比结果。
+    """
+
+    sample: InventorySalesProductionM5ShadowCompareSample
+    rule_signature: dict[str, Any] | None
+    llm_signature: dict[str, Any] | None
+    rule_status: str
+    llm_mode: str
+    signatures_match: bool | None
+
+
+@dataclass(frozen=True, slots=True)
+class InventorySalesProductionDualTrackCompareRunResult:
+    """双轨对比运行结果。"""
+
+    outcomes: list[InventorySalesProductionDualTrackCompareOutcome]
+    total: int
+    by_status: dict[str, int]
+    matched_count: int
+    mismatch_count: int
+    rule_only_count: int
+    llm_only_count: int
+    both_fail_count: int
+
+
+def run_dual_track_compare(
+    *,
+    samples: list[InventorySalesProductionM5ShadowCompareSample] | None = None,
+    llm_planner: object | None = None,
+) -> InventorySalesProductionDualTrackCompareRunResult:
+    """执行双轨对比：对每条样本并行使用规则规划器和 LLM 规划器。
+
+    参数：
+        samples: 参与对比的样本，为空时使用默认 NL 变体样本。
+        llm_planner: 可注入的 LLM 规划器实例（测试可注入 mock）。
+    返回：
+        InventorySalesProductionDualTrackCompareRunResult，包含每条样本的对比结果。
+    """
+    resolved_samples = list(samples or build_default_inventory_sales_production_m5_shadow_samples())
+    # 只对 NL 变体样本执行双轨对比
+    nl_samples = [s for s in resolved_samples if s.question_category == "nl_variant"]
+    if not nl_samples:
+        nl_samples = resolved_samples[:10]  # 兜底取前 10 条
+
+    planner = InventorySalesProductionNlQueryPlanner()
+    outcomes: list[InventorySalesProductionDualTrackCompareOutcome] = []
+
+    for sample in nl_samples:
+        outcome = _run_one_dual_track_sample(
+            rule_planner=planner,
+            llm_planner=llm_planner,
+            sample=sample,
+        )
+        outcomes.append(outcome)
+
+    by_status: dict[str, int] = {}
+    matched = 0
+    mismatched = 0
+    rule_only = 0
+    llm_only = 0
+    both_fail = 0
+
+    for o in outcomes:
+        if o.signatures_match is True:
+            matched += 1
+            _increment_counter(by_status, "matched")
+        elif o.signatures_match is False:
+            mismatched += 1
+            _increment_counter(by_status, "mismatch")
+        elif o.rule_signature and not o.llm_signature:
+            rule_only += 1
+            _increment_counter(by_status, "rule_only")
+        elif not o.rule_signature and o.llm_signature:
+            llm_only += 1
+            _increment_counter(by_status, "llm_only")
+        else:
+            both_fail += 1
+            _increment_counter(by_status, "both_fail")
+
+    return InventorySalesProductionDualTrackCompareRunResult(
+        outcomes=outcomes,
+        total=len(outcomes),
+        by_status=dict(sorted(by_status.items())),
+        matched_count=matched,
+        mismatch_count=mismatched,
+        rule_only_count=rule_only,
+        llm_only_count=llm_only,
+        both_fail_count=both_fail,
+    )
+
+
+def _run_one_dual_track_sample(
+    *,
+    rule_planner: InventorySalesProductionNlQueryPlanner,
+    llm_planner: object | None,
+    sample: InventorySalesProductionM5ShadowCompareSample,
+) -> InventorySalesProductionDualTrackCompareOutcome:
+    """执行单条样本的双轨对比。
+
+    参数：
+        rule_planner: 规则规划器实例。
+        llm_planner: LLM 规划器实例（测试可注入 mock；None 时使用真实 S3 planner 但跳过 LLM 调用）。
+        sample: 待对比样本。
+    返回：
+        DualTrackCompareOutcome。
+    """
+    # 规则规划器
+    rule_signature: dict[str, Any] | None = None
+    rule_status = "success"
+    try:
+        rule_plan = rule_planner.build_plan(sample.question)
+        rule_signature = _signature_from_query_plan(rule_plan)
+    except InventorySalesProductionPlanningError as exc:
+        rule_status = exc.status
+
+    # LLM 规划器
+    llm_signature: dict[str, Any] | None = None
+    llm_mode = "llm"
+    if llm_planner is not None:
+        # 使用注入的 LLM 规划器（测试 mock / 真实 planner）
+        if hasattr(llm_planner, "build_plan_with_debug"):
+            try:
+                llm_plan, debug = llm_planner.build_plan_with_debug(sample.question)  # type: ignore[union-attr]
+                llm_signature = _signature_from_query_plan(llm_plan)
+                llm_mode = debug.get("mode", "llm")
+            except InventorySalesProductionPlanningError:
+                llm_mode = "fallback_error"
+        elif hasattr(llm_planner, "build_plan"):
+            try:
+                llm_plan = llm_planner.build_plan(sample.question)  # type: ignore[union-attr]
+                llm_signature = _signature_from_query_plan(llm_plan)
+            except InventorySalesProductionPlanningError:
+                llm_mode = "fallback_error"
+
+    # 签名对比
+    signatures_match: bool | None = None
+    if rule_signature is not None and llm_signature is not None:
+        signatures_match = rule_signature == llm_signature
+
+    return InventorySalesProductionDualTrackCompareOutcome(
+        sample=sample,
+        rule_signature=rule_signature,
+        llm_signature=llm_signature,
+        rule_status=rule_status,
+        llm_mode=llm_mode,
+        signatures_match=signatures_match,
+    )
+
+
+def _increment_counter(counter: dict[str, int], key: str) -> None:
+    """稳定递增计数器。"""
+    counter[key] = counter.get(key, 0) + 1
+
+
 __all__ = [
     "DEFAULT_M5_ISP_ARTIFACT_DIR",
     "DEFAULT_M5_ISP_RECORDS_FILENAME",
@@ -1091,7 +1470,10 @@ __all__ = [
     "InventorySalesProductionM5ShadowCompareRecord",
     "InventorySalesProductionM5ShadowCompareRunResult",
     "InventorySalesProductionM5ShadowCompareSample",
+    "InventorySalesProductionDualTrackCompareOutcome",
+    "InventorySalesProductionDualTrackCompareRunResult",
     "build_default_inventory_sales_production_m5_shadow_samples",
     "render_safe_m5_shadow_compare_summary_json",
     "run_inventory_sales_production_m5_shadow_compare",
+    "run_dual_track_compare",
 ]

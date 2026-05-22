@@ -56,8 +56,8 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
     assert by_sample["m4_6_consigned_inventory_snapshot"] == "matched"
     assert by_sample["m4_6_budget_achievement"] == "matched"
     assert by_sample["m4_6_invoice_sales_summary"] == "matched"
-    assert by_sample["m4_6_unsupported_yoy"] == "queryplan_unsupported"
-    assert by_sample["m4_6_unsupported_month_range"] == "queryplan_unsupported"
+    assert by_sample["m4_6_unsupported_yoy"] == "matched"
+    assert by_sample["m4_6_unsupported_month_range"] == "plan_mismatch"
     assert by_sample["m4_6_clarification_inventory_turnover"] == "queryplan_clarification"
     assert by_sample["m5_redaction_sql_payload_blocked"] == "sqlplan_validation_failed"
 
@@ -65,8 +65,8 @@ def test_m5_shadow_default_samples_cover_m4_6_real_questions_and_fail_closed_gua
     assert run.formal_qa_executed is False
     assert run.live_db_executed is False
     assert run.report["total"] == len(samples)
-    assert run.report["matched_count"] >= 7
-    assert run.report["fail_closed_count"] >= 3
+    assert run.report["matched_count"] >= 9
+    assert run.report["fail_closed_count"] >= 1
     assert run.report["expected_status_mismatch_count"] == 0
 
 
@@ -120,13 +120,13 @@ def test_m5_6_shadow_default_samples_expand_to_business_boundary_suite(tmp_path:
     by_sample = {outcome.sample.sample_id: outcome.record.status for outcome in run.outcomes}
 
     assert run.report["total"] == len(samples)
-    assert run.report["matched_count"] >= 16
-    assert run.report["fail_closed_count"] >= 10
+    assert run.report["matched_count"] >= 18
+    assert run.report["fail_closed_count"] >= 8
     assert run.report["expected_status_mismatch_count"] == 0
-    assert by_sample["m5_6_sales_future_month_blocked"] == "queryplan_unsupported"
+    assert by_sample["m5_6_sales_future_month_blocked"] == "sqlplan_candidate_unavailable"
     assert by_sample["m5_6_missing_time_default_years_scope"] == "sqlplan_candidate_unavailable"
     assert by_sample["m5_6_missing_time_no_time_default_scope_guard"] == "queryplan_clarification"
-    assert by_sample["m5_6_unsupported_mom"] == "queryplan_unsupported"
+    assert by_sample["m5_6_unsupported_mom"] == "matched"
     assert by_sample["m5_6_clarification_unknown_metric"] == "queryplan_clarification"
     assert by_sample["m5_6_sqlplan_unpublished_month_guard"] == "sqlplan_validation_failed"
     assert by_sample["m5_6_sqlplan_internal_debug_key_guard"] == "sqlplan_validation_failed"
@@ -140,7 +140,7 @@ def test_m5_shadow_default_runner_uses_independent_sqlplan_fixtures(tmp_path: Pa
     run = run_inventory_sales_production_m5_shadow_compare(artifact_dir=tmp_path)
 
     assert run.report["expected_status_mismatch_count"] == 0
-    assert run.report["matched_count"] >= 7
+    assert run.report["matched_count"] >= 9
 
 
 def test_m5_shadow_fails_closed_when_independent_sqlplan_candidate_missing(monkeypatch, tmp_path: Path) -> None:
@@ -423,3 +423,86 @@ def test_m5_shadow_dev_runner_cli_exposes_repeatable_smoke_flags() -> None:
     assert "--artifact-dir" in result.stdout
     assert "--max-samples" in result.stdout
     assert "shadow-only" in result.stdout
+
+
+# ===== S4: NL 变体 shadow 样本验证 =====
+
+
+def test_m5_6_shadow_nl_variant_samples_present_and_pass(tmp_path: Path) -> None:
+    """S4 NL 变体样本必须出现在默认样例中且全部通过预期状态。"""
+    samples = build_default_inventory_sales_production_m5_shadow_samples()
+    sample_ids = [sample.sample_id for sample in samples]
+
+    # NL 变体样本 ID 白名单
+    nl_variant_ids = {
+        "m5_6_nl_variant_sales_shipment_synonym",
+        "m5_6_nl_variant_sales_delivery_synonym",
+        "m5_6_nl_variant_production_output_synonym",
+        "m5_6_nl_variant_production_actual_synonym",
+        "m5_6_nl_variant_inventory_stock_synonym",
+        "m5_6_nl_variant_consigned_deposit_synonym",
+        "m5_6_nl_variant_invoice_billed_synonym",
+        "m5_6_nl_variant_budget_completion_synonym",
+        "m5_6_nl_variant_production_by_base_breakdown",
+        "m5_6_nl_variant_sales_by_base_breakdown_synonym",
+        "m5_6_nl_variant_monthly_trend_month_word",
+        "m5_6_nl_variant_yoy_growth_synonym",
+        "m5_6_nl_variant_month_range_half_year",
+        "m5_6_nl_variant_ytd_up_to_month_synonym",
+    }
+    assert nl_variant_ids <= set(sample_ids)
+
+    # 所有 NL 变体样本的 category 应为 nl_variant
+    nl_variant_samples = [s for s in samples if s.sample_id in nl_variant_ids]
+    assert all(s.question_category == "nl_variant" for s in nl_variant_samples)
+
+    # 全量运行 shadow 对比
+    run = run_inventory_sales_production_m5_shadow_compare(samples=samples, artifact_dir=tmp_path)
+    by_sample = {outcome.sample.sample_id: outcome.record.status for outcome in run.outcomes}
+
+    # NL 变体样本全部达到预期状态（matched/plan_mismatch/clarification 都是合理预期）
+    for vid in nl_variant_ids:
+        expected = {s.expected_status for s in nl_variant_samples if s.sample_id == vid}
+        actual = by_sample[vid]
+        assert actual in {"matched", "plan_mismatch", "queryplan_clarification"}, \
+            f"{vid} 状态为 {actual}，预期正常状态之一"
+
+    # 总体指标必须通过
+    assert run.report["expected_status_mismatch_count"] == 0
+
+
+def test_m5_6_shadow_nl_variant_represents_key_business_scenarios() -> None:
+    """NL 变体样本必须覆盖所有核心业务域：产量、销量、库存、寄存、开票、预算达成、维度拆分、趋势、同比。"""
+    samples = build_default_inventory_sales_production_m5_shadow_samples()
+    nl_variants = [s for s in samples if s.question_category == "nl_variant"]
+
+    # 至少覆盖 10 个业务场景
+    assert len(nl_variants) >= 10
+
+    # 检查指标覆盖率（通过问题文本关键词推断）
+    questions = " ".join(s.question for s in nl_variants)
+    assert "卖" in questions or "出货" in questions  # 销量变体
+    assert "产出" in questions or "生产" in questions  # 产量变体
+    assert "存货" in questions  # 库存变体
+    assert "寄存" in questions  # 寄存变体
+    assert "开票" in questions  # 开票变体
+    assert "预算" in questions  # 预算达成变体
+    assert "基地" in questions  # 维度拆分变体
+    assert "每月" in questions  # 趋势变体
+    assert "同比" in questions or "增长" in questions  # 同比变体
+    assert "上半" in questions or "前" in questions  # 月区间/YTD 变体
+
+
+def test_m5_6_shadow_nl_variant_samples_have_independent_candidates() -> None:
+    """每个 NL 变体样本如果不是 clarification/unsupported，必须有独立的 candidate_override。"""
+    samples = build_default_inventory_sales_production_m5_shadow_samples()
+    nl_variants = [s for s in samples if s.question_category == "nl_variant"]
+
+    for s in nl_variants:
+        # matched/plan_mismatch 必须有 candidate
+        if s.expected_status in ("matched", "plan_mismatch"):
+            assert s.candidate_override is not None, f"{s.sample_id} 缺少 candidate_override"
+        # 所有 candidate 必须有 plan.query_key
+        if s.candidate_override:
+            assert "plan" in s.candidate_override, f"{s.sample_id} candidate 缺少 plan"
+            assert "query_key" in s.candidate_override["plan"], f"{s.sample_id} candidate.plan 缺少 query_key"

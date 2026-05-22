@@ -5,7 +5,7 @@
         <el-radio-button value="auto" data-testid="domain-auto">自动识别</el-radio-button>
         <el-radio-button value="logistics" data-testid="domain-logistics">物流数据</el-radio-button>
         <el-radio-button value="plan_bom" data-testid="domain-plan-bom">计划 BOM</el-radio-button>
-        <el-radio-button value="business_analysis" data-testid="domain-business-analysis">经营分析/产销存</el-radio-button>
+        <el-radio-button value="business_analysis" data-testid="domain-business-analysis">经营分析</el-radio-button>
       </el-radio-group>
     </div>
 

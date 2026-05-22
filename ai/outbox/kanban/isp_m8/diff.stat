@@ -1,0 +1,6 @@
+ backend/app/core/config.py                         |   6 +
+ .../m6_live_provider_gate.py                       |  26 +++-
+ .../inventory_sales_production/qa_service.py       |  84 ++++++++++++
+ ...ntory_sales_production_m6_live_provider_gate.py | 109 +++++++++++++++-
+ ...ntory_sales_production_m6_live_provider_gate.py | 141 ++++++++++++++++++++-
+ 5 files changed, 356 insertions(+), 10 deletions(-)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -18,6 +19,9 @@ from backend.app.domains.business_analysis.schemas.inventory_sales_production_qu
 from backend.app.domains.business_analysis.services.inventory_sales_production.nl_query_planner import (
     InventorySalesProductionNlQueryPlanner,
     InventorySalesProductionPlanningError,
+)
+from backend.app.domains.business_analysis.services.inventory_sales_production.nl2sql_query_planner import (
+    InventorySalesProductionNl2SqlQueryPlanner,
 )
 from backend.app.domains.business_analysis.services.inventory_sales_production.query_executor import (
     InventorySalesProductionQueryExecutor,
@@ -45,8 +49,7 @@ class InventorySalesProductionQaService:
         2. 业务事实、聚合、预算达成率等计算全部复用 M3 QueryExecutor；
         3. 服务层只整理用户可见状态、摘要、表格和追溯日志；
         4. 不让 LLM 直接生成 SQL、直接计算指标或直接读取 Excel/数据库表。
-        5. ISP M8：当 isp_m8_live_provider_enabled 开启时，优先走 M6 live provider 链路，
-           失败时自动 fallback 到 M4 确定性链路。
+        5. M8 新增 live gate 注入点：ask_with_live_gate 支持 off/shadow/assist 三种模式。
     """
 
     def __init__(
@@ -54,30 +57,39 @@ class InventorySalesProductionQaService:
         db: Session,
         *,
         planner: InventorySalesProductionNlQueryPlanner | None = None,
+        nl2sql_planner: InventorySalesProductionNl2SqlQueryPlanner | None = None,
         executor: InventorySalesProductionQueryExecutor | None = None,
         query_log_repository: LogisticsQueryRepository | None = None,
-        settings: Any | None = None,
+        live_gate_enabled: bool = False,
+        live_gate_mode: str = "off",
+        live_gate_runner: Any = None,
+        live_gate_artifact_dir: Path | None = None,
     ) -> None:
         """初始化产销存 QA 服务。
 
         参数：
             db: 当前数据库会话。
-            planner: 自然语言临时规划器，测试可注入。
+            planner: 自然语言规则规划器，测试可注入。
+            nl2sql_planner: LLM Catalog Recall 规划器（S3），仅在 live_gate 模式启用时使用。
             executor: M3 QueryExecutor，测试可注入。
             query_log_repository: 统一查询历史仓储，失败时不影响主链路。
-            settings: 应用配置，ISP M8 灰度接管时必需。
+            live_gate_enabled: M8 feature flag 是否启用。
+            live_gate_mode: M8 feature flag 模式（off/shadow/assist/nl2sql）。
+            live_gate_runner: 可注入的 M6 live shadow gate runner。
+            live_gate_artifact_dir: M8 shadow 模式下的验收材料目录。
         返回：
             无返回值。
         """
 
         self.db = db
         self.planner = planner or InventorySalesProductionNlQueryPlanner()
+        self.nl2sql_planner = nl2sql_planner or InventorySalesProductionNl2SqlQueryPlanner()
         self.executor = executor or InventorySalesProductionQueryExecutor(db)
         self.query_log_repository = query_log_repository or LogisticsQueryRepository()
-        self._settings = settings
-
-        # M8 灰度接管门禁（延迟初始化，避免 import 时触发 LLM 连接）
-        self._m8_gate: Any = None
+        self.live_gate_enabled = live_gate_enabled
+        self.live_gate_mode = live_gate_mode
+        self.live_gate_runner = live_gate_runner
+        self.live_gate_artifact_dir = live_gate_artifact_dir
 
     def ask(self, question: str, *, trace_id: str | None = None) -> InventorySalesProductionQaResponse:
         """回答一个产销存自然语言问题。
@@ -126,39 +138,166 @@ class InventorySalesProductionQaService:
         self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
         return response
 
-    def _is_m8_enabled(self) -> bool:
-        """判断 ISP M8 feature flag 是否开启。
-
-        返回：
-            True 当 isp_m8_live_provider_enabled 配置为 True 且 settings 已注入时。
-        """
-        if self._settings is None:
-            return False
-        return bool(getattr(self._settings, "isp_m8_live_provider_enabled", False))
-
-    def _try_m8_ask(
+    def ask_with_live_gate(
         self,
-        *,
         question: str,
-        trace_id: str | None,
-    ) -> tuple[bool, Any]:
-        """尝试通过 M8 灰度接管门禁回答问题。
+        *,
+        trace_id: str | None = None,
+    ) -> InventorySalesProductionQaResponse:
+        """M8 可选 live gate / S3 NL2SQL / S8 NL2SQL-Extended 问答入口。
 
+        参数：
+            question: 用户原始自然语言问题。
+            trace_id: 请求链路 ID。
         返回：
-            (success, qa_response_or_none)
+            InventorySalesProductionQaResponse；gate/NL2SQL 失败时自动 fallback 到 M4 确定性结果。
+
+        业务逻辑：
+            off 模式：与 ask() 完全相同，不走 gate，使用规则规划器。
+            shadow 模式：使用规则规划器，NL2SQL 结果仅记录到日志。
+            assist 模式：使用规则规划器，gate 结果仅记录（向后兼容 M6）。
+            nl2sql 模式：使用 S3 LLM Catalog Recall 规划器（Nl2SqlQueryPlanner），
+                    成功时返回 NL2SQL 结果，失败时 fallback 到规则规划器。
+            nl2sql_extended 模式：使用 S7 LLM 完整 SQLPlan 规划器（Nl2SqlSqlPlanPlanner），
+                    输出完整 SqlPlanCandidate 经 Validator 校验后执行，
+                    失败时 fallback 到规则规划器。
         """
+
+        if not self.live_gate_enabled or self.live_gate_mode == "off":
+            return self.ask(question=question, trace_id=trace_id)
+
+        # nl2sql / nl2sql_extended 模式：都使用 NL2SQL 规划器（接口兼容）
+        if self.live_gate_mode in ("nl2sql", "nl2sql_extended"):
+            return self._ask_with_nl2sql_planner(question=question, trace_id=trace_id)
+
+        # shadow/assist 模式：向后兼容 M6（规则规划器 + gate 记录）
+        return self._ask_with_shadow_gate(question=question, trace_id=trace_id)
+
+    def _ask_with_nl2sql_planner(
+        self,
+        question: str,
+        *,
+        trace_id: str | None = None,
+    ) -> InventorySalesProductionQaResponse:
+        """使用 LLM Catalog Recall 规划器（S3）回答问题。
+
+        参数：
+            question: 用户自然语言问题。
+            trace_id: 请求链路 ID。
+        返回：
+            InventorySalesProductionQaResponse；LLM 规划器失败时自动 fallback 到规则规划器。
+        """
+        # 尝试 LLM 规划器
         try:
-            from backend.app.domains.business_analysis.services.inventory_sales_production.m8_live_gate import (
-                InventorySalesProductionM8LiveGate,
+            plan = self.nl2sql_planner.build_plan(question)
+            query_result = self.executor.execute(plan)
+            response = self._build_response_from_query_result(
+                question=question,
+                trace_id=trace_id,
+                query_result=query_result,
+            )
+            logger.info("isp_nl2sql_planner_success question=%s", question[:50])
+            self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+            return response
+        except InventorySalesProductionPlanningError:
+            # LLM 规划器返回 clarification/unsupported —— fallback 到规则规划器
+            pass
+        except Exception:  # noqa: BLE001
+            # LLM 规划器异常 —— fallback 到规则规划器
+            logger.warning("isp_nl2sql_planner_fallback question=%s", question[:50], exc_info=True)
+
+        # fallback 到规则规划器
+        try:
+            plan = self.planner.build_plan(question)
+            query_result = self.executor.execute(plan)
+            response = self._build_response_from_query_result(
+                question=question,
+                trace_id=trace_id,
+                query_result=query_result,
+            )
+            logger.info("isp_nl2sql_fallback_rule_success question=%s", question[:50])
+            self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+            return response
+        except InventorySalesProductionPlanningError as exc:
+            response = self._build_blocked_response(
+                question=question,
+                trace_id=trace_id,
+                status=exc.status,
+                message=exc.message,
+            )
+            self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+            return response
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("inventory_sales_production_qa_failed trace_id=%s", trace_id)
+            response = self._build_error_response(question=question, trace_id=trace_id, message=str(exc))
+            self._write_history_snapshot(question=question, trace_id=trace_id, response=response)
+            return response
+
+    def _ask_with_shadow_gate(
+        self,
+        question: str,
+        *,
+        trace_id: str | None = None,
+    ) -> InventorySalesProductionQaResponse:
+        """M6 live shadow gate 模式（向后兼容）。
+
+        参数：
+            question: 用户原始自然语言问题。
+            trace_id: 请求链路 ID。
+        返回：
+            InventorySalesProductionQaResponse；gate 失败时自动 fallback 到 M4 确定性结果。
+
+        业务逻辑：
+            shadow 模式：M4 确定性结果作为正式答案，gate 结果仅记录。
+            assist 模式：gate 成功时记录，失败时退回到 M4 结果。
+        """
+
+        # 先获取 M4 确定性结果（基线安全结果）
+        m4_response = self.ask(question=question, trace_id=trace_id)
+
+        if not self.live_gate_runner:
+            return m4_response
+
+        # 执行 M6 live gate（异常不中断，fallback 到 M4）
+        try:
+            from backend.app.domains.business_analysis.services.inventory_sales_production.m6_live_provider_gate import (
+                InventorySalesProductionM6LiveShadowSample,
             )
 
-            if self._m8_gate is None:
-                self._m8_gate = InventorySalesProductionM8LiveGate(settings=self._settings)
-            return self._m8_gate.try_ask(question=question, trace_id=trace_id)
-        except Exception as exc:  # noqa: BLE001
-            # M8 异常不向用户暴露，静默 fallback 到 M4
-            logger.warning("m8_gate_unexpected_error trace_id=%s reason=%s", trace_id, str(exc))
-            return False, None
+            samples = [
+                InventorySalesProductionM6LiveShadowSample(
+                    sample_id=f"m8_live_gate_{hash(question) % 100000:05d}",
+                    question=question,
+                    expected_status="matched",
+                )
+            ]
+            artifact_dir = self.live_gate_artifact_dir or Path("/tmp/hermes/m8_live_gate")
+            run = self.live_gate_runner.run(samples=samples, artifact_dir=artifact_dir)
+            gate_ok = bool(
+                run.report.get("expected_status_mismatch_count") == 0
+                and run.report.get("success_count", 0) > 0
+            )
+        except Exception:  # noqa: BLE001
+            gate_ok = False
+
+        if self.live_gate_mode == "shadow":
+            # shadow 模式：M4 结果不变，gate 结果仅记录到日志
+            logger.info(
+                "isp_m8_live_gate_shadow question=%s gate_ok=%s",
+                question[:50],
+                gate_ok,
+            )
+            return m4_response
+
+        if self.live_gate_mode == "assist" and gate_ok:
+            # assist 模式且 gate 成功：返回 M4 结果（gate 成功但未正式接入）
+            # 后续 M8 验收通过后，可在此处将门禁结果替换为正式 NL2SQL 结果
+            logger.info(
+                "isp_m8_live_gate_assist_gate_ok question=%s",
+                question[:50],
+            )
+
+        return m4_response
 
     def write_error_log(self, *, question: str, trace_id: str | None, message: str) -> int:
         """写入 API 异常兜底日志。

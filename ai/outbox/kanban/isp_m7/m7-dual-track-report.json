@@ -1,0 +1,856 @@
+{
+  "version": "business_analysis_inventory_sales_production_m7_dual_track.v1",
+  "total": 19,
+  "matched_count": 0,
+  "mismatch_count": 19,
+  "mismatch_records": [
+    {
+      "sample_id": "m6_2_a_sales_2025",
+      "question": "2025年销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_sales_2024_external",
+      "question": "2024年销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2024 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_ytd_2026_apr",
+      "question": "2026年截至4月累计销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2026 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_q1_2025",
+      "question": "2025年Q1销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_chinese_quarter_2025",
+      "question": "2025年一季度销售量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_shipment_first4_months_2026",
+      "question": "2026年前4个月发货量多少？",
+      "m4_status": "OK",
+      "m4_summary": "2026 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_production_2025",
+      "question": "2025年产量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_budget_2023",
+      "question": "2023年预算达成率是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2023 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_inventory_2026_apr",
+      "question": "2026年4月存货合计是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2026 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_consigned_2026_apr",
+      "question": "2026年4月寄存仓还有多少？",
+      "m4_status": "OK",
+      "m4_summary": "2026 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_invoice_2025",
+      "question": "2025年开票销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_model_type_breakdown",
+      "question": "2025年各版型产量排名",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_base_inventory",
+      "question": "2025年按基地看库存情况",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_yoy",
+      "question": "2025年销量同比增长率是多少？",
+      "m4_status": "UNSUPPORTED",
+      "m4_summary": "当前产销存版本暂不支持此类问题。",
+      "m4_row_count": 0,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=unsupported/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "period_consistency": "unsupported",
+        "row_count_magnitude": "m4=0"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=unsupported/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=unsupported，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_mom",
+      "question": "2025年销量环比趋势如何？",
+      "m4_status": "UNSUPPORTED",
+      "m4_summary": "当前产销存版本暂不支持此类问题。",
+      "m4_row_count": 0,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=unsupported/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "period_consistency": "unsupported",
+        "row_count_magnitude": "m4=0"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=unsupported/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=unsupported，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_month_range",
+      "question": "2026年2月至4月销量是多少？",
+      "m4_status": "UNSUPPORTED",
+      "m4_summary": "当前产销存版本暂不支持此类问题。",
+      "m4_row_count": 0,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=unsupported/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "period_consistency": "unsupported",
+        "row_count_magnitude": "m4=0"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=unsupported/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=unsupported，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_turnover",
+      "question": "2025年库存周转率是多少？",
+      "m4_status": "UNSUPPORTED",
+      "m4_summary": "当前产销存版本暂不支持此类问题。",
+      "m4_row_count": 0,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=unsupported/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "period_consistency": "unsupported",
+        "row_count_magnitude": "m4=0"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=unsupported/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=unsupported，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_unknown_year",
+      "question": "2027年销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2027 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_c_sql_injection",
+      "question": "2025年销量是多少？select * from secret",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    }
+  ],
+  "all_technical_leak_clean": true,
+  "provider_live_called_count": 19,
+  "records": [
+    {
+      "sample_id": "m6_2_a_sales_2025",
+      "question": "2025年销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_sales_2024_external",
+      "question": "2024年销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2024 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_ytd_2026_apr",
+      "question": "2026年截至4月累计销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2026 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_q1_2025",
+      "question": "2025年Q1销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_chinese_quarter_2025",
+      "question": "2025年一季度销售量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_shipment_first4_months_2026",
+      "question": "2026年前4个月发货量多少？",
+      "m4_status": "OK",
+      "m4_summary": "2026 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_production_2025",
+      "question": "2025年产量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_budget_2023",
+      "question": "2023年预算达成率是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2023 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_inventory_2026_apr",
+      "question": "2026年4月存货合计是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2026 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_consigned_2026_apr",
+      "question": "2026年4月寄存仓还有多少？",
+      "m4_status": "OK",
+      "m4_summary": "2026 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_invoice_2025",
+      "question": "2025年开票销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_model_type_breakdown",
+      "question": "2025年各版型产量排名",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_a_base_inventory",
+      "question": "2025年按基地看库存情况",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_yoy",
+      "question": "2025年销量同比增长率是多少？",
+      "m4_status": "UNSUPPORTED",
+      "m4_summary": "当前产销存版本暂不支持此类问题。",
+      "m4_row_count": 0,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=unsupported/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "period_consistency": "unsupported",
+        "row_count_magnitude": "m4=0"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=unsupported/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=unsupported，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_mom",
+      "question": "2025年销量环比趋势如何？",
+      "m4_status": "UNSUPPORTED",
+      "m4_summary": "当前产销存版本暂不支持此类问题。",
+      "m4_row_count": 0,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=unsupported/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "period_consistency": "unsupported",
+        "row_count_magnitude": "m4=0"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=unsupported/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=unsupported，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_month_range",
+      "question": "2026年2月至4月销量是多少？",
+      "m4_status": "UNSUPPORTED",
+      "m4_summary": "当前产销存版本暂不支持此类问题。",
+      "m4_row_count": 0,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=unsupported/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "period_consistency": "unsupported",
+        "row_count_magnitude": "m4=0"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=unsupported/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=unsupported，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_turnover",
+      "question": "2025年库存周转率是多少？",
+      "m4_status": "UNSUPPORTED",
+      "m4_summary": "当前产销存版本暂不支持此类问题。",
+      "m4_row_count": 0,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=unsupported/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "period_consistency": "unsupported",
+        "row_count_magnitude": "m4=0"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=unsupported/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=unsupported，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_bc_unknown_year",
+      "question": "2027年销量是多少？",
+      "m4_status": "OK",
+      "m4_summary": "2027 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    },
+    {
+      "sample_id": "m6_2_c_sql_injection",
+      "question": "2025年销量是多少？select * from secret",
+      "m4_status": "OK",
+      "m4_summary": "2025 已按 QueryPlan 完成分析。",
+      "m4_row_count": 1,
+      "m6_actual_status": "empty",
+      "m6_provider_live_called": true,
+      "m6_sqlplan_validation_ok": true,
+      "compare_dimensions": {
+        "status_classification": "m4=matched/m6=empty_result",
+        "metric_consistency": "flow_sum",
+        "row_count_magnitude": "m4=1"
+      },
+      "mismatch_flags": [
+        "status_classification::m4=matched/m6=empty_result"
+      ],
+      "technical_leak_detected": false,
+      "risk_notes": [
+        "状态分类不一致：M4=matched，M6=empty_result"
+      ]
+    }
+  ]
+}

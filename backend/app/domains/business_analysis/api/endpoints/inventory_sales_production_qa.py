@@ -32,7 +32,7 @@ def ask_inventory_sales_production(
     """
 
     trace_id = getattr(request.state, "trace_id", getattr(request.state, "request_id", payload.trace_id or ""))
-    result = service.ask(payload.question, trace_id=trace_id)
+    result = service.ask_with_live_gate(payload.question, trace_id=trace_id)
     return ApiResponse.success(result.model_dump(mode="json"), trace_id=trace_id)
 
 
@@ -66,7 +66,7 @@ def ask_inventory_sales_production_stream(
             },
         )
         try:
-            result = service.ask(payload.question, trace_id=trace_id)
+            result = service.ask_with_live_gate(payload.question, trace_id=trace_id)
             result_payload = result.model_dump(mode="json")
             yield build_json_line_event(
                 "meta",

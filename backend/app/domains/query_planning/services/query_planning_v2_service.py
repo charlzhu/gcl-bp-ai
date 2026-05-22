@@ -8,6 +8,7 @@ from backend.app.domains.query_planning.services.logistics_adapter import Logist
 from backend.app.domains.query_planning.services.plan_bom_adapter import PlanBomQueryPlanningAdapter
 from backend.app.domains.query_planning.services.query_plan_v2_audit_writer import QueryPlanV2AuditWriter
 from backend.app.domains.query_planning.services.strategy_router import QueryPlanningV2StrategyRouter
+from backend.app.domains.query_planning.services.isp_adapter import InventorySalesProductionQueryPlanningAdapter
 
 
 class QueryPlanningV2Service:
@@ -24,6 +25,7 @@ class QueryPlanningV2Service:
         *,
         logistics_adapter: LogisticsQueryPlanningAdapter,
         plan_bom_adapter: PlanBomQueryPlanningAdapter,
+        isp_adapter: InventorySalesProductionQueryPlanningAdapter | None = None,
         audit_writer: QueryPlanV2AuditWriter | None = None,
         strategy_router: QueryPlanningV2StrategyRouter | None = None,
     ) -> None:
@@ -32,6 +34,7 @@ class QueryPlanningV2Service:
         参数：
             logistics_adapter: 物流领域适配器。
             plan_bom_adapter: 计划 BOM 领域适配器。
+            isp_adapter: 产销存经营分析领域适配器（M10）。
             audit_writer: JSONL 审计写入器。
             strategy_router: 策略路由器。
         返回：无返回值。
@@ -39,6 +42,7 @@ class QueryPlanningV2Service:
 
         self.logistics_adapter = logistics_adapter
         self.plan_bom_adapter = plan_bom_adapter
+        self.isp_adapter = isp_adapter
         self.audit_writer = audit_writer or QueryPlanV2AuditWriter()
         self.strategy_router = strategy_router or QueryPlanningV2StrategyRouter()
 
@@ -67,6 +71,8 @@ d
             candidate = self.logistics_adapter.build_candidate(question, trace_id=trace_id)
         elif resolved_domain == "plan_bom":
             candidate = self.plan_bom_adapter.build_candidate(question, trace_id=trace_id)
+        elif resolved_domain == "business_analysis" and self.isp_adapter is not None:
+            candidate = self.isp_adapter.build_candidate(question, trace_id=trace_id)
         else:
             candidate = self._fail_closed_plan(question=question, domain=resolved_domain, trace_id=trace_id)
 
@@ -88,7 +94,7 @@ d
         """
 
         normalized_domain = (domain or "").strip().lower().replace("-", "_")
-        if normalized_domain in {"logistics", "plan_bom"}:
+        if normalized_domain in {"logistics", "plan_bom", "business_analysis"}:
             return normalized_domain
         if normalized_domain:
             return "unknown"
@@ -97,6 +103,8 @@ d
             return "plan_bom"
         if any(keyword in compact for keyword in ("物流", "发运", "发货", "承运", "运费", "车辆", "司机")):
             return "logistics"
+        if any(keyword in compact for keyword in ("销量", "产量", "库存", "存货", "经营分析", "预算达成", "产销存", "寄存", "发货量", "同比", "环比", "周转率")):
+            return "business_analysis"
         return "unknown"
 
     @staticmethod

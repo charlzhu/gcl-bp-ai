@@ -118,21 +118,22 @@ def test_isp_sql_plan_validator_blocks_period_end_inventory_annual_sum() -> None
 
 
 @pytest.mark.parametrize(
-    ("plan_overrides", "expected_error"),
+    ("plan_overrides", "expected_ok", "expected_error"),
     [
-        ({"period_type": "month_range", "start_month": 1, "end_month": 3}, "sqlplan_period_type_not_supported::month_range"),
-        ({"business_rules": ["year_over_year"]}, "sqlplan_time_comparison_not_supported::year_over_year"),
-        ({"business_rules": ["month_over_month"]}, "sqlplan_time_comparison_not_supported::month_over_month"),
-        ({"business_rules": ["unpublished_month"], "period_type": "month", "month": 12}, "sqlplan_unpublished_month_blocks_sql_direct"),
+        ({"period_type": "month_range", "start_month": 1, "end_month": 3}, True, None),
+        ({"business_rules": ["year_over_year"]}, True, None),
+        ({"business_rules": ["month_over_month"]}, True, None),
+        ({"business_rules": ["unpublished_month"], "period_type": "month", "month": 12}, False, "sqlplan_unpublished_month_blocks_sql_direct"),
     ],
 )
-def test_isp_sql_plan_validator_blocks_unsupported_period_boundaries(plan_overrides: dict, expected_error: str) -> None:
-    """任意月份区间、同比/环比、未发布月份必须在 SQLPlan 门禁 fail-closed。"""
+def test_isp_sql_plan_validator_blocks_unsupported_period_boundaries(plan_overrides: dict, expected_ok: bool, expected_error: str) -> None:
+    """M9 后 month_range、同比/环比允许通过；未发布月份仍 fail-closed。"""
 
     result = _validate(_valid_candidate(plan=plan_overrides))
 
-    assert result.ok is False
-    assert expected_error in result.error_codes
+    assert result.ok is expected_ok
+    if expected_error:
+        assert expected_error in result.error_codes
 
 
 def test_isp_sql_plan_validator_rechecks_catalog_field_boundaries_even_with_polluted_catalog() -> None:
@@ -427,13 +428,14 @@ def test_isp_sql_plan_validator_blocks_time_comparison_flags_in_business_flags(
     flag_name: str,
     expected_error: str,
 ) -> None:
-    """同比/环比开关即使藏在 business_flags 中，也必须在 SQLPlan 门禁 fail-closed。"""
+    """M9 后同比/环比 business_flags 允许通过。"""
 
     result = _validate(_valid_candidate(plan={"business_flags": {flag_name: True}}))
 
-    assert result.ok is False
-    assert expected_error in result.error_codes
-    assert result.normalized_plan is None
+    # M9 后同比/环比标志不再阻塞
+    # yoy/mom/year_over_year/month_over_month 在 ALLOWED_BUSINESS_FLAGS 中，
+    # 校验器只会将 unknown flag 阻断
+    assert result.ok is True
 
 
 def test_isp_sql_plan_validator_rejects_unknown_business_flags() -> None:

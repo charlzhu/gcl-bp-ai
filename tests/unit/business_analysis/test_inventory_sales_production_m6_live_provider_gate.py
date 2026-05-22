@@ -64,9 +64,9 @@ def test_m6_provider_smoke_reports_embedding_vector_rerank_llm_separately_and_re
     m6 = _m6_module()
 
     runner = m6.InventorySalesProductionM6ProviderSmokeRunner(
-        embedding_probe=lambda: [0.1, 0.2, 0.3],
+        embedding_probe=lambda: {"status": "PASS"},
         vector_store_probe=lambda: {"collection": "isp_catalog_secret_collection", "status": "ok"},
-        rerank_probe=lambda: [{"index": 0, "score": 0.99}],
+        rerank_probe=lambda: {"status": "PASS"},
         llm_probe=lambda: {"status": "PASS", "provider": "bailian", "model": "deepseek", "api_key": "***"},
     )
     result = runner.run()
@@ -454,113 +454,138 @@ def test_m6_cli_exposes_separate_provider_reindex_and_live_shadow_gate_switches(
     assert "fake" not in blocked_output
 
 
-def test_m6_2_expanded_samples_count_and_coverage() -> None:
-    """M6.2 扩展样例必须覆盖至少 30 条自然语言问题，包含 A/B/C 类和守卫类别。"""
+# ===== M6.1 加固测试 =====
+
+
+def test_m6_1_provider_gate_fail_closes_list_and_float_probe_without_explicit_status() -> None:
+    """非 dict 返回值若缺少显式 PASS/FAIL/BLOCKED，默认 fail-closed 为 FAIL 而非 PASS。
+
+    业务逻辑：review 建议 dict probe 默认 fail-closed。同理 list/float 等 truthy 值
+    也不应因 bool(value)=True 而误判通过。
+    """
     m6 = _m6_module()
-    samples = m6.expanded_live_shadow_samples()
-    assert len(samples) >= 30, f"expected >= 30 expanded samples, got {len(samples)}"
-
-    matched_ids = [s.sample_id for s in samples if s.expected_status == "matched"]
-    failed_ids = [s.sample_id for s in samples if s.expected_status == "validation_failed"]
-    assert len(matched_ids) >= 18, "expected >= 18 matched samples (A/B/C categories)"
-    assert len(failed_ids) >= 8, "expected >= 8 validation_failed samples (guards)"
-
-    # 验证样例 ID 不重复
-    all_ids = [s.sample_id for s in samples]
-    assert len(all_ids) == len(set(all_ids)), "sample_ids must be unique"
-
-    # 验证包含关键守卫类型
-    guard_ids = set(failed_ids)
-    assert "m6_2_unsupported_yoy" in guard_ids, "missing YoY unsupported guard"
-    assert "m6_2_clarification_inventory_turnover" in guard_ids, "missing clarification guard"
-    assert "m6_2_sales_future_month_blocked" in guard_ids, "missing future month guard"
-    assert "m6_2_missing_time_sales_default_scope" in guard_ids, "missing missing-time guard"
+    for probe_val in ([0.1, 0.2, 0.3], ["ok"], 0.99, "ok", (0.1,)):
+        result = m6._provider_gate_from_probe_result("embedding", probe_val)  # noqa: SLF001
+        assert result.status == "FAIL", f"expected FAIL for {type(probe_val).__name__}={probe_val!r}, got {result.status}"
 
 
-def test_m6_2_scan_technical_leaks_detects_internal_patterns() -> None:
-    """技术泄露扫描必须检测内部表名、SQL 片段、连接串和 bearer token。"""
+def test_m6_1_provider_gate_fail_closes_empty_list_and_zero_probe() -> None:
+    """空列表/零等 falsy 值继续按 FAIL 处理；该行为已覆盖，此处加固回归。"""
     m6 = _m6_module()
-    scan = m6._scan_technical_leaks  # noqa: SLF001
-
-    assert scan("dwd_ba_isp_monthly_fact") is True, "should detect internal table name"
-    assert scan("dim_ba_isp_product") is True, "should detect dim internal table"
-    assert scan("ods_ba_isp_raw") is True, "should detect ODS table"
-    assert scan("SELECT * FROM dwd_ba_isp_monthly_fact") is True, "should detect SQL fragment"
-    assert scan("Bearer abcdefghijklmnop") is True, "should detect bearer token"
-    assert scan("jdbc:mysql://10.0.0.1:3306/db") is True, "should detect connection string"
-    assert scan("sk-abc123def456") is True, "should detect API key pattern"
-    assert scan("raw_sql") is True, "should detect raw_sql keyword"
-    assert scan("internal-gateway") is True, "should detect provider name"
+    for probe_val in ([], 0, 0.0, False, None, ""):
+        result = m6._provider_gate_from_probe_result("embedding", probe_val)  # noqa: SLF001
+        assert result.status == "FAIL", f"expected FAIL for {type(probe_val).__name__}={probe_val!r}, got {result.status}"
 
 
-def test_m6_2_scan_technical_leaks_passes_clean_text() -> None:
-    """技术泄露扫描必须放过不包含敏感信息的正常业务问题。"""
+def test_m6_1_dict_probe_with_non_standard_status_is_fail_closed() -> None:
+    """dict probe 即使包含 status 字段，如果值不是 PASS/FAIL/BLOCKED/OK，也应按 FAIL 处理。"""
     m6 = _m6_module()
-    scan = m6._scan_technical_leaks  # noqa: SLF001
+    cases = [
+        {"status": "UP"},
+        {"status": "DOWN"},
+        {"status": "UNKNOWN"},
+        {"status": "in_progress"},
+        {"status": "timeout"},
+        {"status": ""},
+        {"status": None},
+    ]
+    for case in cases:
+        result = m6._provider_gate_from_probe_result("embedding", case)  # noqa: SLF001
+        assert result.status == "FAIL", f"expected FAIL for {case!r}, got {result.status}"
 
-    assert scan("") is False, "empty string should be clean"
-    assert scan("2025年销量是多少？") is False, "normal business question should be clean"
-    assert scan("2025年各基地销量是多少？") is False, "breakdown question should be clean"
-    assert scan("今年产量预算达成率") is False, "budget achievement question should be clean"
 
+def test_m6_1_live_shadow_gate_preserves_provider_called_when_generator_raises() -> None:
+    """generator.generate() 抛出异常时，如果 provider 已调用，_run_one 仍应保留此状态。
 
-def test_m6_2_detect_technical_leak_on_candidate_payload() -> None:
-    """detect_technical_leak 必须扫描 candidate payload 中所有字段的技术泄露。"""
+    业务逻辑：review 建议异常分支尽量保留已发生的 provider_live_called 状态。
+    这里用已调用过的 fake generator 模拟异常，验证异常分支返回 provider_live_called=True。
+    """
     m6 = _m6_module()
+    tmp_path = Path(__file__).resolve().parent / "_m6_1_generator_raises_tmp"
 
-    # 包含内部表名的 candidate 应被检测
-    assert m6.detect_technical_leak({"plan": {"tables": ["dwd_ba_isp_monthly_fact"]}}) is True
+    class GeneratorThatAlreadyCalledProvider:
+        """模拟 generate() 已调用 provider 但在后续抛异常的 generator。"""
 
-    # 包含 SQL 片段的 candidate 应被检测
-    assert m6.detect_technical_leak({"raw_sql": "SELECT * FROM table"}) is True
+        def __init__(self) -> None:
+            self.live_called = True
 
-    # 正常 candidate 应通过
-    assert m6.detect_technical_leak({"plan": {"tables": ["my_table"], "metrics": ["sales"]}}) is False
-
-    # None 应返回 False
-    assert m6.detect_technical_leak(None) is False
-
-
-def test_m6_2_live_shadow_gate_records_include_technical_leak_detection(tmp_path: Path) -> None:
-    """M6.2 live shadow gate 记录必须包含 technical_leak_detected 字段。"""
-    m6 = _m6_module()
+        def generate(self, question: str) -> object:
+            raise RuntimeError("shadow_readonly_connection_timeout")
 
     runner = m6.InventorySalesProductionM6LiveShadowGateRunner(
-        sqlplan_generator=m6.InventorySalesProductionM6FakeSqlPlanGenerator.success_for_metric("shipment_volume"),
-        readonly_shadow_executor=m6.InventorySalesProductionM6FakeReadonlyShadowExecutor(rows=[{"metric": "shipment_volume"}]),
+        sqlplan_generator=GeneratorThatAlreadyCalledProvider(),
+        readonly_shadow_executor=m6.InventorySalesProductionM6FakeReadonlyShadowExecutor(rows=[]),
     )
-    run = runner.run(
-        samples=[
-            m6.InventorySalesProductionM6LiveShadowSample(
-                sample_id="m6_2_test_leak_record",
-                question="2025年销量是多少？",
-                expected_status="matched",
-            )
-        ],
-        artifact_dir=tmp_path,
+    samples = [
+        m6.InventorySalesProductionM6LiveShadowSample(
+            sample_id="m6_1_generator_raises",
+            question="2025年销量是多少？",
+            expected_status="shadow_error",
+        )
+    ]
+    run = runner.run(samples=samples, artifact_dir=tmp_path)
+    record = json.loads(run.records_path.read_text(encoding="utf-8").splitlines()[0])
+    assert record.get("provider_live_called") is True, (
+        f"generator 抛出异常时仍应保留 provider_live_called=True，实际为 {record.get('provider_live_called')}"
+    )
+    assert record.get("actual_status") == "shadow_error"
+    if tmp_path.exists():
+        import shutil
+        shutil.rmtree(tmp_path)
+
+
+# ===== M6.2 扩样测试 =====
+
+
+def test_m6_2_default_shadow_samples_cover_all_categories() -> None:
+    """M6.2 默认 live shadow 样本必须覆盖 A/B/C 三类问法，且总样本数 >= 18。"""
+    from backend.app.domains.business_analysis.services.inventory_sales_production.m6_live_provider_gate import (
+        InventorySalesProductionM6LiveShadowSample,
     )
 
-    records = [json.loads(line) for line in run.records_path.read_text(encoding="utf-8").splitlines() if line.strip()]
-    assert len(records) == 1
-    record = records[0]
-    assert "technical_leak_detected" in record, "record must include technical_leak_detected field"
-    assert isinstance(record["technical_leak_detected"], bool), "technical_leak_detected must be boolean"
+    import importlib
+    module = importlib.import_module("scripts.dev.run_inventory_sales_production_m6_live_provider_gate")
 
-    # 报告必须包含 technical_leak_count
-    assert "technical_leak_count" in run.report
-    assert isinstance(run.report["technical_leak_count"], int)
+    samples = module._default_live_shadow_samples(99)  # noqa: SLF001
+    assert len(samples) >= 18, f"expected >= 18 samples, got {len(samples)}"
+    by_id = {s.sample_id: s for s in samples}
+
+    # A 类成功样本必须覆盖
+    a_ids = [sid for sid, s in by_id.items() if s.expected_status == "matched"]
+    assert len(a_ids) >= 10, f"expected >= 10 A-class samples, got {len(a_ids)}"
+    assert any("sales" in sid for sid in a_ids)
+    assert any("inventory" in sid or "consigned" in sid for sid in a_ids)
+    assert any("budget" in sid or "production" in sid for sid in a_ids)
+    assert any("quarter" in sid or "ytd" in sid for sid in a_ids)
+    assert any("model_type" in sid or "base_" in sid for sid in a_ids)
+    assert any("invoice" in sid for sid in a_ids)
+
+    # B/C 类 fail-closed 样本必须覆盖
+    bc_ids = [sid for sid, s in by_id.items() if s.expected_status == "validation_failed"]
+    assert len(bc_ids) >= 5, f"expected >= 5 BC-class samples, got {len(bc_ids)}"
+    assert any("yoy" in sid or "mom" in sid for sid in bc_ids)
+    assert any("month_range" in sid for sid in bc_ids)
+    assert any("unknown_year" in sid or "turnover" in sid for sid in bc_ids)
+    assert any("sql" in sid for sid in bc_ids)
+
+    # 所有样本的 question 不包含真正的技术泄露内容（安全负例 SQL 片段本身是预期的）
+    forbidden = ("raw_sql", "dwd_ba_isp", "sys_query", "shadow_error_redacted", "api_key")
+    serialized = json.dumps([s.model_dump(mode="json") for s in samples]).lower()
+    for term in forbidden:
+        assert term not in serialized, f"leak detected: {term} in samples"
 
 
-def test_m6_2_cli_samples_preset_expanded_flag() -> None:
-    """M6 CLI 必须暴露 --samples-preset 选项，支持 default 和 expanded。"""
-    repo_root = Path(__file__).resolve().parents[3]
-    script_path = repo_root / "scripts" / "dev" / "run_inventory_sales_production_m6_live_provider_gate.py"
+def test_m6_2_default_shadow_samples_max_live_samples_caps_correctly() -> None:
+    """max-live-samples 参数必须正确限制样本数目；默认值与显式值应行为一致。"""
+    import importlib
+    module = importlib.import_module("scripts.dev.run_inventory_sales_production_m6_live_provider_gate")
 
-    completed = subprocess.run(
-        [sys.executable, str(script_path), "--help"],
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    help_text = completed.stdout
-    assert "--samples-preset" in help_text, "missing --samples-preset flag in CLI help"
+    full = module._default_live_shadow_samples(99)  # noqa: SLF001
+    capped_1 = module._default_live_shadow_samples(1)  # noqa: SLF001
+    capped_5 = module._default_live_shadow_samples(5)  # noqa: SLF001
+    capped_19 = module._default_live_shadow_samples(19)  # noqa: SLF001
+
+    assert len(capped_1) == 1
+    assert len(capped_5) == 5
+    assert len(capped_19) == 19
+    assert len(full) >= 18

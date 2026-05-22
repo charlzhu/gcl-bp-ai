@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from backend.app.domains.business_analysis.api.endpoints import inventory_sales_production_qa
+from backend.app.domains.business_analysis.api.endpoints import inventory_sales_production_import, inventory_sales_production_qa
 
 router = APIRouter()
 
@@ -9,4 +9,10 @@ router.include_router(
     inventory_sales_production_qa.router,
     prefix="/inventory-sales-production/qa",
     tags=["Business Analysis - Inventory Sales Production QA"],
+)
+# 产销存 Excel 导入
+router.include_router(
+    inventory_sales_production_import.router,
+    prefix="/inventory-sales-production/import",
+    tags=["Business Analysis - Inventory Sales Production Import"],
 )
