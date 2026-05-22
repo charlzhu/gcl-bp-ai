@@ -1,0 +1,889 @@
+diff --git a/backend/app/domains/qa_evaluation/__init__.py b/backend/app/domains/qa_evaluation/__init__.py
+new file mode 100644
+index 00000000..fd23b582
+--- /dev/null
++++ b/backend/app/domains/qa_evaluation/__init__.py
+@@ -0,0 +1,20 @@
++"""统一业务问法评测集（NQE-Eval）模块。
++
++业务逻辑：
++    本模块定义跨业务域（物流、计划BOM、功率预测）的统一评测集标准格式，
++    支持问题-预期结果-评测结果-评测报告的完整生命周期。
++"""
++
++from backend.app.domains.qa_evaluation.schema import (
++    EvaluationCase,
++    EvaluationReport,
++    EvaluationResult,
++    EvaluationSuite,
++)
++
++__all__ = [
++    "EvaluationCase",
++    "EvaluationSuite",
++    "EvaluationResult",
++    "EvaluationReport",
++]
+diff --git a/backend/app/domains/qa_evaluation/schema.py b/backend/app/domains/qa_evaluation/schema.py
+new file mode 100644
+index 00000000..acd7b115
+--- /dev/null
++++ b/backend/app/domains/qa_evaluation/schema.py
+@@ -0,0 +1,334 @@
++"""统一业务问法评测集（NQE-Eval）Schema 定义。
++
++业务逻辑：
++    本模块定义跨业务域（物流、计划BOM、功率预测、经营分析）的统一评测集核心 Schema。
++    包括评测用例（EvaluationCase）、评测套件（EvaluationSuite）、
++    评测结果（EvaluationResult）和评测报告（EvaluationReport）。
++
++    设计原则：
++    1. 评测用例独立可序列化，不依赖运行时环境。
++    2. 套件可包含多条用例，按业务域组织。
++    3. 评测结果保留实际回答快照，支持人工复核。
++    4. 报告汇总套件级统计，支持 pass_rate 计算。
++"""
++
++from __future__ import annotations
++
++import uuid
++from typing import Literal
++
++from pydantic import BaseModel, ConfigDict, Field, model_validator
++
++
++# ---------------------------------------------------------------------------
++# 业务问法评测集支持的业务域
++# ---------------------------------------------------------------------------
++"""支持的业务域列表：
++    - logistics：物流问答。
++    - plan_bom：计划 BOM 问答。
++    - power_prediction：功率预测问答。
++    - business_analysis：经营分析（产销存）问答。
++"""
++_SUPPORTED_DOMAINS = frozenset({
++    "logistics",
++    "plan_bom",
++    "power_prediction",
++    "business_analysis",
++})
++
++# ---------------------------------------------------------------------------
++# 业务问法评测预期状态枚举
++# ---------------------------------------------------------------------------
++"""预期回答状态列表：
++    - success：成功回答，包含关键业务数据。
++    - clarification：需要澄清，缺少关键槽位。
++    - unsupported：暂不支持的问题类型。
++    - empty_result：数据范围内无匹配记录。
++    - error：后端执行异常。
++"""
++_EXPECTED_STATUSES = frozenset({
++    "success",
++    "clarification",
++    "unsupported",
++    "empty_result",
++    "error",
++})
++
++
++# ---------------------------------------------------------------------------
++# EvaluationCase —— 单条评测用例
++# ---------------------------------------------------------------------------
++
++class EvaluationCase(BaseModel):
++    """单条业务问法评测用例。
++
++    描述一条用户自然语言问题及其预期回答，供评测引擎自动化对比。
++
++    参数：
++        question: 用户自然语言问题，必填。
++        domain: 所属业务域，必填，见 _SUPPORTED_DOMAINS。
++        expected_status: 预期回答状态，必填，见 _EXPECTED_STATUSES。
++        expected_text: 预期回答核心文本，可选。
++            —— 用于验证 LLM 生成回答是否包含关键业务数据。
++        expected_row_count: 预期结果行数，可选。
++            —— 用于验证查询返回的数据量是否匹配。
++        caliber: 业务口径说明，可选。
++            —— 说明本问题的数据范围、计算公式、筛选条件等，供评测员参考。
++        tags: 分类标签列表，可选，默认空列表。
++            —— 如 ["smoke", "logistics_route_price"]。
++        allow_empty_substitute: 是否允许空结果回填预期，默认 True。
++            —— 当数据源无匹配记录时，是否接受 row_count=0 的结果。
++        schema_version: Schema 版本号，默认 "1.0"。
++        case_id: 用例唯一标识，可选，未传入时自动生成 UUID。
++
++    业务注意：
++        本 Schema 仅用于构建评测数据集，不执行实际查询。
++        评测引擎需基于 case_id 关联实际回答和 EvaluationResult。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    case_id: str = Field(
++        default_factory=lambda: str(uuid.uuid4()),
++        description="用例唯一标识，未传入时自动生成 UUID",
++    )
++    question: str = Field(..., min_length=1, description="用户自然语言问题")
++    domain: str = Field(..., description="所属业务域")
++    expected_status: str = Field(..., description="预期回答状态")
++    expected_text: str | None = Field(
++        default=None,
++        description="预期回答核心文本，用于验证关键业务数据是否存在",
++    )
++    expected_row_count: int | None = Field(
++        default=None,
++        ge=0,
++        description="预期结果行数，用于验证查询返回的数据量",
++    )
++    caliber: str | None = Field(
++        default=None,
++        description="业务口径说明：数据范围、计算公式、筛选条件等",
++    )
++    tags: list[str] = Field(
++        default_factory=list,
++        description="分类标签列表，如 ['smoke', 'logistics_route_price']",
++    )
++    allow_empty_substitute: bool = Field(
++        default=True,
++        description="是否允许空结果回填预期（row_count=0 可接受）",
++    )
++    schema_version: str = Field(
++        default="1.0",
++        description="Schema 版本号",
++    )
++
++    @model_validator(mode="after")
++    def _validate_domain(self) -> "EvaluationCase":
++        """校验 domain 是否在支持的业务域白名单内。"""
++        if self.domain not in _SUPPORTED_DOMAINS:
++            raise ValueError(
++                f"domain 必须是以下之一：{sorted(_SUPPORTED_DOMAINS)}，"
++                f"当前值：{self.domain}",
++            )
++        return self
++
++    @model_validator(mode="after")
++    def _validate_expected_status(self) -> "EvaluationCase":
++        """校验 expected_status 是否在允许的状态值内。"""
++        if self.expected_status not in _EXPECTED_STATUSES:
++            raise ValueError(
++                f"expected_status 必须是以下之一：{sorted(_EXPECTED_STATUSES)}，"
++                f"当前值：{self.expected_status}",
++            )
++        return self
++
++
++# ---------------------------------------------------------------------------
++# EvaluationSuite —— 评测套件
++# ---------------------------------------------------------------------------
++
++class EvaluationSuite(BaseModel):
++    """评测套件：包含一个业务域内的多条评测用例。
++
++    参数：
++        name: 套件名称，必填，如"物流核心问答回归"。
++        domain: 所属业务域，必填。
++        cases: 评测用例列表，默认空列表。
++        description: 套件描述，可选。
++
++    业务注意：
++        套件内的用例应属于同一业务域；评测引擎可按套件批量执行。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    name: str = Field(..., min_length=1, description="套件名称")
++    domain: str = Field(..., description="所属业务域")
++    cases: list[EvaluationCase] = Field(
++        default_factory=list,
++        description="评测用例列表",
++    )
++    description: str | None = Field(
++        default=None,
++        description="套件描述",
++    )
++
++    @model_validator(mode="after")
++    def _validate_domain(self) -> "EvaluationSuite":
++        """校验 domain 是否在支持的业务域白名单内。"""
++        if self.domain not in _SUPPORTED_DOMAINS:
++            raise ValueError(
++                f"domain 必须是以下之一：{sorted(_SUPPORTED_DOMAINS)}，"
++                f"当前值：{self.domain}",
++            )
++        return self
++
++    @model_validator(mode="after")
++    def _validate_cases_domain(self) -> "EvaluationSuite":
++        """校验所有 case 的 domain 与套件 domain 一致。"""
++        for i, case in enumerate(self.cases):
++            if case.domain != self.domain:
++                raise ValueError(
++                    f"cases[{i}] 的 domain ({case.domain}) 与套件 domain"
++                    f" ({self.domain}) 不一致",
++                )
++        return self
++
++
++# ---------------------------------------------------------------------------
++# EvaluationResult —— 单条用例评测结果
++# ---------------------------------------------------------------------------
++
++class EvaluationResult(BaseModel):
++    """单条评测用例的执行结果。
++
++    对比实际回答与预期用例，记录是否匹配及差异详情。
++
++    参数：
++        case_id: 关联的用例标识，必填。
++        matched_status: 实际状态是否匹配预期，默认 False。
++        key_numbers_match: 关键数字是否匹配，可选。
++            —— 例如预期 row_count=5，实际 row_count=5 则为 True。
++        text_similarity: 文本相似度（0.0~1.0），可选。
++            —— 基于 expected_text 与实际 answer 的语义/字符匹配计算。
++        leak_found: 是否发现技术泄露（SQL/表名/字段名等），默认 False。
++        actual_status: 实际回答状态，可选。
++        actual_answer_summary: 实际回答摘要，可选。
++        actual_row_count: 实际返回行数，可选。
++        mismatch_detail: 差异说明，可选。
++            —— 用人类可读方式描述不匹配的具体项目。
++
++    业务注意：
++        matched_status=False 时可通过 mismatch_detail 了解具体差异。
++        leak_found=True 是严重问题，即使其他指标全匹配也应标记不通过。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    case_id: str = Field(..., min_length=1, description="关联的用例标识")
++    matched_status: bool = Field(
++        default=False,
++        description="实际状态是否匹配预期",
++    )
++    key_numbers_match: bool | None = Field(
++        default=None,
++        description="关键数字（如 row_count）是否匹配",
++    )
++    text_similarity: float | None = Field(
++        default=None,
++        ge=0.0,
++        le=1.0,
++        description="文本相似度，范围 0.0~1.0",
++    )
++    leak_found: bool = Field(
++        default=False,
++        description="是否发现技术泄露（SQL/表名/字段名等）",
++    )
++    actual_status: str | None = Field(
++        default=None,
++        description="实际回答状态",
++    )
++    actual_answer_summary: str | None = Field(
++        default=None,
++        description="实际回答摘要",
++    )
++    actual_row_count: int | None = Field(
++        default=None,
++        ge=0,
++        description="实际返回行数",
++    )
++    mismatch_detail: str | None = Field(
++        default=None,
++        description="差异说明，用人类可读方式描述不匹配的具体项目",
++    )
++
++
++# ---------------------------------------------------------------------------
++# EvaluationReport —— 评测报告
++# ---------------------------------------------------------------------------
++
++class EvaluationReport(BaseModel):
++    """套件级评测汇总报告。
++
++    汇总一个评测套件的整体通过/失败情况，附每条用例的详细结果。
++
++    参数：
++        suite_name: 套件名称，必填。
++        domain: 所属业务域，可选。
++        total_cases: 总用例数，必填。
++        passed_cases: 通过用例数，必填。
++        failed_cases: 失败用例数，必填。
++        results: 详细评测结果列表，默认空列表。
++        notes: 备注信息，可选。
++
++    业务逻辑：
++        passed_cases + failed_cases 必须等于 total_cases，否则抛 ValidationError。
++        pass_rate 为计算属性（passed_cases / total_cases），
++        当 total_cases=0 时返回 1.0（空套件视为全部通过）。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    suite_name: str = Field(..., min_length=1, description="套件名称")
++    domain: str | None = Field(
++        default=None,
++        description="所属业务域",
++    )
++    total_cases: int = Field(..., ge=0, description="总用例数")
++    passed_cases: int = Field(..., ge=0, description="通过用例数")
++    failed_cases: int = Field(..., ge=0, description="失败用例数")
++    results: list[EvaluationResult] = Field(
++        default_factory=list,
++        description="详细评测结果列表",
++    )
++    notes: str | None = Field(
++        default=None,
++        description="备注信息",
++    )
++
++    @model_validator(mode="after")
++    def _validate_consistency(self) -> "EvaluationReport":
++        """校验 passed_cases + failed_cases 与 total_cases 一致。"""
++        if self.passed_cases + self.failed_cases != self.total_cases:
++            raise ValueError(
++                f"passed_cases + failed_cases 必须等于 total_cases，"
++                f"当前 passed={self.passed_cases} + failed={self.failed_cases}"
++                f" != total={self.total_cases}",
++            )
++        return self
++
++    @model_validator(mode="after")
++    def _validate_results_count(self) -> "EvaluationReport":
++        """校验 results 列表长度与 total_cases 一致（非空时）。"""
++        if self.results and len(self.results) != self.total_cases:
++            raise ValueError(
++                f"results 长度 ({len(self.results)}) 与 total_cases"
++                f" ({self.total_cases}) 不一致",
++            )
++        return self
++
++    @property
++    def pass_rate(self) -> float:
++        """计算通过率（0.0~1.0）。"""
++        if self.total_cases == 0:
++            return 1.0
++        return self.passed_cases / self.total_cases
+diff --git a/tests/unit/qa_evaluation/test_evaluation_schema.py b/tests/unit/qa_evaluation/test_evaluation_schema.py
+new file mode 100644
+index 00000000..b98fb47a
+--- /dev/null
++++ b/tests/unit/qa_evaluation/test_evaluation_schema.py
+@@ -0,0 +1,517 @@
++"""统一业务问法评测集（NQE-Eval）Schema 的 focused tests。
++
++业务逻辑：
++    验证 EvaluationCase / EvaluationSuite / EvaluationResult / EvaluationReport
++    四类核心 schema 的字段定义、业务规则和跨域（物流/BOM/功率）存储能力。
++"""
++
++from __future__ import annotations
++
++import pytest
++from pydantic import ValidationError
++
++
++class TestEvaluationCase:
++    """EvaluationCase schema 测试：单条评测用例的结构与约束。"""
++
++    def test_question_required(self):
++        """question 为必填字段，缺失时抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        with pytest.raises(ValidationError, match="question"):
++            EvaluationCase(  # type: ignore[call-arg]
++                domain="logistics",
++                expected_status="success",
++            )
++
++    def test_domain_required(self):
++        """domain 为必填字段，必须是已知业务域之一。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        with pytest.raises(ValidationError, match="domain"):
++            EvaluationCase(  # type: ignore[call-arg]
++                question="合肥到阜宁的运费是多少",
++                expected_status="success",
++            )
++
++    def test_expected_status_required(self):
++        """expected_status 为必填字段，标识本条的预期回答状态。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        with pytest.raises(ValidationError, match="expected_status"):
++            EvaluationCase(  # type: ignore[call-arg]
++                question="合肥到阜宁的运费是多少",
++                domain="logistics",
++            )
++
++    def test_minimal_case_valid(self):
++        """最少字段（question + domain + expected_status）可以构造有效用例。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="2023年合肥到广州的总运费",
++            domain="logistics",
++            expected_status="success",
++        )
++        assert case.question == "2023年合肥到广州的总运费"
++        assert case.domain == "logistics"
++        assert case.expected_status == "success"
++
++    def test_expected_status_enum(self):
++        """expected_status 须按业务定义允许的状态值。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        # 合法状态值应可构造
++        for status in ("success", "clarification", "unsupported", "empty_result", "error"):
++            case = EvaluationCase(
++                question="测试问题",
++                domain="logistics",
++                expected_status=status,
++            )
++            assert case.expected_status == status
++
++    def test_expected_status_invalid_raises(self):
++        """非预期状态值应抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        with pytest.raises(ValidationError):
++            EvaluationCase(
++                question="测试",
++                domain="logistics",
++                expected_status="unknown_status_xyz",
++            )
++
++    def test_optional_fields_default(self):
++        """可选的 expected_text / expected_row_count / caliber 应有合理默认值。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="2023年合肥基地发货量",
++            domain="logistics",
++            expected_status="success",
++        )
++        assert case.expected_text is None
++        assert case.expected_row_count is None
++        assert case.caliber is None
++        # schema_version / tags / allow_empty_substitute 应有文档级说明即可
++        assert isinstance(case.schema_version, str)
++        assert case.schema_version == "1.0"
++
++    def test_full_case_all_fields(self):
++        """全字段构造用例，所有字段均可正确存取。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="2023年合肥基地发货量",
++            domain="logistics",
++            expected_status="success",
++            expected_text="2023年合肥基地总发货量为 12,500 MW",
++            expected_row_count=1,
++            caliber="发货量=总费用/车次数，按合肥基地筛选",
++            tags=["smoke", "logistics_route_price"],
++            allow_empty_substitute=False,
++            schema_version="1.0",
++        )
++        assert case.question == "2023年合肥基地发货量"
++        assert case.domain == "logistics"
++        assert case.expected_status == "success"
++        assert case.expected_text == "2023年合肥基地总发货量为 12,500 MW"
++        assert case.expected_row_count == 1
++        assert case.caliber == "发货量=总费用/车次数，按合肥基地筛选"
++        assert case.tags == ["smoke", "logistics_route_price"]
++        assert case.allow_empty_substitute is False
++
++    def test_domain_allows_logistics_bom_power(self):
++        """domain 支持物流（logistics）、计划BOM（plan_bom）、功率（power_prediction）。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        for domain in ("logistics", "plan_bom", "power_prediction", "business_analysis"):
++            case = EvaluationCase(
++                question=f"{domain}域测试问题",
++                domain=domain,
++                expected_status="success",
++            )
++            assert case.domain == domain
++
++    def test_tags_optional_default(self):
++        """tags 为可选字段，默认空列表。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="测试",
++            domain="logistics",
++            expected_status="success",
++        )
++        assert case.tags == []
++
++    def test_allow_empty_substitute_default(self):
++        """allow_empty_substitute 默认 True（允许空结果回填预期）。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="测试",
++            domain="logistics",
++            expected_status="empty_result",
++        )
++        assert case.allow_empty_substitute is True
++
++    def test_case_id_autogenerated(self):
++        """case_id 在未显式传入时自动生成唯一标识。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case1 = EvaluationCase(
++            question="问题A",
++            domain="logistics",
++            expected_status="success",
++        )
++        case2 = EvaluationCase(
++            question="问题B",
++            domain="logistics",
++            expected_status="success",
++        )
++        assert case1.case_id is not None
++        assert case2.case_id is not None
++        assert case1.case_id != case2.case_id, "自动生成的 case_id 应互不相同"
++
++
++class TestEvaluationSuite:
++    """EvaluationSuite schema 测试：评测套件的结构与约束。"""
++
++    def test_name_required(self):
++        """name 为必填字段。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationSuite
++
++        with pytest.raises(ValidationError, match="name"):
++            EvaluationSuite(  # type: ignore[call-arg]
++                domain="logistics",
++            )
++
++    def test_domain_required(self):
++        """domain 为必填字段。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationSuite
++
++        with pytest.raises(ValidationError, match="domain"):
++            EvaluationSuite(  # type: ignore[call-arg]
++                name="物流基础问答回归",
++            )
++
++    def test_cases_default_empty_list(self):
++        """cases 默认为空列表。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationSuite
++
++        suite = EvaluationSuite(
++            name="物流基础问答回归",
++            domain="logistics",
++        )
++        assert suite.cases == []
++
++    def test_suite_with_cases(self):
++        """套件可包含多条 EvaluationCase。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase, EvaluationSuite
++
++        case1 = EvaluationCase(
++            question="2023年合肥到广州总运费",
++            domain="logistics",
++            expected_status="success",
++            expected_row_count=5,
++        )
++        case2 = EvaluationCase(
++            question="2024年阜宁基地发货量",
++            domain="logistics",
++            expected_status="success",
++            expected_row_count=3,
++        )
++        suite = EvaluationSuite(
++            name="物流核心问答",
++            domain="logistics",
++            cases=[case1, case2],
++        )
++        assert len(suite.cases) == 2
++        assert suite.cases[0].question == "2023年合肥到广州总运费"
++        assert suite.cases[1].question == "2024年阜宁基地发货量"
++
++    def test_suite_domain_validation(self):
++        """suite 的 domain 必须在白名单内，否则抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationSuite
++
++        with pytest.raises(ValidationError, match="domain 必须是以下之一"):
++            EvaluationSuite(
++                name="未知域套件",
++                domain="unknown_domain_xyz",
++            )
++
++    def test_suite_cases_domain_mismatch(self):
++        """套件内 case 的 domain 与套件 domain 不一致时应抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase, EvaluationSuite
++
++        case = EvaluationCase(
++            question="BOM问题",
++            domain="plan_bom",  # 与套件的 logistics 不一致
++            expected_status="success",
++        )
++        with pytest.raises(ValidationError, match="domain.*不一致"):
++            EvaluationSuite(
++                name="物流套件",
++                domain="logistics",
++                cases=[case],
++            )
++
++
++class TestEvaluationResult:
++    """EvaluationResult schema 测试：单条用例的评测结果。"""
++
++    def test_case_id_required(self):
++        """case_id 为必填字段，关联被评测的用例。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        with pytest.raises(ValidationError, match="case_id"):
++            EvaluationResult(  # type: ignore[call-arg]
++                matched_status=True,
++            )
++
++    def test_minimal_result_valid(self):
++        """最少字段即可构造有效评测结果。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        result = EvaluationResult(
++            case_id="case_001",
++            matched_status=True,
++        )
++        assert result.case_id == "case_001"
++        assert result.matched_status is True
++
++    def test_full_result_all_fields(self):
++        """全字段构造评测结果。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        result = EvaluationResult(
++            case_id="case_001",
++            matched_status=True,
++            key_numbers_match=True,
++            text_similarity=0.95,
++            leak_found=False,
++            actual_status="success",
++            actual_answer_summary="2023年合肥基地总发货量为12,500 MW",
++            actual_row_count=1,
++            mismatch_detail="各项指标完全匹配，无差异",
++        )
++        assert result.case_id == "case_001"
++        assert result.matched_status is True
++        assert result.key_numbers_match is True
++        assert result.text_similarity == 0.95
++        assert result.leak_found is False
++        assert result.actual_status == "success"
++        assert result.actual_answer_summary == "2023年合肥基地总发货量为12,500 MW"
++        assert result.actual_row_count == 1
++        assert result.mismatch_detail == "各项指标完全匹配，无差异"
++
++    def test_text_similarity_range(self):
++        """text_similarity 应在 0.0~1.0 范围内。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        # 边界值通过
++        for val in (0.0, 0.5, 1.0):
++            result = EvaluationResult(
++                case_id="case_001",
++                matched_status=True,
++                text_similarity=val,
++            )
++            assert result.text_similarity == val
++
++    def test_default_values(self):
++        """默认值：matched_status=False, key_numbers_match=None, leak_found=False。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        result = EvaluationResult(case_id="case_001")
++        assert result.matched_status is False
++        assert result.key_numbers_match is None
++        assert result.leak_found is False
++
++
++class TestEvaluationReport:
++    """EvaluationReport schema 测试：套件级别的评测报告。"""
++
++    def test_suite_name_required(self):
++        """suite_name 为必填字段。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        with pytest.raises(ValidationError, match="suite_name"):
++            EvaluationReport(  # type: ignore[call-arg]
++                total_cases=10,
++                passed_cases=8,
++                failed_cases=2,
++            )
++
++    def test_basic_report(self):
++        """基础报告包含总量/通过/失败统计。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        report = EvaluationReport(
++            suite_name="物流核心问答回归",
++            total_cases=10,
++            passed_cases=8,
++            failed_cases=2,
++        )
++        assert report.suite_name == "物流核心问答回归"
++        assert report.total_cases == 10
++        assert report.passed_cases == 8
++        assert report.failed_cases == 2
++
++    def test_results_list_default(self):
++        """results 默认为空列表。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        report = EvaluationReport(
++            suite_name="物流核心问答回归",
++            total_cases=10,
++            passed_cases=8,
++            failed_cases=2,
++        )
++        assert report.results == []
++
++    def test_full_report_with_results(self):
++        """完整报告包含若干条 EvaluationResult。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport, EvaluationResult
++
++        r1 = EvaluationResult(case_id="case_001", matched_status=True)
++        r2 = EvaluationResult(case_id="case_002", matched_status=False)
++        report = EvaluationReport(
++            suite_name="物流核心问答回归",
++            total_cases=2,
++            passed_cases=1,
++            failed_cases=1,
++            results=[r1, r2],
++        )
++        assert len(report.results) == 2
++        assert report.results[0].matched_status is True
++        assert report.results[1].matched_status is False
++
++    def test_pass_rate_computed(self):
++        """pass_rate 可根据 passed/total 计算。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        report = EvaluationReport(
++            suite_name="测试套件",
++            total_cases=10,
++            passed_cases=7,
++            failed_cases=3,
++        )
++        assert report.pass_rate == pytest.approx(0.7)
++
++    def test_consistency_check(self):
++        """passed + failed 应与 total 一致，不一致时抛错误。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        with pytest.raises(ValidationError, match="passed_cases \\+ failed_cases 必须等于 total_cases"):
++            EvaluationReport(
++                suite_name="测试套件",
++                total_cases=10,
++                passed_cases=5,
++                failed_cases=3,  # 5+3 != 10
++            )
++
++    def test_domain_field(self):
++        """domain 字段应正确存储评测所属业务域。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        report = EvaluationReport(
++            suite_name="BOM问答回归",
++            domain="plan_bom",
++            total_cases=5,
++            passed_cases=5,
++            failed_cases=0,
++        )
++        assert report.domain == "plan_bom"
++
++    def test_results_count_mismatch(self):
++        """results 列表长度与 total_cases 不一致时应抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport, EvaluationResult
++
++        r1 = EvaluationResult(case_id="case_001", matched_status=True)
++        with pytest.raises(ValidationError, match="results 长度"):
++            EvaluationReport(
++                suite_name="测试套件",
++                total_cases=5,  # 声明 5 条，但只给了 1 条结果
++                passed_cases=1,
++                failed_cases=4,
++                results=[r1],
++            )
++
++
++class TestCrossDomainStorage:
++    """跨域存储测试：验证物流、BOM、功率的评测用例均可存入。"""
++
++    def test_logistics_case_serialization(self):
++        """物流域用例可序列化/反序列化。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="2023年合肥基地发运量",
++            domain="logistics",
++            expected_status="success",
++            expected_text="2023年合肥基地总发运量约 2500 车次",
++            expected_row_count=1,
++            caliber="发运量=车次数，按合肥基地筛选",
++            tags=["logistics", "smoke"],
++        )
++        # 验证 model_dump 返回所有关键字段
++        d = case.model_dump(mode="json")
++        assert d["question"] == "2023年合肥基地发运量"
++        assert d["domain"] == "logistics"
++        assert d["expected_status"] == "success"
++        assert d["expected_row_count"] == 1
++        assert d["caliber"] == "发运量=车次数，按合肥基地筛选"
++
++    def test_bom_case_serialization(self):
++        """计划BOM域用例可序列化/反序列化。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="BOM评审号 BM2024-00123 的物料清单",
++            domain="plan_bom",
++            expected_status="success",
++            expected_row_count=15,
++            caliber="按评审号 BM2024-00123 查询全部物料行",
++            tags=["plan_bom", "bom_query"],
++        )
++        d = case.model_dump(mode="json")
++        assert d["question"] == "BOM评审号 BM2024-00123 的物料清单"
++        assert d["domain"] == "plan_bom"
++        assert d["expected_status"] == "success"
++        assert d["expected_row_count"] == 15
++
++    def test_power_prediction_case_serialization(self):
++        """功率预测域用例可序列化/反序列化。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="615功率 4mm² 线长400/200 的功率档位预测",
++            domain="power_prediction",
++            expected_status="success",
++            expected_text="功率档位为第3档",
++            caliber="基于GCL功率测试基准xlsm模型计算",
++            tags=["power", "prediction"],
++        )
++        d = case.model_dump(mode="json")
++        assert d["question"] == "615功率 4mm² 线长400/200 的功率档位预测"
++        assert d["domain"] == "power_prediction"
++        assert d["expected_status"] == "success"
++
++    def test_suite_cross_domain(self):
++        """评测套件可包含不同业务域的用例（由 suite domain 字段声明）。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase, EvaluationSuite
++
++        # 套件声明为 logistics，用例必须同域
++        case = EvaluationCase(
++            question="物流问题",
++            domain="logistics",
++            expected_status="success",
++        )
++        suite = EvaluationSuite(
++            name="物流评测集",
++            domain="logistics",
++            cases=[case],
++        )
++        assert suite.domain == "logistics"
++        assert len(suite.cases) == 1
++        assert suite.cases[0].domain == "logistics"

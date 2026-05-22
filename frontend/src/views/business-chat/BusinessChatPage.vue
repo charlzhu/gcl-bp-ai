@@ -454,6 +454,8 @@ import {
 import { streamLogisticsDataQaQuery, type LogisticsDataQaResult } from '@/api/logistics'
 import * as planBomApi from '@/api/planBom'
 import type { PlanBomQaResponse } from '@/api/planBom'
+/* LQG-8：统一业务问数流式入口 */
+import { streamBusinessQa } from '@/api/businessQa'
 import { renderBusinessMarkdown } from '@/utils/businessMarkdown'
 import {
   buildBusinessChatMessageId,
@@ -801,23 +803,35 @@ async function submitQuestion(input?: string) {
   })
 
   try {
-    if (resolvedDomain === 'logistics') {
+    /* LQG-8：物流与计划 BOM 统一走 business-qa/stream 入口；
+       经营分析/产销存继续使用原有独立流式接口。 */
+    if (resolvedDomain === 'logistics' || resolvedDomain === 'plan_bom') {
       let completed = false
-      await streamLogisticsDataQaQuery(
-        { question: text },
+      await streamBusinessQa(
+        { question: text, domain_hint: resolvedDomain as 'logistics' | 'plan_bom' },
         {
           onMeta: (meta) => updateAssistantStreamMeta(sessionId, assistantId, meta),
           onDelta: (chunk) => updateAssistantStreamingContent(sessionId, assistantId, chunk),
           onDone: (streamData) => {
-            const data = ((streamData as any)?.data || streamData) as LogisticsDataQaResult
+            const data = ((streamData as any)?.data || streamData) as Record<string, any>
             completed = true
-            completeAssistantMessage(sessionId, assistantId, {
-              content: '',
-              domain: resolvedDomain,
-              status: data?.status?.code || 'OK',
-              presentation: adaptLogisticsResult(data),
-              rawResponse: data as unknown as Record<string, any>,
-            })
+            if (resolvedDomain === 'logistics') {
+              completeAssistantMessage(sessionId, assistantId, {
+                content: '',
+                domain: resolvedDomain,
+                status: data?.status?.code || 'OK',
+                presentation: adaptLogisticsResult(data as any),
+                rawResponse: data as unknown as Record<string, any>,
+              })
+            } else {
+              completeAssistantMessage(sessionId, assistantId, {
+                content: '',
+                domain: resolvedDomain,
+                status: data?.status?.code || data?.classification || 'OK',
+                presentation: adaptPlanBomResult(data as any),
+                rawResponse: data as unknown as Record<string, any>,
+              })
+            }
           },
         },
       )
@@ -837,27 +851,6 @@ async function submitQuestion(input?: string) {
               domain: resolvedDomain,
               status: data?.status?.code || data?.classification || 'OK',
               presentation: adaptInventorySalesProductionResult(data),
-              rawResponse: data as unknown as Record<string, any>,
-            })
-          },
-        },
-      )
-      if (!completed) throw new Error('流式回答未正常结束，请稍后重试。')
-    } else {
-      let completed = false
-      await planBomApi.streamPlanBomQuestion(
-        { question: text },
-        {
-          onMeta: (meta) => updateAssistantStreamMeta(sessionId, assistantId, meta),
-          onDelta: (chunk) => updateAssistantStreamingContent(sessionId, assistantId, chunk),
-          onDone: (streamData) => {
-            const data = ((streamData as any)?.data || streamData) as PlanBomQaResponse
-            completed = true
-            completeAssistantMessage(sessionId, assistantId, {
-              content: '',
-              domain: resolvedDomain,
-              status: data?.status?.code || data?.classification || 'OK',
-              presentation: adaptPlanBomResult(data),
               rawResponse: data as unknown as Record<string, any>,
             })
           },
