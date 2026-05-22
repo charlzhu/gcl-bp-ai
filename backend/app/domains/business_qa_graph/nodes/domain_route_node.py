@@ -138,19 +138,33 @@ def _llm_classify_domain(question: str, settings: Any) -> str:
 
 
 def _get_catalog_summary() -> str:
-    """获取 catalog 简短摘要（表名+描述），供 LLM 分类参考。"""
+    """从语义 catalog 动态加载表名摘要，不可用时用硬编码兜底。"""
     try:
-        from backend.app.domains.logistics.services.nl2sql.catalog_retrieval import (
-            LogisticsCatalogRecallService,
+        from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
+            LogisticsSemanticCatalogLoader,
         )
-        recall_service = LogisticsCatalogRecallService()
-        # 获取所有已注册的 domain 概览
+        loader = LogisticsSemanticCatalogLoader()
+        catalog = loader.load()
+        tables_by_domain: dict[str, list[str]] = {}
+        for table in catalog.tables:
+            domain = getattr(table, "domain", "unknown")
+            if domain not in tables_by_domain:
+                tables_by_domain[domain] = []
+            tables_by_domain[domain].append(table.name)
+        lines = ["当前 catalog 注册的域："]
+        domain_labels = {
+            "logistics": "物流", "plan_bom": "计划BOM",
+            "business_analysis": "经营分析", "material_management": "物控物管",
+        }
+        for domain, tables in tables_by_domain.items():
+            label = domain_labels.get(domain, domain)
+            lines.append(f"- {label}: {', '.join(tables[:10])}")
+        return "\n".join(lines) if len(lines) > 1 else "catalog 为空。"
+    except Exception:
         return (
             "当前 catalog 注册的域：\n"
-            "- logistics: 物流发运台账（logistics_shipment）、线路运价\n"
-            "- plan_bom: 计划BOM详情（plan_bom_detail）、BOM对比\n"
-            "- business_analysis: 产销存月度数据（production_monthly）、库存表\n"
-            "- material_management: 库存出入库（V_HF_SAP_INOUT_DAILY）、物料库存（V_SAP_HFFN_CRKLSZ）\n"
+            "- logistics: 物流发运台账、线路运价\n"
+            "- plan_bom: 计划BOM详情、BOM对比、功率测算\n"
+            "- business_analysis: 产销存月度数据、库存表\n"
+            "- material_management: 库存出入库(V_HF_SAP_INOUT_DAILY)、物料库存(V_SAP_HFFN_CRKLSZ)\n"
         )
-    except Exception:
-        return "catalog 不可用。"

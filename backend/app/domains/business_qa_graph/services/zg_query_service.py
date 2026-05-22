@@ -14,9 +14,9 @@ import json
 import logging
 from typing import Any, AsyncGenerator
 
-from backend.app.domains.business_qa_graph.builder_zg import build_zg_business_qa_graph
+from backend.app.domains.business_qa_graph.builder_v2 import build_unified_graph
 from backend.app.domains.business_qa_graph.schemas.request import BusinessQaGraphRequest
-from backend.app.domains.business_qa_graph.schemas.zg_state import build_zg_initial_state
+from backend.app.domains.business_qa_graph.schemas.state import build_business_qa_initial_state
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ class ZgQueryService:
     @property
     def graph(self) -> Any:
         if self._graph is None:
-            self._graph = build_zg_business_qa_graph()
+            self._graph = build_unified_graph()
         return self._graph
 
     async def query(self, question: str) -> AsyncGenerator[str, None]:
@@ -59,7 +59,7 @@ class ZgQueryService:
         - on_chain_end LangGraph → SSE result（最终结果）
         """
         request = BusinessQaGraphRequest(question=question, domain_hint=None, trace_id=None)
-        initial_state = build_zg_initial_state(request)
+        initial_state = build_business_qa_initial_state(request)
         if self._db_session:
             initial_state["_db_session"] = self._db_session
 
