@@ -9,6 +9,7 @@ alembic==1.13.3
 
 pydantic==2.9.2
 pydantic-settings==2.5.2
+langgraph==1.2.0
 python-multipart==0.0.9
 python-dotenv==1.0.1
 PyYAML==6.0.2

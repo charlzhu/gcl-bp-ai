@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     llm_answer_presentation_timeout: float = 6.0
     llm_answer_presentation_max_retries: int = 0
     query_planning_v2_response_meta_enabled: bool = False
+    business_qa_langgraph_enabled: bool = False
     logistics_query_planner_v2_enabled: bool = False
     logistics_query_planner_v2_mode: Literal["off", "shadow", "assist"] = "shadow"
     logistics_query_planner_v2_min_confidence: float = 0.9

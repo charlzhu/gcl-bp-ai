@@ -1,0 +1,1390 @@
+diff --git a/backend/app/domains/business_qa_graph/__init__.py b/backend/app/domains/business_qa_graph/__init__.py
+new file mode 100644
+index 00000000..64b6fa4c
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/__init__.py
+@@ -0,0 +1,10 @@
++"""统一业务问数 LangGraph 编排骨架。
++
++本包只承载外层 orchestration 骨架；物流、计划 BOM、经营分析、NL2SQL/QueryPlanningV2/SQLPlan
++等受控查询能力仍由既有领域服务负责，不能在这里绕过中间库或生成自由 SQL。
++"""
++
++from backend.app.domains.business_qa_graph.builder import build_business_qa_graph
++from backend.app.domains.business_qa_graph.runner import BusinessQaGraphRunner
++
++__all__ = ["BusinessQaGraphRunner", "build_business_qa_graph"]
+diff --git a/backend/app/domains/business_qa_graph/builder.py b/backend/app/domains/business_qa_graph/builder.py
+new file mode 100644
+index 00000000..f4098f95
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/builder.py
+@@ -0,0 +1,27 @@
++from __future__ import annotations
++
++from langgraph.graph import END, START, StateGraph
++
++from backend.app.domains.business_qa_graph.nodes.domain_route_node import domain_route_node
++from backend.app.domains.business_qa_graph.nodes.receive_node import receive_node
++from backend.app.domains.business_qa_graph.schemas.state import BusinessQaGraphState
++
++
++def build_business_qa_graph():
++    """构建最小统一业务问数 StateGraph。
++
++    参数：无。
++    返回：
++        已 compile 的 LangGraph graph，可通过 invoke 执行。
++    业务逻辑：
++        LQG-2 只连接 START→receive→domain_route→END，证明真实 LangGraph 依赖、state 传递和
++        capability 白名单路由可用；不注册任何正式业务执行节点，避免绕过既有物流/BOM/NL2SQL 受控链路。
++    """
++
++    graph = StateGraph(BusinessQaGraphState)
++    graph.add_node("receive", receive_node)
++    graph.add_node("domain_route", domain_route_node)
++    graph.add_edge(START, "receive")
++    graph.add_edge("receive", "domain_route")
++    graph.add_edge("domain_route", END)
++    return graph.compile()
+diff --git a/backend/app/domains/business_qa_graph/domain_registry.py b/backend/app/domains/business_qa_graph/domain_registry.py
+new file mode 100644
+index 00000000..ce1b76f8
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/domain_registry.py
+@@ -0,0 +1,503 @@
++from __future__ import annotations
++
++from collections.abc import Iterable
++import re
++
++from backend.app.domains.business_qa_graph.schemas.domain import (
++    BusinessQaCapabilityDefinition,
++    BusinessQaCapabilityId,
++    BusinessQaDomainDefinition,
++    BusinessQaDomainRouteCandidate,
++    BusinessQaDomainRouteResult,
++    BusinessQaNormalizedDomainHint,
++    BusinessQaRoutableDomainId,
++)
++
++
++class BusinessQaDomainRegistry:
++    """统一业务问数领域与 capability 注册表。
++
++    参数：无。
++    返回：
++        可执行领域识别、capability 查询和澄清候选生成的 registry 实例。
++    业务逻辑：
++        LQG-2 只做外层领域路由与能力标记；所有能力最终仍必须交给既有受控领域服务执行。
++    """
++
++    _LOGISTICS_KEYWORDS = (
++        "物流",
++        "发运",
++        "发货",
++        "出货",
++        "运量",
++        "发运量",
++        "运费",
++        "运输费",
++        "承运商",
++        "物流公司",
++        "车次",
++        "线路",
++        "始发",
++        "目的地",
++        "到货地址",
++        "单价/车",
++        "均价",
++    )
++    _PLAN_BOM_KEYWORDS = (
++        "bom",
++        "计划bom",
++        "评审号",
++        "版型",
++        "版型号",
++        "订单号",
++        "物料编码",
++        "玻璃",
++        "胶膜",
++        "间隙贴膜",
++        "焊带",
++        "接线盒",
++        "汇流条",
++        "边框",
++        "背板",
++        "组件配置",
++        "bom配置",
++    )
++    _POWER_KEYWORDS = (
++        "功率",
++        "瓦",
++        "档位",
++        "功率档",
++        "效率段",
++        "标板",
++        "电池片",
++        "供应商效率",
++        "目标功率",
++        "目标比例",
++    )
++    _POWER_FACTOR_COMPARE_KEYWORDS = ("影响值", "配置影响", "差异", "对比", "比较", "区别", "相差")
++    _POWER_SUPPLIER_RECOMMEND_KEYWORDS = ("推荐", "供应商", "电池片", "目标功率", "目标比例", "比例")
++    _POWER_UNIT_PATTERN = re.compile(r"\d+(?:\.\d+)?(?:w|瓦)")
++
++    def __init__(self) -> None:
++        self._capabilities = self._build_capabilities()
++        self._domains = self._build_domains()
++
++    @classmethod
++    def default(cls) -> "BusinessQaDomainRegistry":
++        """构造默认 registry。
++
++        参数：无。
++        返回：
++            默认领域注册表。
++        业务逻辑：
++            当前实现无外部依赖，直接构造即可；后续可替换为配置/语义目录加载。
++        """
++
++        return cls()
++
++    def list_domains(self) -> tuple[BusinessQaDomainDefinition, ...]:
++        """列出 LQG-2 已开放的业务域。
++
++        参数：无。
++        返回：
++            按稳定顺序返回 logistics、plan_bom 两个域定义。
++        业务逻辑：
++            unknown 是路由结果，不是可执行业务域，因此不出现在 domain registry 中。
++        """
++
++        return tuple(self._domains.values())
++
++    def list_capabilities(self) -> tuple[BusinessQaCapabilityDefinition, ...]:
++        """列出当前 registry 中的 capability 白名单。
++
++        参数：无。
++        返回：
++            所有可被 Graph 标记的受控 capability 定义。
++        业务逻辑：
++            这里只暴露能力元数据，不授予执行权限，也不构造实际 service。
++        """
++
++        return tuple(self._capabilities.values())
++
++    def get_capability(self, capability: BusinessQaCapabilityId) -> BusinessQaCapabilityDefinition:
++        """获取指定 capability 定义。
++
++        参数：
++            capability: capability 稳定标识。
++        返回：
++            对应 capability 定义。
++        业务逻辑：
++            未注册 capability 会自然抛出 KeyError，防止后续 adapter 误用未授权能力。
++        """
++
++        return self._capabilities[capability]
++
++    def route(self, question: str, *, domain_hint: str | None = None) -> BusinessQaDomainRouteResult:
++        """根据问题和可选 domain_hint 执行领域路由。
++
++        参数：
++            question: 用户原始问题。
++            domain_hint: 可选领域提示，支持 auto/logistics/plan_bom 及少量中文别名。
++        返回：
++            领域路由结果；无法识别时返回 CLARIFY + 候选域。
++        业务逻辑：
++            路由只使用 registry 与确定性关键词启发式兜底，不调用 LLM、不查库、不计算事实。
++        """
++
++        normalized_question = self._normalize_text(question)
++        normalized_hint = self.normalize_domain_hint(domain_hint)
++        if normalized_hint == "unknown":
++            return self._clarify(
++                requested_domain=domain_hint,
++                normalized_hint=normalized_hint,
++                reason="调用方提供的 domain_hint 不在 auto/logistics/plan_bom 白名单内。",
++            )
++
++        if normalized_hint in {"logistics", "plan_bom"}:
++            return self._routed(
++                domain=normalized_hint,
++                question=normalized_question,
++                requested_domain=domain_hint,
++                normalized_hint=normalized_hint,
++                confidence=0.95,
++                reason="调用方显式提供受支持业务域，按白名单直接路由。",
++            )
++
++        detected_domain, confidence, reason = self._detect_domain(normalized_question)
++        if detected_domain is None:
++            return self._clarify(
++                requested_domain=domain_hint,
++                normalized_hint=normalized_hint,
++                reason=reason,
++            )
++        return self._routed(
++            domain=detected_domain,
++            question=normalized_question,
++            requested_domain=domain_hint,
++            normalized_hint=normalized_hint,
++            confidence=confidence,
++            reason=reason,
++        )
++
++    def normalize_domain_hint(self, domain_hint: str | None) -> BusinessQaNormalizedDomainHint:
++        """归一化调用方领域提示。
++
++        参数：
++            domain_hint: 调用方传入的领域提示。
++        返回：
++            auto/logistics/plan_bom/unknown 之一。
++        业务逻辑：
++            功率相关 hint 归并到 plan_bom，避免出现独立 power 前端域或执行域。
++        """
++
++        if domain_hint is None:
++            return "auto"
++        hint = self._normalize_text(domain_hint)
++        aliases: dict[str, BusinessQaNormalizedDomainHint] = {
++            "": "auto",
++            "auto": "auto",
++            "自动": "auto",
++            "自动识别": "auto",
++            "logistics": "logistics",
++            "logistic": "logistics",
++            "物流": "logistics",
++            "plan_bom": "plan_bom",
++            "plan-bom": "plan_bom",
++            "planbom": "plan_bom",
++            "bom": "plan_bom",
++            "计划bom": "plan_bom",
++            "计划": "plan_bom",
++            "power": "plan_bom",
++            "plan_power": "plan_bom",
++            "功率": "plan_bom",
++        }
++        return aliases.get(hint, "unknown")
++
++    def clarify_candidates(self) -> tuple[BusinessQaDomainRouteCandidate, ...]:
++        """生成无法识别时的澄清候选。
++
++        参数：无。
++        返回：
++            logistics 与 plan_bom 两个候选，顺序稳定。
++        业务逻辑：
++            只返回当前 registry 已开放域，避免将未知问题导向未接入的旧域或远期域。
++        """
++
++        return tuple(
++            BusinessQaDomainRouteCandidate(
++                domain=domain.domain,
++                label=domain.label,
++                capabilities=domain.capabilities,
++                reason=domain.description,
++            )
++            for domain in self.list_domains()
++        )
++
++    def _detect_domain(self, question: str) -> tuple[BusinessQaRoutableDomainId | None, float, str]:
++        """使用确定性启发式识别业务域。
++
++        参数：
++            question: 已归一化的问题文本。
++        返回：
++            (领域, 置信度, 原因)；无法安全识别时领域为 None。
++        业务逻辑：
++            得分相同或无命中都 fail-closed，交给澄清节点，而不是默认路由到某个旧域。
++        """
++
++        logistics_score = self._keyword_score(question, self._LOGISTICS_KEYWORDS)
++        plan_bom_score = self._keyword_score(question, self._PLAN_BOM_KEYWORDS)
++        if self._has_power_signal(question):
++            plan_bom_score += 3
++
++        if logistics_score == 0 and plan_bom_score == 0:
++            return None, 0.0, "问题未命中 logistics 或 plan_bom 的安全识别特征。"
++        if logistics_score == plan_bom_score:
++            return None, 0.0, "问题同时命中多个业务域且置信度相近，需要用户澄清。"
++
++        if logistics_score > plan_bom_score:
++            confidence = min(0.95, 0.72 + logistics_score * 0.04)
++            return "logistics", confidence, "问题命中物流域发运、运费、承运商或线路等特征。"
++
++        confidence = min(0.95, 0.72 + plan_bom_score * 0.04)
++        return "plan_bom", confidence, "问题命中计划 BOM 或功率预测相关特征。"
++
++    def _routed(
++        self,
++        *,
++        domain: BusinessQaRoutableDomainId,
++        question: str,
++        requested_domain: str | None,
++        normalized_hint: BusinessQaNormalizedDomainHint,
++        confidence: float,
++        reason: str,
++    ) -> BusinessQaDomainRouteResult:
++        """构造已路由结果。
++
++        参数：
++            domain: 已确定业务域。
++            question: 已归一化问题。
++            requested_domain: 原始领域提示。
++            normalized_hint: 归一化领域提示。
++            confidence: 路由置信度。
++            reason: 内部审计原因。
++        返回：
++            ROUTED 结果。
++        业务逻辑：
++            capability 按业务域和问题特征选择；功率 capability 仍标记为 plan_bom 域。
++        """
++
++        capabilities = self._select_capabilities(domain, question)
++        capability_domain = self._capabilities[capabilities[0]].domain if capabilities else "unknown"
++        return BusinessQaDomainRouteResult(
++            status="ROUTED",
++            requested_domain=requested_domain,
++            normalized_domain_hint=normalized_hint,
++            domain=domain,
++            confidence=confidence,
++            capabilities=capabilities,
++            capability_domain=capability_domain,
++            reason=reason,
++        )
++
++    def _clarify(
++        self,
++        *,
++        requested_domain: str | None,
++        normalized_hint: BusinessQaNormalizedDomainHint,
++        reason: str,
++    ) -> BusinessQaDomainRouteResult:
++        """构造需要澄清的路由结果。
++
++        参数：
++            requested_domain: 原始领域提示。
++            normalized_hint: 归一化领域提示。
++            reason: 需要澄清的内部原因。
++        返回：
++            CLARIFY 结果，附带安全候选域。
++        业务逻辑：
++            unknown 不携带 capability，后续节点不能继续查数或计算。
++        """
++
++        return BusinessQaDomainRouteResult(
++            status="CLARIFY",
++            requested_domain=requested_domain,
++            normalized_domain_hint=normalized_hint,
++            domain="unknown",
++            confidence=0.0,
++            capabilities=(),
++            capability_domain="unknown",
++            reason=reason,
++            clarify_candidates=self.clarify_candidates(),
++        )
++
++    def _select_capabilities(
++        self,
++        domain: BusinessQaRoutableDomainId,
++        question: str,
++    ) -> tuple[BusinessQaCapabilityId, ...]:
++        """按业务域和问题特征选择 capability。
++
++        参数：
++            domain: 已识别业务域。
++            question: 已归一化问题。
++        返回：
++            capability 元组。
++        业务逻辑：
++            物流域当前只暴露 logistics_data_qa；计划 BOM 域根据功率语义再细分三个 plan_power 子能力。
++        """
++
++        if domain == "logistics":
++            return ("logistics_data_qa",)
++        if not self._has_any(question, self._POWER_KEYWORDS):
++            return ("plan_bom_qa",)
++        if self._has_any(question, self._POWER_FACTOR_COMPARE_KEYWORDS):
++            return ("plan_power_factor_effect_compare",)
++        if self._has_any(question, self._POWER_SUPPLIER_RECOMMEND_KEYWORDS):
++            return ("plan_power_supplier_recommendation",)
++        return ("plan_power_prediction",)
++
++    def _build_domains(self) -> dict[BusinessQaRoutableDomainId, BusinessQaDomainDefinition]:
++        """构建默认业务域定义。
++
++        参数：无。
++        返回：
++            按插入顺序保存的业务域定义字典。
++        业务逻辑：
++            只注册当前卡范围内可观测、可澄清的两个业务域。
++        """
++
++        return {
++            "logistics": BusinessQaDomainDefinition(
++                domain="logistics",
++                label="物流问数",
++                description="处理发运、运费、承运商、线路、车次、目的地等物流问数。",
++                capabilities=("logistics_data_qa",),
++            ),
++            "plan_bom": BusinessQaDomainDefinition(
++                domain="plan_bom",
++                label="计划 BOM 问数",
++                description="处理计划 BOM 查询、BOM 配置消歧，以及归属计划 BOM 的功率预测/推荐/影响值对比。",
++                capabilities=(
++                    "plan_bom_qa",
++                    "plan_power_prediction",
++                    "plan_power_supplier_recommendation",
++                    "plan_power_factor_effect_compare",
++                ),
++            ),
++        }
++
++    def _build_capabilities(self) -> dict[BusinessQaCapabilityId, BusinessQaCapabilityDefinition]:
++        """构建默认 capability 定义。
++
++        参数：无。
++        返回：
++            capability 定义字典。
++        业务逻辑：
++            executable_service 仅记录后续 adapter 目标，当前节点不会实例化或调用这些服务。
++        """
++
++        definitions = (
++            BusinessQaCapabilityDefinition(
++                capability="logistics_data_qa",
++                domain="logistics",
++                label="物流数据问答",
++                description="调用既有 LogisticsDataQaService 处理物流结构化问数。",
++                risk_level="read_only_data_qa",
++                executable_service="LogisticsDataQaService",
++            ),
++            BusinessQaCapabilityDefinition(
++                capability="plan_bom_qa",
++                domain="plan_bom",
++                label="计划 BOM 问答",
++                description="调用既有 PlanBomQaService 处理 BOM 查询、消歧和对比。",
++                risk_level="read_only_data_qa",
++                executable_service="PlanBomQaService",
++            ),
++            BusinessQaCapabilityDefinition(
++                capability="plan_power_prediction",
++                domain="plan_bom",
++                label="计划 BOM 功率预测",
++                description="调用既有功率预测确定性能力处理功率档位分布。",
++                risk_level="deterministic_calculation",
++                executable_service="PowerPredictionEngine",
++            ),
++            BusinessQaCapabilityDefinition(
++                capability="plan_power_supplier_recommendation",
++                domain="plan_bom",
++                label="供应商功率匹配推荐",
++                description="调用既有供应商功率推荐确定性能力处理目标功率匹配。",
++                risk_level="deterministic_calculation",
++                executable_service="PowerRecommendationService",
++            ),
++            BusinessQaCapabilityDefinition(
++                capability="plan_power_factor_effect_compare",
++                domain="plan_bom",
++                label="功率配置影响值对比",
++                description="调用既有功率配置影响值对比能力处理同因子选项差异。",
++                risk_level="deterministic_calculation",
++                executable_service="PlanPowerFactorEffectCompareService",
++            ),
++        )
++        return {definition.capability: definition for definition in definitions}
++
++    @staticmethod
++    def _normalize_text(value: str | None) -> str:
++        """归一化短文本以便做安全关键词匹配。
++
++        参数：
++            value: 原始文本。
++        返回：
++            小写并去除常见空白后的文本。
++        业务逻辑：
++            仅用于路由启发式，不改变用户原始问题在 state 中的存储。
++        """
++
++        return "".join(str(value or "").lower().split())
++
++    @staticmethod
++    def _has_power_signal(text: str) -> bool:
++        """判断文本是否包含功率信号 —— 匹配功率关键词或数字+W/瓦 模式。
++
++        参数：
++            text: 已归一化文本。
++        返回：
++            是否包含功率信号。
++        业务逻辑：
++            1. _POWER_KEYWORDS 已移除单字符 "w" 避免英文误匹配。
++            2. 额外匹配 "数字+W" 或 "数字+瓦" 模式（如 615W、620瓦）。
++            3. _POWER_UNIT_PATTERN 的 w 匹配是小写的，因为 text 已归一化。
++        """
++
++        if BusinessQaDomainRegistry._has_any(text, BusinessQaDomainRegistry._POWER_KEYWORDS):
++            return True
++        return bool(BusinessQaDomainRegistry._POWER_UNIT_PATTERN.search(text))
++
++    @staticmethod
++    def _has_any(text: str, keywords: Iterable[str]) -> bool:
++        """判断文本是否命中任一关键词。
++
++        参数：
++            text: 已归一化文本。
++            keywords: 待匹配关键词。
++        返回：
++            是否命中。
++        业务逻辑：
++            简单包含匹配只做安全兜底；识别不充分时会进入澄清而非强行路由。
++        """
++
++        return any(BusinessQaDomainRegistry._normalize_text(keyword) in text for keyword in keywords)
++
++    @classmethod
++    def _keyword_score(cls, text: str, keywords: Iterable[str]) -> int:
++        """计算关键词命中数量。
++
++        参数：
++            text: 已归一化文本。
++            keywords: 待匹配关键词。
++        返回：
++            命中关键词数量。
++        业务逻辑：
++            分数只用于选择候选域，无法拉开差距时必须澄清。
++        """
++
++        return sum(1 for keyword in keywords if cls._normalize_text(keyword) in text)
+diff --git a/backend/app/domains/business_qa_graph/nodes/__init__.py b/backend/app/domains/business_qa_graph/nodes/__init__.py
+new file mode 100644
+index 00000000..27641c8c
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/nodes/__init__.py
+@@ -0,0 +1,5 @@
++"""business_qa_graph 节点集合。"""
++
++from backend.app.domains.business_qa_graph.nodes.receive_node import receive_node
++
++__all__ = ["receive_node"]
+diff --git a/backend/app/domains/business_qa_graph/nodes/domain_route_node.py b/backend/app/domains/business_qa_graph/nodes/domain_route_node.py
+new file mode 100644
+index 00000000..7a463381
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/nodes/domain_route_node.py
+@@ -0,0 +1,45 @@
++from __future__ import annotations
++
++from backend.app.domains.business_qa_graph.domain_registry import BusinessQaDomainRegistry
++from backend.app.domains.business_qa_graph.schemas.event import BusinessQaGraphEvent
++from backend.app.domains.business_qa_graph.schemas.state import BusinessQaGraphState
++
++
++def domain_route_node(state: BusinessQaGraphState) -> BusinessQaGraphState:
++    """执行统一业务问数领域路由并写入 capability 标记。
++
++    参数：
++        state: 已经过 receive_node 的 Graph 运行态。
++    返回：
++        写入 domain_route、domain、capabilities 和 trace 后的新 state。
++    业务逻辑：
++        本节点只做 registry 白名单路由；不查数据库、不调用领域 service、不生成 SQL、不计算功率事实。
++    """
++
++    question = str(state.get("question") or "").strip()
++    domain_hint = state.get("domain_hint")
++    trace = list(state.get("trace") or [])
++    registry = BusinessQaDomainRegistry.default()
++    route = registry.route(question, domain_hint=domain_hint)
++    route_payload = route.model_dump(mode="json")
++    event_type = "domain_routed" if route.status == "ROUTED" else "domain_route_clarification"
++    message = (
++        "已识别业务域和受控能力，等待后续规划/执行节点处理。"
++        if route.status == "ROUTED"
++        else "无法安全识别业务域，已生成澄清候选。"
++    )
++    event = BusinessQaGraphEvent(
++        node="domain_route",
++        event_type=event_type,
++        message=message,
++        payload=route_payload,
++    )
++
++    next_state: BusinessQaGraphState = dict(state)
++    next_state["trace"] = [*trace, event.model_dump(mode="json")]
++    next_state["status"] = "DOMAIN_ROUTED" if route.status == "ROUTED" else "CLARIFY"
++    next_state["execution_mode"] = "domain_routing_only"
++    next_state["domain"] = route.domain
++    next_state["capabilities"] = list(route.capabilities)
++    next_state["domain_route"] = route_payload
++    return next_state
+diff --git a/backend/app/domains/business_qa_graph/nodes/receive_node.py b/backend/app/domains/business_qa_graph/nodes/receive_node.py
+new file mode 100644
+index 00000000..adc7f8ac
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/nodes/receive_node.py
+@@ -0,0 +1,47 @@
++from __future__ import annotations
++
++from backend.app.domains.business_qa_graph.schemas.event import BusinessQaGraphEvent
++from backend.app.domains.business_qa_graph.schemas.state import (
++    DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES,
++    DEFAULT_BUSINESS_QA_GRAPH_VERSION,
++    BusinessQaGraphState,
++)
++
++
++def receive_node(state: BusinessQaGraphState) -> BusinessQaGraphState:
++    """接收统一业务问数请求并写入 trace。
++
++    参数：
++        state: LangGraph 当前运行态，包含 question、domain_hint、trace_id 和已有 trace。
++    返回：
++        写入 receive 事件后的新 state。
++    业务逻辑：
++        LQG-1 只建立 START→receive→END 骨架；本节点不查中间库、不调用 NL2SQL、
++        不生成 SQL、不做业务计算，也不改写结构化事实。
++    """
++
++    question = str(state.get("question") or "").strip()
++    domain_hint = state.get("domain_hint")
++    trace_id = state.get("trace_id")
++    trace = list(state.get("trace") or [])
++    event = BusinessQaGraphEvent(
++        node="receive",
++        event_type="question_received",
++        message="已接收业务问数请求，等待后续受控编排节点处理。",
++        payload={
++            "question": question,
++            "domain_hint": domain_hint,
++            "trace_id": trace_id,
++        },
++    )
++
++    next_state: BusinessQaGraphState = dict(state)
++    next_state["question"] = question
++    next_state["domain_hint"] = domain_hint
++    next_state["trace_id"] = trace_id
++    next_state["trace"] = [*trace, event.model_dump(mode="json")]
++    next_state["status"] = "RECEIVED"
++    next_state["graph_version"] = state.get("graph_version", DEFAULT_BUSINESS_QA_GRAPH_VERSION)
++    next_state["execution_mode"] = "graph_skeleton_only"
++    next_state["boundary_notes"] = list(state.get("boundary_notes", DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES))
++    return next_state
+diff --git a/backend/app/domains/business_qa_graph/runner.py b/backend/app/domains/business_qa_graph/runner.py
+new file mode 100644
+index 00000000..c4bcfd5f
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/runner.py
+@@ -0,0 +1,61 @@
++from __future__ import annotations
++
++from typing import Any
++
++from backend.app.core.config import Settings, get_settings
++from backend.app.domains.business_qa_graph.builder import build_business_qa_graph
++from backend.app.domains.business_qa_graph.schemas.request import BusinessQaGraphRequest
++from backend.app.domains.business_qa_graph.schemas.response import BusinessQaGraphResponse
++from backend.app.domains.business_qa_graph.schemas.state import (
++    DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES,
++    DEFAULT_BUSINESS_QA_GRAPH_VERSION,
++    build_business_qa_initial_state,
++)
++
++
++class BusinessQaGraphRunner:
++    """统一业务问数 LangGraph 运行器。
++
++    参数：
++        graph: 可选 compiled graph，测试或后续卡可注入。
++        settings: 配置对象，默认读取项目 settings。
++        enabled: 可选显式开关；不传时读取 settings.business_qa_langgraph_enabled。
++    返回：
++        可调用 run 的 Graph 运行器实例。
++    业务逻辑：
++        默认配置关闭，确保 LQG-1 不影响旧物流/BOM 接口；只有显式打开时才执行骨架 graph。
++    """
++
++    def __init__(self, *, graph: Any | None = None, settings: Settings | None = None, enabled: bool | None = None) -> None:
++        self.settings = settings or get_settings()
++        self.enabled = self.settings.business_qa_langgraph_enabled if enabled is None else enabled
++        # Graph 采用懒加载：默认关闭时不构建 LangGraph，避免 LQG-1 对旧链路产生任何运行时副作用。
++        self._graph = graph
++
++    def run(self, request: BusinessQaGraphRequest) -> BusinessQaGraphResponse:
++        """运行统一业务问数 Graph 骨架。
++
++        参数：
++            request: 入口请求，包含用户问题、业务域提示和 trace_id。
++        返回：
++            Graph 骨架响应。
++        业务逻辑：
++            配置关闭时返回 DISABLED 响应，不执行任何节点；配置打开时仅执行 receive 节点。
++        """
++
++        if not self.enabled:
++            return BusinessQaGraphResponse(
++                status="DISABLED",
++                execution_mode="disabled",
++                question=request.question,
++                domain_hint=request.domain_hint,
++                trace_id=request.trace_id,
++                graph_version=DEFAULT_BUSINESS_QA_GRAPH_VERSION,
++                trace=[],
++                boundary_notes=list(DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES),
++            )
++
++        graph = self._graph or build_business_qa_graph()
++        self._graph = graph
++        final_state = graph.invoke(build_business_qa_initial_state(request))
++        return BusinessQaGraphResponse.from_state(final_state)
+diff --git a/backend/app/domains/business_qa_graph/schemas/__init__.py b/backend/app/domains/business_qa_graph/schemas/__init__.py
+new file mode 100644
+index 00000000..90681e1e
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/schemas/__init__.py
+@@ -0,0 +1,21 @@
++"""business_qa_graph 对外稳定数据结构。"""
++
++from backend.app.domains.business_qa_graph.schemas.event import BusinessQaGraphEvent
++from backend.app.domains.business_qa_graph.schemas.request import BusinessQaGraphRequest
++from backend.app.domains.business_qa_graph.schemas.response import BusinessQaGraphResponse
++from backend.app.domains.business_qa_graph.schemas.state import (
++    DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES,
++    DEFAULT_BUSINESS_QA_GRAPH_VERSION,
++    BusinessQaGraphState,
++    build_business_qa_initial_state,
++)
++
++__all__ = [
++    "BusinessQaGraphEvent",
++    "BusinessQaGraphRequest",
++    "BusinessQaGraphResponse",
++    "BusinessQaGraphState",
++    "DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES",
++    "DEFAULT_BUSINESS_QA_GRAPH_VERSION",
++    "build_business_qa_initial_state",
++]
+diff --git a/backend/app/domains/business_qa_graph/schemas/domain.py b/backend/app/domains/business_qa_graph/schemas/domain.py
+new file mode 100644
+index 00000000..74ef0712
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/schemas/domain.py
+@@ -0,0 +1,120 @@
++from __future__ import annotations
++
++from typing import Literal
++
++from pydantic import BaseModel, ConfigDict, Field
++
++BusinessQaDomainId = Literal["logistics", "plan_bom", "unknown"]
++BusinessQaRoutableDomainId = Literal["logistics", "plan_bom"]
++BusinessQaNormalizedDomainHint = Literal["auto", "logistics", "plan_bom", "unknown"]
++BusinessQaDomainRouteStatus = Literal["ROUTED", "CLARIFY"]
++BusinessQaCapabilityId = Literal[
++    "logistics_data_qa",
++    "plan_bom_qa",
++    "plan_power_prediction",
++    "plan_power_supplier_recommendation",
++    "plan_power_factor_effect_compare",
++]
++BusinessQaCapabilityRiskLevel = Literal["read_only_data_qa", "deterministic_calculation"]
++
++
++class BusinessQaCapabilityDefinition(BaseModel):
++    """统一业务问数 capability 定义。
++
++    参数：
++        capability: 稳定 capability 标识。
++        domain: capability 所属业务域。
++        label: 内部审计用中文名称。
++        description: capability 覆盖的业务边界说明。
++        risk_level: 风险等级；当前仅允许只读问数或确定性计算。
++        executable_service: 后续 adapter 可调用的既有受控服务名称。
++    返回：
++        capability registry 中的单条能力定义。
++    业务逻辑：
++        registry 只声明受控能力，不包含 SQL、表名、字段名或可执行工具参数。
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    capability: BusinessQaCapabilityId
++    domain: BusinessQaRoutableDomainId
++    label: str
++    description: str
++    risk_level: BusinessQaCapabilityRiskLevel
++    executable_service: str
++
++
++class BusinessQaDomainDefinition(BaseModel):
++    """统一业务问数业务域定义。
++
++    参数：
++        domain: 业务域稳定标识。
++        label: 内部审计用中文名称。
++        description: 业务域覆盖范围说明。
++        capabilities: 该域可暴露给 Graph 的受控 capability 白名单。
++    返回：
++        domain registry 中的单条业务域定义。
++    业务逻辑：
++        LQG-2 只开放 logistics 与 plan_bom；功率能力作为 plan_bom 子能力，不新增 power 域。
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    domain: BusinessQaRoutableDomainId
++    label: str
++    description: str
++    capabilities: tuple[BusinessQaCapabilityId, ...]
++
++
++class BusinessQaDomainRouteCandidate(BaseModel):
++    """无法明确识别时返回的澄清候选。
++
++    参数：
++        domain: 候选业务域。
++        label: 候选业务域中文名称。
++        capabilities: 候选域可处理的 capability 列表。
++        reason: 该候选适合处理的问题类型摘要。
++    返回：
++        可供后续澄清节点或前端展示的候选项。
++    业务逻辑：
++        候选只来自 registry 白名单，避免未知问题误落旧域或未启用业务域。
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    domain: BusinessQaRoutableDomainId
++    label: str
++    capabilities: tuple[BusinessQaCapabilityId, ...]
++    reason: str
++
++
++class BusinessQaDomainRouteResult(BaseModel):
++    """统一业务问数领域路由结果。
++
++    参数：
++        status: ROUTED 表示已确定领域，CLARIFY 表示需要澄清。
++        requested_domain: 调用方原始 domain_hint。
++        normalized_domain_hint: 归一后的 domain_hint。
++        domain: 已确定领域；无法确定时为 unknown。
++        confidence: 路由置信度，unknown 时为 0。
++        capabilities: 本轮可进入的 capability 白名单。
++        capability_domain: capability 所属域；unknown 表示未选中 capability。
++        reason: 内部审计说明，不直接作为用户最终回答。
++        clarify_candidates: 需要澄清时可选候选。
++    返回：
++        domain_route_node 写入 state 与 response 的稳定结构。
++    业务逻辑：
++        该结果只做外层路由和 capability 标记，不查数、不计算、不执行自由 SQL。
++    """
++
++    model_config = ConfigDict(extra="forbid", frozen=True)
++
++    status: BusinessQaDomainRouteStatus
++    requested_domain: str | None = None
++    normalized_domain_hint: BusinessQaNormalizedDomainHint = "auto"
++    domain: BusinessQaDomainId
++    confidence: float = Field(ge=0.0, le=1.0)
++    capabilities: tuple[BusinessQaCapabilityId, ...] = ()
++    capability_domain: BusinessQaDomainId = "unknown"
++    reason: str
++    clarify_candidates: tuple[BusinessQaDomainRouteCandidate, ...] = ()
+diff --git a/backend/app/domains/business_qa_graph/schemas/event.py b/backend/app/domains/business_qa_graph/schemas/event.py
+new file mode 100644
+index 00000000..8105370f
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/schemas/event.py
+@@ -0,0 +1,27 @@
++from __future__ import annotations
++
++from typing import Any
++
++from pydantic import BaseModel, ConfigDict, Field
++
++
++class BusinessQaGraphEvent(BaseModel):
++    """统一业务问数 Graph 的节点事件。
++
++    参数：
++        node: 产生事件的节点名称。
++        event_type: 事件类型，使用稳定英文枚举便于审计检索。
++        message: 面向内部日志的中文说明，不作为用户可见回答。
++        payload: 节点写入的最小上下文快照。
++    返回：
++        可序列化、可写入 state.trace 的事件对象。
++    业务逻辑：
++        本事件只记录外层编排进度，不承载 SQL、表名、字段名或原始调试 payload。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    node: str
++    event_type: str
++    message: str
++    payload: dict[str, Any] = Field(default_factory=dict)
+diff --git a/backend/app/domains/business_qa_graph/schemas/request.py b/backend/app/domains/business_qa_graph/schemas/request.py
+new file mode 100644
+index 00000000..51f6efdd
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/schemas/request.py
+@@ -0,0 +1,45 @@
++from __future__ import annotations
++
++from typing import Any
++
++from pydantic import BaseModel, ConfigDict, Field, field_validator
++
++
++class BusinessQaGraphRequest(BaseModel):
++    """统一业务问数 Graph 的入口请求。
++
++    参数：
++        question: 用户原始问题，仅作为编排上下文传递，不在本卡中执行查数。
++        domain_hint: 可选业务域提示，例如 auto、logistics、plan_bom；其他值会在路由节点 fail-closed。
++        trace_id: 调用方传入的追踪号，用于串联后续审计。
++        metadata: 预留的非敏感扩展上下文。
++    返回：
++        可转换成 LangGraph 初始 state 的请求对象。
++    业务逻辑：
++        本对象不包含 SQL、表名、字段名或自由工具调用参数；后续真实查询仍必须走受控服务。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    question: str
++    domain_hint: str | None = None
++    trace_id: str | None = None
++    metadata: dict[str, Any] = Field(default_factory=dict)
++
++    @field_validator("question")
++    @classmethod
++    def _question_must_not_be_blank(cls, value: str) -> str:
++        """校验问题不能为空。
++
++        参数：
++            value: 原始问题文本。
++        返回：
++            去除首尾空白后的问题文本。
++        业务逻辑：
++            空问题无法进入任何受控领域服务，因此在 Graph 入口 fail-fast。
++        """
++
++        normalized = value.strip()
++        if not normalized:
++            raise ValueError("question must not be blank")
++        return normalized
+diff --git a/backend/app/domains/business_qa_graph/schemas/response.py b/backend/app/domains/business_qa_graph/schemas/response.py
+new file mode 100644
+index 00000000..1a8c21b6
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/schemas/response.py
+@@ -0,0 +1,82 @@
++from __future__ import annotations
++
++from typing import Literal
++
++from pydantic import BaseModel, ConfigDict, Field
++
++from backend.app.domains.business_qa_graph.schemas.domain import (
++    BusinessQaCapabilityId,
++    BusinessQaDomainId,
++    BusinessQaDomainRouteResult,
++)
++from backend.app.domains.business_qa_graph.schemas.event import BusinessQaGraphEvent
++from backend.app.domains.business_qa_graph.schemas.state import (
++    DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES,
++    DEFAULT_BUSINESS_QA_GRAPH_VERSION,
++    BusinessQaGraphState,
++)
++
++
++class BusinessQaGraphResponse(BaseModel):
++    """统一业务问数 Graph 的骨架响应。
++
++    参数：
++        status: 当前骨架状态。
++        execution_mode: 执行模式，LQG-2 只允许 domain-routing、skeleton-only 或 disabled。
++        question: 用户原始问题。
++        domain_hint: 可选业务域提示。
++        trace_id: 请求追踪号。
++        graph_version: Graph 版本。
++        trace: 节点事件列表。
++        boundary_notes: 本卡安全边界说明。
++        domain: 领域路由结果，无法识别时为 unknown。
++        capabilities: 本轮仅允许后续节点使用的 capability 白名单。
++        domain_route: 领域路由节点写入的完整审计结构。
++    返回：
++        调用方可审计的最小 Graph 响应。
++    业务逻辑：
++        该响应不包含业务事实结果；后续卡接入领域服务前，不能把它当成最终业务回答。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    status: Literal["RECEIVED", "DOMAIN_ROUTED", "CLARIFY", "DISABLED"]
++    execution_mode: Literal["graph_skeleton_only", "domain_routing_only", "disabled"]
++    question: str
++    domain_hint: str | None = None
++    trace_id: str | None = None
++    graph_version: str = DEFAULT_BUSINESS_QA_GRAPH_VERSION
++    trace: list[BusinessQaGraphEvent] = Field(default_factory=list)
++    boundary_notes: list[str] = Field(default_factory=lambda: list(DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES))
++    domain: BusinessQaDomainId = "unknown"
++    capabilities: list[BusinessQaCapabilityId] = Field(default_factory=list)
++    domain_route: BusinessQaDomainRouteResult | None = None
++
++    @classmethod
++    def from_state(cls, state: BusinessQaGraphState) -> "BusinessQaGraphResponse":
++        """从 LangGraph state 构造响应。
++
++        参数：
++            state: compiled graph 执行后的最终 state。
++        返回：
++            Pydantic 响应对象。
++        业务逻辑：
++            将 trace 统一重新校验成 BusinessQaGraphEvent，确保节点写入结构稳定。
++        """
++
++        domain_route_payload = state.get("domain_route") or None
++        return cls(
++            status=state.get("status", "RECEIVED"),
++            execution_mode=state.get("execution_mode", "graph_skeleton_only"),
++            question=state.get("question", ""),
++            domain_hint=state.get("domain_hint"),
++            trace_id=state.get("trace_id"),
++            graph_version=state.get("graph_version", DEFAULT_BUSINESS_QA_GRAPH_VERSION),
++            trace=[BusinessQaGraphEvent.model_validate(event) for event in state.get("trace", [])],
++            boundary_notes=list(state.get("boundary_notes", DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES)),
++            domain=state.get("domain", "unknown"),
++            capabilities=list(state.get("capabilities", [])),
++            domain_route=BusinessQaDomainRouteResult.model_validate(domain_route_payload)
++            if domain_route_payload
++            else None,
++        )
+diff --git a/backend/app/domains/business_qa_graph/schemas/state.py b/backend/app/domains/business_qa_graph/schemas/state.py
+new file mode 100644
+index 00000000..7be5b35c
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/schemas/state.py
+@@ -0,0 +1,75 @@
++from __future__ import annotations
++
++from typing import Any, Literal, TypedDict
++
++from backend.app.domains.business_qa_graph.schemas.domain import BusinessQaCapabilityId, BusinessQaDomainId
++from backend.app.domains.business_qa_graph.schemas.request import BusinessQaGraphRequest
++
++DEFAULT_BUSINESS_QA_GRAPH_VERSION = "business_qa_graph.v0"
++DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES = [
++    "本卡仅建立 LangGraph 外层编排骨架，不替代受控 NL2SQL/QueryPlanningV2/SQLPlan。",
++    "当前 Graph 只经过 receive 与 domain_route 节点，不进行查数、业务计算、SQL 生成或正式业务执行。",
++]
++
++
++class BusinessQaGraphState(TypedDict, total=False):
++    """LangGraph 运行态。
++
++    参数：
++        question: 用户原始问题。
++        domain_hint: 可选业务域提示。
++        trace_id: 请求追踪号。
++        trace: 节点事件列表。
++        status: 当前骨架状态。
++        graph_version: Graph 版本。
++        execution_mode: 当前执行模式。
++        metadata: 非敏感扩展上下文。
++        boundary_notes: 安全边界说明。
++        domain: 领域路由结果，无法识别时为 unknown。
++        capabilities: 本轮允许进入的 capability 白名单。
++        domain_route: 领域路由节点写入的完整审计结构。
++    返回：
++        StateGraph 节点之间传递的字典态。
++    业务逻辑：
++        state 只承载编排控制信息，不承载内部 SQL、表字段、raw/debug 或 LLM 自由执行结果。
++    """
++
++    question: str
++    domain_hint: str | None
++    trace_id: str | None
++    trace: list[dict[str, Any]]
++    status: Literal["PENDING", "RECEIVED", "DOMAIN_ROUTED", "CLARIFY", "DISABLED"]
++    graph_version: str
++    execution_mode: Literal["graph_skeleton_only", "domain_routing_only", "disabled"]
++    metadata: dict[str, Any]
++    boundary_notes: list[str]
++    domain: BusinessQaDomainId
++    capabilities: list[BusinessQaCapabilityId]
++    domain_route: dict[str, Any]
++
++
++def build_business_qa_initial_state(request: BusinessQaGraphRequest) -> BusinessQaGraphState:
++    """把入口请求转换成 LangGraph 初始 state。
++
++    参数：
++        request: 已通过入口校验的 Graph 请求。
++    返回：
++        可直接传入 compiled graph.invoke 的初始 state。
++    业务逻辑：
++        初始态显式标注 skeleton-only，避免后续误读为已执行正式业务问数。
++    """
++
++    return {
++        "question": request.question,
++        "domain_hint": request.domain_hint,
++        "trace_id": request.trace_id,
++        "trace": [],
++        "status": "PENDING",
++        "graph_version": DEFAULT_BUSINESS_QA_GRAPH_VERSION,
++        "execution_mode": "graph_skeleton_only",
++        "metadata": dict(request.metadata),
++        "boundary_notes": list(DEFAULT_BUSINESS_QA_GRAPH_BOUNDARY_NOTES),
++        "domain": "unknown",
++        "capabilities": [],
++        "domain_route": {},
++    }
+diff --git a/tests/unit/business_qa_graph/test_business_qa_graph_skeleton.py b/tests/unit/business_qa_graph/test_business_qa_graph_skeleton.py
+new file mode 100644
+index 00000000..c9576adf
+--- /dev/null
++++ b/tests/unit/business_qa_graph/test_business_qa_graph_skeleton.py
+@@ -0,0 +1,238 @@
++from __future__ import annotations
++
++from typing import Any
++
++from backend.app.api.router import api_router
++from backend.app.core.config import Settings
++from backend.app.domains.business_qa_graph.builder import build_business_qa_graph
++from backend.app.domains.business_qa_graph.domain_registry import BusinessQaDomainRegistry
++from backend.app.domains.business_qa_graph.nodes.domain_route_node import domain_route_node
++from backend.app.domains.business_qa_graph.nodes.receive_node import receive_node
++from backend.app.domains.business_qa_graph.runner import BusinessQaGraphRunner
++from backend.app.domains.business_qa_graph.schemas.request import BusinessQaGraphRequest
++
++
++class ExplodingGraph:
++    """用于验证默认关闭时绝不调用 graph.invoke 的测试桩。"""
++
++    def __init__(self) -> None:
++        self.invoked = False
++
++    def invoke(self, state: dict[str, Any]) -> dict[str, Any]:
++        """如果被调用则立即失败，证明 disabled 边界被破坏。"""
++        self.invoked = True
++        raise AssertionError("disabled runner must not invoke graph")
++
++
++def test_langgraph_config_is_disabled_by_default_and_old_routes_stay_registered() -> None:
++    """LangGraph 统一编排默认关闭，不应影响既有物流和计划 BOM 路由。"""
++    settings = Settings(_env_file=None)
++    route_paths = {route.path for route in api_router.routes}
++
++    assert settings.business_qa_langgraph_enabled is False
++    assert any(path.startswith("/logistics/") for path in route_paths)
++    assert any(path.startswith("/plan-bom/") for path in route_paths)
++    assert not any(path.startswith("/business-qa-graph") for path in route_paths)
++
++
++def test_runner_disabled_mode_does_not_invoke_graph() -> None:
++    """Runner 默认关闭时必须短路返回，不能提前执行任何 graph 节点。"""
++    graph = ExplodingGraph()
++    runner = BusinessQaGraphRunner(graph=graph, enabled=False)
++
++    response = runner.run(BusinessQaGraphRequest(question="2025 年合肥物流发运量是多少？"))
++
++    assert response.status == "DISABLED"
++    assert response.execution_mode == "disabled"
++    assert graph.invoked is False
++
++
++def test_receive_node_records_question_domain_hint_and_trace() -> None:
++    """receive_node 只接收请求并写入 trace，不触发业务查数或 NL2SQL 执行。"""
++    next_state = receive_node(
++        {
++            "question": "2025 年合肥物流发运量是多少？",
++            "domain_hint": "logistics",
++            "trace_id": "trace-lqg-1",
++            "trace": [],
++        }
++    )
++
++    assert next_state["status"] == "RECEIVED"
++    assert next_state["question"] == "2025 年合肥物流发运量是多少？"
++    assert next_state["domain_hint"] == "logistics"
++    assert len(next_state["trace"]) == 1
++    event = next_state["trace"][0]
++    assert event["node"] == "receive"
++    assert event["event_type"] == "question_received"
++    assert event["payload"]["question"] == "2025 年合肥物流发运量是多少？"
++    assert event["payload"]["domain_hint"] == "logistics"
++    assert event["payload"]["trace_id"] == "trace-lqg-1"
++
++
++def test_domain_registry_declares_only_logistics_and_plan_bom_business_domains() -> None:
++    """registry 只声明 LQG-2 范围内的物流和计划 BOM 域，功率必须归属计划 BOM。"""
++    registry = BusinessQaDomainRegistry.default()
++    domains = {domain.domain: domain for domain in registry.list_domains()}
++
++    assert set(domains) == {"logistics", "plan_bom"}
++    assert domains["logistics"].capabilities == ("logistics_data_qa",)
++    assert set(domains["plan_bom"].capabilities) == {
++        "plan_bom_qa",
++        "plan_power_prediction",
++        "plan_power_supplier_recommendation",
++        "plan_power_factor_effect_compare",
++    }
++    assert "power" not in domains
++    assert registry.get_capability("plan_power_prediction").domain == "plan_bom"
++
++
++def test_domain_registry_routes_logistics_question_to_logistics_data_qa() -> None:
++    """物流问题应命中 logistics 域和 logistics_data_qa capability。"""
++    route = BusinessQaDomainRegistry.default().route("2025 年哪个承运商发运量最高？", domain_hint="auto")
++
++    assert route.status == "ROUTED"
++    assert route.domain == "logistics"
++    assert route.capabilities == ("logistics_data_qa",)
++    assert route.confidence >= 0.7
++
++
++def test_domain_registry_routes_bom_question_to_plan_bom_qa() -> None:
++    """普通 BOM 问题应命中 plan_bom 域和 plan_bom_qa capability。"""
++    route = BusinessQaDomainRegistry.default().route("这个 BOM 用了什么玻璃和接线盒？")
++
++    assert route.status == "ROUTED"
++    assert route.domain == "plan_bom"
++    assert route.capabilities == ("plan_bom_qa",)
++    assert route.confidence >= 0.7
++
++
++def test_domain_registry_routes_power_prediction_to_plan_bom_power_capability() -> None:
++    """功率预测问题仍属于 plan_bom 域，不能新建独立 power 域。"""
++    route = BusinessQaDomainRegistry.default().route("订单00104 预测 615 功率档位分布")
++
++    assert route.status == "ROUTED"
++    assert route.domain == "plan_bom"
++    assert route.capabilities == ("plan_power_prediction",)
++    assert route.capability_domain == "plan_bom"
++
++
++def test_domain_registry_routes_numeric_watt_power_question_to_plan_bom() -> None:
++    """只有明确数字瓦数语境的 W 才能作为功率单位命中，避免单字母 w 泛化。"""
++    route = BusinessQaDomainRegistry.default().route("订单00104 预测 615W 档位分布")
++
++    assert route.status == "ROUTED"
++    assert route.domain == "plan_bom"
++    assert route.capabilities == ("plan_power_prediction",)
++    assert route.capability_domain == "plan_bom"
++
++
++def test_domain_registry_does_not_treat_plain_english_w_as_power() -> None:
++    """普通英文问题包含字母 w 时必须澄清，不能被单字符功率单位误路由。"""
++    route = BusinessQaDomainRegistry.default().route("what is the weather tomorrow?")
++
++    assert route.status == "CLARIFY"
++    assert route.domain == "unknown"
++    assert route.capabilities == ()
++
++
++def test_domain_registry_does_not_treat_wms_as_power_unit() -> None:
++    """WMS 等非功率缩写不能因为包含 W 就落入计划 BOM 功率能力。"""
++    route = BusinessQaDomainRegistry.default().route("WMS 库存同步状态怎么样？")
++
++    assert route.status == "CLARIFY"
++    assert route.domain == "unknown"
++    assert route.capabilities == ()
++
++
++def test_domain_registry_routes_power_supplier_recommendation_to_plan_bom() -> None:
++    """供应商功率推荐问题应命中 plan_bom 域和供应商推荐 capability。"""
++    route = BusinessQaDomainRegistry.default().route("目标功率 615W，推荐哪些供应商和电池片比例？")
++
++    assert route.status == "ROUTED"
++    assert route.domain == "plan_bom"
++    assert route.capabilities == ("plan_power_supplier_recommendation",)
++    assert route.capability_domain == "plan_bom"
++
++
++def test_domain_registry_routes_power_factor_effect_compare_to_plan_bom() -> None:
++    """功率配置影响值对比问题应命中 plan_bom 域和配置影响值 capability。"""
++    route = BusinessQaDomainRegistry.default().route("NT12R-66GDF 镀釉和非镀釉的功率影响值差异是多少？")
++
++    assert route.status == "ROUTED"
++    assert route.domain == "plan_bom"
++    assert route.capabilities == ("plan_power_factor_effect_compare",)
++    assert route.capability_domain == "plan_bom"
++
++
++def test_domain_registry_unknown_question_returns_clarify_candidates_not_legacy_domain() -> None:
++    """无法识别的问题必须进入澄清候选，不能误落旧业务域或默认物流域。"""
++    route = BusinessQaDomainRegistry.default().route("帮我安排明天上午的会议")
++
++    assert route.status == "CLARIFY"
++    assert route.domain == "unknown"
++    assert route.capabilities == ()
++    assert [candidate.domain for candidate in route.clarify_candidates] == ["logistics", "plan_bom"]
++    assert "business_analysis" not in {candidate.domain for candidate in route.clarify_candidates}
++
++
++def test_domain_route_node_writes_route_result_and_trace() -> None:
++    """domain_route_node 应写入领域路由结果和 trace，但不执行真实业务查数。"""
++    state = receive_node(
++        {
++            "question": "2024 年总运费是多少？",
++            "domain_hint": "auto",
++            "trace_id": "trace-domain-route",
++            "trace": [],
++        }
++    )
++
++    routed_state = domain_route_node(state)
++
++    assert routed_state["status"] == "DOMAIN_ROUTED"
++    assert routed_state["domain"] == "logistics"
++    assert routed_state["capabilities"] == ["logistics_data_qa"]
++    assert routed_state["domain_route"]["domain"] == "logistics"
++    assert [event["node"] for event in routed_state["trace"]] == ["receive", "domain_route"]
++    assert routed_state["trace"][-1]["event_type"] == "domain_routed"
++
++
++def test_minimal_state_graph_runs_receive_then_domain_route_only() -> None:
++    """LQG-2 Graph 应只经过 receive→domain_route，不进入查数、SQL 或业务计算节点。"""
++    graph = build_business_qa_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "这个 BOM 用了哪些玻璃？",
++            "domain_hint": "auto",
++            "trace_id": "trace-lqg-graph",
++            "trace": [],
++        }
++    )
++
++    assert final_state["status"] == "DOMAIN_ROUTED"
++    assert final_state["graph_version"] == "business_qa_graph.v0"
++    assert final_state["domain"] == "plan_bom"
++    assert final_state["capabilities"] == ["plan_bom_qa"]
++    assert [event["node"] for event in final_state["trace"]] == ["receive", "domain_route"]
++
++
++def test_runner_returns_domain_routed_response_without_business_execution() -> None:
++    """Runner 返回领域路由响应，仍不执行查数、不替代受控 NL2SQL。"""
++    runner = BusinessQaGraphRunner(enabled=True)
++    response = runner.run(
++        BusinessQaGraphRequest(
++            question="2024 年销量是多少？",
++            domain_hint="auto",
++            trace_id="trace-lqg-runner",
++        )
++    )
++
++    assert response.status == "CLARIFY"
++    assert response.execution_mode == "domain_routing_only"
++    assert response.question == "2024 年销量是多少？"
++    assert response.domain_route is not None
++    assert response.domain_route.domain == "unknown"
++    assert [candidate.domain for candidate in response.domain_route.clarify_candidates] == ["logistics", "plan_bom"]
++    assert [event.node for event in response.trace] == ["receive", "domain_route"]
++    assert "NL2SQL" in response.boundary_notes[0]

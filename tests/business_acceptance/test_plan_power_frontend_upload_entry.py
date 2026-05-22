@@ -410,7 +410,8 @@ def test_business_chat_uses_backend_llm_streaming_answer_pipeline() -> None:
     assert "/logistics/data-qa/query/stream" in logistics_api
     assert "/plan-bom/qa/ask/stream" in plan_bom_api
     assert "streamLogisticsDataQaQuery" in chat
-    assert "streamPlanBomQuestion" in chat
+    # LQG-8: 物流和计划 BOM 已统一到 streamBusinessQa
+    assert "streamBusinessQa" in chat
     assert "function updateAssistantStreamingContent" in chat
     assert "AI 正在生成回答" in template
     assert "'streaming-answer': message.role === 'assistant' && message.loading" in template
