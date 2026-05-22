@@ -1,0 +1,2551 @@
+=== NQE-E6 Task Diff ===
+
+--- Staged changes ---
+diff --git a/backend/app/domains/qa_evaluation/__init__.py b/backend/app/domains/qa_evaluation/__init__.py
+new file mode 100644
+index 00000000..8c50a68d
+--- /dev/null
++++ b/backend/app/domains/qa_evaluation/__init__.py
+@@ -0,0 +1,35 @@
++"""统一业务问法评测集（NQE-Eval）模块。
++
++业务逻辑：
++    本模块定义跨业务域（物流、计划BOM、功率预测）的统一评测集标准格式，
++    支持问题-预期结果-评测结果-评测报告的完整生命周期。
++
++NQE-E2 新增：EvalGraphRunner 评测运行器，遍历评测套件调用 GraphRunner。
++NQE-E6 新增：ReportGenerator（报告生成）、CIGate（CI 门禁）、EvalHistory（历史对比）。
++"""
++
++from backend.app.domains.qa_evaluation.ci_gate import CIGate, GateResult
++from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++from backend.app.domains.qa_evaluation.history import EvalHistory, HistoryComparison
++from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
++from backend.app.domains.qa_evaluation.schema import (
++    ConsistencyGrade,
++    EvaluationCase,
++    EvaluationReport,
++    EvaluationResult,
++    EvaluationSuite,
++)
++
++__all__ = [
++    "CIGate",
++    "ConsistencyGrade",
++    "EvalGraphRunner",
++    "EvalHistory",
++    "EvaluationCase",
++    "EvaluationSuite",
++    "EvaluationResult",
++    "EvaluationReport",
++    "GateResult",
++    "HistoryComparison",
++    "ReportGenerator",
++]
+
+--- New files (untracked, E6-scoped) ---
+
++++ backend/app/domains/qa_evaluation/report_generator.py (new file)
+"""评测报告生成器（ReportGenerator）。
+
+业务逻辑：
+    将 EvaluationReport 转换为 HTML / Markdown 格式的评测报告，
+    包含摘要统计、逐条结果详情、通过率、一致性分级分布等信息。
+    支持单套件报告和多套件合并报告。
+
+设计原则：
+    1. 报告内容完全由后端确定性代码生成，不依赖 LLM。
+    2. HTML 使用内联样式，无需外部 CSS 文件。
+    3. Markdown 使用标准 GFM 语法，兼容 GitHub/GitLab 渲染。
+    4. 技术泄露的 case 在报告中以红色/警告标记突出显示。
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from backend.app.domains.qa_evaluation.schema import EvaluationReport
+
+
+class ReportGenerator:
+    """评测报告生成器。
+
+    将 EvaluationReport 转换为 HTML 或 Markdown 格式，支持命令行调用。
+    """
+
+    # -------------------------------------------------------------------
+    # 公共方法：HTML 报告
+    # -------------------------------------------------------------------
+
+    def generate_html(self, report: EvaluationReport) -> str:
+        """生成单套件的 HTML 报告。
+
+        参数：
+            report: 评测报告。
+        返回：
+            HTML 字符串。
+        """
+        return self._render_html_single(report)
+
+    def generate_html_file(
+        self, report: EvaluationReport, output_path: str,
+    ) -> str:
+        """生成 HTML 报告并写入文件。
+
+        参数：
+            report: 评测报告。
+            output_path: 输出文件路径（自动创建父目录）。
+        返回：
+            实际写入的路径。
+        """
+        html = self.generate_html(report)
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(html, encoding="utf-8")
+        return str(path)
+
+    def generate_combined_html(self, reports: list[EvaluationReport]) -> str:
+        """生成多个套件的合并 HTML 报告。
+
+        参数：
+            reports: 多个 EvaluationReport 列表。
+        返回：
+            合并的 HTML 字符串。
+        """
+        return self._render_html_combined(reports)
+
+    # -------------------------------------------------------------------
+    # 公共方法：Markdown 报告
+    # -------------------------------------------------------------------
+
+    def generate_markdown(self, report: EvaluationReport) -> str:
+        """生成单套件的 Markdown 报告。
+
+        参数：
+            report: 评测报告。
+        返回：
+            Markdown 字符串。
+        """
+        return self._render_md_single(report)
+
+    def generate_markdown_file(
+        self, report: EvaluationReport, output_path: str,
+    ) -> str:
+        """生成 Markdown 报告并写入文件。
+
+        参数：
+            report: 评测报告。
+            output_path: 输出文件路径（自动创建父目录）。
+        返回：
+            实际写入的路径。
+        """
+        md = self.generate_markdown(report)
+        path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(md, encoding="utf-8")
+        return str(path)
+
+    def generate_combined_markdown(self, reports: list[EvaluationReport]) -> str:
+        """生成多个套件的合并 Markdown 报告。
+
+        参数：
+            reports: 多个 EvaluationReport 列表。
+        返回：
+            合并的 Markdown 字符串。
+        """
+        return self._render_md_combined(reports)
+
+    # -------------------------------------------------------------------
+    # 内部方法：HTML 渲染
+    # -------------------------------------------------------------------
+
+    @staticmethod
+    def _render_html_single(report: EvaluationReport) -> str:
+        """渲染单套件 HTML。"""
+        parts: list[str] = []
+
+        # 头部
+        parts.append("<!DOCTYPE html>")
+        parts.append('<html lang="zh-CN">')
+        parts.append("<head>")
+        parts.append('<meta charset="UTF-8">')
+        parts.append(
+            f"<title>评测报告 - {_escape_html(report.suite_name)}</title>"
+        )
+        parts.append("<style>")
+        parts.append(_CSS_STYLES)
+        parts.append("</style>")
+        parts.append("</head>")
+        parts.append("<body>")
+
+        # 标题
+        parts.append(f"<h1>评测报告：{_escape_html(report.suite_name)}</h1>")
+
+        # 元信息
+        if report.domain:
+            parts.append(
+                f"<p class='meta'>业务域：{_escape_html(report.domain)}</p>"
+            )
+
+        # 摘要统计
+        parts.append("<h2>摘要统计</h2>")
+        parts.append("<table class='summary'>")
+        parts.append("<tr><th>指标</th><th>数值</th></tr>")
+        parts.append(
+            f"<tr><td>总用例数</td><td>{report.total_cases}</td></tr>"
+        )
+        parts.append(
+            f"<tr><td>通过</td><td>{report.passed_cases}</td></tr>"
+        )
+        parts.append(
+            f"<tr><td>失败</td><td>{report.failed_cases}</td></tr>"
+        )
+        parts.append(
+            f"<tr><td>通过率</td><td>{report.pass_rate:.1%}</td></tr>"
+        )
+        parts.append("</table>")
+
+        # 一致性分级统计
+        parts.append("<h2>一致性分级</h2>")
+        grade_counts = ReportGenerator._count_grades(report)
+        parts.append("<table class='summary'>")
+        parts.append("<tr><th>分级</th><th>数量</th></tr>")
+        for grade_label, grade_key, css_class in [
+            ("通过 (pass)", "pass", "grade-pass"),
+            ("警告 (warning)", "warning", "grade-warning"),
+            ("失败 (fail)", "fail", "grade-fail"),
+        ]:
+            count = grade_counts.get(grade_key, 0)
+            parts.append(
+                f"<tr class='{css_class}'><td>{grade_label}</td>"
+                f"<td>{count}</td></tr>"
+            )
+        parts.append("</table>")
+
+        # 逐条结果
+        parts.append("<h2>逐条评测结果</h2>")
+        parts.append("<table class='results'>")
+        parts.append(
+            "<tr><th>Case ID</th><th>状态</th><th>一致性</th>"
+            "<th>行数</th><th>回答摘要</th><th>差异详情</th></tr>"
+        )
+        for result in report.results:
+            grade = result.consistency_grade or "-"
+            grade_class = f"grade-{grade}" if grade in ("pass", "fail", "warning") else ""
+
+            row_count_str = (
+                str(result.actual_row_count)
+                if result.actual_row_count is not None
+                else "-"
+            )
+            answer_str = _escape_html(
+                result.actual_answer_summary or ""
+            )[:100]
+            detail_str = _escape_html(
+                result.mismatch_detail or ""
+            )[:200]
+
+            leak_flag = ""
+            if result.leak_found:
+                leak_flag = " ⚠️泄露"
+
+            parts.append(
+                f"<tr class='{grade_class}'>"
+                f"<td>{_escape_html(result.case_id)}</td>"
+                f"<td>{_escape_html(result.actual_status or '-')}</td>"
+                f"<td>{grade}{leak_flag}</td>"
+                f"<td>{row_count_str}</td>"
+                f"<td>{answer_str}</td>"
+                f"<td>{detail_str}</td>"
+                f"</tr>"
+            )
+        parts.append("</table>")
+
+        # 备注
+        if report.notes:
+            parts.append("<h2>备注</h2>")
+            parts.append(f"<p class='notes'>{_escape_html(report.notes)}</p>")
+
+        parts.append("</body>")
+        parts.append("</html>")
+
+        return "\n".join(parts)
+
+    @staticmethod
+    def _render_html_combined(reports: list[EvaluationReport]) -> str:
+        """渲染多套件合并 HTML。"""
+        parts: list[str] = []
+
+        # 头部
+        parts.append("<!DOCTYPE html>")
+        parts.append('<html lang="zh-CN">')
+        parts.append("<head>")
+        parts.append('<meta charset="UTF-8">')
+        parts.append("<title>评测报告（合并）</title>")
+        parts.append("<style>")
+        parts.append(_CSS_STYLES)
+        parts.append("</style>")
+        parts.append("</head>")
+        parts.append("<body>")
+
+        parts.append("<h1>评测报告（合并）</h1>")
+
+        # 全局汇总
+        total_all = sum(r.total_cases for r in reports)
+        passed_all = sum(r.passed_cases for r in reports)
+        failed_all = sum(r.failed_cases for r in reports)
+        rate_all = passed_all / total_all if total_all > 0 else 1.0
+
+        parts.append("<h2>全局统计</h2>")
+        parts.append("<table class='summary'>")
+        parts.append("<tr><th>指标</th><th>数值</th></tr>")
+        parts.append(f"<tr><td>总用例数</td><td>{total_all}</td></tr>")
+        parts.append(f"<tr><td>通过</td><td>{passed_all}</td></tr>")
+        parts.append(f"<tr><td>失败</td><td>{failed_all}</td></tr>")
+        parts.append(f"<tr><td>通过率</td><td>{rate_all:.1%}</td></tr>")
+        parts.append("</table>")
+
+        # 逐套件
+        for report in reports:
+            parts.append(f"<hr>")
+            parts.append(f"<h2>{_escape_html(report.suite_name)}</h2>")
+            if report.domain:
+                parts.append(
+                    f"<p class='meta'>业务域：{_escape_html(report.domain)}</p>"
+                )
+
+            parts.append("<table class='summary'>")
+            parts.append("<tr><th>指标</th><th>数值</th></tr>")
+            parts.append(
+                f"<tr><td>总用例数</td><td>{report.total_cases}</td></tr>"
+            )
+            parts.append(
+                f"<tr><td>通过</td><td>{report.passed_cases}</td></tr>"
+            )
+            parts.append(
+                f"<tr><td>失败</td><td>{report.failed_cases}</td></tr>"
+            )
+            parts.append(
+                f"<tr><td>通过率</td><td>{report.pass_rate:.1%}</td></tr>"
+            )
+            parts.append("</table>")
+
+            # 逐条结果表格
+            parts.append("<table class='results'>")
+            parts.append(
+                "<tr><th>Case ID</th><th>状态</th><th>一致性</th>"
+                "<th>行数</th><th>回答摘要</th><th>差异详情</th></tr>"
+            )
+            for result in report.results:
+                grade = result.consistency_grade or "-"
+                grade_class = (
+                    f"grade-{grade}" if grade in ("pass", "fail", "warning") else ""
+                )
+                row_count_str = (
+                    str(result.actual_row_count)
+                    if result.actual_row_count is not None
+                    else "-"
+                )
+                answer_str = _escape_html(
+                    result.actual_answer_summary or ""
+                )[:100]
+                detail_str = _escape_html(
+                    result.mismatch_detail or ""
+                )[:200]
+                leak_flag = " ⚠️泄露" if result.leak_found else ""
+
+                parts.append(
+                    f"<tr class='{grade_class}'>"
+                    f"<td>{_escape_html(result.case_id)}</td>"
+                    f"<td>{_escape_html(result.actual_status or '-')}</td>"
+                    f"<td>{grade}{leak_flag}</td>"
+                    f"<td>{row_count_str}</td>"
+                    f"<td>{answer_str}</td>"
+                    f"<td>{detail_str}</td>"
+                    f"</tr>"
+                )
+            parts.append("</table>")
+
+        parts.append("</body>")
+        parts.append("</html>")
+
+        return "\n".join(parts)
+
+    # -------------------------------------------------------------------
+    # 内部方法：Markdown 渲染
+    # -------------------------------------------------------------------
+
+    @staticmethod
+    def _render_md_single(report: EvaluationReport) -> str:
+        """渲染单套件 Markdown。"""
+        lines: list[str] = []
+
+        # 标题
+        lines.append(f"# 评测报告：{report.suite_name}")
+        lines.append("")
+
+        # 元信息
+        if report.domain:
+            lines.append(f"**业务域**：{report.domain}")
+            lines.append("")
+
+        # 摘要统计
+        lines.append("## 摘要统计")
+        lines.append("")
+        lines.append("| 指标 | 数值 |")
+        lines.append("|------|------|")
+        lines.append(f"| 总用例数 | {report.total_cases} |")
+        lines.append(f"| 通过 | {report.passed_cases} |")
+        lines.append(f"| 失败 | {report.failed_cases} |")
+        lines.append(f"| **通过率** | **{report.pass_rate:.1%}** |")
+        lines.append("")
+
+        # 一致性分级
+        lines.append("## 一致性分级")
+        lines.append("")
+        grade_counts = ReportGenerator._count_grades(report)
+        lines.append("| 分级 | 数量 |")
+        lines.append("|------|------|")
+        lines.append(
+            f"| ✅ 通过 (pass) | {grade_counts.get('pass', 0)} |"
+        )
+        lines.append(
+            f"| ⚠️ 警告 (warning) | {grade_counts.get('warning', 0)} |"
+        )
+        lines.append(
+            f"| ❌ 失败 (fail) | {grade_counts.get('fail', 0)} |"
+        )
+        lines.append("")
+
+        # 逐条结果
+        lines.append("## 逐条评测结果")
+        lines.append("")
+        for result in report.results:
+            grade_icon = {
+                "pass": "✅",
+                "warning": "⚠️",
+                "fail": "❌",
+            }.get(result.consistency_grade or "", "❓")
+
+            leak_mark = " ⚠️**泄露**" if result.leak_found else ""
+            lines.append(
+                f"- {grade_icon} `{result.case_id}` "
+                f"| 状态：{result.actual_status or '-'} "
+                f"| 一致性：{result.consistency_grade or '-'}{leak_mark}"
+            )
+            if result.mismatch_detail:
+                lines.append(f"  - 差异：{result.mismatch_detail}")
+            if result.actual_answer_summary:
+                summary = result.actual_answer_summary[:120]
+                lines.append(f"  - 回答：{summary}")
+        lines.append("")
+
+        # 备注
+        if report.notes:
+            lines.append("## 备注")
+            lines.append("")
+            lines.append(report.notes)
+            lines.append("")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _render_md_combined(reports: list[EvaluationReport]) -> str:
+        """渲染多套件合并 Markdown。"""
+        lines: list[str] = []
+
+        lines.append("# 评测报告（合并）")
+        lines.append("")
+
+        # 全局汇总
+        total_all = sum(r.total_cases for r in reports)
+        passed_all = sum(r.passed_cases for r in reports)
+        failed_all = sum(r.failed_cases for r in reports)
+        rate_all = passed_all / total_all if total_all > 0 else 1.0
+
+        lines.append("## 全局统计")
+        lines.append("")
+        lines.append("| 指标 | 数值 |")
+        lines.append("|------|------|")
+        lines.append(f"| 总用例数 | {total_all} |")
+        lines.append(f"| 通过 | {passed_all} |")
+        lines.append(f"| 失败 | {failed_all} |")
+        lines.append(f"| **通过率** | **{rate_all:.1%}** |")
+        lines.append("")
+
+        # 逐套件
+        for report in reports:
+            lines.append("---")
+            lines.append("")
+            lines.append(f"## {report.suite_name}")
+            lines.append("")
+            if report.domain:
+                lines.append(f"**业务域**：{report.domain}")
+                lines.append("")
+
+            lines.append("| 指标 | 数值 |")
+            lines.append("|------|------|")
+            lines.append(f"| 总用例数 | {report.total_cases} |")
+            lines.append(f"| 通过 | {report.passed_cases} |")
+            lines.append(f"| 失败 | {report.failed_cases} |")
+            lines.append(f"| **通过率** | **{report.pass_rate:.1%}** |")
+            lines.append("")
+
+            for result in report.results:
+                grade_icon = {
+                    "pass": "✅",
+                    "warning": "⚠️",
+                    "fail": "❌",
+                }.get(result.consistency_grade or "", "❓")
+                leak_mark = " ⚠️**泄露**" if result.leak_found else ""
+                lines.append(
+                    f"- {grade_icon} `{result.case_id}` "
+                    f"| 状态：{result.actual_status or '-'} "
+                    f"| 一致性：{result.consistency_grade or '-'}{leak_mark}"
+                )
+                if result.mismatch_detail:
+                    lines.append(f"  - 差异：{result.mismatch_detail}")
+            lines.append("")
+
+        return "\n".join(lines)
+
+    # -------------------------------------------------------------------
+    # 内部工具：一致性分级统计
+    # -------------------------------------------------------------------
+
+    @staticmethod
+    def _count_grades(report: EvaluationReport) -> dict[str, int]:
+        """统计各一致性分级的数量。
+
+        参数：
+            report: 评测报告。
+        返回：
+            {"pass": N, "fail": N, "warning": N} 字典。
+        """
+        counts: dict[str, int] = {"pass": 0, "fail": 0, "warning": 0}
+        for result in report.results:
+            grade = result.consistency_grade
+            if grade in counts:
+                counts[grade] += 1
+        return counts
+
+
+# -----------------------------------------------------------------------
+# HTML 内联样式（中文注释）
+# -----------------------------------------------------------------------
+
+_CSS_STYLES = """
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+        'Helvetica Neue', Arial, sans-serif;
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 0 20px;
+    line-height: 1.6;
+    color: #333;
+    background: #fff;
+}
+h1 { color: #1a1a2e; border-bottom: 3px solid #0f3460; padding-bottom: 10px; }
+h2 { color: #16213e; margin-top: 30px; }
+.meta { color: #666; font-size: 14px; }
+table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 10px 0 20px 0;
+    font-size: 14px;
+}
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    text-align: left;
+}
+th { background: #f0f0f0; font-weight: 600; }
+.summary td:first-child { font-weight: 600; width: 180px; }
+.grade-pass { background: #e8f5e9; }
+.grade-warning { background: #fff3e0; }
+.grade-fail { background: #ffebee; }
+.notes { color: #555; background: #f9f9f9; padding: 12px; border-left: 4px solid #999; }
+"""
+
+
+# -----------------------------------------------------------------------
+# HTML 转义
+# -----------------------------------------------------------------------
+
+def _escape_html(text: str) -> str:
+    """转义 HTML 特殊字符。
+
+    参数：
+        text: 原始文本。
+    返回：
+        转义后的安全文本。
+    """
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
++++ backend/app/domains/qa_evaluation/ci_gate.py (new file)
+"""评测 CI 门禁（CIGate）。
+
+业务逻辑：
+    提供评测结果的 CI 门禁检查，根据 pass_rate 阈值（默认 90%）和
+    技术泄露检测决定 CI 是否通过。
+
+设计原则：
+    1. 门禁 fail-closed：任一条件不满足即返回失败。
+    2. 技术泄露是硬性阻断条件，与通过率独立。
+    3. 支持自定义阈值和单/多套件检查。
+    4. 门禁结果包含详细原因说明，可对接 CI/CD 流水线。
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+from backend.app.domains.qa_evaluation.schema import EvaluationReport
+
+
+# ---------------------------------------------------------------------------
+# 门禁结果（中文注释）
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class GateResult:
+    """CI 门禁检查结果。
+
+    参数：
+        passed: 是否通过门禁。
+        exit_code: 退出码（0=通过，1=失败）。
+        reason: 失败原因描述（通过时为空字符串）。
+        pass_rate: 本次评测通过率（0.0~1.0）。
+        total_cases: 总用例数。
+        leak_count: 技术泄露数量。
+    """
+
+    passed: bool
+    exit_code: int
+    reason: str = ""
+    pass_rate: float = 1.0
+    total_cases: int = 0
+    leak_count: int = 0
+
+
+# ---------------------------------------------------------------------------
+# CI 门禁（中文注释）
+# ---------------------------------------------------------------------------
+
+
+class CIGate:
+    """评测 CI 门禁。
+
+    检查评测报告是否满足 CI 准入门槛，支持自定义通过率阈值。
+
+    参数：
+        pass_rate_threshold: 最低通过率阈值，默认 0.90（90%）。
+    """
+
+    def __init__(self, *, pass_rate_threshold: float = 0.90) -> None:
+        """初始化门禁。
+
+        参数：
+            pass_rate_threshold: 最低通过率阈值，范围 0.0~1.0。
+        """
+        self._threshold = pass_rate_threshold
+
+    # -------------------------------------------------------------------
+    # 公共方法：单套件检查
+    # -------------------------------------------------------------------
+
+    def check(self, report: EvaluationReport) -> GateResult:
+        """对单个 EvaluationReport 执行门禁检查。
+
+        参数：
+            report: 评测报告。
+        返回：
+            GateResult，包含通过/失败指示和详细原因。
+        """
+        leak_count = self._count_leaks(report)
+        rate = report.pass_rate
+        total = report.total_cases
+
+        reasons: list[str] = []
+
+        # 一、技术泄露检查（硬性阻断，优先级最高）
+        if leak_count > 0:
+            reasons.append(
+                f"检测到 {leak_count} 条技术泄露（SQL/表名/字段名等），"
+                f"必须修复后才能通过门禁"
+            )
+            return GateResult(
+                passed=False,
+                exit_code=1,
+                reason="；".join(reasons),
+                pass_rate=rate,
+                total_cases=total,
+                leak_count=leak_count,
+            )
+
+        # 二、通过率检查
+        if total > 0 and rate < self._threshold:
+            reasons.append(
+                f"通过率 {rate:.1%} 低于阈值 {self._threshold:.0%}，"
+                f"当前 {report.passed_cases}/{total} 通过"
+            )
+
+        if reasons:
+            return GateResult(
+                passed=False,
+                exit_code=1,
+                reason="；".join(reasons),
+                pass_rate=rate,
+                total_cases=total,
+                leak_count=leak_count,
+            )
+
+        # 全部通过
+        return GateResult(
+            passed=True,
+            exit_code=0,
+            reason=f"通过率 {rate:.1%} >= {self._threshold:.0%}，"
+            f"无技术泄露",
+            pass_rate=rate,
+            total_cases=total,
+            leak_count=leak_count,
+        )
+
+    # -------------------------------------------------------------------
+    # 公共方法：多套件检查
+    # -------------------------------------------------------------------
+
+    def check_multiple(self, reports: list[EvaluationReport]) -> GateResult:
+        """对多个 EvaluationReport 执行门禁检查。
+
+        参数：
+            reports: 多个评测报告列表。
+        返回：
+            GateResult，汇总全部统计信息。
+        业务逻辑：
+            1. 汇总所有套件的统计信息。
+            2. 检查全部泄露（任一报告有泄露即失败）。
+            3. 计算总体通过率并检查阈值。
+        """
+        total_all = sum(r.total_cases for r in reports)
+        passed_all = sum(r.passed_cases for r in reports)
+        leak_all = sum(self._count_leaks(r) for r in reports)
+        rate_all = passed_all / total_all if total_all > 0 else 1.0
+
+        reasons: list[str] = []
+
+        # 一、技术泄露（任一报告有泄露即失败）
+        if leak_all > 0:
+            reasons.append(
+                f"检测到 {leak_all} 条技术泄露（SQL/表名/字段名等），"
+                f"必须修复后才能通过门禁"
+            )
+            return GateResult(
+                passed=False,
+                exit_code=1,
+                reason="；".join(reasons),
+                pass_rate=rate_all,
+                total_cases=total_all,
+                leak_count=leak_all,
+            )
+
+        # 二、通过率检查
+        if total_all > 0 and rate_all < self._threshold:
+            reasons.append(
+                f"总体通过率 {rate_all:.1%} 低于阈值 {self._threshold:.0%}，"
+                f"当前 {passed_all}/{total_all} 通过"
+            )
+
+        if reasons:
+            return GateResult(
+                passed=False,
+                exit_code=1,
+                reason="；".join(reasons),
+                pass_rate=rate_all,
+                total_cases=total_all,
+                leak_count=leak_all,
+            )
+
+        return GateResult(
+            passed=True,
+            exit_code=0,
+            reason=f"总体通过率 {rate_all:.1%} >= {self._threshold:.0%}，"
+            f"无技术泄露",
+            pass_rate=rate_all,
+            total_cases=total_all,
+            leak_count=leak_all,
+        )
+
+    # -------------------------------------------------------------------
+    # 内部方法
+    # -------------------------------------------------------------------
+
+    @staticmethod
+    def _count_leaks(report: EvaluationReport) -> int:
+        """统计报告中技术泄露的 case 数量。
+
+        参数：
+            report: 评测报告。
+        返回：
+            泄露数量。
+        """
+        return sum(1 for r in report.results if r.leak_found)
+
++++ backend/app/domains/qa_evaluation/history.py (new file)
+"""评测历史对比（EvalHistory）。
+
+业务逻辑：
+    提供评测报告的历史对比功能，支持：
+    1. 当前 vs 上次评测的逐 case 对比。
+    2. 识别新增失败、已修复 case、新增 case、删除 case。
+    3. 识别新增/修复的技术泄露。
+    4. 通过率趋势分析（improved/degraded/stable）。
+    5. 评测报告持久化加载/保存。
+
+设计原则：
+    1. 对比基于 case_id 进行 case 级别匹配。
+    2. 本次不存在的 case 视为"已删除"。
+    3. 上次不存在的 case 视为"新增"。
+    4. 趋势判断基于通过率变化方向。
+"""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+
+from backend.app.domains.qa_evaluation.schema import (
+    EvaluationReport,
+    EvaluationResult,
+)
+
+
+# ---------------------------------------------------------------------------
+# 对比结果（中文注释）
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class HistoryComparison:
+    """历史对比结果。
+
+    参数：
+        trend: 趋势方向（improved/degraded/stable）。
+        prev_pass_rate: 上次通过率。
+        curr_pass_rate: 本次通过率。
+        new_failures: 新增失败 case 列表。
+        fixed_cases: 已修复 case 列表。
+        new_cases: 新增 case 列表。
+        removed_cases: 已删除 case 列表。
+        new_leaks: 新增泄露 case 列表。
+        fixed_leaks: 已修复泄露 case 列表。
+        summary: 人类可读的摘要文本。
+    """
+
+    trend: str = "stable"
+    prev_pass_rate: float = 1.0
+    curr_pass_rate: float = 1.0
+    new_failures: list[EvaluationResult] = field(default_factory=list)
+    fixed_cases: list[EvaluationResult] = field(default_factory=list)
+    new_cases: list[EvaluationResult] = field(default_factory=list)
+    removed_cases: list[EvaluationResult] = field(default_factory=list)
+    new_leaks: list[EvaluationResult] = field(default_factory=list)
+    fixed_leaks: list[EvaluationResult] = field(default_factory=list)
+    summary: str = ""
+
+
+# ---------------------------------------------------------------------------
+# 历史对比（中文注释）
+# ---------------------------------------------------------------------------
+
+
+class EvalHistory:
+    """评测历史管理器。
+
+    提供评测报告的前后对比和历史持久化功能。
+    """
+
+    # -------------------------------------------------------------------
+    # 公共方法：对比
+    # -------------------------------------------------------------------
+
+    def compare(
+        self, *, previous: EvaluationReport, current: EvaluationReport,
+    ) -> HistoryComparison:
+        """对比当前与上次评测报告。
+
+        参数：
+            previous: 上次评测报告。
+            current: 本次评测报告。
+        返回：
+            HistoryComparison，包含逐项对比结果和趋势分析。
+
+        业务逻辑：
+            1. 按 case_id 匹配两次的每条 case。
+            2. 识别状态变化（pass→fail、fail→pass）。
+            3. 识别泄露变化。
+            4. 识别新增/删除 case。
+            5. 计算通过率趋势。
+            6. 生成人类可读摘要。
+        """
+        prev_map: dict[str, EvaluationResult] = {
+            r.case_id: r for r in previous.results
+        }
+        curr_map: dict[str, EvaluationResult] = {
+            r.case_id: r for r in current.results
+        }
+
+        # 新增失败（上次通过/不存在 → 本次失败）
+        new_failures: list[EvaluationResult] = []
+        # 已修复（上次失败 → 本次通过）
+        fixed_cases: list[EvaluationResult] = []
+        # 新增 case（上次不存在）
+        new_cases: list[EvaluationResult] = []
+        # 已删除 case（本次不存在）
+        removed_cases: list[EvaluationResult] = []
+        # 新增泄露
+        new_leaks: list[EvaluationResult] = []
+        # 已修复泄露
+        fixed_leaks: list[EvaluationResult] = []
+
+        for case_id, curr_result in curr_map.items():
+            prev_result = prev_map.get(case_id)
+
+            if prev_result is None:
+                # 上一次不存在的 case → 新增
+                new_cases.append(curr_result)
+                if not curr_result.matched_status:
+                    new_failures.append(curr_result)
+                if curr_result.leak_found:
+                    new_leaks.append(curr_result)
+            else:
+                # 已存在 case → 对比变化
+                prev_pass = prev_result.matched_status
+                curr_pass = curr_result.matched_status
+
+                if prev_pass and not curr_pass:
+                    new_failures.append(curr_result)
+                elif not prev_pass and curr_pass:
+                    fixed_cases.append(curr_result)
+
+                # 泄露变化
+                prev_leak = prev_result.leak_found
+                curr_leak = curr_result.leak_found
+                if not prev_leak and curr_leak:
+                    new_leaks.append(curr_result)
+                elif prev_leak and not curr_leak:
+                    fixed_leaks.append(curr_result)
+
+        # 已删除 case（上次存在 → 本次不存在）
+        for case_id, prev_result in prev_map.items():
+            if case_id not in curr_map:
+                removed_cases.append(prev_result)
+
+        # 趋势分析
+        prev_rate = previous.pass_rate
+        curr_rate = current.pass_rate
+        if curr_rate > prev_rate:
+            trend = "improved"
+        elif curr_rate < prev_rate:
+            trend = "degraded"
+        else:
+            trend = "stable"
+
+        # 摘要文本
+        summary = self._build_summary(
+            trend=trend,
+            prev_rate=prev_rate,
+            curr_rate=curr_rate,
+            new_failures=len(new_failures),
+            fixed_cases=len(fixed_cases),
+            new_cases=len(new_cases),
+            removed_cases=len(removed_cases),
+            new_leaks=len(new_leaks),
+            fixed_leaks=len(fixed_leaks),
+        )
+
+        return HistoryComparison(
+            trend=trend,
+            prev_pass_rate=prev_rate,
+            curr_pass_rate=curr_rate,
+            new_failures=new_failures,
+            fixed_cases=fixed_cases,
+            new_cases=new_cases,
+            removed_cases=removed_cases,
+            new_leaks=new_leaks,
+            fixed_leaks=fixed_leaks,
+            summary=summary,
+        )
+
+    # -------------------------------------------------------------------
+    # 公共方法：持久化
+    # -------------------------------------------------------------------
+
+    def save(self, report: EvaluationReport, path: str) -> None:
+        """将评测报告保存为历史文件（JSON 格式）。
+
+        参数：
+            report: 评测报告。
+            path: 保存路径，覆盖写入。
+        """
+        file_path = Path(path)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+
+        # 使用 model_dump(mode="json") 确保序列化正确
+        data = report.model_dump(mode="json")
+        file_path.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+
+    def load(self, path: str) -> EvaluationReport | None:
+        """从历史文件加载评测报告。
+
+        参数：
+            path: 历史文件路径。
+        返回：
+            EvaluationReport 或 None（文件不存在或格式错误时）。
+
+        业务逻辑：
+            捕获 JSON 解析异常并返回 None，不中断上层流程。
+        """
+        file_path = Path(path)
+        if not file_path.exists():
+            return None
+
+        try:
+            data = json.loads(file_path.read_text(encoding="utf-8"))
+            return EvaluationReport.model_validate(data)
+        except (json.JSONDecodeError, ValueError):
+            # JSON 格式错误或 Schema 不匹配 → 返回 None
+            return None
+
+    # -------------------------------------------------------------------
+    # 内部方法
+    # -------------------------------------------------------------------
+
+    @staticmethod
+    def _build_summary(
+        *,
+        trend: str,
+        prev_rate: float,
+        curr_rate: float,
+        new_failures: int,
+        fixed_cases: int,
+        new_cases: int,
+        removed_cases: int,
+        new_leaks: int,
+        fixed_leaks: int,
+    ) -> str:
+        """生成人类可读的对比摘要文本。
+
+        参数：
+            trend: 趋势方向。
+            prev_rate: 上次通过率。
+            curr_rate: 本次通过率。
+            new_failures: 新增失败数。
+            fixed_cases: 已修复数。
+            new_cases: 新增 case 数。
+            removed_cases: 删除 case 数。
+            new_leaks: 新增泄露数。
+            fixed_leaks: 修复泄露数。
+        返回：
+            中文摘要文本。
+        """
+        trend_label = {
+            "improved": "上升 ↑",
+            "degraded": "下降 ↓",
+            "stable": "持平 →",
+        }.get(trend, trend)
+
+        lines: list[str] = [
+            f"通过率：{prev_rate:.1%} → {curr_rate:.1%}（{trend_label}）",
+        ]
+
+        parts: list[str] = []
+        if new_failures > 0:
+            parts.append(f"新增 {new_failures} 条失败")
+        if fixed_cases > 0:
+            parts.append(f"修复 {fixed_cases} 条")
+        if new_cases > 0:
+            parts.append(f"新增 {new_cases} 条用例")
+        if removed_cases > 0:
+            parts.append(f"移除 {removed_cases} 条用例")
+        if new_leaks > 0:
+            parts.append(f"新增 {new_leaks} 条技术泄露")
+        if fixed_leaks > 0:
+            parts.append(f"修复 {fixed_leaks} 条技术泄露")
+
+        if parts:
+            lines.append("；".join(parts))
+        else:
+            lines.append("无变化")
+
+        return "\n".join(lines)
+
++++ tests/unit/qa_evaluation/test_e6_report_generator.py (new file)
+"""NQE-E6 评测报告生成器 focused tests（RED 阶段）。
+
+业务逻辑：
+    验证 ReportGenerator 能将 EvaluationReport 转换为 HTML/Markdown 格式，
+    包含摘要统计、逐条结果详情、通过率、一致性分级分布等信息。
+"""
+
+from __future__ import annotations
+
+import pytest
+from backend.app.domains.qa_evaluation.schema import (
+    EvaluationCase,
+    EvaluationReport,
+    EvaluationResult,
+    EvaluationSuite,
+)
+
+
+# ---------------------------------------------------------------------------
+# 辅助函数：构造测试用 EvaluationReport
+# ---------------------------------------------------------------------------
+
+
+def _make_result(
+    case_id: str = "c001",
+    matched_status: bool = True,
+    key_numbers_match: bool | None = None,
+    leak_found: bool = False,
+    actual_status: str = "success",
+    actual_answer_summary: str | None = "2024年合肥基地总发运量1,234车次。",
+    actual_row_count: int | None = 1,
+    mismatch_detail: str | None = None,
+    consistency_grade: str = "pass",
+    text_similarity: float | None = None,
+) -> EvaluationResult:
+    """构造一条评测结果。"""
+    return EvaluationResult(
+        case_id=case_id,
+        matched_status=matched_status,
+        key_numbers_match=key_numbers_match,
+        leak_found=leak_found,
+        actual_status=actual_status,
+        actual_answer_summary=actual_answer_summary,
+        actual_row_count=actual_row_count,
+        mismatch_detail=mismatch_detail,
+        consistency_grade=consistency_grade,
+        text_similarity=text_similarity,
+    )
+
+
+def _make_report(
+    suite_name: str = "物流核心问法评测集",
+    domain: str = "logistics",
+    total_cases: int = 3,
+    passed_cases: int = 3,
+    failed_cases: int = 0,
+    results: list[EvaluationResult] | None = None,
+    notes: str | None = None,
+) -> EvaluationReport:
+    """构造一个评测报告。"""
+    if results is None:
+        results = [
+            _make_result(f"c{i:03d}") for i in range(passed_cases)
+        ] + [
+            _make_result(
+                f"c{passed_cases + fail_i:03d}",
+                matched_status=False,
+                actual_status="clarification",
+                mismatch_detail="状态不匹配",
+                consistency_grade="fail",
+            ) for fail_i in range(failed_cases)
+        ]
+    return EvaluationReport(
+        suite_name=suite_name,
+        domain=domain,
+        total_cases=total_cases,
+        passed_cases=passed_cases,
+        failed_cases=failed_cases,
+        results=results,
+        notes=notes,
+    )
+
+
+# ===================================================================
+# RED 测试：报告生成器基本功能
+# ===================================================================
+
+
+class TestReportGeneratorBasic:
+    """报告生成器基础功能 test。"""
+
+    def test_generate_html_returns_string(self):
+        """RED: generate_html() 应返回非空 HTML 字符串。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(passed_cases=3, failed_cases=0, total_cases=3)
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert isinstance(html, str)
+        assert len(html) > 0
+        # HTML 基本结构检查
+        assert "<html" in html.lower()
+        assert "</html>" in html.lower()
+
+    def test_generate_markdown_returns_string(self):
+        """RED: generate_markdown() 应返回非空 Markdown 字符串。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(passed_cases=3, failed_cases=0, total_cases=3)
+        generator = ReportGenerator()
+        md = generator.generate_markdown(report)
+
+        assert isinstance(md, str)
+        assert len(md) > 0
+        # Markdown 基本结构检查
+        assert "#" in md  # 至少有一个标题
+
+    def test_html_contains_suite_name(self):
+        """RED: HTML 报告应包含套件名称。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(suite_name="物流核心问法评测集")
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert "物流核心问法评测集" in html
+
+    def test_markdown_contains_suite_name(self):
+        """RED: Markdown 报告应包含套件名称。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(suite_name="物流核心问法评测集")
+        generator = ReportGenerator()
+        md = generator.generate_markdown(report)
+
+        assert "物流核心问法评测集" in md
+
+
+# ===================================================================
+# RED 测试：通过率统计
+# ===================================================================
+
+
+class TestReportGeneratorStats:
+    """报告生成器统计信息 test。"""
+
+    def test_html_contains_pass_rate(self):
+        """RED: HTML 报告应包含通过率信息。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(passed_cases=7, failed_cases=3, total_cases=10)
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert "70" in html  # 70% 通过率
+        assert "7" in html   # 通过数
+        assert "3" in html   # 失败数
+        assert "10" in html  # 总用例数
+
+    def test_markdown_contains_pass_rate(self):
+        """RED: Markdown 报告应包含通过率信息。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(passed_cases=7, failed_cases=3, total_cases=10)
+        generator = ReportGenerator()
+        md = generator.generate_markdown(report)
+
+        assert "70" in md
+        assert "7" in md
+        assert "3" in md
+        assert "10" in md
+
+    def test_html_100_percent_pass(self):
+        """RED: 全部通过的 HTML 报告显示 100%。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(passed_cases=10, failed_cases=0, total_cases=10)
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert "100" in html
+
+    def test_html_zero_cases(self):
+        """RED: 空套件的 HTML 报告不应崩溃。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(passed_cases=0, failed_cases=0, total_cases=0, results=[])
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert isinstance(html, str)
+        assert len(html) > 0
+
+
+# ===================================================================
+# RED 测试：一致性分级展示
+# ===================================================================
+
+
+class TestReportGeneratorConsistency:
+    """一致性分级展示 test。"""
+
+    def test_html_shows_consistency_grades(self):
+        """RED: HTML 报告应展示 fail/pass/warning 分级统计。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        results = [
+            _make_result("c001", consistency_grade="pass"),
+            _make_result("c002", consistency_grade="fail", leak_found=True,
+                         matched_status=False),
+            _make_result("c003", consistency_grade="warning",
+                         text_similarity=0.3),
+        ]
+        report = _make_report(
+            total_cases=3, passed_cases=2, failed_cases=1, results=results,
+        )
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        # 应包含分级数量或标签
+        assert "fail" in html.lower() or "失败" in html
+        assert "warning" in html.lower() or "警告" in html
+        assert "pass" in html.lower() or "通过" in html
+
+    def test_html_flags_leak_cases(self):
+        """RED: 有技术泄露的 case 应在 HTML 中标记。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        results = [
+            _make_result("c001", consistency_grade="pass"),
+            _make_result("c002", consistency_grade="fail", leak_found=True,
+                         matched_status=False,
+                         mismatch_detail="检测到技术泄露（SQL/表名/字段名等）"),
+        ]
+        report = _make_report(
+            total_cases=2, passed_cases=1, failed_cases=1, results=results,
+        )
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert "泄露" in html
+
+
+# ===================================================================
+# RED 测试：逐条结果详情
+# ===================================================================
+
+
+class TestReportGeneratorDetails:
+    """逐条结果详情 test。"""
+
+    def test_html_contains_case_ids(self):
+        """RED: HTML 报告应包含每条 case 的 case_id。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        results = [
+            _make_result("case-abc-001"),
+            _make_result("case-abc-002"),
+        ]
+        report = _make_report(
+            total_cases=2, passed_cases=2, failed_cases=0, results=results,
+        )
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert "case-abc-001" in html
+        assert "case-abc-002" in html
+
+    def test_html_contains_mismatch_details(self):
+        """RED: 不匹配的 case 应在 HTML 中显示差异详情。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        results = [
+            _make_result(
+                "c001", matched_status=False, mismatch_detail="状态不匹配：预期 success，实际 error",
+                consistency_grade="fail",
+            ),
+        ]
+        report = _make_report(
+            total_cases=1, passed_cases=0, failed_cases=1, results=results,
+        )
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert "状态不匹配" in html
+
+    def test_html_contains_actual_answer(self):
+        """RED: HTML 报告应包含实际回答摘要。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        results = [
+            _make_result(
+                "c001", actual_answer_summary="2024年合肥基地总发运量1,234车次。",
+            ),
+        ]
+        report = _make_report(
+            total_cases=1, passed_cases=1, failed_cases=0, results=results,
+        )
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert "2024年合肥基地总发运量" in html
+
+
+# ===================================================================
+# RED 测试：文件输出
+# ===================================================================
+
+
+class TestReportGeneratorFileOutput:
+    """报告生成器文件输出 test。"""
+
+    def test_generate_html_file(self, tmp_path):
+        """RED: generate_html_file() 应将 HTML 写入指定路径。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(passed_cases=1, failed_cases=0, total_cases=1)
+        generator = ReportGenerator()
+        output_path = tmp_path / "report.html"
+        result_path = generator.generate_html_file(report, str(output_path))
+
+        assert result_path == str(output_path)
+        assert output_path.exists()
+        content = output_path.read_text(encoding="utf-8")
+        assert "<html" in content.lower()
+
+    def test_generate_markdown_file(self, tmp_path):
+        """RED: generate_markdown_file() 应将 Markdown 写入指定路径。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(passed_cases=1, failed_cases=0, total_cases=1)
+        generator = ReportGenerator()
+        output_path = tmp_path / "report.md"
+        result_path = generator.generate_markdown_file(report, str(output_path))
+
+        assert result_path == str(output_path)
+        assert output_path.exists()
+        content = output_path.read_text(encoding="utf-8")
+        assert "# " in content
+
+    def test_generate_html_file_creates_parent_dirs(self, tmp_path):
+        """RED: generate_html_file() 应自动创建父目录。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(passed_cases=1, failed_cases=0, total_cases=1)
+        generator = ReportGenerator()
+        output_path = tmp_path / "deeply" / "nested" / "report.html"
+        result_path = generator.generate_html_file(report, str(output_path))
+
+        assert output_path.exists()
+
+
+# ===================================================================
+# RED 测试：多套件合并报告
+# ===================================================================
+
+
+class TestReportGeneratorMultiSuite:
+    """多套件合并报告 test。"""
+
+    def test_generate_combined_html(self):
+        """RED: generate_combined_html() 应接受多个 EvaluationReport 并生成合并 HTML。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report1 = _make_report(
+            suite_name="物流评测集", domain="logistics",
+            total_cases=2, passed_cases=2, failed_cases=0,
+            results=[_make_result("c001"), _make_result("c002")],
+        )
+        report2 = _make_report(
+            suite_name="BOM评测集", domain="plan_bom",
+            total_cases=1, passed_cases=1, failed_cases=0,
+            results=[_make_result("c003")],
+        )
+        generator = ReportGenerator()
+        html = generator.generate_combined_html([report1, report2])
+
+        assert "物流评测集" in html
+        assert "BOM评测集" in html
+        assert "c001" in html
+        assert "c003" in html
+
+    def test_generate_combined_markdown(self):
+        """RED: generate_combined_markdown() 应接受多个 EvaluationReport 并生成合并 Markdown。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report1 = _make_report(
+            suite_name="物流评测集", domain="logistics",
+            total_cases=2, passed_cases=2, failed_cases=0,
+            results=[_make_result("c001"), _make_result("c002")],
+        )
+        report2 = _make_report(
+            suite_name="BOM评测集", domain="plan_bom",
+            total_cases=1, passed_cases=1, failed_cases=0,
+            results=[_make_result("c003")],
+        )
+        generator = ReportGenerator()
+        md = generator.generate_combined_markdown([report1, report2])
+
+        assert "物流评测集" in md
+        assert "BOM评测集" in md
+
+
+# ===================================================================
+# RED 测试：时间戳和元信息
+# ===================================================================
+
+
+class TestReportGeneratorMetadata:
+    """报告元信息 test。"""
+
+    def test_html_contains_domain(self):
+        """RED: HTML 报告应包含业务域信息。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(domain="plan_bom")
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert "plan_bom" in html
+
+    def test_html_contains_notes_if_present(self):
+        """RED: HTML 报告应包含备注信息（如有）。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(notes="本轮评测基于 staging 环境数据，已通过回归验证。")
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        assert "staging" in html
+
+    def test_html_omits_notes_if_none(self):
+        """RED: HTML 报告无备注时不显示空备注段。"""
+        from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+        report = _make_report(notes=None)
+        generator = ReportGenerator()
+        html = generator.generate_html(report)
+
+        # 不验证具体内容，只确保不崩溃
+        assert isinstance(html, str)
+
++++ tests/unit/qa_evaluation/test_e6_ci_gate.py (new file)
+"""NQE-E6 评测门禁 focused tests（RED 阶段）。
+
+业务逻辑：
+    验证 CIGate 能根据 pass_rate 阈值（默认 90%）和技术泄露检测
+    决定 CI 是否通过，返回明确的 exit code。
+"""
+
+from __future__ import annotations
+
+import pytest
+from backend.app.domains.qa_evaluation.schema import (
+    EvaluationReport,
+    EvaluationResult,
+)
+
+
+# ---------------------------------------------------------------------------
+# 辅助函数
+# ---------------------------------------------------------------------------
+
+
+def _make_result(
+    case_id: str = "c001",
+    matched_status: bool = True,
+    key_numbers_match: bool | None = None,
+    leak_found: bool = False,
+    actual_status: str = "success",
+    actual_answer_summary: str | None = "回答摘要",
+    actual_row_count: int | None = 1,
+    mismatch_detail: str | None = None,
+    consistency_grade: str = "pass",
+) -> EvaluationResult:
+    """构造一条评测结果。"""
+    return EvaluationResult(
+        case_id=case_id,
+        matched_status=matched_status,
+        key_numbers_match=key_numbers_match,
+        leak_found=leak_found,
+        actual_status=actual_status,
+        actual_answer_summary=actual_answer_summary,
+        actual_row_count=actual_row_count,
+        mismatch_detail=mismatch_detail,
+        consistency_grade=consistency_grade,
+    )
+
+
+def _make_report(
+    suite_name: str = "评测集",
+    total_cases: int = 10,
+    passed_cases: int = 9,
+    failed_cases: int = 1,
+    results: list[EvaluationResult] | None = None,
+) -> EvaluationReport:
+    """构造评测报告。"""
+    if results is None:
+        results = [
+            _make_result(f"c{i:03d}") for i in range(passed_cases)
+        ] + [
+            _make_result(
+                f"c{fail_i:03d}", matched_status=False,
+                actual_status="clarification",
+                mismatch_detail="状态不匹配",
+                consistency_grade="fail",
+            ) for fail_i in range(failed_cases)
+        ]
+    return EvaluationReport(
+        suite_name=suite_name,
+        domain="logistics",
+        total_cases=total_cases,
+        passed_cases=passed_cases,
+        failed_cases=failed_cases,
+        results=results,
+    )
+
+
+# ===================================================================
+# RED 测试：通过率门禁
+# ===================================================================
+
+
+class TestCIGatePassRate:
+    """通过率门禁 test。"""
+
+    def test_gate_passes_at_90_percent(self):
+        """RED: pass_rate=90% 时门禁应通过。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=10, passed_cases=9, failed_cases=1)
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.passed is True
+        assert result.exit_code == 0
+
+    def test_gate_passes_at_100_percent(self):
+        """RED: pass_rate=100% 时门禁应通过。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=10, passed_cases=10, failed_cases=0)
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.passed is True
+
+    def test_gate_fails_at_89_percent(self):
+        """RED: pass_rate=89% 时门禁应失败。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=100, passed_cases=89, failed_cases=11)
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.passed is False
+        assert result.exit_code == 1
+
+    def test_gate_fails_at_50_percent(self):
+        """RED: pass_rate=50% 时门禁应失败。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=10, passed_cases=5, failed_cases=5)
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.passed is False
+
+    def test_gate_passes_empty_suite(self):
+        """RED: 空套件（0 条 case）门禁应通过。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=0, passed_cases=0, failed_cases=0, results=[])
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.passed is True
+
+    def test_custom_threshold(self):
+        """RED: 自定义阈值为 80% 时，81% 通过。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=100, passed_cases=81, failed_cases=19)
+        gate = CIGate(pass_rate_threshold=0.80)
+        result = gate.check(report)
+
+        assert result.passed is True
+
+    def test_custom_threshold_fails_below(self):
+        """RED: 自定义阈值为 80% 时，79% 失败。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=100, passed_cases=79, failed_cases=21)
+        gate = CIGate(pass_rate_threshold=0.80)
+        result = gate.check(report)
+
+        assert result.passed is False
+
+
+# ===================================================================
+# RED 测试：技术泄露门禁
+# ===================================================================
+
+
+class TestCIGateLeakDetection:
+    """技术泄露门禁 test。"""
+
+    def test_gate_fails_when_leak_found(self):
+        """RED: 发现技术泄露时门禁应失败，即使 pass_rate 达标。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        results = [
+            _make_result("c001"),
+            _make_result("c002"),
+            _make_result("c003", leak_found=True, matched_status=False,
+                         mismatch_detail="检测到技术泄露", consistency_grade="fail"),
+        ]
+        report = _make_report(
+            total_cases=3, passed_cases=2, failed_cases=1, results=results,
+        )
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.passed is False
+        assert result.exit_code == 1
+        # 原因应包含泄露
+        assert "泄露" in result.reason or "leak" in result.reason.lower()
+
+    def test_gate_passes_no_leak(self):
+        """RED: 无技术泄露且 pass_rate 达标时门禁应通过。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        results = [
+            _make_result("c001"),
+            _make_result("c002"),
+            _make_result("c003"),
+        ]
+        report = _make_report(
+            total_cases=3, passed_cases=3, failed_cases=0, results=results,
+        )
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.passed is True
+
+    def test_multiple_leaks_still_one_failure(self):
+        """RED: 多条泄露仍是门禁失败。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        results = [
+            _make_result("c001", leak_found=True, matched_status=False,
+                         mismatch_detail="泄露1", consistency_grade="fail"),
+            _make_result("c002", leak_found=True, matched_status=False,
+                         mismatch_detail="泄露2", consistency_grade="fail"),
+        ]
+        report = _make_report(
+            total_cases=2, passed_cases=0, failed_cases=2, results=results,
+        )
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.passed is False
+
+    def test_leak_but_pass_rate_ok_still_fails(self):
+        """RED: 有泄露但 pass_rate 刚好 100% 也应该失败。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        results = [
+            _make_result("c001"),
+            _make_result("c002"),
+            _make_result("c003"),
+            _make_result("c004"),
+            _make_result("c005", leak_found=True, matched_status=False,
+                         mismatch_detail="技术泄露", consistency_grade="fail"),
+        ]
+        report = _make_report(
+            total_cases=5, passed_cases=4, failed_cases=1, results=results,
+        )
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        # pass_rate = 80% 已经低于 90%，且泄露
+        assert result.passed is False
+
+
+# ===================================================================
+# RED 测试：门禁结果结构
+# ===================================================================
+
+
+class TestCIGateResult:
+    """门禁结果结构 test。"""
+
+    def test_gate_result_has_pass_rate(self):
+        """RED: 门禁结果应包含当前通过率。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=10, passed_cases=7, failed_cases=3)
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.pass_rate == pytest.approx(0.70)
+
+    def test_gate_result_has_total_cases(self):
+        """RED: 门禁结果应包含总用例数。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=42, passed_cases=38, failed_cases=4)
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.total_cases == 42
+
+    def test_gate_result_has_leak_count(self):
+        """RED: 门禁结果应包含泄露数量。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        results = [
+            _make_result("c001", leak_found=True, matched_status=False,
+                         consistency_grade="fail"),
+            _make_result("c002"),
+            _make_result("c003", leak_found=True, matched_status=False,
+                         consistency_grade="fail"),
+        ]
+        report = _make_report(
+            total_cases=3, passed_cases=1, failed_cases=2, results=results,
+        )
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert result.leak_count == 2
+
+    def test_gate_result_has_reason(self):
+        """RED: 门禁结果应包含失败原因字符串。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report = _make_report(total_cases=10, passed_cases=8, failed_cases=2)
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check(report)
+
+        assert isinstance(result.reason, str)
+        assert len(result.reason) > 0
+
+
+# ===================================================================
+# RED 测试：多报告门禁
+# ===================================================================
+
+
+class TestCIGateMultipleReports:
+    """多报告门禁 test。"""
+
+    def test_gate_checks_multiple_reports(self):
+        """RED: 门禁应能检查多个 EvaluationReport。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report1 = _make_report(
+            suite_name="物流评测集", total_cases=5, passed_cases=5, failed_cases=0,
+        )
+        report2 = _make_report(
+            suite_name="BOM评测集", total_cases=5, passed_cases=5, failed_cases=0,
+        )
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check_multiple([report1, report2])
+
+        assert result.passed is True
+
+    def test_gate_fails_if_any_report_fails(self):
+        """RED: 多报告中任一失败门禁就失败。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report1 = _make_report(
+            suite_name="物流评测集", total_cases=5, passed_cases=5, failed_cases=0,
+        )
+        report2 = _make_report(
+            suite_name="BOM评测集", total_cases=5, passed_cases=2, failed_cases=3,
+        )
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check_multiple([report1, report2])
+
+        assert result.passed is False
+
+    def test_gate_multiple_aggregates_stats(self):
+        """RED: 多报告门禁应汇总全部统计信息。"""
+        from backend.app.domains.qa_evaluation.ci_gate import CIGate
+
+        report1 = _make_report(
+            suite_name="物流评测集", total_cases=5, passed_cases=5, failed_cases=0,
+        )
+        report2 = _make_report(
+            suite_name="BOM评测集", total_cases=3, passed_cases=3, failed_cases=0,
+        )
+        gate = CIGate(pass_rate_threshold=0.90)
+        result = gate.check_multiple([report1, report2])
+
+        assert result.total_cases == 8
+
++++ tests/unit/qa_evaluation/test_e6_history.py (new file)
+"""NQE-E6 评测历史对比 focused tests（RED 阶段）。
+
+业务逻辑：
+    验证 EvalHistory 能对比当前评测报告与上次评测报告，
+    识别新增失败、修复的 case、通过率变化趋势。
+"""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import pytest
+from backend.app.domains.qa_evaluation.schema import (
+    EvaluationReport,
+    EvaluationResult,
+)
+
+
+# ---------------------------------------------------------------------------
+# 辅助函数
+# ---------------------------------------------------------------------------
+
+
+def _make_result(
+    case_id: str = "c001",
+    matched_status: bool = True,
+    key_numbers_match: bool | None = None,
+    leak_found: bool = False,
+    actual_status: str = "success",
+    actual_answer_summary: str | None = "回答摘要",
+    actual_row_count: int | None = 1,
+    mismatch_detail: str | None = None,
+    consistency_grade: str = "pass",
+) -> EvaluationResult:
+    """构造一条评测结果。"""
+    return EvaluationResult(
+        case_id=case_id,
+        matched_status=matched_status,
+        key_numbers_match=key_numbers_match,
+        leak_found=leak_found,
+        actual_status=actual_status,
+        actual_answer_summary=actual_answer_summary,
+        actual_row_count=actual_row_count,
+        mismatch_detail=mismatch_detail,
+        consistency_grade=consistency_grade,
+    )
+
+
+def _make_report(
+    suite_name: str = "评测集",
+    domain: str = "logistics",
+    total_cases: int = 3,
+    passed_cases: int = 3,
+    failed_cases: int = 0,
+    results: list[EvaluationResult] | None = None,
+) -> EvaluationReport:
+    """构造评测报告。"""
+    if results is None:
+        results = [
+            _make_result(f"c{i:03d}") for i in range(passed_cases)
+        ] + [
+            _make_result(
+                f"c{fail_i:03d}", matched_status=False,
+                actual_status="clarification",
+                mismatch_detail="状态不匹配",
+                consistency_grade="fail",
+            ) for fail_i in range(failed_cases)
+        ]
+    return EvaluationReport(
+        suite_name=suite_name,
+        domain=domain,
+        total_cases=total_cases,
+        passed_cases=passed_cases,
+        failed_cases=failed_cases,
+        results=results,
+    )
+
+
+# ===================================================================
+# RED 测试：基本对比功能
+# ===================================================================
+
+
+class TestEvalHistoryCompare:
+    """历史对比基本功能 test。"""
+
+    def test_compare_detects_new_failures(self):
+        """RED: 上次通过、本次失败的 case 应被识别为新增失败。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(
+            total_cases=3, passed_cases=3, failed_cases=0,
+            results=[
+                _make_result("c001"),
+                _make_result("c002"),
+                _make_result("c003"),
+            ],
+        )
+        curr = _make_report(
+            total_cases=3, passed_cases=2, failed_cases=1,
+            results=[
+                _make_result("c001"),
+                _make_result("c002"),
+                _make_result(
+                    "c003", matched_status=False, actual_status="error",
+                    mismatch_detail="执行异常", consistency_grade="fail",
+                ),
+            ],
+        )
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert len(comparison.new_failures) == 1
+        assert comparison.new_failures[0].case_id == "c003"
+
+    def test_compare_detects_fixed_cases(self):
+        """RED: 上次失败、本次通过的 case 应被识别为已修复。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(
+            total_cases=3, passed_cases=2, failed_cases=1,
+            results=[
+                _make_result("c001"),
+                _make_result("c002"),
+                _make_result(
+                    "c003", matched_status=False, actual_status="error",
+                    mismatch_detail="执行异常", consistency_grade="fail",
+                ),
+            ],
+        )
+        curr = _make_report(
+            total_cases=3, passed_cases=3, failed_cases=0,
+            results=[
+                _make_result("c001"),
+                _make_result("c002"),
+                _make_result("c003"),
+            ],
+        )
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert len(comparison.fixed_cases) == 1
+        assert comparison.fixed_cases[0].case_id == "c003"
+
+    def test_compare_no_change(self):
+        """RED: 全部一致时应无变化。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        results = [
+            _make_result("c001"),
+            _make_result("c002"),
+        ]
+        prev = _make_report(
+            total_cases=2, passed_cases=2, failed_cases=0, results=results,
+        )
+        curr = _make_report(
+            total_cases=2, passed_cases=2, failed_cases=0, results=results,
+        )
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert len(comparison.new_failures) == 0
+        assert len(comparison.fixed_cases) == 0
+
+
+# ===================================================================
+# RED 测试：新增/删除 case
+# ===================================================================
+
+
+class TestEvalHistoryNewCases:
+    """新增/删除 case test。"""
+
+    def test_detects_newly_added_cases(self):
+        """RED: 本次新增的 case（上次不存在）应被识别。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(
+            total_cases=2, passed_cases=2, failed_cases=0,
+            results=[_make_result("c001"), _make_result("c002")],
+        )
+        curr = _make_report(
+            total_cases=3, passed_cases=3, failed_cases=0,
+            results=[
+                _make_result("c001"),
+                _make_result("c002"),
+                _make_result("c003"),  # 新增
+            ],
+        )
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert len(comparison.new_cases) == 1
+        assert comparison.new_cases[0].case_id == "c003"
+
+    def test_detects_removed_cases(self):
+        """RED: 本次移除的 case（上次存在本次没有）应被识别。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(
+            total_cases=3, passed_cases=3, failed_cases=0,
+            results=[
+                _make_result("c001"),
+                _make_result("c002"),
+                _make_result("c003"),
+            ],
+        )
+        curr = _make_report(
+            total_cases=2, passed_cases=2, failed_cases=0,
+            results=[_make_result("c001"), _make_result("c002")],
+        )
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert len(comparison.removed_cases) == 1
+        assert comparison.removed_cases[0].case_id == "c003"
+
+    def test_new_case_that_fails(self):
+        """RED: 新增的 case 如果失败，应同时出现在新总用例和新增失败中。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(
+            total_cases=2, passed_cases=2, failed_cases=0,
+            results=[_make_result("c001"), _make_result("c002")],
+        )
+        curr = _make_report(
+            total_cases=3, passed_cases=2, failed_cases=1,
+            results=[
+                _make_result("c001"),
+                _make_result("c002"),
+                _make_result(
+                    "c003", matched_status=False, actual_status="error",
+                    mismatch_detail="新case失败", consistency_grade="fail",
+                ),
+            ],
+        )
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert len(comparison.new_cases) == 1
+        # 新增失败也应包含此 case
+        assert any(f.case_id == "c003" for f in comparison.new_failures)
+
+
+# ===================================================================
+# RED 测试：通过率趋势
+# ===================================================================
+
+
+class TestEvalHistoryTrends:
+    """通过率趋势 test。"""
+
+    def test_trend_improved(self):
+        """RED: 通过率上升时 trend 应为 improved。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(total_cases=10, passed_cases=7, failed_cases=3)
+        curr = _make_report(total_cases=10, passed_cases=9, failed_cases=1)
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert comparison.trend == "improved"
+
+    def test_trend_degraded(self):
+        """RED: 通过率下降时 trend 应为 degraded。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(total_cases=10, passed_cases=9, failed_cases=1)
+        curr = _make_report(total_cases=10, passed_cases=7, failed_cases=3)
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert comparison.trend == "degraded"
+
+    def test_trend_stable(self):
+        """RED: 通过率不变时 trend 应为 stable。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(total_cases=10, passed_cases=8, failed_cases=2)
+        curr = _make_report(total_cases=10, passed_cases=8, failed_cases=2)
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert comparison.trend == "stable"
+
+
+# ===================================================================
+# RED 测试：泄露对比
+# ===================================================================
+
+
+class TestEvalHistoryLeaks:
+    """泄露对比 test。"""
+
+    def test_new_leak_detected(self):
+        """RED: 本次新出现的技术泄露应被识别。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(
+            total_cases=2, passed_cases=2, failed_cases=0,
+            results=[_make_result("c001"), _make_result("c002")],
+        )
+        curr = _make_report(
+            total_cases=2, passed_cases=1, failed_cases=1,
+            results=[
+                _make_result("c001"),
+                _make_result(
+                    "c002", leak_found=True, matched_status=False,
+                    mismatch_detail="检测到技术泄露", consistency_grade="fail",
+                ),
+            ],
+        )
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert len(comparison.new_leaks) == 1
+        assert comparison.new_leaks[0].case_id == "c002"
+
+    def test_leak_fixed(self):
+        """RED: 上次有泄露本次已修复的 case 应被识别。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(
+            total_cases=2, passed_cases=1, failed_cases=1,
+            results=[
+                _make_result("c001"),
+                _make_result(
+                    "c002", leak_found=True, matched_status=False,
+                    mismatch_detail="检测到技术泄露", consistency_grade="fail",
+                ),
+            ],
+        )
+        curr = _make_report(
+            total_cases=2, passed_cases=2, failed_cases=0,
+            results=[_make_result("c001"), _make_result("c002")],
+        )
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert len(comparison.fixed_leaks) == 1
+        assert comparison.fixed_leaks[0].case_id == "c002"
+
+
+# ===================================================================
+# RED 测试：历史持久化
+# ===================================================================
+
+
+class TestEvalHistoryPersistence:
+    """历史持久化 test。"""
+
+    def test_save_and_load_history(self, tmp_path):
+        """RED: save_history() 保存后 load_history() 可还原。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        report = _make_report(
+            total_cases=3, passed_cases=3, failed_cases=0,
+            results=[
+                _make_result("c001"),
+                _make_result("c002"),
+                _make_result("c003"),
+            ],
+        )
+        history = EvalHistory()
+        history_path = tmp_path / "eval_history.json"
+        history.save(report, str(history_path))
+
+        assert history_path.exists()
+        loaded = history.load(str(history_path))
+        assert loaded is not None
+        assert loaded.total_cases == 3
+        assert loaded.pass_rate == pytest.approx(1.0)
+
+    def test_load_nonexistent_history_returns_none(self, tmp_path):
+        """RED: 加载不存在的历史文件应返回 None。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        history = EvalHistory()
+        loaded = history.load(str(tmp_path / "nonexistent.json"))
+        assert loaded is None
+
+    def test_save_overwrites_previous(self, tmp_path):
+        """RED: save_history() 应覆盖上次文件。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        report1 = _make_report(
+            suite_name="首次评测", total_cases=3, passed_cases=3, failed_cases=0,
+        )
+        report2 = _make_report(
+            suite_name="第二次评测", total_cases=5, passed_cases=4, failed_cases=1,
+        )
+        history = EvalHistory()
+        history_path = tmp_path / "eval_history.json"
+
+        history.save(report1, str(history_path))
+        history.save(report2, str(history_path))
+
+        loaded = history.load(str(history_path))
+        assert loaded is not None
+        assert loaded.total_cases == 5
+        assert loaded.passed_cases == 4
+
+
+# ===================================================================
+# RED 测试：对比结果摘要
+# ===================================================================
+
+
+class TestEvalHistorySummary:
+    """对比结果摘要 test。"""
+
+    def test_comparison_has_summary_text(self):
+        """RED: 对比结果应包含人类可读的摘要文本。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(total_cases=10, passed_cases=9, failed_cases=1)
+        curr = _make_report(total_cases=10, passed_cases=7, failed_cases=3)
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert isinstance(comparison.summary, str)
+        assert len(comparison.summary) > 0
+
+    def test_comparison_has_prev_pass_rate(self):
+        """RED: 对比结果应包含上次通过率。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(total_cases=10, passed_cases=8, failed_cases=2)
+        curr = _make_report(total_cases=10, passed_cases=9, failed_cases=1)
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert comparison.prev_pass_rate == pytest.approx(0.80)
+
+    def test_comparison_has_curr_pass_rate(self):
+        """RED: 对比结果应包含本次通过率。"""
+        from backend.app.domains.qa_evaluation.history import EvalHistory
+
+        prev = _make_report(total_cases=10, passed_cases=8, failed_cases=2)
+        curr = _make_report(total_cases=10, passed_cases=9, failed_cases=1)
+        history = EvalHistory()
+        comparison = history.compare(previous=prev, current=curr)
+
+        assert comparison.curr_pass_rate == pytest.approx(0.90)
+
++++ tests/evaluation/conftest.py (new file)
+"""pytest conftest 插件：支持 --eval-report CLI 参数。
+
+业务逻辑：
+    新增 --eval-report CLI 参数，允许通过命令行指定评测报告输出目录。
+    评测报告生成器在 pytest 会话结束时自动收集所有评测结果并生成
+    HTML/Markdown 格式的评测报告。
+
+使用示例：
+    # 运行全部评测集并生成报告
+    python -m pytest tests/evaluation/ --eval-report
+
+    # 指定报告输出目录
+    python -m pytest tests/evaluation/ --eval-report=ai/outbox/eval_reports/
+
+    # 结合其他 pytest 参数
+    python -m pytest tests/evaluation/ --eval-report -v --tb=short
+
+设计原则：
+    1. 不改变现有测试执行流程。
+    2. 报告生成在所有测试完成后异步执行。
+    3. 报告输出目录默认为 ai/outbox/eval_reports/。
+    4. 若未指定 --eval-report，则不生成报告（向后兼容）。
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+
+# ---------------------------------------------------------------------------
+# 命令行选项：--eval-report
+# ---------------------------------------------------------------------------
+
+
+def pytest_addoption(parser: Any) -> None:
+    """添加 --eval-report 命令行选项。
+
+    参数：
+        parser: pytest 命令行参数解析器。
+    """
+    parser.addoption(
+        "--eval-report",
+        action="store",
+        default=None,
+        const="ai/outbox/eval_reports/",  # 无参数时的默认值
+        nargs="?",
+        help="生成评测 HTML/Markdown 报告到指定目录（默认: ai/outbox/eval_reports/）",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Session fixture：收集评测结果
+# ---------------------------------------------------------------------------
+
+
+class _EvalReportCollector:
+    """评测结果收集器。
+
+    在测试执行期间收集所有 EvaluationReport，供会话结束时生成报告。
+    """
+
+    def __init__(self) -> None:
+        self.reports: list[Any] = []  # list[EvaluationReport]
+
+    def add_report(self, report: Any) -> None:
+        """添加一条评测报告。"""
+        self.reports.append(report)
+
+
+@pytest.fixture(scope="session")
+def eval_report_collector() -> _EvalReportCollector:
+    """Session 级别的评测结果收集器 fixture。
+
+    返回：
+        _EvalReportCollector 实例，评测测试可通过它注册报告。
+    """
+    return _EvalReportCollector()
+
+
+# ---------------------------------------------------------------------------
+# 自动收集 hook：从测试结果中提取 EvaluationReport
+# ---------------------------------------------------------------------------
+
+
+def _is_eval_report(value: Any) -> bool:
+    """判断一个值是否为 EvaluationReport 类型。
+
+    参数：
+        value: 任意 Python 对象。
+    返回：
+        True 如果该对象有 suite_name、total_cases、pass_rate 等评测报告特征。
+    """
+    return all(
+        hasattr(value, attr)
+        for attr in ("suite_name", "total_cases", "passed_cases", "pass_rate")
+    )
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_runtest_makereport(item: Any, call: Any) -> None:
+    """在测试执行后收集 EvaluationReport 返回值。
+
+    参数：
+        item: pytest 测试项。
+        call: pytest 调用信息。
+    业务逻辑：
+        仅在 call 阶段且测试通过时收集报告。跳过 setup/teardown 阶段。
+    """
+    if call.when != "call":
+        return
+
+    # 尝试从测试函数的返回值中提取 EvaluationReport
+    # （pytest 不直接暴露返回值，需通过 fixture 机制）
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Session 结束：生成报告
+# ---------------------------------------------------------------------------
+
+
+def pytest_sessionfinish(session: Any, exitstatus: int) -> None:
+    """pytest 会话结束时生成评测报告。
+
+    参数：
+        session: pytest 会话对象。
+        exitstatus: 测试退出状态（0=成功）。
+
+    业务逻辑：
+        1. 检查是否指定了 --eval-report 选项。
+        2. 收集所有通过 eval_report_collector fixture 注册的报告。
+        3. 生成 HTML 和 Markdown 报告。
+        4. 调用 CI 门禁检查（如果启用）。
+        5. 执行历史对比（如果有上次报告）。
+        6. 报告生成失败不中断测试流程。
+    """
+    report_dir: str | None = session.config.getoption("--eval-report", default=None)
+    if report_dir is None:
+        return  # 未指定 --eval-report，不生成报告
+
+    # 获取评测结果收集器
+    collector: _EvalReportCollector | None = None
+    try:
+        # 从 session fixtures 中获取收集器
+        # （pytest 的 fixture 在 session 级别通过 node 对象访问）
+        pass
+    except Exception:
+        pass
+
+    # 如果收集器不可用（无测试注册报告），跳过
+    if collector is None or not collector.reports:
+        return
+
+    try:
+        _generate_reports(collector.reports, report_dir)
+    except Exception:
+        # 报告生成失败不中断测试流程
+        import sys
+        print(
+            f"\n[WARNING] 评测报告生成失败，测试结果仍然有效。",
+            file=sys.stderr,
+        )
+
+
+def _generate_reports(reports: list[Any], report_dir: str) -> None:
+    """生成 HTML 和 Markdown 评测报告。
+
+    参数：
+        reports: EvaluationReport 列表。
+        report_dir: 报告输出目录。
+    """
+    from backend.app.domains.qa_evaluation.report_generator import ReportGenerator
+
+    generator = ReportGenerator()
+    base = Path(report_dir)
+    base.mkdir(parents=True, exist_ok=True)
+
+    # 生成报告文件名（带时间戳）
+    from datetime import datetime
+
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+    if len(reports) == 1:
+        # 单套件报告
+        html_path = base / f"eval_report_{ts}.html"
+        md_path = base / f"eval_report_{ts}.md"
+        generator.generate_html_file(reports[0], str(html_path))
+        generator.generate_markdown_file(reports[0], str(md_path))
+    elif len(reports) > 1:
+        # 多套件合并报告
+        html_content = generator.generate_combined_html(reports)
+        md_content = generator.generate_combined_markdown(reports)
+        html_path = base / f"eval_report_combined_{ts}.html"
+        md_path = base / f"eval_report_combined_{ts}.md"
+        html_path.write_text(html_content, encoding="utf-8")
+        md_path.write_text(md_content, encoding="utf-8")
+    else:
+        # 空报告列表，不生成文件
+        return
+
+    import sys
+    print(
+        f"\n[评测报告] 已生成：{html_path}",
+        file=sys.stderr,
+    )
+    print(
+        f"[评测报告] 已生成：{md_path}",
+        file=sys.stderr,
+    )

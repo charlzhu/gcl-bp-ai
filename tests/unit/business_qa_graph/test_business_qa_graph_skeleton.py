@@ -242,3 +242,28 @@ def test_runner_returns_domain_routed_response_without_business_execution() -> N
     assert "plan_validate" in node_names
     assert "unsupported" in node_names
     assert "NL2SQL" in response.boundary_notes[0]
+
+
+# =============================================================================
+# NQE-E4 RED 测试：domain_registry 支持 power_prediction 别名
+# =============================================================================
+
+
+def test_domain_registry_normalizes_power_prediction_hint() -> None:
+    """power_prediction 作为 domain_hint 应被归一化为 plan_bom。
+
+    RED：当前 normalize_domain_hint("power_prediction") 返回 "unknown"，
+    导致评测套件 domain_hint 匹配失败。
+    """
+    registry = BusinessQaDomainRegistry.default()
+
+    result = registry.normalize_domain_hint("power_prediction")
+    assert result == "plan_bom", (
+        f"power_prediction 应归一化为 plan_bom，实际 {result}"
+    )
+
+    route = registry.route("615W 版型功率预测", domain_hint="power_prediction")
+    assert route.status == "ROUTED", (
+        f"power_prediction hint 应路由成功，实际 status={route.status}"
+    )
+    assert route.domain == "plan_bom"

@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [
+    "_write_jsonl 的 output_path 可加路径合法性校验防路径遍历（低风险，仅内部调用场景）",
+    "_check_leak 仅扫描 answer_summary；若响应未来新增其他用户可见字段（如 clarification_question），可能遗漏泄露检测",
+    "EvaluationCase.allow_empty_substitute 字段在 eval_runner 中未被消费，属于死字段——建议实现或从 schema 移除避免误导"
+  ],
+  "summary": "四项修复全部正确应用：死断言已清除、死代码已移除、docstring 已修正为覆盖写入、JSONL 异常保护已添加。无安全风险，无逻辑错误，可合入。"
+}

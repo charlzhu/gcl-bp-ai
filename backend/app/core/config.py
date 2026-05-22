@@ -111,6 +111,11 @@ class Settings(BaseSettings):
     llm_answer_presentation_model: str = ""
     llm_answer_presentation_timeout: float = 6.0
     llm_answer_presentation_max_retries: int = 0
+    business_qa_langgraph_enabled: bool = False
+    business_qa_graph_mode: Literal["off", "shadow", "assist", "on"] = "shadow"
+    business_qa_graph_domains: list[str] = Field(default_factory=lambda: ["logistics", "plan_bom", "plan_power"])
+    business_qa_graph_stream_events_enabled: bool = True
+    business_qa_graph_audit_enabled: bool = True
     query_planning_v2_response_meta_enabled: bool = False
     business_qa_langgraph_enabled: bool = False
     business_qa_graph_mode: Literal["off", "shadow", "assist", "on"] = "shadow"

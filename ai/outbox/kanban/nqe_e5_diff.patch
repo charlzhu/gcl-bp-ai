@@ -1,0 +1,3102 @@
+diff --git a/backend/app/domains/qa_evaluation/__init__.py b/backend/app/domains/qa_evaluation/__init__.py
+new file mode 100644
+index 00000000..050b9973
+--- /dev/null
++++ b/backend/app/domains/qa_evaluation/__init__.py
+@@ -0,0 +1,26 @@
++"""统一业务问法评测集（NQE-Eval）模块。
++
++业务逻辑：
++    本模块定义跨业务域（物流、计划BOM、功率预测）的统一评测集标准格式，
++    支持问题-预期结果-评测结果-评测报告的完整生命周期。
++
++NQE-E2 新增：EvalGraphRunner 评测运行器，遍历评测套件调用 GraphRunner。
++"""
++
++from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++from backend.app.domains.qa_evaluation.schema import (
++    ConsistencyGrade,
++    EvaluationCase,
++    EvaluationReport,
++    EvaluationResult,
++    EvaluationSuite,
++)
++
++__all__ = [
++    "ConsistencyGrade",
++    "EvalGraphRunner",
++    "EvaluationCase",
++    "EvaluationSuite",
++    "EvaluationResult",
++    "EvaluationReport",
++]
+diff --git a/backend/app/domains/qa_evaluation/eval_runner.py b/backend/app/domains/qa_evaluation/eval_runner.py
+new file mode 100644
+index 00000000..080ef2c2
+--- /dev/null
++++ b/backend/app/domains/qa_evaluation/eval_runner.py
+@@ -0,0 +1,482 @@
++"""评测 Graph 运行器（EvalGraphRunner）。
++
++业务逻辑：
++    遍历评测套件中的每条用例，调用 GraphRunner 获取实际回答，
++    生成 EvaluationResult 并输出 JSONL 评测报告。
++
++设计原则：
++    1. 不改变现有 GraphRunner 行为。
++    2. 评测结果独立可审计，每条 JSONL 行包含完整的 case+result。
++    3. GraphRunner 异常不中断整体评测流程。
++    4. 技术泄露检查为默认开启的安全防护。
++
++使用示例：
++    >>> from backend.app.domains.business_qa_graph.runner import BusinessQaGraphRunner
++    >>> from backend.app.domains.qa_evaluation.schema import EvaluationSuite
++    >>> graph_runner = BusinessQaGraphRunner(enabled=True)
++    >>> suite = load_logistics_suite()  # 加载物流评测套件
++    >>> runner = EvalGraphRunner(graph_runner=graph_runner, suite=suite, output_jsonl="eval.jsonl")
++    >>> report = runner.run()
++    >>> print(f"通过率: {report.pass_rate:.1%}")
++"""
++
++from __future__ import annotations
++
++import json
++import logging
++import traceback
++from pathlib import Path
++from typing import Any
++
++from backend.app.domains.business_qa_graph.schemas.request import BusinessQaGraphRequest
++from backend.app.domains.business_qa_graph.schemas.response import BusinessQaGraphResponse
++from backend.app.domains.qa_evaluation.schema import (
++    EvaluationCase,
++    EvaluationReport,
++    EvaluationResult,
++    EvaluationSuite,
++)
++
++logger = logging.getLogger(__name__)
++
++# ---------------------------------------------------------------------------
++# 技术泄露检测关键词黑名单
++# ---------------------------------------------------------------------------
++"""技术泄露检测关键词列表：
++    用户可见回答中不得包含 SQL 关键字、表名模式、字段名模式、
++    query_key、planner、guardrail、schema、raw/debug、LLM 等技术细节。
++"""
++_LEAK_KEYWORDS: tuple[str, ...] = (
++    "SELECT ",
++    "FROM ",
++    "WHERE ",
++    "INSERT ",
++    "UPDATE ",
++    "DELETE ",
++    "query_key",
++    "planner",
++    "guardrail",
++    "schema",
++    "raw_response",
++    "debug",
++    "LLM",
++    "nl2sql",
++    "SQLPlan",
++)
++
++
++class EvalGraphRunner:
++    """评测 Graph 运行器。
++
++    遍历评测套件中的每条用例，调用 GraphRunner 获取实际回答，
++    生成 EvaluationResult 并输出 JSONL 评测报告。
++
++    参数：
++        graph_runner: GraphRunner 可调用对象，接受 BusinessQaGraphRequest 返回 BusinessQaGraphResponse。
++        suite: 评测套件，包含目标业务域和多条 EvaluationCase。
++        output_jsonl: 可选的 JSONL 输出路径，用于持久化评测结果。
++        enable_leak_check: 是否启用技术泄露检查，默认 True。
++
++    返回：
++        调用 run() 后返回 EvaluationReport，包含全部用例的评测结果和通过率统计。
++    """
++
++    def __init__(
++        self,
++        *,
++        graph_runner: Any,
++        suite: EvaluationSuite,
++        output_jsonl: str | None = None,
++        enable_leak_check: bool = True,
++    ) -> None:
++        """初始化评测运行器。
++
++        参数：
++            graph_runner: 已配置的 GraphRunner 实例（或兼容的 callable）。
++            suite: 包含多条的评测套件。
++            output_jsonl: JSONL 输出路径，可选。
++            enable_leak_check: 技术泄露检查开关。
++        """
++        self._graph_runner = graph_runner
++        self._suite = suite
++        self._output_jsonl = output_jsonl
++        self._enable_leak_check = enable_leak_check
++
++    # -----------------------------------------------------------------------
++    # 公共方法
++    # -----------------------------------------------------------------------
++
++    def run(self) -> EvaluationReport:
++        """执行全量评测，遍历套件中每条 case。
++
++        参数：无。
++        返回：EvaluationReport，包含全部评测结果和通过率统计。
++        业务逻辑：
++            1. 遍历 suite.cases。
++            2. 对每条 case 构造 BusinessQaGraphRequest。
++            3. 调用 graph_runner.run() 获取回答。
++            4. 生成 EvaluationResult。
++            5. 汇总为 EvaluationReport。
++            6. 若指定 output_jsonl，写入 JSONL 文件。
++            7. 若 graph_runner 抛异常，捕获并记录 error 结果。
++        """
++        results: list[EvaluationResult] = []
++        passed_count = 0
++        failed_count = 0
++
++        for case in self._suite.cases:
++            try:
++                request = BusinessQaGraphRequest(
++                    question=case.question,
++                    domain_hint=case.domain,
++                )
++                response = self._graph_runner.run(request)
++                result = self._evaluate_case(case, response)
++            except Exception as exc:
++                # 异常兜底：记录 error 结果，不中断评测流程
++                logger.error(
++                    "评测用例执行异常 case_id=%s question=%s error=%s",
++                    case.case_id,
++                    case.question[:60],
++                    exc,
++                )
++                result = self._error_result(
++                    case=case,
++                    exc=exc,
++                )
++
++            results.append(result)
++            if result.matched_status:
++                passed_count += 1
++            else:
++                failed_count += 1
++
++        # 构造评测报告
++        report = EvaluationReport(
++            suite_name=self._suite.name,
++            domain=self._suite.domain,
++            total_cases=len(results),
++            passed_cases=passed_count,
++            failed_cases=failed_count,
++            results=results,
++        )
++
++        # 执行一致性分级（fail/pass/warning）
++        report.evaluate_consistency()
++
++        # 输出 JSONL（如果指定）—— 写入失败不中断评测
++        if self._output_jsonl:
++            try:
++                self._write_jsonl(report, self._output_jsonl)
++            except Exception as exc:
++                logger.error(
++                    "JSONL 写入失败 path=%s error=%s",
++                    self._output_jsonl,
++                    exc,
++                )
++
++        return report
++
++    # -----------------------------------------------------------------------
++    # 单条评测逻辑
++    # -----------------------------------------------------------------------
++
++    def _evaluate_case(
++        self,
++        case: EvaluationCase,
++        response: BusinessQaGraphResponse,
++    ) -> EvaluationResult:
++        """评估单条 case 的实际回答。
++
++        参数：
++            case: 评测用例，包含预期状态、可选的预期文本和行数。
++            response: GraphRunner 返回的实际回答。
++        返回：
++            EvaluationResult，包含匹配结果、文本相似度、泄露检查等。
++        业务逻辑：
++            1. 提取实际状态（success/clarification/unsupported/error）。
++            2. 与预期状态对比，记录 matched_status。
++            3. 对比预期行数（如果 case 指定了 expected_row_count）。
++            4. 对比预期文本（如果 case 指定了 expected_text）。
++            5. 技术泄露检查（默认开启）。
++            6. 生成差异说明。
++        """
++        actual_status = self._map_response_status(response)
++        actual_row_count = self._extract_row_count(response)
++        actual_answer = self._extract_answer_summary(response)
++
++        # 状态匹配判断
++        matched_status = actual_status == case.expected_status
++
++        # 行数匹配判断
++        key_numbers_match: bool | None = None
++        if case.expected_row_count is not None:
++            key_numbers_match = actual_row_count == case.expected_row_count
++
++        # 文本相似度计算
++        text_similarity: float | None = None
++        if case.expected_text is not None and actual_answer is not None:
++            text_similarity = self._compute_text_similarity(
++                expected=case.expected_text,
++                actual=actual_answer,
++            )
++
++        # 技术泄露检查
++        leak_found = False
++        if self._enable_leak_check:
++            leak_found = self._check_leak(response)
++
++        # 泄露视为严重问题 → matched_status 强制 False
++        if leak_found:
++            matched_status = False
++
++        # 差异说明
++        mismatch_detail = self._build_mismatch_detail(
++            case=case,
++            matched_status=matched_status,
++            key_numbers_match=key_numbers_match,
++            text_similarity=text_similarity,
++            leak_found=leak_found,
++            actual_status=actual_status,
++            expected_status=case.expected_status,
++        )
++
++        return EvaluationResult(
++            case_id=case.case_id,
++            matched_status=matched_status,
++            key_numbers_match=key_numbers_match,
++            text_similarity=text_similarity,
++            leak_found=leak_found,
++            actual_status=actual_status,
++            actual_answer_summary=actual_answer,
++            actual_row_count=actual_row_count,
++            mismatch_detail=mismatch_detail,
++        )
++
++    # -----------------------------------------------------------------------
++    # 内部工具方法
++    # -----------------------------------------------------------------------
++
++    @staticmethod
++    def _map_response_status(response: BusinessQaGraphResponse) -> str:
++        """将 Graph 响应状态映射为评测用实际状态。
++
++        参数：
++            response: GraphRunner 返回的响应。
++        返回：
++            评测实际状态字符串（success/clarification/unsupported/empty_result/error）。
++        业务逻辑：
++            - EXECUTED + execution_result 有数据 → success
++            - EXECUTED + execution_result 行数=0 → empty_result
++            - CLARIFY → clarification
++            - UNSUPPORTED → unsupported
++            - ERROR → error
++            - 其他状态兜底为 error
++        """
++        status = response.status
++
++        if status == "EXECUTED":
++            # 区分有数据成功与空结果
++            row_count = EvalGraphRunner._extract_row_count(response)
++            if row_count is not None and row_count == 0:
++                return "empty_result"
++            return "success"
++
++        if status == "CLARIFY":
++            return "clarification"
++
++        if status == "UNSUPPORTED":
++            return "unsupported"
++
++        if status == "ERROR":
++            return "error"
++
++        # 兜底：其他状态（RECEIVED/DOMAIN_ROUTED/PLAN_BUILT/DISABLED）视为异常
++        return "error"
++
++    @staticmethod
++    def _extract_row_count(response: BusinessQaGraphResponse) -> int | None:
++        """从 Graph 响应中提取实际行数。
++
++        参数：
++            response: GraphRunner 返回的响应。
++        返回：
++            实际行数，如果 execution_result 中无 row_count 则返回 None。
++        """
++        if response.execution_result and isinstance(response.execution_result, dict):
++            return response.execution_result.get("row_count")
++        return None
++
++    @staticmethod
++    def _extract_answer_summary(response: BusinessQaGraphResponse) -> str | None:
++        """从 Graph 响应中提取回答摘要文本。
++
++        参数：
++            response: GraphRunner 返回的响应。
++        返回：
++            回答摘要字符串，如果无 execution_result 则返回 None。
++        """
++        if response.execution_result and isinstance(response.execution_result, dict):
++            return response.execution_result.get("answer_summary")
++        return None
++
++    @staticmethod
++    def _compute_text_similarity(*, expected: str, actual: str) -> float:
++        """计算预期文本与实际回答的相似度。
++
++        参数：
++            expected: 预期的关键文本。
++            actual: 实际回答摘要。
++        返回：
++            相似度（0.0~1.0），基于子串匹配或长度比例计算。
++        业务逻辑：
++            - 预期文本作为子串出现在实际回答中 → 相似度按覆盖比例计算。
++            - 预期文本未出现 → 0.0。
++        """
++        if not expected or not actual:
++            return 0.0
++
++        # 简单子串匹配
++        if expected in actual:
++            # 相似度 = 预期文本长度 / 实际回答长度，上限 1.0
++            return min(1.0, len(expected) / len(actual))
++
++        return 0.0
++
++    @staticmethod
++    def _check_leak(response: BusinessQaGraphResponse) -> bool:
++        """检查回答中是否存在技术泄露（SQL/表名/字段名等）。
++
++        参数：
++            response: GraphRunner 返回的响应。
++        返回：
++            True 表示发现技术泄露，False 表示安全。
++        业务逻辑：
++            遍历 execution_result 和 answer_summary 的文本，检测黑名单关键词。
++        """
++        # 提取所有可见文本
++        texts: list[str] = []
++
++        if response.execution_result and isinstance(response.execution_result, dict):
++            answer = response.execution_result.get("answer_summary", "")
++            if answer:
++                texts.append(str(answer))
++
++        combined = " ".join(texts)
++        if not combined:
++            return False
++
++        # 大小写不敏感匹配
++        combined_upper = combined.upper()
++        for keyword in _LEAK_KEYWORDS:
++            if keyword.upper() in combined_upper:
++                logger.warning("技术泄露检测到关键词: %s", keyword)
++                return True
++
++        return False
++
++    @staticmethod
++    def _build_mismatch_detail(
++        *,
++        case: EvaluationCase,
++        matched_status: bool,
++        key_numbers_match: bool | None,
++        text_similarity: float | None,
++        leak_found: bool,
++        actual_status: str,
++        expected_status: str,
++    ) -> str | None:
++        """生成人类可读的差异说明。
++
++        参数：
++            case: 源评测用例。
++            matched_status: 状态是否匹配。
++            key_numbers_match: 行数是否匹配。
++            text_similarity: 文本相似度。
++            leak_found: 是否发现泄露。
++            actual_status: 实际状态。
++            expected_status: 预期状态。
++        返回：
++            差异说明字符串，全部匹配时返回 None。
++        """
++        parts: list[str] = []
++
++        if not matched_status:
++            parts.append(
++                f"状态不匹配：预期 {expected_status}，实际 {actual_status}"
++            )
++
++        if key_numbers_match is False:
++            parts.append(
++                f"行数不匹配：预期 {case.expected_row_count} 行，实际不符"
++            )
++
++        if text_similarity is not None and text_similarity == 0.0:
++            parts.append(
++                f"预期文本「{case.expected_text}」未出现在回答中"
++            )
++
++        if leak_found:
++            parts.append("检测到技术泄露（SQL/表名/字段名等）")
++
++        return "；".join(parts) if parts else None
++
++    @staticmethod
++    def _error_result(
++        *,
++        case: EvaluationCase,
++        exc: Exception,
++    ) -> EvaluationResult:
++        """构造异常情况下的 error 评测结果。
++
++        参数：
++            case: 出错的评测用例。
++            exc: 捕获的异常对象。
++        返回：
++            EvaluationResult，标记为 error 状态。
++        """
++        # 提取异常简要信息
++        exc_name = type(exc).__name__
++        exc_msg = str(exc)[:200]  # 截断防止过长
++        detail = f"{exc_name}: {exc_msg}"
++
++        return EvaluationResult(
++            case_id=case.case_id,
++            matched_status=False,
++            leak_found=False,
++            actual_status="error",
++            mismatch_detail=detail,
++        )
++
++    # -----------------------------------------------------------------------
++    # JSONL 持久化
++    # -----------------------------------------------------------------------
++
++    @staticmethod
++    def _write_jsonl(report: EvaluationReport, output_path: str) -> None:
++        """将评测报告以 JSONL 格式写入文件。
++
++        参数：
++            report: 评测报告，包含 results 列表。
++            output_path: 目标文件路径。
++        业务逻辑：
++            每条 EvaluationResult 序列化为一行 JSON，覆盖写入。
++            文件以 UTF-8 编码，确保中文可读。
++        """
++        path = Path(output_path)
++        path.parent.mkdir(parents=True, exist_ok=True)
++
++        with path.open("w", encoding="utf-8") as f:
++            for result in report.results:
++                # 使用 mode="json" 确保字段序列化正确（如 UUID → str）
++                line = json.dumps(
++                    result.model_dump(mode="json"),
++                    ensure_ascii=False,
++                )
++                f.write(line + "\n")
++
++        logger.info(
++            "评测 JSONL 已写入 %s，%d 条结果",
++            output_path,
++            len(report.results),
++        )
+diff --git a/tests/unit/qa_evaluation/test_eval_runner.py b/tests/unit/qa_evaluation/test_eval_runner.py
+new file mode 100644
+index 00000000..b028cdd7
+--- /dev/null
++++ b/tests/unit/qa_evaluation/test_eval_runner.py
+@@ -0,0 +1,777 @@
++"""NQE-E2 focused tests：评测 Graph 运行器（EvalGraphRunner）。
++
++业务逻辑：
++    验证 EvalGraphRunner 能正确遍历评测套件、调用 GraphRunner、
++    生成 EvaluationResult 和 EvaluationReport，并输出 JSONL。
++
++TDD 流程：RED → GREEN → REFACTOR。
++"""
++
++from __future__ import annotations
++
++import json
++import tempfile
++from pathlib import Path
++from unittest.mock import MagicMock
++
++import pytest
++
++from backend.app.domains.business_qa_graph.schemas.response import BusinessQaGraphResponse
++from backend.app.domains.qa_evaluation.schema import (
++    EvaluationCase,
++    EvaluationReport,
++    EvaluationResult,
++    EvaluationSuite,
++)
++
++
++# =============================================================================
++# RED 测试 1：EvalGraphRunner 基本运行 —— 遍历 suite 并生成报告
++# =============================================================================
++
++
++def test_eval_runner_runs_all_cases_and_returns_report() -> None:
++    """遍历评测套件中的所有 case，调用 GraphRunner，返回 EvaluationReport。
++
++    RED：EvalGraphRunner 尚未实现，此测试应失败。
++    """
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    # 构造评测套件
++    case1 = EvaluationCase(
++        question="2024年合肥基地总发运量",
++        domain="logistics",
++        expected_status="success",
++        tags=["smoke"],
++    )
++    case2 = EvaluationCase(
++        question="2023年阜宁到广州的运价",
++        domain="logistics",
++        expected_status="success",
++        expected_row_count=3,
++        tags=["smoke"],
++    )
++
++    suite = EvaluationSuite(
++        name="物流核心评测集",
++        domain="logistics",
++        cases=[case1, case2],
++    )
++
++    # 构造 fake GraphRunner，返回模拟响应
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.side_effect = [
++        BusinessQaGraphResponse(
++            status="EXECUTED",
++            execution_mode="graph_skeleton_only",
++            question="2024年合肥基地总发运量",
++            domain="logistics",
++            execution_status="EXECUTED",
++            execution_result={
++                "answer_summary": "2024年合肥基地总发运量为 1,250 车次",
++                "row_count": 1,
++            },
++        ),
++        BusinessQaGraphResponse(
++            status="EXECUTED",
++            execution_mode="graph_skeleton_only",
++            question="2023年阜宁到广州的运价",
++            domain="logistics",
++            execution_status="EXECUTED",
++            execution_result={
++                "answer_summary": "2023年阜宁到广州运价为 3,200 元/车",
++                "row_count": 3,
++            },
++        ),
++    ]
++
++    # 运行评测
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    # 验证报告
++    assert isinstance(report, EvaluationReport)
++    assert report.suite_name == "物流核心评测集"
++    assert report.total_cases == 2
++    assert report.passed_cases == 2
++    assert report.failed_cases == 0
++    assert report.pass_rate == 1.0
++    assert len(report.results) == 2
++
++    # 验证每个结果关联到对应 case
++    assert report.results[0].case_id == case1.case_id
++    assert report.results[1].case_id == case2.case_id
++
++    # 验证 fake runner 被调用了两次
++    assert fake_graph_runner.run.call_count == 2
++
++
++# =============================================================================
++# RED 测试 2：状态匹配逻辑
++# =============================================================================
++
++
++def test_eval_runner_status_matching_success() -> None:
++    """expected_status=success 对应 Graph EXECUTED 状态时 matched_status=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="2024年总发运量",
++        domain="logistics",
++        expected_status="success",
++    )
++    suite = EvaluationSuite(
++        name="状态匹配测试",
++        domain="logistics",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="2024年总发运量",
++        domain="logistics",
++        execution_status="EXECUTED",
++        execution_result={"answer_summary": "总发运量 1,250 车次", "row_count": 1},
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_status == "success"
++    assert report.passed_cases == 1
++
++
++def test_eval_runner_status_matching_clarification() -> None:
++    """expected_status=clarification 对应 Graph CLARIFY 状态时 matched_status=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="运费多少",
++        domain="logistics",
++        expected_status="clarification",
++    )
++    suite = EvaluationSuite(
++        name="澄清匹配测试",
++        domain="logistics",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="CLARIFY",
++        execution_mode="graph_skeleton_only",
++        question="运费多少",
++        domain="logistics",
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_status == "clarification"
++    assert report.passed_cases == 1
++
++
++def test_eval_runner_status_matching_unsupported() -> None:
++    """expected_status=unsupported 对应 Graph UNSUPPORTED 状态时 matched_status=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="给我导出所有数据",
++        domain="logistics",
++        expected_status="unsupported",
++    )
++    suite = EvaluationSuite(
++        name="不支持匹配测试",
++        domain="logistics",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="UNSUPPORTED",
++        execution_mode="graph_skeleton_only",
++        question="给我导出所有数据",
++        domain="logistics",
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_status == "unsupported"
++    assert report.passed_cases == 1
++
++
++def test_eval_runner_status_matching_error() -> None:
++    """expected_status=error 对应 Graph ERROR 状态时 matched_status=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="非法查询",
++        domain="logistics",
++        expected_status="error",
++    )
++    suite = EvaluationSuite(
++        name="错误匹配测试",
++        domain="logistics",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="ERROR",
++        execution_mode="graph_skeleton_only",
++        question="非法查询",
++        domain="logistics",
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_status == "error"
++    assert report.passed_cases == 1
++
++
++def test_eval_runner_status_mismatch() -> None:
++    """预期 success 但实际 CLARIFY 时 matched_status=False。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="含糊不清的问题",
++        domain="logistics",
++        expected_status="success",
++    )
++    suite = EvaluationSuite(
++        name="不匹配测试",
++        domain="logistics",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="CLARIFY",
++        execution_mode="graph_skeleton_only",
++        question="含糊不清的问题",
++        domain="logistics",
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is False
++    assert report.results[0].actual_status == "clarification"
++    assert report.passed_cases == 0
++    assert report.failed_cases == 1
++
++
++# =============================================================================
++# RED 测试 3：row_count 匹配
++# =============================================================================
++
++
++def test_eval_runner_row_count_match() -> None:
++    """expected_row_count 与实际结果行数一致时 key_numbers_match=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="2024年合肥基地按承运商分组的发运量",
++        domain="logistics",
++        expected_status="success",
++        expected_row_count=5,
++    )
++    suite = EvaluationSuite(
++        name="行数匹配测试",
++        domain="logistics",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="2024年合肥基地按承运商分组的发运量",
++        domain="logistics",
++        execution_status="EXECUTED",
++        execution_result={
++            "answer_summary": "按承运商分组结果共5条",
++            "row_count": 5,
++        },
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is True
++    assert report.results[0].key_numbers_match is True
++    assert report.results[0].actual_row_count == 5
++
++
++def test_eval_runner_row_count_mismatch() -> None:
++    """expected_row_count 与实际结果行数不一致时 key_numbers_match=False。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="2024年合肥基地按承运商分组的发运量",
++        domain="logistics",
++        expected_status="success",
++        expected_row_count=5,
++    )
++    suite = EvaluationSuite(
++        name="行数不匹配测试",
++        domain="logistics",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="2024年合肥基地按承运商分组的发运量",
++        domain="logistics",
++        execution_status="EXECUTED",
++        execution_result={
++            "answer_summary": "按承运商分组结果共3条",
++            "row_count": 3,
++        },
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].key_numbers_match is False
++    assert report.results[0].actual_row_count == 3
++
++
++# =============================================================================
++# RED 测试 4：技术泄露检查
++# =============================================================================
++
++
++def test_eval_runner_leak_check_no_leak() -> None:
++    """无技术泄露时 leak_found=False。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="2024年总发运量",
++        domain="logistics",
++        expected_status="success",
++    )
++    suite = EvaluationSuite(name="无泄露测试", domain="logistics", cases=[case])
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="2024年总发运量",
++        domain="logistics",
++        execution_status="EXECUTED",
++        execution_result={
++            "answer_summary": "2024年总发运量为1,250车次",
++            "row_count": 1,
++        },
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].leak_found is False
++
++
++def test_eval_runner_leak_check_found() -> None:
++    """发现 SQL 关键词泄露时 leak_found=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="2024年总发运量",
++        domain="logistics",
++        expected_status="success",
++    )
++    suite = EvaluationSuite(name="泄露测试", domain="logistics", cases=[case])
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="2024年总发运量",
++        domain="logistics",
++        execution_status="EXECUTED",
++        execution_result={
++            "answer_summary": "SELECT * FROM logistics_table WHERE year=2024 -- 1,250车次",
++            "row_count": 1,
++        },
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].leak_found is True
++    # leak 会导致 matched_status 为 False（即使业务状态匹配）
++    assert report.results[0].matched_status is False
++
++
++# =============================================================================
++# RED 测试 5：JSONL 输出
++# =============================================================================
++
++
++def test_eval_runner_jsonl_output() -> None:
++    """output_jsonl 指定时输出评测结果到 JSONL 文件。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case1 = EvaluationCase(
++        question="2024年合肥基地总发运量",
++        domain="logistics",
++        expected_status="success",
++    )
++    case2 = EvaluationCase(
++        question="运费多少",
++        domain="logistics",
++        expected_status="clarification",
++    )
++    suite = EvaluationSuite(
++        name="JSONL输出测试",
++        domain="logistics",
++        cases=[case1, case2],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.side_effect = [
++        BusinessQaGraphResponse(
++            status="EXECUTED",
++            execution_mode="graph_skeleton_only",
++            question="2024年合肥基地总发运量",
++            domain="logistics",
++            execution_status="EXECUTED",
++            execution_result={"answer_summary": "1,250 车次", "row_count": 1},
++        ),
++        BusinessQaGraphResponse(
++            status="CLARIFY",
++            execution_mode="graph_skeleton_only",
++            question="运费多少",
++            domain="logistics",
++        ),
++    ]
++
++    with tempfile.TemporaryDirectory() as tmpdir:
++        output_path = Path(tmpdir) / "eval_results.jsonl"
++        runner = EvalGraphRunner(
++            graph_runner=fake_graph_runner,
++            suite=suite,
++            output_jsonl=str(output_path),
++        )
++        runner.run()
++
++        # 验证 JSONL 文件已创建
++        assert output_path.exists()
++
++        # 读取并验证 JSONL 内容
++        lines = output_path.read_text(encoding="utf-8").strip().split("\n")
++        assert len(lines) == 2
++
++        line1 = json.loads(lines[0])
++        assert line1["case_id"] == case1.case_id
++        assert line1["matched_status"] is True
++        assert line1["actual_status"] == "success"
++
++        line2 = json.loads(lines[1])
++        assert line2["case_id"] == case2.case_id
++        assert line2["matched_status"] is True
++        assert line2["actual_status"] == "clarification"
++
++
++# =============================================================================
++# RED 测试 6：空套件处理
++# =============================================================================
++
++
++def test_eval_runner_empty_suite() -> None:
++    """空评测套件（cases=[]）应返回总用例 0、通过率 1.0 的报告。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    suite = EvaluationSuite(
++        name="空套件",
++        domain="logistics",
++        cases=[],
++    )
++
++    fake_graph_runner = MagicMock()
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.total_cases == 0
++    assert report.passed_cases == 0
++    assert report.failed_cases == 0
++    assert report.pass_rate == 1.0
++    assert len(report.results) == 0
++    # 空套件不应调用 GraphRunner
++    assert fake_graph_runner.run.call_count == 0
++
++
++# =============================================================================
++# RED 测试 7：GraphRunner 异常处理
++# =============================================================================
++
++
++def test_eval_runner_graph_exception_produces_error_result() -> None:
++    """GraphRunner 抛异常时应捕获并记录 error 结果，不中断评测流程。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case1 = EvaluationCase(
++        question="正常问题",
++        domain="logistics",
++        expected_status="success",
++    )
++    case2 = EvaluationCase(
++        question="会崩溃的问题",
++        domain="logistics",
++        expected_status="success",
++    )
++    suite = EvaluationSuite(
++        name="异常处理测试",
++        domain="logistics",
++        cases=[case1, case2],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.side_effect = [
++        BusinessQaGraphResponse(
++            status="EXECUTED",
++            execution_mode="graph_skeleton_only",
++            question="正常问题",
++            domain="logistics",
++            execution_status="EXECUTED",
++            execution_result={"answer_summary": "正常回答", "row_count": 1},
++        ),
++        RuntimeError("模拟 Graph 内部异常"),
++    ]
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    # case1 正常通过
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_status == "success"
++
++    # case2 异常应记录为 error
++    assert report.results[1].actual_status == "error"
++    assert report.results[1].matched_status is False  # 预期 success 但实际 error
++    assert report.results[1].mismatch_detail is not None
++    assert "RuntimeError" in report.results[1].mismatch_detail
++
++    # 报告汇总
++    assert report.total_cases == 2
++    assert report.passed_cases == 1
++    assert report.failed_cases == 1
++
++
++# =============================================================================
++# RED 测试 8：allow_empty_substitute 选项
++# =============================================================================
++
++
++def test_eval_runner_empty_result_with_allow_empty_true() -> None:
++    """allow_empty_substitute=True 且实际为空结果时 matched_status=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="2024年不存在的路线",
++        domain="logistics",
++        expected_status="empty_result",
++        allow_empty_substitute=True,
++    )
++    suite = EvaluationSuite(name="空结果允许测试", domain="logistics", cases=[case])
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="2024年不存在的路线",
++        domain="logistics",
++        execution_status="EXECUTED",
++        execution_result={
++            "answer_summary": "未找到匹配记录",
++            "row_count": 0,
++        },
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].actual_status == "empty_result"
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_row_count == 0
++    assert report.passed_cases == 1
++
++
++# =============================================================================
++# RED 测试 9：expected_text 子串匹配
++# =============================================================================
++
++
++def test_eval_runner_expected_text_substring_match() -> None:
++    """expected_text 包含在实际回答中时 text_similarity > 0（至少匹配长度比例）。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="2024年合肥基地发运量",
++        domain="logistics",
++        expected_status="success",
++        expected_text="1,250 车次",
++    )
++    suite = EvaluationSuite(name="文本匹配测试", domain="logistics", cases=[case])
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="2024年合肥基地发运量",
++        domain="logistics",
++        execution_status="EXECUTED",
++        execution_result={
++            "answer_summary": "2024年合肥基地总发运量为 1,250 车次",
++            "row_count": 1,
++        },
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].text_similarity is not None
++    assert report.results[0].text_similarity > 0.0
++    assert report.results[0].matched_status is True
++
++
++def test_eval_runner_expected_text_not_found() -> None:
++    """expected_text 不在回答中时 text_similarity=0 且记录 mismatch。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="2024年合肥基地发运量",
++        domain="logistics",
++        expected_status="success",
++        expected_text="5,000 车次",
++    )
++    suite = EvaluationSuite(name="文本不匹配测试", domain="logistics", cases=[case])
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="2024年合肥基地发运量",
++        domain="logistics",
++        execution_status="EXECUTED",
++        execution_result={
++            "answer_summary": "2024年合肥基地总发运量为 1,250 车次",
++            "row_count": 1,
++        },
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    # 文本不匹配不影响 matched_status（以状态为主要判断），
++    # 但应记录在 mismatch_detail 中
++    assert report.results[0].text_similarity == 0.0
++
++
++# =============================================================================
++# RED 测试 10：物流评测样例可加载
++# =============================================================================
++
++
++def test_logistics_evaluation_samples_loadable() -> None:
++    """物流评测样例集可从 tests/evaluation/logistics/ 加载为 EvaluationSuite。
++
++    RED：样例文件和加载函数尚未实现。
++    """
++    from tests.evaluation.logistics.samples import load_logistics_suite
++
++    suite = load_logistics_suite()
++
++    assert isinstance(suite, EvaluationSuite)
++    assert suite.domain == "logistics"
++    assert len(suite.cases) >= 5, f"首批物流评测样例应至少 5 条，实际 {len(suite.cases)} 条"
++
++    # 验证每条 case 的 domain 与 suite 一致
++    for case in suite.cases:
++        assert case.domain == "logistics"
++        assert case.question, f"每条 case 必须有 question"
++        assert case.expected_status, f"每条 case 必须有 expected_status"
++
++
++# =============================================================================
++# NQE-E4 RED 测试：功率评测 EvalGraphRunner 支持
++# =============================================================================
++
++
++def test_eval_runner_power_prediction_domain_suite() -> None:
++    """power_prediction 域的评测套件能被 EvalGraphRunner 正确执行。
++
++    RED：domain_hint="power_prediction" 未被 domain_registry 识别，
++    当前会落入 unknown → CLARIFY，导致 matched_status=False。
++    """
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="615W 版型功率预测",
++        domain="power_prediction",
++        expected_status="success",
++        tags=["smoke", "power"],
++    )
++    suite = EvaluationSuite(
++        name="功率评测集",
++        domain="power_prediction",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="615W 版型功率预测",
++        domain="plan_bom",
++        execution_status="EXECUTED",
++        execution_result={
++            "answer_summary": "615W 版型功率预测结果：中心功率 615W",
++            "row_count": 1,
++        },
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert isinstance(report, EvaluationReport)
++    assert report.domain == "power_prediction"
++    assert report.total_cases == 1
++    assert report.results[0].matched_status is True, (
++        f"预期 matched_status=True，实际 {report.results[0].matched_status}，"
++        f"mismatch_detail={report.results[0].mismatch_detail}"
++    )
++    assert report.results[0].actual_status == "success"
++
++
++def test_power_evaluation_samples_loadable() -> None:
++    """功率评测样例集可从 tests/evaluation/plan_power/ 加载为 EvaluationSuite。
++
++    RED：tests/evaluation/plan_power/samples.py 尚未创建。
++    """
++    from tests.evaluation.plan_power.samples import load_power_suite
++
++    suite = load_power_suite()
++
++    assert isinstance(suite, EvaluationSuite)
++    assert suite.domain == "power_prediction"
++    assert len(suite.cases) >= 5, (
++        f"首批功率评测样例应至少 5 条，实际 {len(suite.cases)} 条"
++    )
++
++    for case in suite.cases:
++        assert case.domain == "power_prediction"
++        assert case.question, "每条 case 必须有 question"
++        assert case.expected_status, "每条 case 必须有 expected_status"
+diff --git a/backend/app/domains/qa_evaluation/schema.py b/backend/app/domains/qa_evaluation/schema.py
+new file mode 100644
+--- /dev/null
++++ b/backend/app/domains/qa_evaluation/schema.py
++++ b/backend/app/domains/qa_evaluation/schema.py
+@@ -0,0 +1,412 @@
++"""统一业务问法评测集（NQE-Eval）Schema 定义。
++
++业务逻辑：
++    本模块定义跨业务域（物流、计划BOM、功率预测、经营分析）的统一评测集核心 Schema。
++    包括评测用例（EvaluationCase）、评测套件（EvaluationSuite）、
++    评测结果（EvaluationResult）和评测报告（EvaluationReport）。
++
++    设计原则：
++    1. 评测用例独立可序列化，不依赖运行时环境。
++    2. 套件可包含多条用例，按业务域组织。
++    3. 评测结果保留实际回答快照，支持人工复核。
++    4. 报告汇总套件级统计，支持 pass_rate 计算。
++"""
++
++from __future__ import annotations
++
++import uuid
++from typing import Literal
++
++from pydantic import BaseModel, ConfigDict, Field, model_validator
++
++# ---------------------------------------------------------------------------
++# 一致性评测分级枚举
++# ---------------------------------------------------------------------------
++"""一致性评测分级：
++    - pass：全部核心指标匹配。
++    - fail：存在硬性不合格项（状态不匹配、行数不匹配、技术泄露）。
++    - warning：存在软性风险项（文本相似度低、数值误差超标）。
++"""
++ConsistencyGrade = Literal["pass", "fail", "warning"]
++_CONSISTENCY_GRADES = frozenset({"pass", "fail", "warning"})
++
++
++# ---------------------------------------------------------------------------
++# 业务问法评测集支持的业务域
++# ---------------------------------------------------------------------------
++"""支持的业务域列表：
++    - logistics：物流问答。
++    - plan_bom：计划 BOM 问答。
++    - power_prediction：功率预测问答。
++    - business_analysis：经营分析（产销存）问答。
++"""
++_SUPPORTED_DOMAINS = frozenset({
++    "logistics",
++    "plan_bom",
++    "power_prediction",
++    "business_analysis",
++})
++
++# ---------------------------------------------------------------------------
++# 业务问法评测预期状态枚举
++# ---------------------------------------------------------------------------
++"""预期回答状态列表：
++    - success：成功回答，包含关键业务数据。
++    - clarification：需要澄清，缺少关键槽位。
++    - unsupported：暂不支持的问题类型。
++    - empty_result：数据范围内无匹配记录。
++    - error：后端执行异常。
++"""
++_EXPECTED_STATUSES = frozenset({
++    "success",
++    "clarification",
++    "unsupported",
++    "empty_result",
++    "error",
++})
++
++
++# ---------------------------------------------------------------------------
++# EvaluationCase —— 单条评测用例
++# ---------------------------------------------------------------------------
++
++class EvaluationCase(BaseModel):
++    """单条业务问法评测用例。
++
++    描述一条用户自然语言问题及其预期回答，供评测引擎自动化对比。
++
++    参数：
++        question: 用户自然语言问题，必填。
++        domain: 所属业务域，必填，见 _SUPPORTED_DOMAINS。
++        expected_status: 预期回答状态，必填，见 _EXPECTED_STATUSES。
++        expected_text: 预期回答核心文本，可选。
++            —— 用于验证 LLM 生成回答是否包含关键业务数据。
++        expected_row_count: 预期结果行数，可选。
++            —— 用于验证查询返回的数据量是否匹配。
++        caliber: 业务口径说明，可选。
++            —— 说明本问题的数据范围、计算公式、筛选条件等，供评测员参考。
++        tags: 分类标签列表，可选，默认空列表。
++            —— 如 ["smoke", "logistics_route_price"]。
++        allow_empty_substitute: 是否允许空结果回填预期，默认 True。
++            —— 当数据源无匹配记录时，是否接受 row_count=0 的结果。
++        schema_version: Schema 版本号，默认 "1.0"。
++        case_id: 用例唯一标识，可选，未传入时自动生成 UUID。
++
++    业务注意：
++        本 Schema 仅用于构建评测数据集，不执行实际查询。
++        评测引擎需基于 case_id 关联实际回答和 EvaluationResult。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    case_id: str = Field(
++        default_factory=lambda: str(uuid.uuid4()),
++        description="用例唯一标识，未传入时自动生成 UUID",
++    )
++    question: str = Field(..., min_length=1, description="用户自然语言问题")
++    domain: str = Field(..., description="所属业务域")
++    expected_status: str = Field(..., description="预期回答状态")
++    expected_text: str | None = Field(
++        default=None,
++        description="预期回答核心文本，用于验证关键业务数据是否存在",
++    )
++    expected_row_count: int | None = Field(
++        default=None,
++        ge=0,
++        description="预期结果行数，用于验证查询返回的数据量",
++    )
++    caliber: str | None = Field(
++        default=None,
++        description="业务口径说明：数据范围、计算公式、筛选条件等",
++    )
++    tags: list[str] = Field(
++        default_factory=list,
++        description="分类标签列表，如 ['smoke', 'logistics_route_price']",
++    )
++    allow_empty_substitute: bool = Field(
++        default=True,
++        description="是否允许空结果回填预期（row_count=0 可接受）",
++    )
++    schema_version: str = Field(
++        default="1.0",
++        description="Schema 版本号",
++    )
++
++    @model_validator(mode="after")
++    def _validate_domain(self) -> "EvaluationCase":
++        """校验 domain 是否在支持的业务域白名单内。"""
++        if self.domain not in _SUPPORTED_DOMAINS:
++            raise ValueError(
++                f"domain 必须是以下之一：{sorted(_SUPPORTED_DOMAINS)}，"
++                f"当前值：{self.domain}",
++            )
++        return self
++
++    @model_validator(mode="after")
++    def _validate_expected_status(self) -> "EvaluationCase":
++        """校验 expected_status 是否在允许的状态值内。"""
++        if self.expected_status not in _EXPECTED_STATUSES:
++            raise ValueError(
++                f"expected_status 必须是以下之一：{sorted(_EXPECTED_STATUSES)}，"
++                f"当前值：{self.expected_status}",
++            )
++        return self
++
++
++# ---------------------------------------------------------------------------
++# EvaluationSuite —— 评测套件
++# ---------------------------------------------------------------------------
++
++class EvaluationSuite(BaseModel):
++    """评测套件：包含一个业务域内的多条评测用例。
++
++    参数：
++        name: 套件名称，必填，如"物流核心问答回归"。
++        domain: 所属业务域，必填。
++        cases: 评测用例列表，默认空列表。
++        description: 套件描述，可选。
++
++    业务注意：
++        套件内的用例应属于同一业务域；评测引擎可按套件批量执行。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    name: str = Field(..., min_length=1, description="套件名称")
++    domain: str = Field(..., description="所属业务域")
++    cases: list[EvaluationCase] = Field(
++        default_factory=list,
++        description="评测用例列表",
++    )
++    description: str | None = Field(
++        default=None,
++        description="套件描述",
++    )
++
++    @model_validator(mode="after")
++    def _validate_domain(self) -> "EvaluationSuite":
++        """校验 domain 是否在支持的业务域白名单内。"""
++        if self.domain not in _SUPPORTED_DOMAINS:
++            raise ValueError(
++                f"domain 必须是以下之一：{sorted(_SUPPORTED_DOMAINS)}，"
++                f"当前值：{self.domain}",
++            )
++        return self
++
++    @model_validator(mode="after")
++    def _validate_cases_domain(self) -> "EvaluationSuite":
++        """校验所有 case 的 domain 与套件 domain 一致。"""
++        for i, case in enumerate(self.cases):
++            if case.domain != self.domain:
++                raise ValueError(
++                    f"cases[{i}] 的 domain ({case.domain}) 与套件 domain"
++                    f" ({self.domain}) 不一致",
++                )
++        return self
++
++
++# ---------------------------------------------------------------------------
++# EvaluationResult —— 单条用例评测结果
++# ---------------------------------------------------------------------------
++
++class EvaluationResult(BaseModel):
++    """单条评测用例的执行结果。
++
++    对比实际回答与预期用例，记录是否匹配及差异详情。
++
++    参数：
++        case_id: 关联的用例标识，必填。
++        matched_status: 实际状态是否匹配预期，默认 False。
++        key_numbers_match: 关键数字是否匹配，可选。
++            —— 例如预期 row_count=5，实际 row_count=5 则为 True。
++        text_similarity: 文本相似度（0.0~1.0），可选。
++            —— 基于 expected_text 与实际 answer 的语义/字符匹配计算。
++        leak_found: 是否发现技术泄露（SQL/表名/字段名等），默认 False。
++        actual_status: 实际回答状态，可选。
++        actual_answer_summary: 实际回答摘要，可选。
++        actual_row_count: 实际返回行数，可选。
++        mismatch_detail: 差异说明，可选。
++            —— 用人类可读方式描述不匹配的具体项目。
++
++    业务注意：
++        matched_status=False 时可通过 mismatch_detail 了解具体差异。
++        leak_found=True 是严重问题，即使其他指标全匹配也应标记不通过。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    case_id: str = Field(..., min_length=1, description="关联的用例标识")
++    matched_status: bool = Field(
++        default=False,
++        description="实际状态是否匹配预期",
++    )
++    key_numbers_match: bool | None = Field(
++        default=None,
++        description="关键数字（如 row_count）是否匹配",
++    )
++    text_similarity: float | None = Field(
++        default=None,
++        ge=0.0,
++        le=1.0,
++        description="文本相似度，范围 0.0~1.0",
++    )
++    leak_found: bool = Field(
++        default=False,
++        description="是否发现技术泄露（SQL/表名/字段名等）",
++    )
++    actual_status: str | None = Field(
++        default=None,
++        description="实际回答状态",
++    )
++    actual_answer_summary: str | None = Field(
++        default=None,
++        description="实际回答摘要",
++    )
++    actual_row_count: int | None = Field(
++        default=None,
++        ge=0,
++        description="实际返回行数",
++    )
++    mismatch_detail: str | None = Field(
++        default=None,
++        description="差异说明，用人类可读方式描述不匹配的具体项目",
++    )
++    consistency_grade: ConsistencyGrade = Field(
++        default="pass",
++        description="一致性评测分级：pass=全部匹配、fail=硬性不合格、warning=软性风险",
++    )
++    numeric_error_pct: float | None = Field(
++        default=None,
++        ge=0.0,
++        description="关键数值误差百分比（0.0~），None 表示未计算",
++    )
++
++
++# ---------------------------------------------------------------------------
++# EvaluationReport —— 评测报告
++# ---------------------------------------------------------------------------
++
++class EvaluationReport(BaseModel):
++    """套件级评测汇总报告。
++
++    汇总一个评测套件的整体通过/失败情况，附每条用例的详细结果。
++
++    参数：
++        suite_name: 套件名称，必填。
++        domain: 所属业务域，可选。
++        total_cases: 总用例数，必填。
++        passed_cases: 通过用例数，必填。
++        failed_cases: 失败用例数，必填。
++        results: 详细评测结果列表，默认空列表。
++        notes: 备注信息，可选。
++
++    业务逻辑：
++        passed_cases + failed_cases 必须等于 total_cases，否则抛 ValidationError。
++        pass_rate 为计算属性（passed_cases / total_cases），
++        当 total_cases=0 时返回 1.0（空套件视为全部通过）。
++        evaluate_consistency() 方法按 fail/pass/warning 对每条结果一致性分级。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    suite_name: str = Field(..., min_length=1, description="套件名称")
++    domain: str | None = Field(
++        default=None,
++        description="所属业务域",
++    )
++    total_cases: int = Field(..., ge=0, description="总用例数")
++    passed_cases: int = Field(..., ge=0, description="通过用例数")
++    failed_cases: int = Field(..., ge=0, description="失败用例数")
++    results: list[EvaluationResult] = Field(
++        default_factory=list,
++        description="详细评测结果列表",
++    )
++    notes: str | None = Field(
++        default=None,
++        description="备注信息",
++    )
++
++    @model_validator(mode="after")
++    def _validate_consistency(self) -> "EvaluationReport":
++        """校验 passed_cases + failed_cases 与 total_cases 一致。"""
++        if self.passed_cases + self.failed_cases != self.total_cases:
++            raise ValueError(
++                f"passed_cases + failed_cases 必须等于 total_cases，"
++                f"当前 passed={self.passed_cases} + failed={self.failed_cases}"
++                f" != total={self.total_cases}",
++            )
++        return self
++
++    @model_validator(mode="after")
++    def _validate_results_count(self) -> "EvaluationReport":
++        """校验 results 列表长度与 total_cases 一致（非空时）。"""
++        if self.results and len(self.results) != self.total_cases:
++            raise ValueError(
++                f"results 长度 ({len(self.results)}) 与 total_cases"
++                f" ({self.total_cases}) 不一致",
++            )
++        return self
++
++    @property
++    def pass_rate(self) -> float:
++        """计算通过率（0.0~1.0）。"""
++        if self.total_cases == 0:
++            return 1.0
++        return self.passed_cases / self.total_cases
++
++    # -----------------------------------------------------------------------
++    # 一致性评测方法
++    # -----------------------------------------------------------------------
++
++    def evaluate_consistency(self) -> "EvaluationReport":
++        """对每条评测结果进行一致性分级（fail/pass/warning）。
++
++        参数：无。
++        返回：self，支持链式调用。
++
++        业务逻辑：
++            遍历 self.results，根据以下规则逐条赋值 consistency_grade：
++            - fail：满足任一硬性不合格条件
++                * leak_found 为 True（技术泄露）。
++                * matched_status 为 False（状态不匹配）。
++                * key_numbers_match 为 False（行数不匹配）。
++            - warning：不满足 fail 条件时，满足任一软性风险条件
++                * text_similarity 已计算且 < 0.5（文本相似度低）。
++                * numeric_error_pct 已计算且 > 0.10（数值误差超标）。
++            - pass：不满足以上任一条件。
++
++        边界说明：
++            - text_similarity=None 时不触发 warning。
++            - numeric_error_pct=None 时不触发 warning。
++            - 阈值边界值（0.5 / 0.10）属于 pass，不触发 warning。
++            - fail 优先级高于 warning（同时满足时判定为 fail）。
++        """
++        for result in self.results:
++            result.consistency_grade = self._grade_one(result)
++        return self
++
++    @staticmethod
++    def _grade_one(result: EvaluationResult) -> ConsistencyGrade:
++        """对单条结果做一致性分级。
++
++        参数：
++            result: 单条评测结果。
++        返回：
++            "pass" / "fail" / "warning"。
++        """
++        # 一、硬性不合格检查（优先级最高）
++        if result.leak_found:
++            return "fail"
++        if not result.matched_status:
++            return "fail"
++        if result.key_numbers_match is False:
++            return "fail"
++
++        # 二、软性风险检查
++        if result.text_similarity is not None and result.text_similarity < 0.5:
++            return "warning"
++        if result.numeric_error_pct is not None and result.numeric_error_pct > 0.10:
++            return "warning"
++
++        # 三、全部通过
++        return "pass"
+diff --git a/tests/unit/qa_evaluation/test_e5_consistency.py b/tests/unit/qa_evaluation/test_e5_consistency.py
+new file mode 100644
+--- /dev/null
++++ b/tests/unit/qa_evaluation/test_e5_consistency.py
++++ b/tests/unit/qa_evaluation/test_e5_consistency.py
+@@ -0,0 +1,388 @@
++"""NQE-E5 focused tests：评测结果一致性评估。
++
++业务逻辑：
++    验证 EvaluationReport + EvaluationResult 的一致性校验逻辑：
++    - 状态匹配：expected_status vs actual_status。
++    - 行数匹配：expected_row_count vs actual_row_count。
++    - 数值误差百分比：回答中关键数字与预期的误差。
++    - 技术泄露检测：leak_found 检查。
++    - 分级：fail/pass/warning。
++
++TDD 流程：RED → GREEN → REFACTOR。
++"""
++
++from __future__ import annotations
++
++import pytest
++
++from backend.app.domains.qa_evaluation.schema import (
++    EvaluationReport,
++    EvaluationResult,
++)
++
++
++# =============================================================================
++# 辅助函数：构造基础 EvaluationReport（含若干结果）
++# =============================================================================
++
++
++def _make_report_with_results(
++    *results: EvaluationResult,
++    suite_name: str = "一致性评测套件",
++) -> EvaluationReport:
++    """构造包含给定结果的 EvaluationReport，自动计算 passed/failed 计数。"""
++    passed = sum(1 for r in results if r.matched_status)
++    failed = len(results) - passed
++    return EvaluationReport(
++        suite_name=suite_name,
++        domain="logistics",
++        total_cases=len(results),
++        passed_cases=passed,
++        failed_cases=failed,
++        results=list(results),
++    )
++
++
++def _make_result(
++    case_id: str = "case_001",
++    matched_status: bool = True,
++    key_numbers_match: bool | None = None,
++    text_similarity: float | None = None,
++    leak_found: bool = False,
++    numeric_error_pct: float | None = None,
++    **kwargs,
++) -> EvaluationResult:
++    """构造单条 EvaluationResult。"""
++    return EvaluationResult(
++        case_id=case_id,
++        matched_status=matched_status,
++        key_numbers_match=key_numbers_match,
++        text_similarity=text_similarity,
++        leak_found=leak_found,
++        numeric_error_pct=numeric_error_pct,
++        **kwargs,
++    )
++
++
++# =============================================================================
++# RED 测试 1：EvaluationResult 新增字段 existence
++# =============================================================================
++
++
++def test_result_has_consistency_grade_field() -> None:
++    """EvaluationResult 必须有 consistency_grade 字段（fail/pass/warning）。"""
++    result = EvaluationResult(case_id="case_001", matched_status=True)
++    # consistency_grade 应存在并有默认值
++    d = result.model_dump(mode="json")
++    assert "consistency_grade" in d, "EvaluationResult 缺少 consistency_grade 字段"
++    assert d["consistency_grade"] == "pass"
++
++
++def test_result_has_numeric_error_pct_field() -> None:
++    """EvaluationResult 必须有 numeric_error_pct 字段（关键数值误差百分比）。"""
++    result = EvaluationResult(
++        case_id="case_001",
++        matched_status=True,
++        numeric_error_pct=0.05,
++    )
++    d = result.model_dump(mode="json")
++    assert "numeric_error_pct" in d, "EvaluationResult 缺少 numeric_error_pct 字段"
++    assert d["numeric_error_pct"] == 0.05
++
++
++def test_result_numeric_error_pct_default() -> None:
++    """numeric_error_pct 默认值为 None（未计算）。"""
++    result = EvaluationResult(case_id="case_001", matched_status=True)
++    assert result.numeric_error_pct is None
++
++
++def test_result_consistency_grade_default() -> None:
++    """consistency_grade 默认值为 "pass"。"""
++    result = EvaluationResult(case_id="case_001", matched_status=True)
++    assert result.consistency_grade == "pass"
++
++
++# =============================================================================
++# RED 测试 2：EvaluationReport.evaluate_consistency() 方法
++# =============================================================================
++
++
++def test_report_evaluate_consistency_exists() -> None:
++    """EvaluationReport 必须有 evaluate_consistency() 方法。"""
++    assert hasattr(EvaluationReport, "evaluate_consistency"), (
++        "EvaluationReport 缺少 evaluate_consistency 方法"
++    )
++    assert callable(EvaluationReport.evaluate_consistency)
++
++
++def test_evaluate_consistency_returns_self() -> None:
++    """evaluate_consistency() 返回 self，支持链式调用。"""
++    report = _make_report_with_results(
++        _make_result("case_001", matched_status=True),
++    )
++    result_report = report.evaluate_consistency()
++    assert result_report is report
++
++
++def test_evaluate_consistency_does_not_change_counts() -> None:
++    """evaluate_consistency() 不应改变 passed_cases/failed_cases 计数。"""
++    r1 = _make_result("c1", matched_status=True)
++    r2 = _make_result("c2", matched_status=False)
++    report = _make_report_with_results(r1, r2)
++    report.evaluate_consistency()
++    assert report.passed_cases == 1
++    assert report.failed_cases == 1
++
++
++# =============================================================================
++# RED 测试 3：一致性分级 —— fail/pass/warning
++# =============================================================================
++
++
++def test_consistency_pass_all_match() -> None:
++    """全部匹配 → consistency_grade 为 "pass"。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=True,
++        text_similarity=0.95,
++        leak_found=False,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "pass"
++
++
++def test_consistency_fail_on_leak() -> None:
++    """技术泄露 → consistency_grade 为 "fail"，即使其他指标均匹配。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=True,
++        text_similarity=1.0,
++        leak_found=True,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "fail"
++
++
++def test_consistency_fail_on_status_mismatch() -> None:
++    """状态不匹配 → consistency_grade 为 "fail"。"""
++    result = _make_result(
++        "case_001",
++        matched_status=False,
++        key_numbers_match=None,
++        leak_found=False,
++        actual_status="clarification",
++        mismatch_detail="状态不匹配：预期 success，实际 clarification",
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "fail"
++
++
++def test_consistency_fail_on_row_count_mismatch() -> None:
++    """行数不匹配（key_numbers_match=False）→ consistency_grade 为 "fail"。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,  # 状态匹配，但行数不匹配
++        key_numbers_match=False,
++        leak_found=False,
++        actual_row_count=3,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "fail"
++
++
++def test_consistency_warning_on_low_similarity() -> None:
++    """文本相似度低于 0.5 → consistency_grade 为 "warning"。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=True,
++        text_similarity=0.30,
++        leak_found=False,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "warning"
++
++
++def test_consistency_warning_on_high_numeric_error() -> None:
++    """数值误差超过 10% → consistency_grade 为 "warning"。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=True,
++        leak_found=False,
++        numeric_error_pct=0.15,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "warning"
++
++
++def test_consistency_warning_on_zero_similarity() -> None:
++    """text_similarity=0.0 → consistency_grade 为 "warning"（无泄露且状态匹配时）。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=None,
++        text_similarity=0.0,
++        leak_found=False,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "warning"
++
++
++def test_consistency_pass_with_good_similarity() -> None:
++    """text_similarity >= 0.5 → consistency_grade 为 "pass"（无其他失败条件时）。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=None,
++        text_similarity=0.75,
++        leak_found=False,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "pass"
++
++
++# =============================================================================
++# RED 测试 4：fail 优先级 > warning
++# =============================================================================
++
++
++def test_fail_overrides_warning() -> None:
++    """同时满足 fail 和 warning 条件时，应判定为 fail。"""
++    result = _make_result(
++        "case_001",
++        matched_status=False,  # fail 条件
++        text_similarity=0.10,  # warning 条件
++        leak_found=False,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "fail"
++
++
++def test_fail_leak_overrides_warning_similarity() -> None:
++    """技术泄露（fail）覆盖低相似度（warning）。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=True,
++        text_similarity=0.10,  # warning
++        leak_found=True,  # fail
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "fail"
++
++
++# =============================================================================
++# RED 测试 5：warning 接近阈值边界
++# =============================================================================
++
++
++def test_consistency_warning_similarity_at_threshold() -> None:
++    """text_similarity 恰好等于 0.5 时应为 pass（非 warning）。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=None,
++        text_similarity=0.50,
++        leak_found=False,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "pass"
++
++
++def test_consistency_warning_numeric_error_at_threshold() -> None:
++    """numeric_error_pct 恰好等于 0.10 时应为 pass（非 warning）。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=None,
++        leak_found=False,
++        numeric_error_pct=0.10,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "pass"
++
++
++def test_consistency_warning_numeric_error_just_over() -> None:
++    """numeric_error_pct=0.11 → 应判定为 warning。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=None,
++        leak_found=False,
++        numeric_error_pct=0.11,
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    assert report.results[0].consistency_grade == "warning"
++
++
++# =============================================================================
++# RED 测试 6：多结果批量一致性评测
++# =============================================================================
++
++
++def test_multi_result_consistency_grading() -> None:
++    """包含多条结果的报告应正确给每条结果分级。"""
++    r1 = _make_result("c1", matched_status=True, key_numbers_match=True,
++                      leak_found=False, text_similarity=0.9)
++    r2 = _make_result("c2", matched_status=False, leak_found=False,
++                      mismatch_detail="状态不匹配")
++    r3 = _make_result("c3", matched_status=True, leak_found=True)
++    r4 = _make_result("c4", matched_status=True, key_numbers_match=None,
++                      text_similarity=0.3, leak_found=False)
++    r5 = _make_result("c5", matched_status=True, key_numbers_match=True,
++                      numeric_error_pct=0.15, leak_found=False)
++
++    report = _make_report_with_results(r1, r2, r3, r4, r5)
++    report.evaluate_consistency()
++
++    assert report.results[0].consistency_grade == "pass"     # 全匹配
++    assert report.results[1].consistency_grade == "fail"     # 状态不匹配
++    assert report.results[2].consistency_grade == "fail"     # 泄露
++    assert report.results[3].consistency_grade == "warning"  # 低相似度
++    assert report.results[4].consistency_grade == "warning"  # 数值误差超标
++
++
++# =============================================================================
++# RED 测试 7：consistency_grade 可手动显式指定（不改默认行为）
++# =============================================================================
++
++
++def test_consistency_grade_explicit_set() -> None:
++    """允许显式设置 consistency_grade，保留评测员手动覆盖能力。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        consistency_grade="warning",
++    )
++    assert result.consistency_grade == "warning"
++
++
++def test_evaluate_consistency_overwrites_grade() -> None:
++    """evaluate_consistency() 应覆盖已有的 consistency_grade 值。"""
++    result = _make_result(
++        "case_001",
++        matched_status=True,
++        key_numbers_match=True,
++        leak_found=False,
++        consistency_grade="pass",
++    )
++    report = _make_report_with_results(result)
++    report.evaluate_consistency()
++    # 应保持为 pass（原始值正确）
++    assert report.results[0].consistency_grade == "pass"
+diff --git a/tests/unit/qa_evaluation/test_evaluation_schema.py b/tests/unit/qa_evaluation/test_evaluation_schema.py
+new file mode 100644
+--- /dev/null
++++ b/tests/unit/qa_evaluation/test_evaluation_schema.py
++++ b/tests/unit/qa_evaluation/test_evaluation_schema.py
+@@ -0,0 +1,517 @@
++"""统一业务问法评测集（NQE-Eval）Schema 的 focused tests。
++
++业务逻辑：
++    验证 EvaluationCase / EvaluationSuite / EvaluationResult / EvaluationReport
++    四类核心 schema 的字段定义、业务规则和跨域（物流/BOM/功率）存储能力。
++"""
++
++from __future__ import annotations
++
++import pytest
++from pydantic import ValidationError
++
++
++class TestEvaluationCase:
++    """EvaluationCase schema 测试：单条评测用例的结构与约束。"""
++
++    def test_question_required(self):
++        """question 为必填字段，缺失时抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        with pytest.raises(ValidationError, match="question"):
++            EvaluationCase(  # type: ignore[call-arg]
++                domain="logistics",
++                expected_status="success",
++            )
++
++    def test_domain_required(self):
++        """domain 为必填字段，必须是已知业务域之一。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        with pytest.raises(ValidationError, match="domain"):
++            EvaluationCase(  # type: ignore[call-arg]
++                question="合肥到阜宁的运费是多少",
++                expected_status="success",
++            )
++
++    def test_expected_status_required(self):
++        """expected_status 为必填字段，标识本条的预期回答状态。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        with pytest.raises(ValidationError, match="expected_status"):
++            EvaluationCase(  # type: ignore[call-arg]
++                question="合肥到阜宁的运费是多少",
++                domain="logistics",
++            )
++
++    def test_minimal_case_valid(self):
++        """最少字段（question + domain + expected_status）可以构造有效用例。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="2023年合肥到广州的总运费",
++            domain="logistics",
++            expected_status="success",
++        )
++        assert case.question == "2023年合肥到广州的总运费"
++        assert case.domain == "logistics"
++        assert case.expected_status == "success"
++
++    def test_expected_status_enum(self):
++        """expected_status 须按业务定义允许的状态值。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        # 合法状态值应可构造
++        for status in ("success", "clarification", "unsupported", "empty_result", "error"):
++            case = EvaluationCase(
++                question="测试问题",
++                domain="logistics",
++                expected_status=status,
++            )
++            assert case.expected_status == status
++
++    def test_expected_status_invalid_raises(self):
++        """非预期状态值应抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        with pytest.raises(ValidationError):
++            EvaluationCase(
++                question="测试",
++                domain="logistics",
++                expected_status="unknown_status_xyz",
++            )
++
++    def test_optional_fields_default(self):
++        """可选的 expected_text / expected_row_count / caliber 应有合理默认值。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="2023年合肥基地发货量",
++            domain="logistics",
++            expected_status="success",
++        )
++        assert case.expected_text is None
++        assert case.expected_row_count is None
++        assert case.caliber is None
++        # schema_version / tags / allow_empty_substitute 应有文档级说明即可
++        assert isinstance(case.schema_version, str)
++        assert case.schema_version == "1.0"
++
++    def test_full_case_all_fields(self):
++        """全字段构造用例，所有字段均可正确存取。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="2023年合肥基地发货量",
++            domain="logistics",
++            expected_status="success",
++            expected_text="2023年合肥基地总发货量为 12,500 MW",
++            expected_row_count=1,
++            caliber="发货量=总费用/车次数，按合肥基地筛选",
++            tags=["smoke", "logistics_route_price"],
++            allow_empty_substitute=False,
++            schema_version="1.0",
++        )
++        assert case.question == "2023年合肥基地发货量"
++        assert case.domain == "logistics"
++        assert case.expected_status == "success"
++        assert case.expected_text == "2023年合肥基地总发货量为 12,500 MW"
++        assert case.expected_row_count == 1
++        assert case.caliber == "发货量=总费用/车次数，按合肥基地筛选"
++        assert case.tags == ["smoke", "logistics_route_price"]
++        assert case.allow_empty_substitute is False
++
++    def test_domain_allows_logistics_bom_power(self):
++        """domain 支持物流（logistics）、计划BOM（plan_bom）、功率（power_prediction）。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        for domain in ("logistics", "plan_bom", "power_prediction", "business_analysis"):
++            case = EvaluationCase(
++                question=f"{domain}域测试问题",
++                domain=domain,
++                expected_status="success",
++            )
++            assert case.domain == domain
++
++    def test_tags_optional_default(self):
++        """tags 为可选字段，默认空列表。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="测试",
++            domain="logistics",
++            expected_status="success",
++        )
++        assert case.tags == []
++
++    def test_allow_empty_substitute_default(self):
++        """allow_empty_substitute 默认 True（允许空结果回填预期）。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="测试",
++            domain="logistics",
++            expected_status="empty_result",
++        )
++        assert case.allow_empty_substitute is True
++
++    def test_case_id_autogenerated(self):
++        """case_id 在未显式传入时自动生成唯一标识。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case1 = EvaluationCase(
++            question="问题A",
++            domain="logistics",
++            expected_status="success",
++        )
++        case2 = EvaluationCase(
++            question="问题B",
++            domain="logistics",
++            expected_status="success",
++        )
++        assert case1.case_id is not None
++        assert case2.case_id is not None
++        assert case1.case_id != case2.case_id, "自动生成的 case_id 应互不相同"
++
++
++class TestEvaluationSuite:
++    """EvaluationSuite schema 测试：评测套件的结构与约束。"""
++
++    def test_name_required(self):
++        """name 为必填字段。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationSuite
++
++        with pytest.raises(ValidationError, match="name"):
++            EvaluationSuite(  # type: ignore[call-arg]
++                domain="logistics",
++            )
++
++    def test_domain_required(self):
++        """domain 为必填字段。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationSuite
++
++        with pytest.raises(ValidationError, match="domain"):
++            EvaluationSuite(  # type: ignore[call-arg]
++                name="物流基础问答回归",
++            )
++
++    def test_cases_default_empty_list(self):
++        """cases 默认为空列表。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationSuite
++
++        suite = EvaluationSuite(
++            name="物流基础问答回归",
++            domain="logistics",
++        )
++        assert suite.cases == []
++
++    def test_suite_with_cases(self):
++        """套件可包含多条 EvaluationCase。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase, EvaluationSuite
++
++        case1 = EvaluationCase(
++            question="2023年合肥到广州总运费",
++            domain="logistics",
++            expected_status="success",
++            expected_row_count=5,
++        )
++        case2 = EvaluationCase(
++            question="2024年阜宁基地发货量",
++            domain="logistics",
++            expected_status="success",
++            expected_row_count=3,
++        )
++        suite = EvaluationSuite(
++            name="物流核心问答",
++            domain="logistics",
++            cases=[case1, case2],
++        )
++        assert len(suite.cases) == 2
++        assert suite.cases[0].question == "2023年合肥到广州总运费"
++        assert suite.cases[1].question == "2024年阜宁基地发货量"
++
++    def test_suite_domain_validation(self):
++        """suite 的 domain 必须在白名单内，否则抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationSuite
++
++        with pytest.raises(ValidationError, match="domain 必须是以下之一"):
++            EvaluationSuite(
++                name="未知域套件",
++                domain="unknown_domain_xyz",
++            )
++
++    def test_suite_cases_domain_mismatch(self):
++        """套件内 case 的 domain 与套件 domain 不一致时应抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase, EvaluationSuite
++
++        case = EvaluationCase(
++            question="BOM问题",
++            domain="plan_bom",  # 与套件的 logistics 不一致
++            expected_status="success",
++        )
++        with pytest.raises(ValidationError, match="domain.*不一致"):
++            EvaluationSuite(
++                name="物流套件",
++                domain="logistics",
++                cases=[case],
++            )
++
++
++class TestEvaluationResult:
++    """EvaluationResult schema 测试：单条用例的评测结果。"""
++
++    def test_case_id_required(self):
++        """case_id 为必填字段，关联被评测的用例。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        with pytest.raises(ValidationError, match="case_id"):
++            EvaluationResult(  # type: ignore[call-arg]
++                matched_status=True,
++            )
++
++    def test_minimal_result_valid(self):
++        """最少字段即可构造有效评测结果。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        result = EvaluationResult(
++            case_id="case_001",
++            matched_status=True,
++        )
++        assert result.case_id == "case_001"
++        assert result.matched_status is True
++
++    def test_full_result_all_fields(self):
++        """全字段构造评测结果。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        result = EvaluationResult(
++            case_id="case_001",
++            matched_status=True,
++            key_numbers_match=True,
++            text_similarity=0.95,
++            leak_found=False,
++            actual_status="success",
++            actual_answer_summary="2023年合肥基地总发货量为12,500 MW",
++            actual_row_count=1,
++            mismatch_detail="各项指标完全匹配，无差异",
++        )
++        assert result.case_id == "case_001"
++        assert result.matched_status is True
++        assert result.key_numbers_match is True
++        assert result.text_similarity == 0.95
++        assert result.leak_found is False
++        assert result.actual_status == "success"
++        assert result.actual_answer_summary == "2023年合肥基地总发货量为12,500 MW"
++        assert result.actual_row_count == 1
++        assert result.mismatch_detail == "各项指标完全匹配，无差异"
++
++    def test_text_similarity_range(self):
++        """text_similarity 应在 0.0~1.0 范围内。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        # 边界值通过
++        for val in (0.0, 0.5, 1.0):
++            result = EvaluationResult(
++                case_id="case_001",
++                matched_status=True,
++                text_similarity=val,
++            )
++            assert result.text_similarity == val
++
++    def test_default_values(self):
++        """默认值：matched_status=False, key_numbers_match=None, leak_found=False。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationResult
++
++        result = EvaluationResult(case_id="case_001")
++        assert result.matched_status is False
++        assert result.key_numbers_match is None
++        assert result.leak_found is False
++
++
++class TestEvaluationReport:
++    """EvaluationReport schema 测试：套件级别的评测报告。"""
++
++    def test_suite_name_required(self):
++        """suite_name 为必填字段。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        with pytest.raises(ValidationError, match="suite_name"):
++            EvaluationReport(  # type: ignore[call-arg]
++                total_cases=10,
++                passed_cases=8,
++                failed_cases=2,
++            )
++
++    def test_basic_report(self):
++        """基础报告包含总量/通过/失败统计。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        report = EvaluationReport(
++            suite_name="物流核心问答回归",
++            total_cases=10,
++            passed_cases=8,
++            failed_cases=2,
++        )
++        assert report.suite_name == "物流核心问答回归"
++        assert report.total_cases == 10
++        assert report.passed_cases == 8
++        assert report.failed_cases == 2
++
++    def test_results_list_default(self):
++        """results 默认为空列表。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        report = EvaluationReport(
++            suite_name="物流核心问答回归",
++            total_cases=10,
++            passed_cases=8,
++            failed_cases=2,
++        )
++        assert report.results == []
++
++    def test_full_report_with_results(self):
++        """完整报告包含若干条 EvaluationResult。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport, EvaluationResult
++
++        r1 = EvaluationResult(case_id="case_001", matched_status=True)
++        r2 = EvaluationResult(case_id="case_002", matched_status=False)
++        report = EvaluationReport(
++            suite_name="物流核心问答回归",
++            total_cases=2,
++            passed_cases=1,
++            failed_cases=1,
++            results=[r1, r2],
++        )
++        assert len(report.results) == 2
++        assert report.results[0].matched_status is True
++        assert report.results[1].matched_status is False
++
++    def test_pass_rate_computed(self):
++        """pass_rate 可根据 passed/total 计算。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        report = EvaluationReport(
++            suite_name="测试套件",
++            total_cases=10,
++            passed_cases=7,
++            failed_cases=3,
++        )
++        assert report.pass_rate == pytest.approx(0.7)
++
++    def test_consistency_check(self):
++        """passed + failed 应与 total 一致，不一致时抛错误。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        with pytest.raises(ValidationError, match="passed_cases \\+ failed_cases 必须等于 total_cases"):
++            EvaluationReport(
++                suite_name="测试套件",
++                total_cases=10,
++                passed_cases=5,
++                failed_cases=3,  # 5+3 != 10
++            )
++
++    def test_domain_field(self):
++        """domain 字段应正确存储评测所属业务域。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport
++
++        report = EvaluationReport(
++            suite_name="BOM问答回归",
++            domain="plan_bom",
++            total_cases=5,
++            passed_cases=5,
++            failed_cases=0,
++        )
++        assert report.domain == "plan_bom"
++
++    def test_results_count_mismatch(self):
++        """results 列表长度与 total_cases 不一致时应抛 ValidationError。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationReport, EvaluationResult
++
++        r1 = EvaluationResult(case_id="case_001", matched_status=True)
++        with pytest.raises(ValidationError, match="results 长度"):
++            EvaluationReport(
++                suite_name="测试套件",
++                total_cases=5,  # 声明 5 条，但只给了 1 条结果
++                passed_cases=1,
++                failed_cases=4,
++                results=[r1],
++            )
++
++
++class TestCrossDomainStorage:
++    """跨域存储测试：验证物流、BOM、功率的评测用例均可存入。"""
++
++    def test_logistics_case_serialization(self):
++        """物流域用例可序列化/反序列化。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="2023年合肥基地发运量",
++            domain="logistics",
++            expected_status="success",
++            expected_text="2023年合肥基地总发运量约 2500 车次",
++            expected_row_count=1,
++            caliber="发运量=车次数，按合肥基地筛选",
++            tags=["logistics", "smoke"],
++        )
++        # 验证 model_dump 返回所有关键字段
++        d = case.model_dump(mode="json")
++        assert d["question"] == "2023年合肥基地发运量"
++        assert d["domain"] == "logistics"
++        assert d["expected_status"] == "success"
++        assert d["expected_row_count"] == 1
++        assert d["caliber"] == "发运量=车次数，按合肥基地筛选"
++
++    def test_bom_case_serialization(self):
++        """计划BOM域用例可序列化/反序列化。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="BOM评审号 BM2024-00123 的物料清单",
++            domain="plan_bom",
++            expected_status="success",
++            expected_row_count=15,
++            caliber="按评审号 BM2024-00123 查询全部物料行",
++            tags=["plan_bom", "bom_query"],
++        )
++        d = case.model_dump(mode="json")
++        assert d["question"] == "BOM评审号 BM2024-00123 的物料清单"
++        assert d["domain"] == "plan_bom"
++        assert d["expected_status"] == "success"
++        assert d["expected_row_count"] == 15
++
++    def test_power_prediction_case_serialization(self):
++        """功率预测域用例可序列化/反序列化。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase
++
++        case = EvaluationCase(
++            question="615功率 4mm² 线长400/200 的功率档位预测",
++            domain="power_prediction",
++            expected_status="success",
++            expected_text="功率档位为第3档",
++            caliber="基于GCL功率测试基准xlsm模型计算",
++            tags=["power", "prediction"],
++        )
++        d = case.model_dump(mode="json")
++        assert d["question"] == "615功率 4mm² 线长400/200 的功率档位预测"
++        assert d["domain"] == "power_prediction"
++        assert d["expected_status"] == "success"
++
++    def test_suite_cross_domain(self):
++        """评测套件可包含不同业务域的用例（由 suite domain 字段声明）。"""
++        from backend.app.domains.qa_evaluation.schema import EvaluationCase, EvaluationSuite
++
++        # 套件声明为 logistics，用例必须同域
++        case = EvaluationCase(
++            question="物流问题",
++            domain="logistics",
++            expected_status="success",
++        )
++        suite = EvaluationSuite(
++            name="物流评测集",
++            domain="logistics",
++            cases=[case],
++        )
++        assert suite.domain == "logistics"
++        assert len(suite.cases) == 1
++        assert suite.cases[0].domain == "logistics"
+diff --git a/tests/unit/qa_evaluation/test_plan_bom_eval.py b/tests/unit/qa_evaluation/test_plan_bom_eval.py
+new file mode 100644
+--- /dev/null
++++ b/tests/unit/qa_evaluation/test_plan_bom_eval.py
++++ b/tests/unit/qa_evaluation/test_plan_bom_eval.py
+@@ -0,0 +1,458 @@
++"""NQE-E3 focused tests：计划 BOM 问法评测集接入 Graph。
++
++业务逻辑：
++    验证计划 BOM 评测样例集可加载为 EvaluationSuite，
++    EvalGraphRunner 可对 plan_bom 域执行评测，
++    样例集覆盖 BOM 各问法类型且无技术泄露。
++
++TDD 流程：RED → GREEN → REFACTOR。
++"""
++
++from __future__ import annotations
++
++import json
++import tempfile
++from pathlib import Path
++from unittest.mock import MagicMock
++
++import pytest
++
++from backend.app.domains.business_qa_graph.schemas.response import BusinessQaGraphResponse
++from backend.app.domains.qa_evaluation.schema import (
++    EvaluationCase,
++    EvaluationReport,
++    EvaluationSuite,
++)
++
++
++# =============================================================================
++# RED 测试 1：BOM 评测样例集可加载
++# =============================================================================
++
++
++def test_plan_bom_evaluation_samples_loadable() -> None:
++    """计划 BOM 评测样例集可从 tests/evaluation/plan_bom/ 加载为 EvaluationSuite。
++
++    RED：样例文件和加载函数尚未实现。
++    """
++    from tests.evaluation.plan_bom.samples import load_plan_bom_suite
++
++    suite = load_plan_bom_suite()
++
++    assert isinstance(suite, EvaluationSuite)
++    assert suite.domain == "plan_bom"
++    assert len(suite.cases) >= 8, (
++        f"首批 BOM 评测样例应至少 8 条，实际 {len(suite.cases)} 条"
++    )
++
++    # 验证每条 case 的 domain 与 suite 一致
++    for case in suite.cases:
++        assert case.domain == "plan_bom", (
++            f"case {case.case_id} 的 domain 应为 plan_bom，实际为 {case.domain}"
++        )
++        assert case.question, "每条 case 必须有 question"
++        assert case.expected_status, "每条 case 必须有 expected_status"
++
++
++# =============================================================================
++# RED 测试 2：BOM 样例覆盖所有预期状态类型
++# =============================================================================
++
++
++def test_plan_bom_samples_cover_all_expected_statuses() -> None:
++    """BOM 评测样例集应覆盖 success/clarification/unsupported/empty_result 四种状态。
++
++    RED：样例集尚未实现或覆盖不全。
++    """
++    from tests.evaluation.plan_bom.samples import load_plan_bom_suite
++
++    suite = load_plan_bom_suite()
++
++    statuses = {case.expected_status for case in suite.cases}
++
++    # 至少覆盖 success、clarification、unsupported
++    assert "success" in statuses, "应包含 success 状态的 case"
++    assert "clarification" in statuses, "应包含 clarification 状态的 case"
++    assert "unsupported" in statuses, "应包含 unsupported 状态的 case"
++    assert "empty_result" in statuses, "应包含 empty_result 状态的 case"
++
++    # 统计分布
++    success_count = sum(1 for c in suite.cases if c.expected_status == "success")
++    clarification_count = sum(1 for c in suite.cases if c.expected_status == "clarification")
++    unsupported_count = sum(1 for c in suite.cases if c.expected_status == "unsupported")
++    empty_count = sum(1 for c in suite.cases if c.expected_status == "empty_result")
++
++    assert success_count >= 4, f"success 至少 4 条，实际 {success_count} 条"
++    assert clarification_count >= 2, f"clarification 至少 2 条，实际 {clarification_count} 条"
++    assert unsupported_count >= 2, f"unsupported 至少 2 条，实际 {unsupported_count} 条"
++
++
++# =============================================================================
++# RED 测试 3：BOM 样例 case_id 唯一性
++# =============================================================================
++
++
++def test_plan_bom_samples_have_unique_case_ids() -> None:
++    """BOM 评测样例集中每条 case 应有唯一的 case_id。
++
++    RED：样例集尚未实现。
++    """
++    from tests.evaluation.plan_bom.samples import load_plan_bom_suite
++
++    suite = load_plan_bom_suite()
++
++    case_ids = [case.case_id for case in suite.cases]
++    assert len(case_ids) == len(set(case_ids)), (
++        f"case_id 应唯一，发现重复: {[cid for cid in case_ids if case_ids.count(cid) > 1]}"
++    )
++
++
++# =============================================================================
++# RED 测试 4：BOM 样例 tags 分类完整
++# =============================================================================
++
++
++def test_plan_bom_samples_tags_present() -> None:
++    """BOM 评测样例集中每条 case 应有 tags 标签，且覆盖关键分类。
++
++    RED：样例集尚未实现。
++    """
++    from tests.evaluation.plan_bom.samples import load_plan_bom_suite
++
++    suite = load_plan_bom_suite()
++
++    all_tags: set[str] = set()
++    for case in suite.cases:
++        assert case.tags, f"case {case.case_id} 必须有 tags"
++        assert isinstance(case.tags, list), f"case {case.case_id} 的 tags 应为 list"
++        for tag in case.tags:
++            all_tags.add(tag)
++
++    # 验证关键标签存在
++    assert "smoke" in all_tags, "应有 smoke 标签"
++    assert "clarify" in all_tags, "应有 clarify 标签"
++    assert "unsupported" in all_tags, "应有 unsupported 标签"
++
++
++# =============================================================================
++# RED 测试 5：EvalGraphRunner 对 plan_bom 域运行评测
++# =============================================================================
++
++
++def test_eval_runner_runs_plan_bom_suite() -> None:
++    """EvalGraphRunner 可对 plan_bom 评测套件执行评测并生成报告。
++
++    RED：plan_bom 域评测尚未验证。
++    """
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++    from tests.evaluation.plan_bom.samples import load_plan_bom_suite
++
++    suite = load_plan_bom_suite()
++
++    # 构造 fake GraphRunner，对每条 plan_bom case 返回对应的模拟响应
++    fake_graph_runner = MagicMock()
++
++    def _fake_response_for(case: EvaluationCase) -> BusinessQaGraphResponse:
++        """根据 case 的 expected_status 返回对应的模拟响应。"""
++        if case.expected_status == "success":
++            return BusinessQaGraphResponse(
++                status="EXECUTED",
++                execution_mode="graph_skeleton_only",
++                question=case.question,
++                domain="plan_bom",
++                execution_status="EXECUTED",
++                execution_result={
++                    "answer_summary": f"BOM 查询结果: {case.question[:30]}...",
++                    "row_count": 1,
++                },
++            )
++        elif case.expected_status == "clarification":
++            return BusinessQaGraphResponse(
++                status="CLARIFY",
++                execution_mode="graph_skeleton_only",
++                question=case.question,
++                domain="plan_bom",
++            )
++        elif case.expected_status == "unsupported":
++            return BusinessQaGraphResponse(
++                status="UNSUPPORTED",
++                execution_mode="graph_skeleton_only",
++                question=case.question,
++                domain="plan_bom",
++            )
++        elif case.expected_status == "empty_result":
++            return BusinessQaGraphResponse(
++                status="EXECUTED",
++                execution_mode="graph_skeleton_only",
++                question=case.question,
++                domain="plan_bom",
++                execution_status="EXECUTED",
++                execution_result={
++                    "answer_summary": "未找到匹配的 BOM 记录",
++                    "row_count": 0,
++                },
++            )
++        else:
++            return BusinessQaGraphResponse(
++                status="ERROR",
++                execution_mode="graph_skeleton_only",
++                question=case.question,
++                domain="plan_bom",
++            )
++
++    fake_graph_runner.run.side_effect = [
++        _fake_response_for(case) for case in suite.cases
++    ]
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    # 验证报告结构
++    assert isinstance(report, EvaluationReport)
++    assert report.domain == "plan_bom"
++    assert report.total_cases == len(suite.cases)
++    assert len(report.results) == len(suite.cases)
++
++    # 验证每条 result 关联到对应 case
++    for i, case in enumerate(suite.cases):
++        assert report.results[i].case_id == case.case_id
++
++    # 验证 fake runner 被调用了对应次数
++    assert fake_graph_runner.run.call_count == len(suite.cases)
++
++
++# =============================================================================
++# RED 测试 6：plan_bom 域状态匹配逻辑
++# =============================================================================
++
++
++def test_eval_runner_plan_bom_status_matching_success() -> None:
++    """plan_bom 评测 expected_status=success 对应 Graph EXECUTED 状态时 matched_status=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="查一下NT12R/66GDF的BOM材料",
++        domain="plan_bom",
++        expected_status="success",
++    )
++    suite = EvaluationSuite(
++        name="BOM 成功匹配测试",
++        domain="plan_bom",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="查一下NT12R/66GDF的BOM材料",
++        domain="plan_bom",
++        execution_status="EXECUTED",
++        execution_result={"answer_summary": "NT12R/66GDF 材料规格...", "row_count": 1},
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_status == "success"
++    assert report.passed_cases == 1
++    assert report.domain == "plan_bom"
++
++
++def test_eval_runner_plan_bom_status_matching_clarification() -> None:
++    """plan_bom 评测 expected_status=clarification 对应 Graph CLARIFY 状态时 matched_status=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="玻璃规格是什么",
++        domain="plan_bom",
++        expected_status="clarification",
++    )
++    suite = EvaluationSuite(
++        name="BOM 澄清匹配测试",
++        domain="plan_bom",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="CLARIFY",
++        execution_mode="graph_skeleton_only",
++        question="玻璃规格是什么",
++        domain="plan_bom",
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_status == "clarification"
++
++
++def test_eval_runner_plan_bom_status_matching_unsupported() -> None:
++    """plan_bom 评测 expected_status=unsupported 对应 Graph UNSUPPORTED 状态时 matched_status=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="帮我把BOM导出到Excel",
++        domain="plan_bom",
++        expected_status="unsupported",
++    )
++    suite = EvaluationSuite(
++        name="BOM 不支持匹配测试",
++        domain="plan_bom",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="UNSUPPORTED",
++        execution_mode="graph_skeleton_only",
++        question="帮我把BOM导出到Excel",
++        domain="plan_bom",
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_status == "unsupported"
++
++
++def test_eval_runner_plan_bom_empty_result_matching() -> None:
++    """plan_bom expected_status=empty_result 对应 Graph EXECUTED+row_count=0 时 matched_status=True。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++
++    case = EvaluationCase(
++        question="查一下订单99999的BOM",
++        domain="plan_bom",
++        expected_status="empty_result",
++        allow_empty_substitute=True,
++    )
++    suite = EvaluationSuite(
++        name="BOM 空结果匹配测试",
++        domain="plan_bom",
++        cases=[case],
++    )
++
++    fake_graph_runner = MagicMock()
++    fake_graph_runner.run.return_value = BusinessQaGraphResponse(
++        status="EXECUTED",
++        execution_mode="graph_skeleton_only",
++        question="查一下订单99999的BOM",
++        domain="plan_bom",
++        execution_status="EXECUTED",
++        execution_result={"answer_summary": "未找到匹配记录", "row_count": 0},
++    )
++
++    runner = EvalGraphRunner(graph_runner=fake_graph_runner, suite=suite)
++    report = runner.run()
++
++    assert report.results[0].matched_status is True
++    assert report.results[0].actual_status == "empty_result"
++    assert report.results[0].actual_row_count == 0
++
++
++# =============================================================================
++# RED 测试 7：BOM 评测 JSONL 输出
++# =============================================================================
++
++
++def test_plan_bom_eval_jsonl_output() -> None:
++    """plan_bom 域评测可输出 JSONL 文件。"""
++    from backend.app.domains.qa_evaluation.eval_runner import EvalGraphRunner
++    from tests.evaluation.plan_bom.samples import load_plan_bom_suite
++
++    suite = load_plan_bom_suite()
++
++    fake_graph_runner = MagicMock()
++
++    def _fake_for(case: EvaluationCase) -> BusinessQaGraphResponse:
++        if case.expected_status == "success":
++            return BusinessQaGraphResponse(
++                status="EXECUTED",
++                execution_mode="graph_skeleton_only",
++                question=case.question,
++                domain="plan_bom",
++                execution_status="EXECUTED",
++                execution_result={"answer_summary": "BOM 结果", "row_count": 1},
++            )
++        elif case.expected_status == "clarification":
++            return BusinessQaGraphResponse(
++                status="CLARIFY",
++                execution_mode="graph_skeleton_only",
++                question=case.question,
++                domain="plan_bom",
++            )
++        elif case.expected_status == "unsupported":
++            return BusinessQaGraphResponse(
++                status="UNSUPPORTED",
++                execution_mode="graph_skeleton_only",
++                question=case.question,
++                domain="plan_bom",
++            )
++        else:
++            return BusinessQaGraphResponse(
++                status="EXECUTED",
++                execution_mode="graph_skeleton_only",
++                question=case.question,
++                domain="plan_bom",
++                execution_status="EXECUTED",
++                execution_result={"answer_summary": "空结果", "row_count": 0},
++            )
++
++    fake_graph_runner.run.side_effect = [
++        _fake_for(case) for case in suite.cases
++    ]
++
++    with tempfile.TemporaryDirectory() as tmpdir:
++        output_path = Path(tmpdir) / "plan_bom_eval.jsonl"
++        runner = EvalGraphRunner(
++            graph_runner=fake_graph_runner,
++            suite=suite,
++            output_jsonl=str(output_path),
++        )
++        runner.run()
++
++        # 验证 JSONL 文件已创建
++        assert output_path.exists()
++
++        # 读取并验证 JSONL 内容
++        lines = output_path.read_text(encoding="utf-8").strip().split("\n")
++        assert len(lines) == len(suite.cases)
++
++        for i, line in enumerate(lines):
++            record = json.loads(line)
++            assert record["case_id"] == suite.cases[i].case_id
++            assert "matched_status" in record
++            assert "actual_status" in record
++
++
++# =============================================================================
++# RED 测试 8：BOM 样例无技术泄露关键词
++# =============================================================================
++
++
++def test_plan_bom_samples_no_technical_leak_in_questions() -> None:
++    """BOM 评测样例的 question 字段不应包含 SQL、表名、query_key 等技术细节。
++
++    RED：样例集尚未实现。
++    """
++    from tests.evaluation.plan_bom.samples import load_plan_bom_suite
++
++    suite = load_plan_bom_suite()
++
++    # 技术泄露关键词
++    leak_keywords = (
++        "SELECT ", "FROM ", "WHERE ", "INSERT ", "UPDATE ", "DELETE ",
++        "query_key", "planner", "guardrail", "schema",
++        "raw_response", "debug", "LLM", "nl2sql", "SQLPlan",
++    )
++
++    for case in suite.cases:
++        question_upper = case.question.upper()
++        for kw in leak_keywords:
++            assert kw.upper() not in question_upper, (
++                f"case {case.case_id} 的 question 包含技术关键词 '{kw}': {case.question}"
++            )
