@@ -118,6 +118,12 @@ class Settings(BaseSettings):
     business_qa_graph_audit_enabled: bool = True
     query_planning_v2_response_meta_enabled: bool = False
     business_qa_langgraph_enabled: bool = False
+    # 掌柜问数对齐版 Graph 灰度开关
+    # off = 不启用（默认，不影响现有链路）
+    # shadow = 仅记录 Graph 执行结果，不替代现有链路
+    # on = 替换现有问数链路为掌柜对齐版 12 节点 Graph
+    zg_graph_enabled: bool = False
+    zg_graph_mode: Literal["off", "shadow", "on"] = "off"
     logistics_query_planner_v2_enabled: bool = False
     logistics_query_planner_v2_mode: Literal["off", "shadow", "assist"] = "shadow"
     logistics_query_planner_v2_min_confidence: float = 0.9
