@@ -1,0 +1,1650 @@
+=== NEW FILE: backend/app/domains/semantic_catalog/value_resolver/__init__.py ===
+"""
+统一业务值解析器（Value Resolver）模块。
+
+业务定位：
+    本模块提供各业务域的实体值解析器实现，复用现有 MySQL 中间库
+    和 Milvus 向量库做真实值解析。不同业务域（物流、计划 BOM）的
+    解析逻辑各自封装。
+
+模块组成：
+    - base: 抽象基类 BusinessValueResolver
+    - logistics_resolver: 物流域实体解析器（承运商、客户、区域等）
+    - plan_bom_resolver: 计划 BOM 域实体解析器（订单、文件名等）
+
+约束：
+    - 不引入 ES。
+    - 解析结果不暴露 SQL/表名/字段名。
+    - 误匹配时返回多候选而非硬路由。
+"""
+from backend.app.domains.semantic_catalog.value_resolver.base import BusinessValueResolver
+
+__all__ = [
+    "BusinessValueResolver",
+]
+=== NEW FILE: backend/app/domains/semantic_catalog/value_resolver/base.py ===
+"""
+统一业务值解析器抽象基类。
+
+业务逻辑：
+    本模块定义所有业务域值解析器的统一抽象接口。
+    每个业务域子类只需继承 BusinessValueResolver 并实现
+    resolve() 和 candidates() 两个抽象方法。
+
+    设计原则：
+        1. 基类不耦合具体数据源（MySQL/Milvus/ES）。
+        2. 返回结构统一为包含 entity_type/value/label 的 dict。
+        3. resolve_multi 提供默认批量实现，子类可覆盖。
+"""
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+
+
+class BusinessValueResolver(ABC):
+    """统一业务值解析器抽象基类。
+
+    业务逻辑：
+        提供跨业务域的实体值解析能力。每个业务域子类
+        （如物流、计划 BOM）自行实现数据源查询逻辑。
+
+    抽象方法：
+        resolve(entity_type, user_input) → list[dict]:
+            根据用户输入解析匹配的实体值候选列表。
+            返回的每个 dict 包含 entity_type、value、label。
+
+        candidates(entity_type, limit) → list[dict]:
+            获取指定实体类型下所有可能的值候选（不限制用户输入）。
+
+    默认实现：
+        resolve_multi(queries) → list[dict]:
+            对每个 (entity_type, user_input) 调用 resolve 并汇总。
+    """
+
+    # 子类可选覆盖的 domain 标识
+    domain: str = ""
+
+    @abstractmethod
+    def resolve(self, entity_type: str, user_input: str) -> list[dict]:
+        """按用户输入解析实体值候选。
+
+        参数：
+            entity_type: 实体类型，如 carrier、customer、order_identity。
+            user_input: 用户输入的实体名或关键词。
+
+        返回：
+            候选实体值列表，每项 dict 包含 entity_type、value、label。
+            匹配不到时返回空列表；模糊匹配置信度不够时返回多个候选。
+        """
+        ...
+
+    @abstractmethod
+    def candidates(self, entity_type: str, limit: int = 20) -> list[dict]:
+        """获取指定实体类型的候选值列表（不限定用户输入）。
+
+        参数：
+            entity_type: 实体类型。
+            limit: 最大返回数量，防止数据量过大。
+
+        返回：
+            候选值列表，每项 dict 包含 entity_type、value、label。
+        """
+        ...
+
+    def resolve_multi(self, queries: list[tuple[str, str]]) -> list[dict]:
+        """批量解析多个实体查询。
+
+        参数：
+            queries: [(entity_type, user_input), ...] 查询对列表。
+
+        返回：
+            解析结果列表，每个元素是 resolve 的单次结果展平。
+
+        业务逻辑：
+            默认实现按顺序调用 resolve，子类可覆盖为并发或批量查询。
+        """
+        results: list[dict] = []
+        for entity_type, user_input in queries:
+            results.extend(self.resolve(entity_type, user_input))
+        return results
+
+
+__all__ = ["BusinessValueResolver"]
+=== NEW FILE: backend/app/domains/semantic_catalog/value_resolver/logistics_resolver.py ===
+"""
+物流域实体值解析器（LogisticsValueResolver）。
+
+业务逻辑：
+    本解析器负责物流域的实体值解析，支持以下实体类型：
+    - carrier: 承运商名称解析（从历史明细表读取 distinct 值做模糊匹配）
+    - customer: 客户/委托人名称解析
+    - region: 行政区域解析（标准七大区域 + 省份）
+    - route: 物流线路解析（始发地-目的地组合）
+    - address: 收货地址解析
+
+    设计原则：
+        1. 复用现有 LogisticsDataQaRepository 的 MySQL 查询模式。
+        2. 误匹配时返回多候选，不做硬路由。
+        3. entity_type 未知时返回空列表，不抛异常。
+        4. 不依赖 Milvus（向量检索为可选增强，当前以 MySQL 为主）。
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from backend.app.domains.semantic_catalog.value_resolver.base import BusinessValueResolver
+
+
+# 标准行政区划（七大区域），供 region 实体使用
+STANDARD_REGIONS: list[str] = [
+    "华东",
+    "华南",
+    "华中",
+    "华北",
+    "西南",
+    "西北",
+    "东北",
+]
+
+# 标准省份列表，供 region 实体使用
+STANDARD_PROVINCES: list[str] = [
+    "上海市", "江苏省", "浙江省", "安徽省", "福建省", "江西省", "山东省",
+    "广东省", "广西壮族自治区", "海南省",
+    "河南省", "湖北省", "湖南省",
+    "北京市", "天津市", "河北省", "山西省", "内蒙古自治区",
+    "重庆市", "四川省", "贵州省", "云南省", "西藏自治区",
+    "陕西省", "甘肃省", "青海省", "宁夏回族自治区", "新疆维吾尔自治区",
+    "辽宁省", "吉林省", "黑龙江省",
+]
+
+
+class LogisticsValueResolver(BusinessValueResolver):
+    """物流域业务值解析器。
+
+    业务逻辑：
+        从 MySQL 中间库读取承运商、客户等实体值，
+        支持模糊匹配和多候选返回。当前以 keyword 匹配为主，
+        后续可接入 Milvus 向量检索增强。
+
+    参数：
+        db: SQLAlchemy Session，用于查询中间库。
+    """
+
+    domain = "logistics"
+
+    def __init__(self, db: Session) -> None:
+        """初始化物流域解析器。
+
+        参数：
+            db: SQLAlchemy Session 实例。
+        """
+        super().__init__()
+        self.db = db
+        # 延迟加载缓存：首次调用时从 DB 拉取并缓存
+        self._carrier_cache: list[str] | None = None
+        self._customer_cache: list[str] | None = None
+
+    # ── resolve：按用户输入解析实体值 ──
+
+    def resolve(self, entity_type: str, user_input: str) -> list[dict]:
+        """按用户输入解析物流域实体值候选。
+
+        参数：
+            entity_type: 实体类型（carrier、customer、region、route、address）。
+            user_input: 用户输入的实体名称或关键词。
+
+        返回：
+            候选实体值列表。无匹配时返回空列表。
+        """
+        if entity_type == "carrier":
+            return self._fuzzy_match(self._load_carriers(), entity_type, user_input)
+        if entity_type == "customer":
+            return self._fuzzy_match(self._load_customers(), entity_type, user_input)
+        if entity_type == "region":
+            return self._resolve_region(user_input)
+        if entity_type in ("route", "address"):
+            # 线路和地址暂不实现模糊匹配，只返回 candidates
+            return self._fuzzy_match([], entity_type, user_input)
+        return []
+
+    # ── candidates：获取候选值列表 ──
+
+    def candidates(self, entity_type: str, limit: int = 20) -> list[dict]:
+        """获取物流域某实体类型下的候选值列表。
+
+        参数：
+            entity_type: 实体类型。
+            limit: 最大返回数量。
+
+        返回：
+            候选值列表。
+        """
+        if entity_type == "carrier":
+            names = self._load_carriers()[:limit]
+            return self._names_to_dicts(entity_type, names)
+        if entity_type == "customer":
+            names = self._load_customers()[:limit]
+            return self._names_to_dicts(entity_type, names)
+        if entity_type == "region":
+            all_regions = STANDARD_REGIONS + STANDARD_PROVINCES
+            return self._names_to_dicts(entity_type, all_regions[:limit])
+        if entity_type in ("route", "address"):
+            # 线路和地址动态量大，不返回全量候选
+            return []
+        return []
+
+    # ── 内部方法 ──
+
+    def _load_carriers(self) -> list[str]:
+        """从 DB 加载承运商名称列表（带缓存）。
+
+        返回：
+            去重后的承运商名称列表。
+        """
+        if self._carrier_cache is not None:
+            return self._carrier_cache
+
+        # 复用与 LogisticsDataQaRepository 相同的查询模式：
+        # 从 dwd_logistics_hist_shipment_detail 表读取 distinct 承运商名称
+        try:
+            rows = self.db.execute(
+                text(
+                    """
+                    SELECT DISTINCT TRIM(logistics_company_name) AS carrier_name
+                    FROM dwd_logistics_hist_shipment_detail
+                    WHERE logistics_company_name IS NOT NULL
+                      AND TRIM(logistics_company_name) <> ''
+                    ORDER BY carrier_name ASC
+                    LIMIT 2000
+                    """
+                )
+            ).mappings().all()
+            self._carrier_cache = [str(row["carrier_name"]) for row in rows if row.get("carrier_name")]
+        except Exception:
+            # 表不存在或连接不可用时返回空列表，不阻断调用方
+            self._carrier_cache = []
+        return self._carrier_cache
+
+    def _load_customers(self) -> list[str]:
+        """从 DB 加载客户/委托人名称列表（带缓存）。
+
+        返回：
+            去重后的客户名称列表。
+        """
+        if self._customer_cache is not None:
+            return self._customer_cache
+
+        try:
+            rows = self.db.execute(
+                text(
+                    """
+                    SELECT DISTINCT TRIM(customer_name) AS customer_name
+                    FROM dwd_logistics_hist_shipment_detail
+                    WHERE customer_name IS NOT NULL
+                      AND TRIM(customer_name) <> ''
+                    ORDER BY customer_name ASC
+                    LIMIT 2000
+                    """
+                )
+            ).mappings().all()
+            self._customer_cache = [str(row["customer_name"]) for row in rows if row.get("customer_name")]
+        except Exception:
+            self._customer_cache = []
+        return self._customer_cache
+
+    @staticmethod
+    def _fuzzy_match(candidates: list[str], entity_type: str, user_input: str) -> list[dict]:
+        """在候选列表中对用户输入做模糊匹配。
+
+        参数：
+            candidates: 候选实体值列表。
+            entity_type: 实体类型。
+            user_input: 用户输入的关键词。
+
+        返回：
+            匹配的候选列表。精确匹配置信度最高排最前。
+
+        业务逻辑：
+            1. 先尝试精确匹配（case-insensitive）。
+            2. 精确匹配未命中时做包含匹配。
+            3. 返回所有匹配项，让上游决定消歧策略。
+        """
+        if not user_input or not user_input.strip():
+            return []
+
+        normalized = user_input.strip().lower()
+
+        # 精确匹配
+        exact: list[str] = [c for c in candidates if c.strip().lower() == normalized]
+        if exact:
+            return [{"entity_type": entity_type, "value": c, "label": c} for c in exact]
+
+        # 模糊包含匹配
+        fuzzy: list[str] = [c for c in candidates if normalized in c.strip().lower()]
+        return [{"entity_type": entity_type, "value": c, "label": c} for c in fuzzy]
+
+    @staticmethod
+    def _resolve_region(user_input: str) -> list[dict]:
+        """区域实体值解析。
+
+        参数：
+            user_input: 用户输入的区域名称。
+
+        返回：
+            匹配的区域候选列表。
+
+        业务逻辑：
+            支持标准七大区域名和省份名匹配，
+            "市"/"省" 后缀可容忍。
+        """
+        entity_type = "region"
+        normalized = user_input.strip()
+        if not normalized:
+            return []
+
+        # 去掉 "市"/"省" 后缀做宽松匹配
+        bare = normalized.rstrip("市省")
+
+        # 精确匹配标准区域名
+        for region in STANDARD_REGIONS + STANDARD_PROVINCES:
+            if region == normalized or region == bare:
+                return [{"entity_type": entity_type, "value": region, "label": region}]
+
+        # 包含匹配
+        matches: list[str] = []
+        all_candidates = STANDARD_REGIONS + STANDARD_PROVINCES
+        for candidate in all_candidates:
+            if bare in candidate or candidate in bare:
+                matches.append(candidate)
+
+        return [{"entity_type": entity_type, "value": m, "label": m} for m in matches]
+
+    @staticmethod
+    def _names_to_dicts(entity_type: str, names: list[str]) -> list[dict]:
+        """将名称列表转为标准 dict 格式。
+
+        参数：
+            entity_type: 实体类型。
+            names: 名称列表。
+
+        返回：
+            标准格式的候选列表。
+        """
+        return [{"entity_type": entity_type, "value": n, "label": n} for n in names]
+
+
+__all__ = ["LogisticsValueResolver"]
+=== NEW FILE: backend/app/domains/semantic_catalog/value_resolver/plan_bom_resolver.py ===
+"""
+计划 BOM 域实体值解析器（PlanBomValueResolver）。
+
+业务逻辑：
+    本解析器负责计划 BOM 域的实体值解析，支持以下实体类型：
+    - order_identity: 订单 identity 解析（按订单号/订单名模糊匹配）
+    - filename: 文件名解析（按 raw_file_name 模糊匹配）
+    - customer_instance: 客户实例解析（从订单名中提取客户名）
+    - version: 版本号解析（按 version_no 精确匹配）
+
+    设计原则：
+        1. 复用现有 PlanBomQueryRepository 的 MySQL 查询模式。
+        2. 仅查询 is_active=1 的有效记录。
+        3. 误匹配时返回多候选，不做硬路由。
+        4. entity_type 未知时返回空列表，不抛异常。
+        5. 不依赖 Milvus（向量检索为可选增强，当前以 keyword 为主）。
+"""
+from __future__ import annotations
+
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from backend.app.domains.semantic_catalog.value_resolver.base import BusinessValueResolver
+
+
+class PlanBomValueResolver(BusinessValueResolver):
+    """计划 BOM 域业务值解析器。
+
+    业务逻辑：
+        复用 PlanBomQueryRepository 查询 is_active 记录，
+        支持按订单号、订单名、文件名、版本号做实体值解析。
+
+    参数：
+        db: SQLAlchemy Session，用于查询中间库。
+        repo: 可选注入的 PlanBomQueryRepository 实例（测试用）。
+    """
+
+    domain = "plan_bom"
+
+    def __init__(self, db: Session, repo: Any = None) -> None:
+        """初始化计划 BOM 域解析器。
+
+        参数：
+            db: SQLAlchemy Session 实例。
+            repo: 可选预构造的 PlanBomQueryRepository（测试注入用）。
+        """
+        super().__init__()
+        self.db = db
+        self._repo = repo
+        self._headers_cache: list[Any] | None = None
+
+    def _get_repo(self) -> Any:
+        """延迟获取 PlanBomQueryRepository 实例。
+
+        返回：
+            PlanBomQueryRepository 实例。
+
+        业务逻辑：
+            支持测试注入 repo，避免测试需要真实 DB。
+        """
+        if self._repo is not None:
+            return self._repo
+        from backend.app.domains.plan_bom.repositories.query_repository import (
+            PlanBomQueryRepository,
+        )
+        self._repo = PlanBomQueryRepository(self.db)
+        return self._repo
+
+    # 缓存加载的默认上限，首次加载时使用该值避免缓存过小导致漏匹配
+    _DEFAULT_CACHE_LIMIT: int = 500
+
+    def _load_headers(self, limit: int = 500) -> list[Any]:
+        """加载有效 BOM 头记录（带缓存，DB 异常安全降级）。
+
+        参数：
+            limit: 最大返回数量。
+
+        返回：
+            PlanBomHeader 对象列表。
+
+        业务逻辑：
+            1. 首次加载时使用 self._DEFAULT_CACHE_LIMIT 作为缓存上限，
+               避免先以较小 limit 初始化缓存导致后续查询漏匹配。
+            2. 若请求的 limit 大于已缓存的数据量，自动重新加载更大数据集。
+            3. DB 异常时缓存空列表并降级，不向调用方传播异常。
+        """
+        cache_limit = max(limit, self._DEFAULT_CACHE_LIMIT)
+        if self._headers_cache is not None:
+            if len(self._headers_cache) >= limit:
+                return self._headers_cache[:limit]
+            # 已缓存数据量不足，需要重新加载
+            cache_limit = max(limit, len(self._headers_cache) * 2, self._DEFAULT_CACHE_LIMIT)
+
+        try:
+            repo = self._get_repo()
+            self._headers_cache = repo.list_all_active_headers(limit=cache_limit)
+        except Exception:
+            # DB 连接失败或表不存在时缓存空列表，不阻断调用方
+            if self._headers_cache is None:
+                self._headers_cache = []
+        return self._headers_cache[:limit]
+
+    # ── resolve：按用户输入解析实体值 ──
+
+    def resolve(self, entity_type: str, user_input: str) -> list[dict]:
+        """按用户输入解析计划 BOM 域实体值候选。
+
+        参数：
+            entity_type: 实体类型（order_identity、filename、customer_instance、version）。
+            user_input: 用户输入的实体值或关键词。
+
+        返回：
+            候选实体值列表。无匹配时返回空列表。
+        """
+        if entity_type == "order_identity":
+            return self._resolve_order_identity(user_input)
+        if entity_type == "filename":
+            return self._resolve_filename(user_input)
+        if entity_type == "customer_instance":
+            return self._resolve_customer_instance(user_input)
+        if entity_type == "version":
+            return self._resolve_version(user_input)
+        return []
+
+    # ── candidates：获取候选值列表 ──
+
+    def candidates(self, entity_type: str, limit: int = 20) -> list[dict]:
+        """获取计划 BOM 域某实体类型下的候选值列表。
+
+        参数：
+            entity_type: 实体类型。
+            limit: 最大返回数量。
+
+        返回：
+            候选值列表。
+        """
+        if entity_type == "order_identity":
+            return self._candidates_order_identity(limit)
+        if entity_type == "filename":
+            return self._candidates_filename(limit)
+        if entity_type == "customer_instance":
+            return self._candidates_customer_instance(limit)
+        if entity_type == "version":
+            return self._candidates_version(limit)
+        return []
+
+    # ── 具体实体解析方法 ──
+
+    def _resolve_order_identity(self, user_input: str) -> list[dict]:
+        """按订单号或订单名解析订单 identity。
+
+        参数：
+            user_input: 用户输入的订单号或订单名片段。
+
+        返回：
+            匹配的订单候选列表，每项包含 order_no 和 order_name。
+        """
+        if not user_input or not user_input.strip():
+            return []
+
+        normalized = user_input.strip().lower()
+        headers = self._load_headers()
+
+        # 精确匹配订单号
+        exact_order: list[dict] = []
+        for h in headers:
+            if normalized == (h.order_no or "").strip().lower():
+                exact_order.append(self._header_to_dict("order_identity", h))
+        if exact_order:
+            return exact_order
+
+        # 模糊匹配订单号或订单名
+        fuzzy: list[dict] = []
+        for h in headers:
+            order_no = (h.order_no or "").strip().lower()
+            order_name = (h.order_name or "").strip().lower()
+            if normalized in order_no or normalized in order_name:
+                fuzzy.append(self._header_to_dict("order_identity", h))
+        return fuzzy
+
+    def _resolve_filename(self, user_input: str) -> list[dict]:
+        """按文件名解析。
+
+        参数：
+            user_input: 用户输入的文件名或片段。
+
+        返回：
+            匹配的文件名候选列表。
+        """
+        if not user_input or not user_input.strip():
+            return []
+
+        normalized = user_input.strip().lower()
+        headers = self._load_headers()
+
+        fuzzy: list[dict] = []
+        for h in headers:
+            raw_name = (h.raw_file_name or "").strip().lower()
+            if normalized in raw_name:
+                fuzzy.append(self._header_to_dict("filename", h))
+        return fuzzy
+
+    def _resolve_customer_instance(self, user_input: str) -> list[dict]:
+        """按客户名解析客户实例。
+
+        参数：
+            user_input: 用户输入的客户名或片段。
+
+        返回：
+            匹配的客户实例候选列表。
+
+        业务逻辑：
+            从订单名称中提取客户名进行匹配（如"华为2025年光伏项目"→"华为"）。
+            多个订单可能属于同一客户，不做去重，让上游决定消歧。
+        """
+        if not user_input or not user_input.strip():
+            return []
+
+        normalized = user_input.strip().lower()
+        headers = self._load_headers()
+
+        fuzzy: list[dict] = []
+        for h in headers:
+            order_name = (h.order_name or "").strip().lower()
+            if normalized in order_name:
+                fuzzy.append(self._header_to_dict("customer_instance", h))
+        return fuzzy
+
+    def _resolve_version(self, user_input: str) -> list[dict]:
+        """按版本号解析。
+
+        参数：
+            user_input: 用户输入的版本号（如 A0、A1、B0）。
+
+        返回：
+            匹配的版本候选列表。
+        """
+        if not user_input or not user_input.strip():
+            return []
+
+        normalized = user_input.strip()
+        headers = self._load_headers()
+
+        exact: list[dict] = []
+        for h in headers:
+            version = (h.version_no or "").strip()
+            if normalized == version:
+                exact.append(self._header_to_dict("version", h))
+        return exact
+
+    # ── candidates 具体方法 ──
+
+    def _candidates_order_identity(self, limit: int) -> list[dict]:
+        """订单 identity 候选列表。"""
+        headers = self._load_headers(limit)
+        return [self._header_to_dict("order_identity", h) for h in headers]
+
+    def _candidates_filename(self, limit: int) -> list[dict]:
+        """文件名候选列表。"""
+        headers = self._load_headers(limit)
+        result: list[dict] = []
+        for h in headers:
+            if h.raw_file_name:
+                result.append(self._header_to_dict("filename", h))
+        return result[:limit]
+
+    def _candidates_customer_instance(self, limit: int) -> list[dict]:
+        """客户实例候选列表（按唯一客户名去重）。
+
+        业务逻辑：
+            从订单名中提取已知客户名。多个同一客户的订单只保留一个代表。
+        """
+        headers = self._load_headers(limit * 2)  # 多取一些以便去重后仍有足够数量
+        seen: set[str] = set()
+        result: list[dict] = []
+        for h in headers:
+            order_name = (h.order_name or "").strip()
+            if not order_name:
+                continue
+            # 提取客户名（取订单名中第一个非数字/非年份词作为客户名简写）
+            customer_label = self._extract_customer_label(order_name)
+            if customer_label and customer_label not in seen:
+                seen.add(customer_label)
+                result.append({
+                    "entity_type": "customer_instance",
+                    "value": customer_label,
+                    "label": f"{customer_label}（{order_name}）",
+                })
+            if len(result) >= limit:
+                break
+        return result
+
+    def _candidates_version(self, limit: int) -> list[dict]:
+        """版本号候选列表。"""
+        headers = self._load_headers(limit * 3)  # 多取以覆盖多个版本
+        seen: set[str] = set()
+        result: list[dict] = []
+        for h in headers:
+            version = (h.version_no or "").strip()
+            if version and version not in seen:
+                seen.add(version)
+                result.append({
+                    "entity_type": "version",
+                    "value": version,
+                    "label": f"版本 {version}",
+                })
+            if len(result) >= limit:
+                break
+        return result
+
+    # ── 辅助方法 ──
+
+    @staticmethod
+    def _header_to_dict(entity_type: str, header: Any) -> dict:
+        """将 PlanBomHeader 对象转为标准 dict 格式。
+
+        参数：
+            entity_type: 实体类型。
+            header: PlanBomHeader 对象或 mock。
+
+        返回：
+            包含 entity_type、value、label 的标准 dict。
+        """
+        order_no = (header.order_no or "").strip()
+        order_name = (header.order_name or "").strip()
+        version_no = (header.version_no or "").strip()
+        raw_file_name = (header.raw_file_name or "").strip()
+
+        if entity_type == "order_identity":
+            return {
+                "entity_type": entity_type,
+                "value": order_no,
+                "label": f"{order_no} {order_name}".strip(),
+            }
+        if entity_type == "filename":
+            return {
+                "entity_type": entity_type,
+                "value": raw_file_name,
+                "label": raw_file_name or order_no,
+            }
+        if entity_type == "customer_instance":
+            return {
+                "entity_type": entity_type,
+                "value": order_name,
+                "label": order_name or order_no,
+            }
+        if entity_type == "version":
+            return {
+                "entity_type": entity_type,
+                "value": version_no,
+                "label": f"{order_no} (v{version_no})",
+            }
+        return {
+            "entity_type": entity_type,
+            "value": order_no,
+            "label": order_no,
+        }
+
+    @staticmethod
+    def _extract_customer_label(order_name: str) -> str:
+        """从订单名中提取客户标签。
+
+        参数：
+            order_name: 订单名称（如"华为2025年光伏项目"）。
+
+        返回：
+            客户标签（如"华为"）。
+
+        业务逻辑：
+            简单启发式：取订单名中第一个中文公司名片段。
+            实际生产应由上游 NLU 提取后传入，这里仅做兜底。
+        """
+        if not order_name:
+            return ""
+        # 简单策略：取前几个中文字符作为客户标签
+        # 更精确的提取应在 NLU 层完成
+        import re
+        # 尝试匹配"公司名+年份"模式
+        match = re.match(r"^([^\d]+?)\d{4}", order_name)
+        if match:
+            return match.group(1).strip()
+        # fallback：返回订单名前 6 个字符
+        return order_name[:6].strip()
+
+
+__all__ = ["PlanBomValueResolver"]
+=== NEW FILE: tests/unit/semantic_catalog/test_value_resolver_base.py ===
+"""
+NQE-N2：统一 BusinessValueResolver 接口 — 基类测试
+
+测试范围：
+    1. BusinessValueResolver 抽象基类定义了 resolve/candidates/resolve_multi 接口。
+    2. 子类不实现抽象方法时构造失败。
+    3. resolve_multi 默认实现正确工作。
+    4. 返回的 dict 包含 entity_type、value、label 字段。
+"""
+from __future__ import annotations
+
+import pytest
+
+from backend.app.domains.semantic_catalog.value_resolver.base import (
+    BusinessValueResolver,
+)
+
+
+# ── 基类抽象方法约束测试 ──
+
+class TestBusinessValueResolverAbstract:
+    """BusinessValueResolver 抽象基类约束。"""
+
+    def test_cannot_instantiate_without_resolve(self) -> None:
+        """子类未实现 resolve 方法时构造失败。"""
+
+        class Incomplete(BusinessValueResolver):
+            """缺少 resolve 方法。"""
+            domain = "logistics"
+
+            def candidates(self, entity_type: str, limit: int = 20) -> list[dict]:
+                return []
+
+        with pytest.raises(TypeError):
+            Incomplete()  # type: ignore[abstract]
+
+    def test_cannot_instantiate_without_candidates(self) -> None:
+        """子类未实现 candidates 方法时构造失败。"""
+
+        class Incomplete(BusinessValueResolver):
+            """缺少 candidates 方法。"""
+            domain = "logistics"
+
+            def resolve(self, entity_type: str, user_input: str) -> list[dict]:
+                return []
+
+        with pytest.raises(TypeError):
+            Incomplete()  # type: ignore[abstract]
+
+    def test_valid_subclass_instantiates(self) -> None:
+        """实现全部抽象方法的子类可以正常实例化。"""
+
+        class Complete(BusinessValueResolver):
+            """完整实现。"""
+            domain = "logistics"
+
+            def resolve(self, entity_type: str, user_input: str) -> list[dict]:
+                return [{"entity_type": entity_type, "value": user_input, "label": user_input}]
+
+            def candidates(self, entity_type: str, limit: int = 20) -> list[dict]:
+                return []
+
+        instance = Complete()
+        assert instance.domain == "logistics"
+
+
+# ── resolve_multi 默认实现测试 ──
+
+class TestResolveMultiDefault:
+    """resolve_multi 默认实现测试。"""
+
+    def test_resolve_multi_calls_resolve_for_each_query(self) -> None:
+        """resolve_multi 按顺序对每个查询调用 resolve 并汇总结果。"""
+
+        class Multi(BusinessValueResolver):
+            """记录 resolve 调用。"""
+            domain = "logistics"
+            calls: list[tuple[str, str]]
+
+            def __init__(self) -> None:
+                super().__init__()
+                self.calls = []
+
+            def resolve(self, entity_type: str, user_input: str) -> list[dict]:
+                self.calls.append((entity_type, user_input))
+                return [{"entity_type": entity_type, "value": user_input, "label": user_input}]
+
+            def candidates(self, entity_type: str, limit: int = 20) -> list[dict]:
+                return []
+
+        resolver = Multi()
+        results = resolver.resolve_multi([
+            ("carrier", "顺丰"),
+            ("customer", "华为"),
+        ])
+
+        assert len(results) == 2
+        assert resolver.calls == [("carrier", "顺丰"), ("customer", "华为")]
+        assert results[0]["entity_type"] == "carrier"
+        assert results[0]["value"] == "顺丰"
+        assert results[1]["entity_type"] == "customer"
+        assert results[1]["value"] == "华为"
+
+    def test_resolve_multi_empty_queries(self) -> None:
+        """空查询列表返回空列表。"""
+
+        class Empty(BusinessValueResolver):
+            domain = "logistics"
+
+            def resolve(self, entity_type: str, user_input: str) -> list[dict]:
+                return []
+
+            def candidates(self, entity_type: str, limit: int = 20) -> list[dict]:
+                return []
+
+        resolver = Empty()
+        results = resolver.resolve_multi([])
+        assert results == []
+
+
+# ── 返回 dict 字段完整性测试 ──
+
+class TestResolvedValueShape:
+    """resolve 返回值的字段形状。"""
+
+    def test_resolve_returns_dict_with_required_fields(self) -> None:
+        """resolve 返回的每个 dict 应包含 entity_type、value、label。"""
+
+        class Shape(BusinessValueResolver):
+            domain = "logistics"
+
+            def resolve(self, entity_type: str, user_input: str) -> list[dict]:
+                return [{"entity_type": entity_type, "value": user_input, "label": user_input}]
+
+            def candidates(self, entity_type: str, limit: int = 20) -> list[dict]:
+                return [{"entity_type": entity_type, "value": "all", "label": "all"}]
+
+        resolver = Shape()
+        results = resolver.resolve("carrier", "测试承运商")
+
+        assert len(results) == 1
+        assert "entity_type" in results[0]
+        assert "value" in results[0]
+        assert "label" in results[0]
+        assert results[0]["entity_type"] == "carrier"
+        assert results[0]["value"] == "测试承运商"
+        assert results[0]["label"] == "测试承运商"
+
+    def test_candidates_returns_dict_with_required_fields(self) -> None:
+        """candidates 返回的每个 dict 应包含 entity_type、value、label。"""
+
+        class Shape(BusinessValueResolver):
+            domain = "plan_bom"
+
+            def resolve(self, entity_type: str, user_input: str) -> list[dict]:
+                return []
+
+            def candidates(self, entity_type: str, limit: int = 20) -> list[dict]:
+                return [
+                    {"entity_type": entity_type, "value": "cand1", "label": "候选1"},
+                    {"entity_type": entity_type, "value": "cand2", "label": "候选2"},
+                ]
+
+        resolver = Shape()
+        results = resolver.candidates("customer", limit=10)
+
+        assert len(results) == 2
+        for r in results:
+            assert "entity_type" in r
+            assert "value" in r
+            assert "label" in r
+=== NEW FILE: tests/unit/semantic_catalog/test_logistics_value_resolver.py ===
+"""
+NQE-N2：LogisticsValueResolver — 物流域实体值解析器测试
+
+测试范围：
+    1. 承运商解析：精确/模糊匹配，返回多候选。
+    2. 客户解析：模糊匹配。
+    3. 区域/线路/地址解析：候选返回。
+    4. 未知实体类型返回空或明确错误。
+    5. 误匹配时返回多候选而非单一硬匹配。
+"""
+from __future__ import annotations
+
+from unittest.mock import MagicMock, patch
+
+import pytest
+from sqlalchemy.orm import Session
+
+from backend.app.domains.semantic_catalog.value_resolver.base import BusinessValueResolver
+
+
+# 模拟 LogisticsDataQaRepository 的承运商查询返回
+MOCK_CARRIER_NAMES = [
+    "顺丰物流有限公司",
+    "德邦物流股份有限公司",
+    "安能物流有限公司",
+    "百世物流科技有限公司",
+    "远成物流股份有限公司",
+]
+
+
+# 模拟客户/委托人查询返回
+MOCK_CUSTOMER_NAMES = [
+    "华为技术有限公司",
+    "中兴通讯股份有限公司",
+    "阳光电源股份有限公司",
+    "晶科能源有限公司",
+]
+
+
+def _make_mock_db() -> MagicMock:
+    """构造模拟的 SQLAlchemy Session。"""
+    mock_db = MagicMock(spec=Session)
+    return mock_db
+
+
+# ── 承运商解析测试 ──
+
+class TestLogisticsCarrierResolve:
+    """承运商实体值解析测试。"""
+
+    def test_resolve_carrier_exact_match(self) -> None:
+        """精确匹配承运商名返回对应候选。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        # 直接注入测试数据到 _carrier_cache
+        resolver._carrier_cache = list(MOCK_CARRIER_NAMES)
+
+        results = resolver.resolve("carrier", "顺丰物流有限公司")
+        assert len(results) == 1
+        assert results[0]["entity_type"] == "carrier"
+        assert results[0]["value"] == "顺丰物流有限公司"
+        assert results[0]["label"] == "顺丰物流有限公司"
+
+    def test_resolve_carrier_fuzzy_match_multiple(self) -> None:
+        """模糊匹配返回多个候选。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        resolver._carrier_cache = list(MOCK_CARRIER_NAMES)
+
+        results = resolver.resolve("carrier", "物流")
+        # "物流" 匹配多个承运商名
+        assert len(results) >= 3
+        for r in results:
+            assert r["entity_type"] == "carrier"
+            assert "物流" in r["value"]
+
+    def test_resolve_carrier_no_match_returns_empty(self) -> None:
+        """完全无匹配时返回空列表，而非硬路由到随机承运商。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        resolver._carrier_cache = list(MOCK_CARRIER_NAMES)
+
+        results = resolver.resolve("carrier", "完全不存在的承运商名称XYZ123")
+        assert results == []
+
+    def test_resolve_carrier_partial_name_one_match(self) -> None:
+        """部分名称匹配到唯一承运商时返回对应候选。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        resolver._carrier_cache = list(MOCK_CARRIER_NAMES)
+
+        results = resolver.resolve("carrier", "德邦")
+        assert len(results) == 1
+        assert "德邦" in results[0]["value"]
+
+
+# ── 客户解析测试 ──
+
+class TestLogisticsCustomerResolve:
+    """客户/委托人实体值解析测试。"""
+
+    def test_resolve_customer_fuzzy_match(self) -> None:
+        """客户名模糊匹配返回多候选。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        resolver._customer_cache = list(MOCK_CUSTOMER_NAMES)
+
+        results = resolver.resolve("customer", "华为")
+        assert len(results) == 1
+        assert results[0]["entity_type"] == "customer"
+        assert "华为" in results[0]["value"]
+
+    def test_resolve_customer_no_match(self) -> None:
+        """不存在的客户名返回空列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        resolver._customer_cache = list(MOCK_CUSTOMER_NAMES)
+
+        results = resolver.resolve("customer", "不存在的客户ABC")
+        assert results == []
+
+
+# ── candidates 候选列表测试 ──
+
+class TestLogisticsCandidates:
+    """candidates 方法测试。"""
+
+    def test_candidates_carrier(self) -> None:
+        """承运商 candidates 返回去重后的候选列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        resolver._carrier_cache = list(MOCK_CARRIER_NAMES)
+
+        results = resolver.candidates("carrier", limit=10)
+        assert len(results) == len(MOCK_CARRIER_NAMES)
+        for r in results:
+            assert r["entity_type"] == "carrier"
+            assert "value" in r
+            assert "label" in r
+
+    def test_candidates_customer(self) -> None:
+        """客户 candidates 返回候选列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        resolver._customer_cache = list(MOCK_CUSTOMER_NAMES)
+
+        results = resolver.candidates("customer", limit=10)
+        assert len(results) == len(MOCK_CUSTOMER_NAMES)
+        for r in results:
+            assert r["entity_type"] == "customer"
+
+    def test_candidates_respects_limit(self) -> None:
+        """candidates 遵守 limit 参数。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        resolver._carrier_cache = list(MOCK_CARRIER_NAMES)
+
+        results = resolver.candidates("carrier", limit=2)
+        assert len(results) == 2
+
+
+# ── 区域实体测试 ──
+
+class TestLogisticsRegion:
+    """区域实体值解析测试。"""
+
+    def test_region_candidates_return_standard_regions(self) -> None:
+        """区域 candidates 返回标准行政区划列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        results = resolver.candidates("region", limit=50)
+
+        # 至少包含华东、华南等标准区域
+        assert len(results) >= 7
+        region_names = [r["label"] for r in results]
+        assert "华东" in region_names
+        assert "华南" in region_names
+        assert "华北" in region_names
+
+    def test_region_resolve_by_name(self) -> None:
+        """区域按名称精确解析。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        results = resolver.resolve("region", "华东")
+
+        assert len(results) == 1
+        assert results[0]["value"] == "华东"
+
+
+# ── unknown entity_type 测试 ──
+
+class TestLogisticsUnknownEntity:
+    """未知实体类型回退测试。"""
+
+    def test_resolve_unknown_entity_type_returns_empty(self) -> None:
+        """未知实体类型 resolve 返回空列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        results = resolver.resolve("unknown_type", "测试")
+        assert results == []
+
+    def test_candidates_unknown_entity_type_returns_empty(self) -> None:
+        """未知实体类型 candidates 返回空列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        results = resolver.candidates("unknown_type")
+        assert results == []
+
+
+# ── 继承关系测试 ──
+
+class TestLogisticsInheritance:
+    """LogisticsValueResolver 正确继承 BusinessValueResolver。"""
+
+    def test_is_instance_of_business_value_resolver(self) -> None:
+        """LogisticsValueResolver 是 BusinessValueResolver 的子类。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        assert isinstance(resolver, BusinessValueResolver)
+
+    def test_domain_is_logistics(self) -> None:
+        """domain 属性为 logistics。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        assert resolver.domain == "logistics"
+
+
+# ── resolve_multi 测试 ──
+
+class TestLogisticsResolveMulti:
+    """resolve_multi 批量解析测试。"""
+
+    def test_resolve_multi_carrier_and_customer(self) -> None:
+        """同时解析承运商和客户。"""
+        from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
+            LogisticsValueResolver,
+        )
+
+        resolver = LogisticsValueResolver(db=_make_mock_db())
+        resolver._carrier_cache = list(MOCK_CARRIER_NAMES)
+        resolver._customer_cache = list(MOCK_CUSTOMER_NAMES)
+
+        results = resolver.resolve_multi([
+            ("carrier", "顺丰"),
+            ("customer", "华为"),
+        ])
+
+        assert len(results) == 2
+        assert results[0]["entity_type"] == "carrier"
+        assert results[1]["entity_type"] == "customer"
+        assert "顺丰" in results[0]["value"]
+        assert "华为" in results[1]["value"]
+=== NEW FILE: tests/unit/semantic_catalog/test_plan_bom_value_resolver.py ===
+"""
+NQE-N2：PlanBomValueResolver — 计划 BOM 域实体值解析器测试
+
+测试范围：
+    1. 订单 identity 解析（订单号/订单名）。
+    2. 文件名解析（file_instance_key / raw_file_name）。
+    3. 客户实例解析（从订单名中提取客户名）。
+    4. 版本号解析（version_no）。
+    5. 误匹配时返回多候选。
+    6. 未知实体类型返回空。
+"""
+from __future__ import annotations
+
+from unittest.mock import MagicMock
+
+import pytest
+from sqlalchemy.orm import Session
+
+from backend.app.domains.semantic_catalog.value_resolver.base import BusinessValueResolver
+
+
+# ── 模拟 PlanBomHeader 数据 ──
+
+def _make_mock_headers() -> list[dict]:
+    """构造模拟 BOM 头数据，模拟 PlanBomHeader 字段。"""
+    return [
+        {
+            "order_no": "PO2025-001",
+            "order_name": "华为2025年光伏项目",
+            "version_no": "A0",
+            "order_identity_key": "excel_inst_abc001",
+            "file_instance_key": "excel_file_f001",
+            "raw_file_name": "华为光伏_BOM_A0.xlsx",
+            "is_active": 1,
+        },
+        {
+            "order_no": "PO2025-002",
+            "order_name": "阳光电源2025储能项目",
+            "version_no": "A1",
+            "order_identity_key": "excel_inst_abc002",
+            "file_instance_key": "excel_file_f002",
+            "raw_file_name": "阳光电源储能_BOM_A1.xlsx",
+            "is_active": 1,
+        },
+        {
+            "order_no": "PO2025-003",
+            "order_name": "华为2025储能项目",
+            "version_no": "A0",
+            "order_identity_key": "excel_inst_abc003",
+            "file_instance_key": "excel_file_f003",
+            "raw_file_name": "华为储能_BOM_A0.xlsx",
+            "is_active": 1,
+        },
+        {
+            "order_no": "PO2025-004",
+            "order_name": "晶科能源2025项目",
+            "version_no": "B0",
+            "order_identity_key": "excel_inst_abc004",
+            "file_instance_key": "excel_file_f004",
+            "raw_file_name": "晶科_BOM_B0.xlsx",
+            "is_active": 1,
+        },
+    ]
+
+
+def _make_mock_db() -> MagicMock:
+    """构造模拟 SQLAlchemy Session。"""
+    return MagicMock(spec=Session)
+
+
+def _make_mock_repo(headers: list[dict] | None = None) -> MagicMock:
+    """构造模拟 PlanBomQueryRepository。"""
+    repo = MagicMock()
+    repo.list_active_headers.return_value = [_make_mock_header_obj(h) for h in (headers or _make_mock_headers())]
+    repo.list_all_active_headers.return_value = [_make_mock_header_obj(h) for h in (headers or _make_mock_headers())]
+    return repo
+
+
+def _make_mock_header_obj(data: dict) -> MagicMock:
+    """将 dict 转为模拟 PlanBomHeader 对象。"""
+    obj = MagicMock()
+    for key, value in data.items():
+        setattr(obj, key, value)
+    return obj
+
+
+# ── 订单 identity 解析测试 ──
+
+class TestPlanBomOrderResolve:
+    """订单 identity 实体值解析测试。"""
+
+    def test_resolve_order_by_order_no(self) -> None:
+        """按订单号精确匹配。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.resolve("order_identity", "PO2025-001")
+        assert len(results) >= 1
+        assert results[0]["entity_type"] == "order_identity"
+        assert "PO2025-001" in results[0]["value"]
+
+    def test_resolve_order_by_order_name_fragment(self) -> None:
+        """按订单名片段模糊匹配返回多候选。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        # "华为" 匹配两个订单
+        results = resolver.resolve("order_identity", "华为")
+        assert len(results) == 2
+        for r in results:
+            assert r["entity_type"] == "order_identity"
+            assert "华为" in r["value"] or "华为" in r["label"]
+
+    def test_resolve_order_no_match(self) -> None:
+        """不存在时返回空列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.resolve("order_identity", "不存在的订单XYZ")
+        assert results == []
+
+
+# ── 文件名解析测试 ──
+
+class TestPlanBomFilenameResolve:
+    """文件名实体值解析测试。"""
+
+    def test_resolve_filename_exact(self) -> None:
+        """按完整文件名匹配。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.resolve("filename", "华为光伏_BOM_A0.xlsx")
+        assert len(results) == 1
+        assert results[0]["entity_type"] == "filename"
+        assert "华为光伏" in results[0]["label"]
+
+    def test_resolve_filename_fragment(self) -> None:
+        """按文件名片段模糊匹配。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.resolve("filename", "储能")
+        assert len(results) == 2  # 阳光电源储能 + 华为储能
+        for r in results:
+            assert r["entity_type"] == "filename"
+
+    def test_resolve_filename_no_match(self) -> None:
+        """不存在时返回空列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.resolve("filename", "不存在文件.xlsx")
+        assert results == []
+
+
+# ── 客户实例解析测试 ──
+
+class TestPlanBomCustomerResolve:
+    """客户实例实体值解析测试。"""
+
+    def test_resolve_customer_by_name_fragment(self) -> None:
+        """按客户名片段匹配。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.resolve("customer_instance", "华为")
+        assert len(results) == 2  # 华为2025年光伏 + 华为2025储能
+        for r in results:
+            assert r["entity_type"] == "customer_instance"
+            assert "华为" in r["value"] or "华为" in r["label"]
+
+    def test_resolve_customer_no_match(self) -> None:
+        """不存在的客户返回空。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.resolve("customer_instance", "不存在的客户XYZ")
+        assert results == []
+
+
+# ── 版本号解析测试 ──
+
+class TestPlanBomVersionResolve:
+    """版本号实体值解析测试。"""
+
+    def test_resolve_version_exact(self) -> None:
+        """按版本号精确匹配。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.resolve("version", "A0")
+        assert len(results) >= 2  # PO2025-001 A0 + PO2025-003 A0
+        for r in results:
+            assert r["entity_type"] == "version"
+            assert r["value"] == "A0"
+
+    def test_resolve_version_no_match(self) -> None:
+        """不存在的版本号返回空。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.resolve("version", "Z99")
+        assert results == []
+
+
+# ── candidates 候选列表测试 ──
+
+class TestPlanBomCandidates:
+    """candidates 方法测试。"""
+
+    def test_candidates_order_identity(self) -> None:
+        """订单 identity candidates 返回去重后的列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.candidates("order_identity", limit=10)
+        assert len(results) == 4
+        for r in results:
+            assert r["entity_type"] == "order_identity"
+
+    def test_candidates_customer_instance(self) -> None:
+        """客户实例 candidates 返回客户候选。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.candidates("customer_instance", limit=10)
+        # 提取的唯一客户名：华为(2个)、阳光电源、晶科能源
+        assert len(results) >= 3
+
+    def test_candidates_respects_limit(self) -> None:
+        """candidates 遵守 limit 参数。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        headers = _make_mock_headers()
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo(headers))
+
+        results = resolver.candidates("version", limit=2)
+        # A0, A1, B0 → 只返回前 2 个
+        assert len(results) <= 2
+        for r in results:
+            assert r["entity_type"] == "version"
+
+
+# ── unknown entity_type 测试 ──
+
+class TestPlanBomUnknownEntity:
+    """未知实体类型测试。"""
+
+    def test_resolve_unknown_type_returns_empty(self) -> None:
+        """未知实体类型 resolve 返回空列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo())
+        results = resolver.resolve("unknown", "测试")
+        assert results == []
+
+    def test_candidates_unknown_type_returns_empty(self) -> None:
+        """未知实体类型 candidates 返回空列表。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo())
+        results = resolver.candidates("unknown")
+        assert results == []
+
+
+# ── DB 异常降级测试 ──
+
+class TestPlanBomDbExceptionSafety:
+    """DB 异常时的安全降级测试。"""
+
+    def test_resolve_returns_empty_when_repo_raises(self) -> None:
+        """repo 抛异常时 resolve 返回空列表，不传播异常。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        repo = MagicMock()
+        repo.list_all_active_headers.side_effect = RuntimeError("DB connection timeout")
+
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=repo)
+        results = resolver.resolve("order_identity", "PO2025-001")
+        assert results == []
+
+    def test_candidates_returns_empty_when_repo_raises(self) -> None:
+        """repo 抛异常时 candidates 返回空列表，不传播异常。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        repo = MagicMock()
+        repo.list_all_active_headers.side_effect = RuntimeError("DB connection timeout")
+
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=repo)
+        results = resolver.candidates("order_identity", limit=10)
+        assert results == []
+
+    def test_cache_reload_when_limit_exceeds_cached(self) -> None:
+        """缓存数据量不足时自动重新加载更大数据集。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        # 构造 10 条数据
+        headers = [
+            {
+                "order_no": f"PO2025-{i:03d}",
+                "order_name": f"项目{i}",
+                "version_no": "A0",
+                "order_identity_key": f"key_{i}",
+                "file_instance_key": f"file_{i}",
+                "raw_file_name": f"file_{i}.xlsx",
+                "is_active": 1,
+            }
+            for i in range(10)
+        ]
+
+        repo = MagicMock()
+        # 第一次调用返回 3 条，第二次返回 10 条
+        repo.list_all_active_headers.side_effect = [
+            [_make_mock_header_obj(h) for h in headers[:3]],
+            [_make_mock_header_obj(h) for h in headers],
+        ]
+
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=repo)
+
+        # 第一次请求 limit=2 → 缓存 3 条
+        results = resolver.candidates("order_identity", limit=2)
+        assert len(results) == 2
+
+        # 第二次请求 limit=10 → 缓存只有 3 条，应重新加载
+        results = resolver.candidates("order_identity", limit=10)
+        # 缓存重新加载后应返回 10 条
+        assert len(results) == 10
+
+
+# ── 继承关系测试 ──
+
+class TestPlanBomInheritance:
+    """PlanBomValueResolver 继承关系。"""
+
+    def test_is_instance_of_business_value_resolver(self) -> None:
+        """PlanBomValueResolver 是 BusinessValueResolver 的子类。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo())
+        assert isinstance(resolver, BusinessValueResolver)
+
+    def test_domain_is_plan_bom(self) -> None:
+        """domain 属性为 plan_bom。"""
+        from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
+            PlanBomValueResolver,
+        )
+
+        resolver = PlanBomValueResolver(db=_make_mock_db(), repo=_make_mock_repo())
+        assert resolver.domain == "plan_bom"

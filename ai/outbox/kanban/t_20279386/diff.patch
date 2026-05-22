@@ -1,0 +1,1813 @@
+# NQE-N4 diff.patch — 现有口径迁移到统一语义资产
+# 变更文件数: 6
+# 物流 query_key: 67 个, 计划 BOM intent: 11 个, 计划功率 capability: 3 个
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/schema.py b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/schema.py
+new file mode 100644
+index 00000000..ba3fa497
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/schema.py
+@@ -0,0 +1,186 @@
++"""
++统一语义资产 Catalog Schema 定义。
++
++业务逻辑：
++    本模块定义跨业务域的统一语义资产数据结构标准。
++    包括指标（SemanticMetric）、维度（SemanticDimension）、实体（SemanticEntity）
++    和可插拔的业务值解析器协议（BusinessValueResolverProtocol）。
++
++    这些 Schema 是 NL2SQL / QueryPlanningV2 的辅助能力层，
++    不是替代现有领域 catalog 的新核心。
++"""
++
++from __future__ import annotations
++
++from typing import Protocol, runtime_checkable
++
++from pydantic import BaseModel, ConfigDict, Field
++
++
++class SemanticMetric(BaseModel):
++    """统一语义指标定义。
++
++    参数：
++        metric_id: 统一指标 ID，如 shipment_mw、total_fee。
++        display_name: 业务展示名称，如"发货量"、"总费用"。
++        domain: 所属业务域，如 logistics、plan_bom、business_analysis。
++        aliases: 用户口语同义词列表，如["件数", "发运量"]。
++        unit: 业务单位，如"MW"、"元"。
++        description: 业务口径说明，供 LLM 辅助理解。
++
++    返回：
++        业务域无关的统一指标条目。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    metric_id: str = Field(..., description="统一指标 ID")
++    display_name: str = Field(..., description="业务展示名称")
++    domain: str = Field(..., description="所属业务域")
++    aliases: list[str] = Field(default_factory=list, description="用户口语同义词")
++    unit: str | None = Field(default=None, description="业务单位")
++    description: str | None = Field(default=None, description="业务口径说明")
++
++
++class SemanticDimension(BaseModel):
++    """统一语义维度定义。
++
++    参数：
++        dimension_id: 统一维度 ID，如 material_category、version_no。
++        display_name: 业务展示名称，如"物料类别"、"版本号"。
++        domain: 所属业务域，如 logistics、plan_bom。
++        aliases: 用户口语同义词列表。
++        description: 业务口径说明。
++
++    返回：
++        业务域无关的统一维度条目。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    dimension_id: str = Field(..., description="统一维度 ID")
++    display_name: str = Field(..., description="业务展示名称")
++    domain: str = Field(..., description="所属业务域")
++    aliases: list[str] = Field(default_factory=list, description="用户口语同义词")
++    description: str | None = Field(default=None, description="业务口径说明")
++
++
++class SemanticEntity(BaseModel):
++    """统一语义实体定义。
++
++    参数：
++        entity_id: 统一实体 ID，如 carrier、material。
++        display_name: 业务展示名称，如"承运商"、"物料"。
++        domain: 所属业务域。
++        entity_type: 实体类型分类，如 carrier、customer、material。
++        aliases: 用户口语同义词列表。
++        description: 业务口径说明。
++
++    返回：
++        业务域无关的统一实体条目。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    entity_id: str = Field(..., description="统一实体 ID")
++    display_name: str = Field(..., description="业务展示名称")
++    domain: str = Field(..., description="所属业务域")
++    entity_type: str = Field(..., description="实体类型分类")
++    aliases: list[str] = Field(default_factory=list, description="用户口语同义词")
++    description: str | None = Field(default=None, description="业务口径说明")
++
++
++class SemanticCapability(BaseModel):
++    """统一语义能力定义 — 业务域的查询能力、意图分类或域能力。
++
++    业务逻辑：
++        每个业务域下存在多种"能力"（如物流的 query_key、计划 BOM 的 intent、
++        计划功率的 domain capability），本模型统一描述这些能力。
++
++        与 SemanticMetric/SemanticDimension 的关系：
++        - 能力是"能做什么"（如 hist_carrier_kpi_by_year 可按承运商查 KPI）。
++        - 指标/维度是"能查什么"（如 shipment_mw、carrier）。
++        - 一个能力可以关联多个指标和维度。
++
++    参数：
++        capability_id: 统一能力 ID（即 query_key、intent 或 capability 编码）。
++        display_name: 业务展示名称，如"承运商 KPI 年度查询"。
++        domain: 所属业务域，如 logistics、plan_bom。
++        capability_type: 能力类型：
++            - "query_key"：物流域的传统 query_key 能力。
++            - "intent"：计划 BOM 域的意图分类能力。
++            - "domain_capability"：计划功率域的域级能力。
++        related_metrics: 关联的业务指标 ID 列表（可选，供下游系统引用）。
++        related_dimensions: 关联的业务维度 ID 列表（可选，供下游系统引用）。
++        aliases: 用户口语同义词列表。
++        description: 业务口径说明。
++
++    返回：
++        业务域无关的统一能力条目。
++
++    约束：
++        不暴露 SQL、表名、字段名、query_key 等内部技术内容。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    capability_id: str = Field(..., description="统一能力 ID")
++    display_name: str = Field(..., description="业务展示名称")
++    domain: str = Field(..., description="所属业务域")
++    capability_type: str = Field(..., description="能力类型：query_key / intent / domain_capability")
++    related_metrics: list[str] = Field(default_factory=list, description="关联的业务指标 ID")
++    related_dimensions: list[str] = Field(default_factory=list, description="关联的业务维度 ID")
++    aliases: list[str] = Field(default_factory=list, description="用户口语同义词")
++    description: str | None = Field(default=None, description="业务口径说明")
++
++
++@runtime_checkable
++class BusinessValueResolverProtocol(Protocol):
++    """业务值解析器协议（可插拔）。
++
++    业务逻辑：
++        不同业务域的实体值解析逻辑可以不同（例如物流承运商从中间库查、
++        计划 BOM 物料从 Excel 查），但都必须实现统一的 resolve/register 接口。
++        这样可以支持后续的 ES 全文搜索、向量检索或其他解析器接入，
++        而不修改统一 catalog 核心。
++
++    Protocol 方法：
++        resolve(domain, entity_type, user_input) → list[dict]:
++            根据用户输入解析实体值候选列表。
++            返回列表包含 dict，至少包含 id 和 label 字段。
++
++        register(domain, entity_type, values):
++            注册一批实体值供后续 resolve 使用。
++    """
++
++    def resolve(self, domain: str, entity_type: str, user_input: str) -> list[dict[str, str]]:
++        """解析用户输入为实体值候选列表。
++
++        参数：
++            domain: 业务域，如 logistics、plan_bom。
++            entity_type: 实体类型，如 carrier、material。
++            user_input: 用户输入的实体名称或关键词。
++
++        返回：
++            候选实体值列表，每项 dict 至少包含 id 和 label。
++        """
++        ...
++
++    def register(self, domain: str, entity_type: str, values: list[dict[str, str]]) -> None:
++        """注册一批实体值。
++
++        参数：
++            domain: 业务域。
++            entity_type: 实体类型。
++            values: 实体值列表，每项 dict 至少包含 id 和 label。
++        """
++        ...
++
++
++__all__ = [
++    "SemanticMetric",
++    "SemanticDimension",
++    "SemanticEntity",
++    "SemanticCapability",
++    "BusinessValueResolverProtocol",
++]
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/catalog.py b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/catalog.py
+new file mode 100644
+index 00000000..a4754b99
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/catalog.py
+@@ -0,0 +1,259 @@
++"""
++统一语义资产注册表（BusinessSemanticCatalog）。
++
++业务逻辑：
++    提供按业务域（domain）和 capability 查询、注册统一语义资产的能力。
++    注册表是 NL2SQL/QueryPlanningV2 的辅助能力——它保存"哪些指标/维度/实体可用"，
++    但不替代现有领域 catalog 的 SQLPlan 校验、表白名单、Join 规则等内部实现。
++
++使用方式：
++    catalog = BusinessSemanticCatalog()
++    catalog.register_metric(SemanticMetric(metric_id="shipment_mw", ...))
++    found = catalog.get_metric("logistics", "shipment_mw")
++"""
++
++from __future__ import annotations
++
++from collections import OrderedDict
++
++from backend.app.domains.semantic_catalog.schema import (
++    SemanticMetric,
++    SemanticDimension,
++    SemanticEntity,
++    SemanticCapability,
++)
++
++
++class BusinessSemanticCatalog:
++    """统一语义资产注册表。
++
++    支持按 domain 和 ID 查询已注册的指标、维度和实体。
++    注册表本身无状态依赖——所有资产通过 register_* 方法注入，
++    也可以从 YAML 文件或现有领域 catalog 桥接填充。
++
++    参数：
++        无（初始化为空注册表）。
++
++    返回：
++        可注册、查询的统一语义资产容器。
++    """
++
++    def __init__(self) -> None:
++        """初始化空注册表。
++
++        业务逻辑：
++            使用 OrderedDict 保证注册顺序可预测，方便测试和调试。
++            内部按 domain 组织数据：_metrics[domain][metric_id] = SemanticMetric。
++        """
++        # 指标注册表：_metrics[domain] = OrderedDict[metric_id → SemanticMetric]
++        self._metrics: dict[str, OrderedDict[str, SemanticMetric]] = {}
++        # 维度注册表：_dimensions[domain] = OrderedDict[dimension_id → SemanticDimension]
++        self._dimensions: dict[str, OrderedDict[str, SemanticDimension]] = {}
++        # 实体注册表：_entities[domain] = OrderedDict[entity_id → SemanticEntity]
++        self._entities: dict[str, OrderedDict[str, SemanticEntity]] = {}
++        # 能力注册表：_capabilities[domain] = OrderedDict[capability_id → SemanticCapability]
++        self._capabilities: dict[str, OrderedDict[str, SemanticCapability]] = {}
++
++    # ── 指标操作 ──
++
++    def register_metric(self, metric: SemanticMetric) -> None:
++        """注册一个统一指标。
++
++        参数：
++            metric: 统一语义指标对象。
++
++        业务逻辑：
++            同一 domain + metric_id 重复注册时会覆盖旧值。
++        """
++        domain = metric.domain
++        if domain not in self._metrics:
++            self._metrics[domain] = OrderedDict()
++        self._metrics[domain][metric.metric_id] = metric
++
++    def get_metrics(self, domain: str) -> list[SemanticMetric]:
++        """获取指定域的全部已注册指标。
++
++        参数：
++            domain: 业务域。
++
++        返回：
++            指标列表（按注册顺序排列）。
++        """
++        return list(self._metrics.get(domain, {}).values())
++
++    def get_metric(self, domain: str, metric_id: str) -> SemanticMetric | None:
++        """按域和 ID 获取单个指标。
++
++        参数：
++            domain: 业务域。
++            metric_id: 指标 ID。
++
++        返回：
++            匹配的指标；不存在则返回 None。
++        """
++        return self._metrics.get(domain, {}).get(metric_id)
++
++    def resolve_metric_alias(self, domain: str, alias: str) -> SemanticMetric | None:
++        """按用户口语同义词解析受控指标。
++
++        参数：
++            domain: 业务域。
++            alias: 用户输入的同义词或指标名称。
++
++        返回：
++            匹配指标；不匹配则返回 None。
++
++        业务逻辑：
++            归一化匹配 metric_id、display_name 和 aliases。
++        """
++        normalized = self._normalize_text(alias)
++        for metric in self.get_metrics(domain):
++            candidates = [metric.metric_id, metric.display_name, *metric.aliases]
++            for candidate in candidates:
++                if normalized == self._normalize_text(candidate):
++                    return metric
++        return None
++
++    # ── 维度操作 ──
++
++    def register_dimension(self, dimension: SemanticDimension) -> None:
++        """注册一个统一维度。
++
++        参数：
++            dimension: 统一语义维度对象。
++        """
++        domain = dimension.domain
++        if domain not in self._dimensions:
++            self._dimensions[domain] = OrderedDict()
++        self._dimensions[domain][dimension.dimension_id] = dimension
++
++    def get_dimensions(self, domain: str) -> list[SemanticDimension]:
++        """获取指定域的全部已注册维度。
++
++        参数：
++            domain: 业务域。
++
++        返回：
++            维度列表（按注册顺序排列）。
++        """
++        return list(self._dimensions.get(domain, {}).values())
++
++    def get_dimension(self, domain: str, dimension_id: str) -> SemanticDimension | None:
++        """按域和 ID 获取单个维度。
++
++        参数：
++            domain: 业务域。
++            dimension_id: 维度 ID。
++
++        返回：
++            匹配的维度；不存在则返回 None。
++        """
++        return self._dimensions.get(domain, {}).get(dimension_id)
++
++    # ── 实体操作 ──
++
++    def register_entity(self, entity: SemanticEntity) -> None:
++        """注册一个统一实体。
++
++        参数：
++            entity: 统一语义实体对象。
++        """
++        domain = entity.domain
++        if domain not in self._entities:
++            self._entities[domain] = OrderedDict()
++        self._entities[domain][entity.entity_id] = entity
++
++    def get_entities(self, domain: str, entity_type: str | None = None) -> list[SemanticEntity]:
++        """获取指定域的已注册实体，可按类型过滤。
++
++        参数：
++            domain: 业务域。
++            entity_type: 可选实体类型过滤。
++
++        返回：
++            实体列表。
++        """
++        entities = list(self._entities.get(domain, {}).values())
++        if entity_type is not None:
++            entities = [e for e in entities if e.entity_type == entity_type]
++        return entities
++
++    # ── 能力操作 ──
++
++    def register_capability(self, capability: SemanticCapability) -> None:
++        """注册一个统一能力。
++
++        参数：
++            capability: 统一语义能力对象。
++
++        业务逻辑：
++            同一 domain + capability_id 重复注册时会覆盖旧值。
++            能力类型（query_key / intent / domain_capability）区分不同来源的能力。
++        """
++        domain = capability.domain
++        if domain not in self._capabilities:
++            self._capabilities[domain] = OrderedDict()
++        self._capabilities[domain][capability.capability_id] = capability
++
++    def get_capabilities(
++        self, domain: str, capability_type: str | None = None
++    ) -> list[SemanticCapability]:
++        """获取指定域的全部已注册能力，可按类型过滤。
++
++        参数：
++            domain: 业务域。
++            capability_type: 可选能力类型过滤（query_key / intent / domain_capability）。
++
++        返回：
++            能力列表（按注册顺序排列）。
++        """
++        caps = list(self._capabilities.get(domain, {}).values())
++        if capability_type is not None:
++            caps = [c for c in caps if c.capability_type == capability_type]
++        return caps
++
++    def get_capability(self, domain: str, capability_id: str) -> SemanticCapability | None:
++        """按域和 ID 获取单个能力。
++
++        参数：
++            domain: 业务域。
++            capability_id: 能力 ID。
++
++        返回：
++            匹配的能力；不存在则返回 None。
++        """
++        return self._capabilities.get(domain, {}).get(capability_id)
++
++    # ── 域查询 ──
++
++    def domains(self) -> list[str]:
++        """返回所有已注册域名的有序列表。
++
++        返回：
++            域名列表（按首次注册顺序排列）。
++        """
++        seen: dict[str, bool] = {}
++        ordered: list[str] = []
++        for source in (self._metrics, self._dimensions, self._entities, self._capabilities):
++            for domain in source:
++                if domain not in seen:
++                    seen[domain] = True
++                    ordered.append(domain)
++        return ordered
++
++    # ── 辅助方法 ──
++
++    @staticmethod
++    def _normalize_text(value: str) -> str:
++        """统一去空白并小写，避免中文/英文同义词匹配受格式影响。
++
++        参数：
++            value: 待归一化的文本。
++
++        返回：
++            归一化后的文本。
++        """
++        return "".join(str(value).strip().lower().split())
++
++
++__all__ = ["BusinessSemanticCatalog"]
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/loader.py b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/loader.py
+new file mode 100644
+index 00000000..6cb81112
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/loader.py
+@@ -0,0 +1,105 @@
++"""
++YAML 文件加载器：从 YAML/JSON 文件加载统一语义资产注册表。
++
++业务逻辑：
++    1. 只读取仓库内人工审计的 YAML 文件。
++    2. 不连接生产库、不生成 SQL、不触及现有领域 catalog 内部。
++    3. 返回强 schema 的 BusinessSemanticCatalog 对象。
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++from typing import Any
++
++import yaml
++
++from backend.app.domains.semantic_catalog.schema import (
++    SemanticMetric,
++    SemanticDimension,
++    SemanticEntity,
++    SemanticCapability,
++)
++from backend.app.domains.semantic_catalog.catalog import BusinessSemanticCatalog
++
++# 默认 catalog 目录：统一语义资产注册文件存放位置
++DEFAULT_UNIFIED_CATALOG_DIR = Path(__file__).resolve().parents[2] / "config" / "unified_catalog"
++
++
++class SemanticCatalogYamlLoader:
++    """统一语义资产 YAML 加载器。
++
++    参数：
++        catalog_dir: 可选 catalog 目录；测试可传临时目录。
++
++    返回：
++        加载器实例。
++    """
++
++    def __init__(self, catalog_dir: str | Path | None = None) -> None:
++        """初始化加载器。
++
++        参数：
++            catalog_dir: catalog 文件目录，默认使用 config/unified_catalog。
++        """
++        self.catalog_dir = Path(catalog_dir) if catalog_dir else DEFAULT_UNIFIED_CATALOG_DIR
++
++    def load(self) -> BusinessSemanticCatalog:
++        """加载全部 YAML 文件并合并到统一注册表。
++
++        返回：
++            填充完成的 BusinessSemanticCatalog 实例。
++
++        业务逻辑：
++            按 metrics.yaml → dimensions.yaml → entities.yaml 顺序读取。
++            缺失文件按空列表处理（不报错），方便分阶段交付。
++        """
++        catalog = BusinessSemanticCatalog()
++
++        metrics_data = self._read_yaml("metrics.yaml")
++        for item in metrics_data.get("metrics", []):
++            metric = SemanticMetric.model_validate(item)
++            catalog.register_metric(metric)
++
++        dimensions_data = self._read_yaml("dimensions.yaml")
++        for item in dimensions_data.get("dimensions", []):
++            dim = SemanticDimension.model_validate(item)
++            catalog.register_dimension(dim)
++
++        entities_data = self._read_yaml("entities.yaml")
++        for item in entities_data.get("entities", []):
++            entity = SemanticEntity.model_validate(item)
++            catalog.register_entity(entity)
++
++        capabilities_data = self._read_yaml("capabilities.yaml")
++        for item in capabilities_data.get("capabilities", []):
++            cap = SemanticCapability.model_validate(item)
++            catalog.register_capability(cap)
++
++        return catalog
++
++    def _read_yaml(self, file_name: str) -> dict[str, Any]:
++        """读取单个 YAML 文件。
++
++        参数：
++            file_name: YAML 文件名。
++
++        返回：
++            解析后的字典；缺失文件返回空 dict。
++
++        业务逻辑：
++            缺失文件不抛错——支持分阶段交付 YAML 配置。
++        """
++        path = self.catalog_dir / file_name
++        if not path.exists():
++            return {}
++        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
++        if not isinstance(data, dict):
++            raise ValueError(f"catalog_yaml_must_be_mapping::{path}")
++        return data
++
++
++__all__ = [
++    "DEFAULT_UNIFIED_CATALOG_DIR",
++    "SemanticCatalogYamlLoader",
++]
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/__init__.py b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/__init__.py
+new file mode 100644
+index 00000000..86fa6134
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/domains/semantic_catalog/__init__.py
+@@ -0,0 +1,80 @@
++"""
++统一语义资产 Catalog（Unified Semantic Catalog）。
++
++业务定位：
++    本模块提供跨业务域（物流、计划 BOM、经营分析、物管）的统一语义资产定义。
++    它是 NL2SQL / QueryPlanningV2 的辅助能力层——描述"有哪些指标/维度/实体可用"，
++    但不替代现有领域 catalog 的 SQLPlan 校验、表白名单等核心能力。
++
++模块组成：
++    - schema: 核心数据结构（SemanticMetric、SemanticDimension、SemanticEntity）
++    - catalog: 统一注册表（BusinessSemanticCatalog）
++    - loader: YAML 文件加载器（SemanticCatalogYamlLoader）
++    - bridge: 现有领域 catalog 桥接适配层
++
++约束：
++    - 不做物管/SAP MID M2。
++    - 不引入 ES。
++    - 不替代 NL2SQL。
++    - 保留旧接口和回退。
++    - LLM 只读，不自由 SQL/查数/改事实。
++"""
++
++from backend.app.domains.semantic_catalog.schema import (
++    SemanticMetric,
++    SemanticDimension,
++    SemanticEntity,
++    SemanticCapability,
++    BusinessValueResolverProtocol,
++)
++from backend.app.domains.semantic_catalog.catalog import BusinessSemanticCatalog
++from backend.app.domains.semantic_catalog.loader import (
++    SemanticCatalogYamlLoader,
++    DEFAULT_UNIFIED_CATALOG_DIR,
++)
++from backend.app.domains.semantic_catalog.bridge import (
++    bridge_logistics_catalog_to_unified,
++)
++from backend.app.domains.semantic_catalog.value_resolver.base import (
++    BusinessValueResolver,
++)
++from backend.app.domains.semantic_catalog.value_resolver.logistics_resolver import (
++    LogisticsValueResolver,
++)
++from backend.app.domains.semantic_catalog.value_resolver.plan_bom_resolver import (
++    PlanBomValueResolver,
++)
++
++# 多候选消歧统一交互模块
++from backend.app.domains.semantic_catalog.disambiguation import (
++    DisambiguationCandidate,
++    DisambiguationRequest,
++    DisambiguationResponse,
++    DisambiguationResolveRequest,
++    DisambiguationResolveResponse,
++    DisambiguationService,
++    DisambiguationError,
++)
++
++__all__ = [
++    "SemanticMetric",
++    "SemanticDimension",
++    "SemanticEntity",
++    "SemanticCapability",
++    "BusinessValueResolverProtocol",
++    "BusinessSemanticCatalog",
++    "SemanticCatalogYamlLoader",
++    "DEFAULT_UNIFIED_CATALOG_DIR",
++    "bridge_logistics_catalog_to_unified",
++    "BusinessValueResolver",
++    "LogisticsValueResolver",
++    "PlanBomValueResolver",
++    # 多候选消歧模块
++    "DisambiguationCandidate",
++    "DisambiguationRequest",
++    "DisambiguationResponse",
++    "DisambiguationResolveRequest",
++    "DisambiguationResolveResponse",
++    "DisambiguationService",
++    "DisambiguationError",
++]
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/config/unified_catalog/capabilities.yaml b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/config/unified_catalog/capabilities.yaml
+new file mode 100644
+index 00000000..9def3bde
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/backend/app/config/unified_catalog/capabilities.yaml
+@@ -0,0 +1,661 @@
++# 统一语义资产 — 能力注册表
++# 业务域：物流（logistics）、计划 BOM（plan_bom）、计划功率（plan_power）
++# 说明：本文件由人工审计，用于注册各业务域的查询能力和意图分类。
++# 统一约束：禁止在此暴露 SQL、表名、字段名、query_key、planner 等技术实现细节。
++
++capabilities:
++- capability_id: carrier_metric_ranking
++  display_name: 承运商指标排行
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按指定指标（运量/费用/车次）的承运商排名。
++- capability_id: composite_decomposed
++  display_name: 复合问题分解
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 由多个子问题组合而成的复合型查询。
++- capability_id: hist_avg_fee_by_month
++  display_name: 月均费用走势
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 历史台账中按月份统计平均运费走势。
++- capability_id: hist_avg_fee_per_watt_by_transport
++  display_name: 单位运费（运输方式）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按运输方式统计的每瓦平均运费。
++- capability_id: hist_avg_pallet_per_vehicle
++  display_name: 平均托盘/车
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 每车的平均托盘数统计。
++- capability_id: hist_carrier_kpi_by_year
++  display_name: 承运商年度 KPI
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 历史台账中按年份和承运商统计运量、运费、车次等经营指标。
++- capability_id: hist_city_carrier_avg_fee_per_trip
++  display_name: 城市/承运商车均费
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按城市和承运商的车均费用分析。
++- capability_id: hist_city_mw_rank
++  display_name: 城市发货量排名
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按城市维度的发运量排名。
++- capability_id: hist_customer_mw
++  display_name: 客户发货量
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按客户维度的发货量统计。
++- capability_id: hist_customer_mw_ranking
++  display_name: 客户发货量排行
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按客户维度的发运量排名。
++- capability_id: hist_extra_fee_ratio_peak_month
++  display_name: 附加费用占比峰值月
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 附加费用占总费用比例最高的月份。
++- capability_id: hist_high_fee_addresses_by_customer
++  display_name: 高运费地址（按客户）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按客户筛选的高运费目的地址分析。
++- capability_id: hist_monthly_metric_by_filters
++  display_name: 月度指标（多筛选）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按月份和多维度筛选的核心经营指标。
++- capability_id: hist_monthly_total_fee_by_year
++  display_name: 月度总费用（按年）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按年份和月份的总费用时间序列。
++- capability_id: hist_monthly_trip_count_summary
++  display_name: 月度车次汇总
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按月份统计的发运车次汇总。
++- capability_id: hist_multi_origin_customers
++  display_name: 多始发地客户
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 同时在多个始发地有发货的客户。
++- capability_id: hist_mw_by_all_regions
++  display_name: 全区域发货量
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 全部区域维度的发货量汇总。
++- capability_id: hist_mw_by_origin_and_carrier
++  display_name: 始发地/承运商发货量
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按始发地和承运商维度的发货量分析。
++- capability_id: hist_mw_by_region_province
++  display_name: 区域省份发货量
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按区域和省份维度的发运量统计。
++- capability_id: hist_mw_by_year
++  display_name: 年度发货量
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按年份维度的发运量统计。
++- capability_id: hist_mw_summary
++  display_name: 发货量汇总
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 历史台账发运量的总体汇总。
++- capability_id: hist_origin_vehicle_breakdown_summary
++  display_name: 始发地/车型分解
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按始发地和车型的发运明细分解。
++- capability_id: hist_origin_vehicle_metric_summary
++  display_name: 始发地/车型指标
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按始发地和车型的核心经营指标汇总。
++- capability_id: hist_plan_actual_deviation
++  display_name: 计划/实际偏差
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 计划发运与实际发运的偏差分析。
++- capability_id: hist_product_spec_mw_summary
++  display_name: 产品规格发货量
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按产品规格维度的发运量汇总。
++- capability_id: hist_quantity_by_region
++  display_name: 区域运量统计
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按区域统计的发运货物数量。
++- capability_id: hist_quarter_region_metric
++  display_name: 季度区域指标
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按季度和区域的核心指标汇总。
++- capability_id: hist_remark_keyword_amount_summary
++  display_name: 备注关键字金额汇总
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按备注字段关键字匹配的金额汇总。
++- capability_id: hist_remark_keyword_fee_ratio
++  display_name: 备注关键字费用占比
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 备注关键字匹配行费用占总费用比率。
++- capability_id: hist_route_aggregate_summary
++  display_name: 线路汇总指标
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按运输线路维度的聚合指标。
++- capability_id: hist_route_pricing_analysis
++  display_name: 线路运价分析
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 历史台账中按始发地、目的城市/省份、车型和年份分析线路运价。
++- capability_id: hist_top_customers_fee_and_mw_by_province
++  display_name: 省份 Top 客户费/量
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按省份和客户维度的 Top N 费用和运量排名。
++- capability_id: hist_total_fee_by_origin_and_carrier
++  display_name: 始发地/承运商总费用
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按始发地和承运商维度的总费用分析。
++- capability_id: hist_total_fee_by_province
++  display_name: 省份总费用
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按省份维度的总费用汇总。
++- capability_id: hist_total_fee_city_rank
++  display_name: 城市费用排名
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 历史台账中按年份、省份或区域统计城市总费用排名。
++- capability_id: hist_total_fee_summary
++  display_name: 总费用汇总
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 历史台账总费用的总体汇总。
++- capability_id: hist_transport_mode_record_summary
++  display_name: 运输方式记录统计
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按运输方式的发运记录分布。
++- capability_id: hist_trip_count_by_region
++  display_name: 区域车次统计
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按区域统计的发运车次数。
++- capability_id: hist_unit_fee_per_watt
++  display_name: 单位瓦特费用
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 每瓦发运对应的运费。
++- capability_id: hist_vehicle_type_trip_count
++  display_name: 车型车次统计
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按车型统计的发运车次数。
++- capability_id: mixed_mw_by_all_regions_2023_2026
++  display_name: 全区域发货量（2023-2026）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 2023-2026 年全区域发货量混合汇总。
++- capability_id: mixed_mw_summary_2023_2026
++  display_name: 发货量汇总（2023-2026）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 2023-2026 年发货量总结。
++- capability_id: mixed_total_fee_summary_2023_2026
++  display_name: 总费用汇总（2023-2026）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 2023-2026 年总费用混合汇总。
++- capability_id: sys_avg_loading_trucks_by_province
++  display_name: 系统平均装车数（按省份）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按省份统计的平均装车数量。
++- capability_id: sys_companies_without_tasks
++  display_name: 系统无任务公司
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 统计系统中无运输任务的公司。
++- capability_id: sys_company_mapping_gap
++  display_name: 系统公司映射缺口
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 系统内部公司名称映射不一致的审计。
++- capability_id: sys_delivery_distance_fill_rate_by_province
++  display_name: 系统配送距离填写率（按省份）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按省份统计配送距离字段完整性。
++- capability_id: sys_delivery_note_parse_status_distribution
++  display_name: 系统运单解析状态分布
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 系统运单 OCR 解析状态分布。
++- capability_id: sys_driver_id_phone_consistency
++  display_name: 系统驾驶员证件/电话一致性
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 驾驶员身份证号与电话号的交叉校验。
++- capability_id: sys_driver_phone_name_consistency
++  display_name: 系统驾驶员电话/姓名一致性
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 驾驶员电话与姓名的交叉校验。
++- capability_id: sys_driver_task_ranking
++  display_name: 系统驾驶员任务排行
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按任务量排名的驾驶员列表。
++- capability_id: sys_extra_cost_audited_concentration
++  display_name: 系统附加费用审计集中度
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 附加费用审计的科目集中度分析。
++- capability_id: sys_extra_fee_summary
++  display_name: 附加费用汇总
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 系统附加费用明细汇总，按费用类型统计。
++- capability_id: sys_mw_and_trip_count
++  display_name: 系统发货量/车次统计
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 系统发货量和车次数的汇总统计。
++- capability_id: sys_mw_by_procurement_type
++  display_name: 系统发货量（按采购类型）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按采购类型分解的系统发货量统计。
++- capability_id: sys_parse_success_rate_by_carrier
++  display_name: 系统解析成功率（按承运商）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按承运商统计运单 OCR 解析成功率。
++- capability_id: sys_procurement_avg_loading_trucks
++  display_name: 系统采购平均装车数
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 采购订单维度的平均装车数量。
++- capability_id: sys_procurement_task_distribution
++  display_name: 系统采购任务分布
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 采购任务的状态/类型分布统计。
++- capability_id: sys_reconciliation_fill_rate_by_month
++  display_name: 系统对账单填写率（按月）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按月统计对账单字段的填写完整度。
++- capability_id: sys_ship_product_detail_stats
++  display_name: 系统发货产品明细统计
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 发货单中产品规格明细的汇总。
++- capability_id: sys_signedfor_rate_by_carrier
++  display_name: 系统签收率（按承运商）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按承运商维度的系统签收率统计。
++- capability_id: sys_special_total_fee
++  display_name: 系统专项总费用
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 系统专项费用（区分于标准运费）汇总。
++- capability_id: sys_task_count_ranking
++  display_name: 系统任务量排行
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按任务交付数量排名的承运商/驾驶员。
++- capability_id: sys_task_status_distribution
++  display_name: 系统任务状态分布
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 运输任务状态（待发运/在途/签收）分布。
++- capability_id: sys_task_status_province_ranking
++  display_name: 系统任务状态（省排行）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按省份分组的任务状态分布排行。
++- capability_id: sys_total_fee_by_filters
++  display_name: 系统总费用（多条件筛选）
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 支持按承运商/始发地/车型等多条件组合的总费用聚合。
++- capability_id: sys_unit_fee_per_watt
++  display_name: 系统单位费用/瓦
++  domain: logistics
++  capability_type: query_key
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 系统层计算的单位瓦特费用。
++- capability_id: single_order_material_specs
++  display_name: 单订单材料规格查询
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按单个订单号查询对应 BOM 的关键材料规格。
++- capability_id: multi_order_material_table
++  display_name: 多订单材料规格表
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 批量查询多个订单 BOM 的材料规格列表。
++- capability_id: cross_order_material_compare
++  display_name: 跨订单材料对比
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 比较不同订单之间相同材料类别的规格差异。
++- capability_id: bom_version_compare
++  display_name: BOM 版本对比
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 对比同一项目/产品不同 BOM 版本的材料变化。
++- capability_id: specific_material_query
++  display_name: 指定材料查询
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按材料类型/规格精确查询某订单中的物料信息。
++- capability_id: scope_material_list
++  display_name: 范围材料清单
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 按客户/国家/型号范围筛选的材料清单。
++- capability_id: batch_export_table
++  display_name: 批量导出表格
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 将查询结果导出为 Excel 表格。
++- capability_id: material_presence_check
++  display_name: 材料存在检查
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 检查某材料是否在某订单 BOM 中存在。
++- capability_id: material_consistency_check
++  display_name: 材料一致性检查
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 检查跨订单/跨版本的同型号材料配置是否一致。
++- capability_id: supplier_reuse_quote_prepare
++  display_name: 供应商复用报价准备
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 为供应商复用场景准备 BOM 物料报价清单。
++- capability_id: power_cell_requirement
++  display_name: 电池片规格需求
++  domain: plan_bom
++  capability_type: intent
++  related_metrics: []
++  related_dimensions: []
++  aliases: []
++  description: 根据 BOM 配置推算所需电池片规格和数量。
++- capability_id: plan_power_prediction
++  display_name: 功率预测
++  domain: plan_bom
++  capability_type: domain_capability
++  related_metrics: []
++  related_dimensions: []
++  aliases:
++  - 功率测算
++  - 功率预估
++  - 电站功率
++  description: 基于 BOM 配置和 Excel 功率模型计算电站功率预测。
++- capability_id: plan_power_supplier_recommendation
++  display_name: 供应商推荐
++  domain: plan_bom
++  capability_type: domain_capability
++  related_metrics: []
++  related_dimensions: []
++  aliases:
++  - 供应商匹配
++  - 效率推荐
++  description: 基于不同供应商物料的功率效率对比，推荐最优供应商组合。
++- capability_id: plan_power_factor_effect_compare
++  display_name: 影响因子对比
++  domain: plan_bom
++  capability_type: domain_capability
++  related_metrics: []
++  related_dimensions: []
++  aliases:
++  - 功率影响因子
++  - 因子效率对比
++  description: 对比不同材料因子（如玻璃、汇流带）对功率的影响差值。
+
+diff --git a/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/tests/unit/semantic_catalog/test_unified_semantic_capabilities.py b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/tests/unit/semantic_catalog/test_unified_semantic_capabilities.py
+new file mode 100644
+index 00000000..d5bb9770
+--- /dev/null
++++ b/Users/zhuchangchao/Work/PythonProject/project/gcl-bp-ai-nqe-catalog/tests/unit/semantic_catalog/test_unified_semantic_capabilities.py
+@@ -0,0 +1,476 @@
++"""
++NQE-N4：现有口径迁移到统一语义资产 — 测试用例
++
++测试范围：
++    1. SemanticCapability Schema 定义正确。
++    2. BusinessSemanticCatalog 支持能力的注册和查询。
++    3. 可从 YAML 文件加载能力注册表（capabilities.yaml）。
++    4. 物流 67 个 query_key 全部在统一 catalog 中可查询。
++    5. 计划 BOM 11 个 intent 全部可查询。
++    6. 计划功率 3 个 domain_capability 全部可查询。
++    7. 按 capability_type 过滤工作正常。
++    8. 现有 semantic_catalog 测试不回退。
++"""
++from __future__ import annotations
++
++import yaml
++from pathlib import Path
++
++import pytest
++
++from backend.app.domains.semantic_catalog.schema import SemanticCapability
++from backend.app.domains.semantic_catalog.catalog import BusinessSemanticCatalog
++from backend.app.domains.semantic_catalog.loader import SemanticCatalogYamlLoader
++
++
++# ==================== SemanticCapability Schema 测试 ====================
++
++
++class TestSemanticCapability:
++    """SemanticCapability Schema 定义测试。"""
++
++    def test_create_capability_minimal(self) -> None:
++        """创建最小字段的能力定义。"""
++        cap = SemanticCapability(
++            capability_id="hist_route_pricing_analysis",
++            display_name="线路运价分析",
++            domain="logistics",
++            capability_type="query_key",
++        )
++        assert cap.capability_id == "hist_route_pricing_analysis"
++        assert cap.display_name == "线路运价分析"
++        assert cap.domain == "logistics"
++        assert cap.capability_type == "query_key"
++        assert cap.related_metrics == []
++        assert cap.related_dimensions == []
++        assert cap.aliases == []
++        assert cap.description is None
++
++    def test_create_capability_full(self) -> None:
++        """创建完整字段的能力定义。"""
++        cap = SemanticCapability(
++            capability_id="plan_power_prediction",
++            display_name="功率预测",
++            domain="plan_bom",
++            capability_type="domain_capability",
++            related_metrics=["power_prediction"],
++            related_dimensions=["material_category"],
++            aliases=["功率测算", "电站功率"],
++            description="基于 BOM 配置和 Excel 模型计算电站功率预测。",
++        )
++        assert cap.capability_id == "plan_power_prediction"
++        assert "功率测算" in cap.aliases
++        assert "power_prediction" in cap.related_metrics
++        assert cap.description is not None
++
++    def test_create_capability_fails_without_required(self) -> None:
++        """缺少必填字段时构造失败。"""
++        with pytest.raises(Exception):
++            SemanticCapability(display_name="测试", domain="logistics", capability_type="query_key")  # type: ignore[arg-type]
++
++        with pytest.raises(Exception):
++            SemanticCapability(capability_id="test", domain="logistics", capability_type="query_key")  # type: ignore[arg-type]
++
++        with pytest.raises(Exception):
++            SemanticCapability(capability_id="test", display_name="测试", capability_type="query_key")  # type: ignore[arg-type]
++
++        with pytest.raises(Exception):
++            SemanticCapability(capability_id="test", display_name="测试", domain="logistics")  # type: ignore[arg-type]
++
++
++# ==================== BusinessSemanticCatalog 能力注册与查询测试 ====================
++
++
++class TestCatalogCapabilityOperations:
++    """BusinessSemanticCatalog 能力注册/查询操作测试。"""
++
++    @pytest.fixture
++    def catalog(self) -> BusinessSemanticCatalog:
++        """创建空的 catalog 实例。"""
++        return BusinessSemanticCatalog()
++
++    def test_catalog_empty_by_default(self, catalog: BusinessSemanticCatalog) -> None:
++        """新建 catalog 无能力。"""
++        assert catalog.get_capabilities("logistics") == []
++
++    def test_register_and_query_capability(self, catalog: BusinessSemanticCatalog) -> None:
++        """注册一个能力后可按域和 ID 查询。"""
++        cap = SemanticCapability(
++            capability_id="hist_route_pricing_analysis",
++            display_name="线路运价分析",
++            domain="logistics",
++            capability_type="query_key",
++            description="分析线路运价。",
++        )
++        catalog.register_capability(cap)
++
++        results = catalog.get_capabilities(domain="logistics")
++        assert len(results) == 1
++        assert results[0].capability_id == "hist_route_pricing_analysis"
++
++        found = catalog.get_capability("logistics", "hist_route_pricing_analysis")
++        assert found is not None
++        assert found.display_name == "线路运价分析"
++
++    def test_register_multiple_capability_types(self, catalog: BusinessSemanticCatalog) -> None:
++        """同一域下注册不同类型能力。"""
++        catalog.register_capability(SemanticCapability(
++            capability_id="query_1", display_name="查询能力1",
++            domain="logistics", capability_type="query_key",
++        ))
++        catalog.register_capability(SemanticCapability(
++            capability_id="intent_1", display_name="意图1",
++            domain="logistics", capability_type="intent",
++        ))
++
++        # 全部获取
++        all_caps = catalog.get_capabilities("logistics")
++        assert len(all_caps) == 2
++
++        # 按类型过滤
++        query_caps = catalog.get_capabilities("logistics", capability_type="query_key")
++        assert len(query_caps) == 1
++        assert query_caps[0].capability_id == "query_1"
++
++        intent_caps = catalog.get_capabilities("logistics", capability_type="intent")
++        assert len(intent_caps) == 1
++        assert intent_caps[0].capability_id == "intent_1"
++
++    def test_query_nonexistent_capability(self, catalog: BusinessSemanticCatalog) -> None:
++        """查询不存在的能力返回 None。"""
++        assert catalog.get_capability("logistics", "nonexistent") is None
++
++    def test_register_duplicate_overwrites(self, catalog: BusinessSemanticCatalog) -> None:
++        """重复注册同一 domain + capability_id 会覆盖。"""
++        cap1 = SemanticCapability(
++            capability_id="test", display_name="旧名称",
++            domain="logistics", capability_type="query_key",
++        )
++        cap2 = SemanticCapability(
++            capability_id="test", display_name="新名称",
++            domain="logistics", capability_type="query_key",
++        )
++        catalog.register_capability(cap1)
++        catalog.register_capability(cap2)
++
++        found = catalog.get_capability("logistics", "test")
++        assert found is not None
++        assert found.display_name == "新名称"
++
++
++# ==================== YAML Loader 能力加载测试 ====================
++
++
++class TestCapabilityYamlLoader:
++    """从 capabilities.yaml 加载能力注册表测试。"""
++
++    def test_load_capabilities_from_yaml(self, tmp_path) -> None:
++        """从 YAML 文件加载能力注册表。"""
++        yaml_content = {
++            "capabilities": [
++                {
++                    "capability_id": "hist_route_pricing_analysis",
++                    "display_name": "线路运价分析",
++                    "domain": "logistics",
++                    "capability_type": "query_key",
++                    "aliases": ["运价查询"],
++                    "description": "分析线路运价。",
++                },
++                {
++                    "capability_id": "plan_power_prediction",
++                    "display_name": "功率预测",
++                    "domain": "plan_bom",
++                    "capability_type": "domain_capability",
++                    "aliases": ["功率测算"],
++                    "description": "功率预测。",
++                },
++            ],
++        }
++        yaml_path = tmp_path / "capabilities.yaml"
++        yaml_path.write_text(yaml.dump(yaml_content, allow_unicode=True), encoding="utf-8")
++
++        loader = SemanticCatalogYamlLoader(catalog_dir=tmp_path)
++        catalog = loader.load()
++
++        # 物流 query_key 可查询
++        found = catalog.get_capability("logistics", "hist_route_pricing_analysis")
++        assert found is not None
++        assert found.capability_type == "query_key"
++        assert "运价查询" in found.aliases
++
++        # 功率能力可查询
++        power_cap = catalog.get_capability("plan_bom", "plan_power_prediction")
++        assert power_cap is not None
++        assert power_cap.capability_type == "domain_capability"
++
++
++# ==================== 生产配置完整性测试 ====================
++
++
++class TestProductionCatalogCompleteness:
++    """验证生产环境 capabilities.yaml 的完整性。
++
++    验收标准：
++        - 物流域 67 个 query_key 全部注册。
++        - 计划 BOM 域 11 个 intent 全部注册。
++        - 计划功率 3 个 domain_capability 全部注册。
++    """
++
++    # 从源码提取的物流 query_key 白名单（data_qa_planner.py 的 67 个 query_key）
++    LOGISTICS_QUERY_KEYS = {
++        "carrier_metric_ranking",
++        "composite_decomposed",
++        "hist_avg_fee_by_month",
++        "hist_avg_fee_per_watt_by_transport",
++        "hist_avg_pallet_per_vehicle",
++        "hist_carrier_kpi_by_year",
++        "hist_city_carrier_avg_fee_per_trip",
++        "hist_city_mw_rank",
++        "hist_customer_mw",
++        "hist_customer_mw_ranking",
++        "hist_extra_fee_ratio_peak_month",
++        "hist_high_fee_addresses_by_customer",
++        "hist_monthly_metric_by_filters",
++        "hist_monthly_total_fee_by_year",
++        "hist_monthly_trip_count_summary",
++        "hist_multi_origin_customers",
++        "hist_mw_by_all_regions",
++        "hist_mw_by_origin_and_carrier",
++        "hist_mw_by_region_province",
++        "hist_mw_by_year",
++        "hist_mw_summary",
++        "hist_origin_vehicle_breakdown_summary",
++        "hist_origin_vehicle_metric_summary",
++        "hist_plan_actual_deviation",
++        "hist_product_spec_mw_summary",
++        "hist_quantity_by_region",
++        "hist_quarter_region_metric",
++        "hist_remark_keyword_amount_summary",
++        "hist_remark_keyword_fee_ratio",
++        "hist_route_aggregate_summary",
++        "hist_route_pricing_analysis",
++        "hist_top_customers_fee_and_mw_by_province",
++        "hist_total_fee_by_origin_and_carrier",
++        "hist_total_fee_by_province",
++        "hist_total_fee_city_rank",
++        "hist_total_fee_summary",
++        "hist_transport_mode_record_summary",
++        "hist_trip_count_by_region",
++        "hist_unit_fee_per_watt",
++        "hist_vehicle_type_trip_count",
++        "mixed_mw_by_all_regions_2023_2026",
++        "mixed_mw_summary_2023_2026",
++        "mixed_total_fee_summary_2023_2026",
++        "sys_avg_loading_trucks_by_province",
++        "sys_companies_without_tasks",
++        "sys_company_mapping_gap",
++        "sys_delivery_distance_fill_rate_by_province",
++        "sys_delivery_note_parse_status_distribution",
++        "sys_driver_id_phone_consistency",
++        "sys_driver_phone_name_consistency",
++        "sys_driver_task_ranking",
++        "sys_extra_cost_audited_concentration",
++        "sys_extra_fee_summary",
++        "sys_mw_and_trip_count",
++        "sys_mw_by_procurement_type",
++        "sys_parse_success_rate_by_carrier",
++        "sys_procurement_avg_loading_trucks",
++        "sys_procurement_task_distribution",
++        "sys_reconciliation_fill_rate_by_month",
++        "sys_ship_product_detail_stats",
++        "sys_signedfor_rate_by_carrier",
++        "sys_special_total_fee",
++        "sys_task_count_ranking",
++        "sys_task_status_distribution",
++        "sys_task_status_province_ranking",
++        "sys_total_fee_by_filters",
++        "sys_unit_fee_per_watt",
++    }
++
++    # 计划 BOM 域 intent 白名单（nlu_center_service.py 的 INTENTS - unsupported/clarification）
++    PLAN_BOM_INTENTS = {
++        "single_order_material_specs",
++        "multi_order_material_table",
++        "cross_order_material_compare",
++        "bom_version_compare",
++        "specific_material_query",
++        "scope_material_list",
++        "batch_export_table",
++        "material_presence_check",
++        "material_consistency_check",
++        "supplier_reuse_quote_prepare",
++        "power_cell_requirement",
++    }
++
++    # 计划功率域 capability 白名单
++    PLAN_POWER_CAPABILITIES = {
++        "plan_power_prediction",
++        "plan_power_supplier_recommendation",
++        "plan_power_factor_effect_compare",
++    }
++
++    @pytest.fixture(scope="class")
++    def prod_catalog(self) -> BusinessSemanticCatalog:
++        """加载生产环境 capabilities.yaml。"""
++        return SemanticCatalogYamlLoader().load()
++
++    # ── 物流 query_key 完整性 ──
++
++    def test_all_logistics_query_keys_registered(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """物流域全部 67 个 query_key 在统一 catalog 中可查询。"""
++        registered = {
++            c.capability_id
++            for c in prod_catalog.get_capabilities("logistics", capability_type="query_key")
++        }
++        missing = self.LOGISTICS_QUERY_KEYS - registered
++        assert len(missing) == 0, (
++            f"物流域缺少 {len(missing)} 个 query_key 注册：{sorted(missing)}"
++        )
++
++    def test_logistics_query_key_count(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """物流域注册的 query_key 数量为 67。"""
++        caps = prod_catalog.get_capabilities("logistics", capability_type="query_key")
++        assert len(caps) == 67, f"预期 67 个 query_key，实际 {len(caps)} 个"
++
++    def test_logistics_query_keys_have_descriptions(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """所有物流 query_key 都有业务描述。"""
++        caps = prod_catalog.get_capabilities("logistics", capability_type="query_key")
++        for cap in caps:
++            assert cap.description is not None, (
++                f"query_key {cap.capability_id} 缺少业务描述"
++            )
++            assert len(cap.description.strip()) > 0, (
++                f"query_key {cap.capability_id} 描述为空"
++            )
++
++    # ── 计划 BOM intent 完整性 ──
++
++    def test_all_plan_bom_intents_registered(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """计划 BOM 域全部 11 个 intent 在统一 catalog 中可查询。"""
++        registered = {
++            c.capability_id
++            for c in prod_catalog.get_capabilities("plan_bom", capability_type="intent")
++        }
++        missing = self.PLAN_BOM_INTENTS - registered
++        assert len(missing) == 0, (
++            f"计划 BOM 域缺少 {len(missing)} 个 intent 注册：{sorted(missing)}"
++        )
++
++    def test_plan_bom_intent_count(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """计划 BOM 域 intent 数量为 11。"""
++        caps = prod_catalog.get_capabilities("plan_bom", capability_type="intent")
++        assert len(caps) == 11, f"预期 11 个 intent，实际 {len(caps)} 个"
++
++    # ── 计划功率 capability 完整性 ──
++
++    def test_all_plan_power_capabilities_registered(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """计划功率域全部 3 个 capability 在统一 catalog 中可查询。"""
++        registered = {
++            c.capability_id
++            for c in prod_catalog.get_capabilities("plan_bom", capability_type="domain_capability")
++        }
++        missing = self.PLAN_POWER_CAPABILITIES - registered
++        assert len(missing) == 0, (
++            f"计划功率域缺少 {len(missing)} 个 capability 注册：{sorted(missing)}"
++        )
++
++    def test_plan_power_capability_count(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """计划功率 capability 数量为 3。"""
++        caps = prod_catalog.get_capabilities("plan_bom", capability_type="domain_capability")
++        assert len(caps) == 3, f"预期 3 个 capability，实际 {len(caps)} 个"
++
++    def test_plan_power_capabilities_have_aliases(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """计划功率三个 capability 都有用户同义词。"""
++        caps = prod_catalog.get_capabilities("plan_bom", capability_type="domain_capability")
++        for cap in caps:
++            assert len(cap.aliases) > 0, (
++                f"capability {cap.capability_id} 缺少用户同义词"
++            )
++
++    # ── 跨域一致性 ──
++
++    def test_domains_include_logistics_and_plan_bom(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """catalog 的 domains() 包含 logistics 和 plan_bom（因为能力注册在新的 _capabilities 中）。"""
++        domains = set(prod_catalog.domains())
++        assert "logistics" in domains
++        assert "plan_bom" in domains
++
++    def test_no_domain_leakage(self, prod_catalog: BusinessSemanticCatalog) -> None:
++        """query_key 只在 logistics 域，不出现在 plan_bom 中。"""
++        logistics_query_keys = {
++            c.capability_id
++            for c in prod_catalog.get_capabilities("logistics", capability_type="query_key")
++        }
++        bom_caps = prod_catalog.get_capabilities("plan_bom")
++        bom_ids = {c.capability_id for c in bom_caps}
++        leaked = logistics_query_keys & bom_ids
++        assert len(leaked) == 0, f"域泄漏：{leaked}"
++
++
++# ==================== 与现有测试集兼容验证 ====================
++
++
++class TestN4DoesNotBreakExistingTests:
++    """验证 N4 新增功能不破坏 N1-N3 已有测试。"""
++
++    def test_catalog_still_supports_metrics(self) -> None:
++        """新增能力后，指标注册表仍然正常。"""
++        catalog = BusinessSemanticCatalog()
++        from backend.app.domains.semantic_catalog.schema import SemanticMetric
++
++        metric = SemanticMetric(
++            metric_id="shipment_mw",
++            display_name="发货量",
++            domain="logistics",
++        )
++        catalog.register_metric(metric)
++        assert catalog.get_metric("logistics", "shipment_mw") is not None
++
++    def test_catalog_still_supports_dimensions(self) -> None:
++        """新增能力后，维度注册表仍然正常。"""
++        catalog = BusinessSemanticCatalog()
++        from backend.app.domains.semantic_catalog.schema import SemanticDimension
++
++        dim = SemanticDimension(
++            dimension_id="carrier",
++            display_name="承运商",
++            domain="logistics",
++        )
++        catalog.register_dimension(dim)
++        assert catalog.get_dimension("logistics", "carrier") is not None
++
++    def test_catalog_still_supports_entities(self) -> None:
++        """新增能力后，实体注册表仍然正常。"""
++        catalog = BusinessSemanticCatalog()
++        from backend.app.domains.semantic_catalog.schema import SemanticEntity
++
++        entity = SemanticEntity(
++            entity_id="carrier",
++            display_name="承运商",
++            domain="logistics",
++            entity_type="carrier",
++        )
++        catalog.register_entity(entity)
++        entities = catalog.get_entities("logistics", entity_type="carrier")
++        assert len(entities) == 1
++
++    def test_domains_still_includes_metrics_domains(self) -> None:
++        """domains() 仍能返回仅通过指标注册的域。"""
++        catalog = BusinessSemanticCatalog()
++        from backend.app.domains.semantic_catalog.schema import SemanticMetric
++
++        catalog.register_metric(SemanticMetric(
++            metric_id="test_metric",
++            display_name="测试指标",
++            domain="business_analysis",
++        ))
++        assert "business_analysis" in catalog.domains()
++
++
++__all__ = [
++    "TestSemanticCapability",
++    "TestCatalogCapabilityOperations",
++    "TestCapabilityYamlLoader",
++    "TestProductionCatalogCompleteness",
++    "TestN4DoesNotBreakExistingTests",
++]
+

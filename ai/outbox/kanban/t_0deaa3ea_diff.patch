@@ -1,0 +1,1374 @@
+diff --git a/backend/app/config/unified_catalog/dimensions.yaml b/backend/app/config/unified_catalog/dimensions.yaml
+new file mode 100644
+index 00000000..8e36ae38
+--- /dev/null
++++ b/backend/app/config/unified_catalog/dimensions.yaml
+@@ -0,0 +1,112 @@
++# 统一语义资产 — 维度注册表
++# 业务域：物流（logistics）、计划 BOM（plan_bom）
++# 说明：本文件由人工审计，用于注册各业务域的维度定义。
++# 统一约束：禁止在此暴露 SQL、表名、字段名、query_key、planner 等技术实现细节。
++
++dimensions:
++  # ========== 物流域维度 ==========
++  - dimension_id: carrier
++    display_name: 承运商
++    domain: logistics
++    aliases:
++      - 物流商
++      - 运输公司
++      - 承运方
++    description: 物流承运商维度。
++
++  - dimension_id: year
++    display_name: 年份
++    domain: logistics
++    aliases:
++      - 年度
++    description: 发运年份维度。
++
++  - dimension_id: origin_city
++    display_name: 始发城市
++    domain: logistics
++    aliases:
++      - 始发地
++      - 出发城市
++      - 出发地
++    description: 物流发运始发城市维度。
++
++  - dimension_id: dest_city
++    display_name: 目的城市
++    domain: logistics
++    aliases:
++      - 目的地
++      - 到达城市
++    description: 物流发运目的城市维度。
++
++  - dimension_id: route
++    display_name: 线路
++    domain: logistics
++    aliases:
++      - 运输线路
++      - 路线
++    description: 物流运输线路维度。
++
++  - dimension_id: product_type
++    display_name: 产品类型
++    domain: logistics
++    aliases:
++      - 品类
++      - 货物类型
++    description: 发运产品类型维度。
++
++  - dimension_id: entity
++    display_name: 委托人
++    domain: logistics
++    aliases:
++      - 委托方
++      - 客户
++    description: 委托人/客户维度。
++
++  # ========== 计划 BOM 域维度 ==========
++  - dimension_id: material_category
++    display_name: 物料类别
++    domain: plan_bom
++    aliases:
++      - 物料类型
++      - 产品类别
++      - 材料分类
++    description: BOM 中物料的分类维度，如组件、逆变器等。
++
++  - dimension_id: version_no
++    display_name: 版本号
++    domain: plan_bom
++    aliases:
++      - BOM版本
++      - 设计版本
++    description: BOM 设计版本号维度。
++
++  - dimension_id: order_no
++    display_name: 订单号
++    domain: plan_bom
++    aliases:
++      - 合同号
++    description: 订单/合同编号维度。
++
++  - dimension_id: project_name
++    display_name: 项目名称
++    domain: plan_bom
++    aliases:
++      - 电站名称
++      - 工程项目
++    description: 项目/电站名称维度。
++
++  - dimension_id: customer
++    display_name: 客户
++    domain: plan_bom
++    aliases:
++      - 业主
++      - 采购方
++    description: 客户/业主维度。
++
++  - dimension_id: supplier
++    display_name: 供应商
++    domain: plan_bom
++    aliases:
++      - 供货商
++      - 厂商
++    description: 供应商维度。
+diff --git a/backend/app/config/unified_catalog/entities.yaml b/backend/app/config/unified_catalog/entities.yaml
+new file mode 100644
+index 00000000..c261b38e
+--- /dev/null
++++ b/backend/app/config/unified_catalog/entities.yaml
+@@ -0,0 +1,64 @@
++# 统一语义资产 — 实体注册表
++# 业务域：物流（logistics）、计划 BOM（plan_bom）
++# 说明：本文件由人工审计，用于注册各业务域的实体定义。
++# 统一约束：禁止在此暴露 SQL、表名、字段名、query_key、planner 等技术实现细节。
++
++entities:
++  # ========== 物流域实体 ==========
++  - entity_id: carrier
++    display_name: 承运商
++    domain: logistics
++    entity_type: carrier
++    aliases:
++      - 物流商
++      - 运输公司
++      - 承运方
++    description: 物流承运商实体，可通过承运商名称查询。
++
++  - entity_id: entity
++    display_name: 委托人
++    domain: logistics
++    entity_type: entity
++    aliases:
++      - 委托方
++      - 客户
++      - 经营计划
++    description: 委托人/客户实体，可按委托人名或简称查询。
++
++  - entity_id: region
++    display_name: 行政区域
++    domain: logistics
++    entity_type: region
++    aliases:
++      - 地区
++      - 省市
++    description: 行政区划实体维度。
++
++  # ========== 计划 BOM 域实体 ==========
++  - entity_id: material
++    display_name: 物料
++    domain: plan_bom
++    entity_type: material
++    aliases:
++      - 产品
++      - 组件
++      - 元器件
++    description: BOM 物料/产品实体。
++
++  - entity_id: supplier
++    display_name: 供应商
++    domain: plan_bom
++    entity_type: supplier
++    aliases:
++      - 供货商
++      - 厂商
++    description: 供应商实体。
++
++  - entity_id: customer
++    display_name: 客户
++    domain: plan_bom
++    entity_type: customer
++    aliases:
++      - 业主
++      - 采购方
++    description: 客户/业主实体。
+diff --git a/backend/app/config/unified_catalog/metrics.yaml b/backend/app/config/unified_catalog/metrics.yaml
+new file mode 100644
+index 00000000..3388001b
+--- /dev/null
++++ b/backend/app/config/unified_catalog/metrics.yaml
+@@ -0,0 +1,86 @@
++# 统一语义资产 — 指标注册表
++# 业务域：物流（logistics）、计划 BOM（plan_bom）
++# 说明：本文件由人工审计，用于注册各业务域的指标定义。
++# 统一约束：禁止在此暴露 SQL、表名、字段名、query_key、planner 等技术实现细节。
++
++metrics:
++  # ========== 物流域指标 ==========
++  - metric_id: shipment_mw
++    display_name: 发货量
++    domain: logistics
++    aliases:
++      - 件数
++      - 发运量
++      - 出货量
++      - 运输量
++    unit: MW
++    description: 物流发运总兆瓦数，按 SUM(shipment_watt) 计算。
++
++  - metric_id: total_fee
++    display_name: 总费用
++    domain: logistics
++    aliases:
++      - 运费
++      - 费用合计
++      - 运输费用
++    unit: 元
++    description: 物流发运总费用，含运费、装卸费、保险费等。
++
++  - metric_id: avg_fee_per_trip
++    display_name: 车均费用
++    domain: logistics
++    aliases:
++      - 平均费用
++      - 单次费用
++      - 均价
++    unit: 元/车
++    description: 车均费用，按 SUM(total_fee) / SUM(shipment_trip_count) 计算。
++
++  - metric_id: unit_price_per_vehicle
++    display_name: 单价/车
++    domain: logistics
++    aliases:
++      - 报价
++      - 运价
++      - 单价
++      - 线路报价
++    unit: 元/车
++    description: 线路运价（单价/车），区别于车均费用。
++
++  - metric_id: shipment_trip_count
++    display_name: 车次数
++    domain: logistics
++    aliases:
++      - 发运车次
++      - 运输车次
++    unit: 车次
++    description: 物流发运总车次数。
++
++  - metric_id: carrier_rank_by_mw
++    display_name: 承运商发货排名
++    domain: logistics
++    aliases:
++      - 运量排名
++      - 发货排名
++    unit: null
++    description: 按发货量排序的承运商排名指标。
++
++  # ========== 计划 BOM 域指标 ==========
++  - metric_id: power_prediction
++    display_name: 功率预测
++    domain: plan_bom
++    aliases:
++      - 功率测算
++      - 功率预估
++      - 电站功率
++    unit: MW
++    description: 基于 BOM 配置和 Excel 模型计算的功率预测。
++
++  - metric_id: supplier_efficiency
++    display_name: 供应商效率
++    domain: plan_bom
++    aliases:
++      - 供应商匹配度
++      - 效率对比
++    unit: null
++    description: 不同供应商方案的效率对比指标。
+diff --git a/backend/app/domains/semantic_catalog/__init__.py b/backend/app/domains/semantic_catalog/__init__.py
+new file mode 100644
+index 00000000..f14951f0
+--- /dev/null
++++ b/backend/app/domains/semantic_catalog/__init__.py
+@@ -0,0 +1,47 @@
++"""
++统一语义资产 Catalog（Unified Semantic Catalog）。
++
++业务定位：
++    本模块提供跨业务域（物流、计划 BOM、经营分析、物管）的统一语义资产定义。
++    它是 NL2SQL / QueryPlanningV2 的辅助能力层——描述"有哪些指标/维度/实体可用"，
++    但不替代现有领域 catalog 的 SQLPlan 校验、表白名单等核心能力。
++
++模块组成：
++    - schema: 核心数据结构（SemanticMetric、SemanticDimension、SemanticEntity）
++    - catalog: 统一注册表（BusinessSemanticCatalog）
++    - loader: YAML 文件加载器（SemanticCatalogYamlLoader）
++    - bridge: 现有领域 catalog 桥接适配层
++
++约束：
++    - 不做物管/SAP MID M2。
++    - 不引入 ES。
++    - 不替代 NL2SQL。
++    - 保留旧接口和回退。
++    - LLM 只读，不自由 SQL/查数/改事实。
++"""
++
++from backend.app.domains.semantic_catalog.schema import (
++    SemanticMetric,
++    SemanticDimension,
++    SemanticEntity,
++    BusinessValueResolverProtocol,
++)
++from backend.app.domains.semantic_catalog.catalog import BusinessSemanticCatalog
++from backend.app.domains.semantic_catalog.loader import (
++    SemanticCatalogYamlLoader,
++    DEFAULT_UNIFIED_CATALOG_DIR,
++)
++from backend.app.domains.semantic_catalog.bridge import (
++    bridge_logistics_catalog_to_unified,
++)
++
++__all__ = [
++    "SemanticMetric",
++    "SemanticDimension",
++    "SemanticEntity",
++    "BusinessValueResolverProtocol",
++    "BusinessSemanticCatalog",
++    "SemanticCatalogYamlLoader",
++    "DEFAULT_UNIFIED_CATALOG_DIR",
++    "bridge_logistics_catalog_to_unified",
++]
+diff --git a/backend/app/domains/semantic_catalog/bridge.py b/backend/app/domains/semantic_catalog/bridge.py
+new file mode 100644
+index 00000000..7d0d6e50
+--- /dev/null
++++ b/backend/app/domains/semantic_catalog/bridge.py
+@@ -0,0 +1,86 @@
++"""
++统一语义资产桥接层：将现有领域 catalog 只读适配到统一注册表。
++
++业务逻辑：
++    1. 不做内改——只从现有 LogisticsSemanticCatalog（及其他领域 catalog）读取数据。
++    2. 桥接是单向的：现有 catalog → 统一注册表。
++    3. 新增的指标/维度/实体可以直接注册到统一 catalog 中。
++    4. 统一 catalog 不替代现有领域 catalog 的 SQLPlan 校验、表白名单等核心链路。
++"""
++
++from __future__ import annotations
++
++from backend.app.domains.semantic_catalog.schema import (
++    SemanticMetric,
++    SemanticDimension,
++    SemanticEntity,
++)
++from backend.app.domains.semantic_catalog.catalog import BusinessSemanticCatalog
++
++
++def bridge_logistics_catalog_to_unified(
++    logistics_catalog: object,
++    unified: BusinessSemanticCatalog,
++) -> None:
++    """将现有 LogisticsSemanticCatalog 桥接到统一注册表。
++
++    参数：
++        logistics_catalog: LogisticsSemanticCatalog 实例（不改动）。
++        unified: 目标 BusinessSemanticCatalog 实例。
++
++    业务逻辑：
++        1. 只做读取式适配——不修改 logistics_catalog 内部状态。
++        2. 从物流 catalog 中提取 metrics、dimensions、entities 注册到统一表。
++        3. 字段映射：
++           - LogisticsCatalogMetric → SemanticMetric（只取业务语义字段）
++           - LogisticsCatalogDimension → SemanticDimension（只取业务语义字段）
++
++    说明：
++        此函数依赖 LogisticsSemanticCatalog 的公开数据属性（metrics、dimensions），
++        而不依赖其内部实现细节。物流 catalog 的 SQL 表达式、表白名单、
++        Join 规则等 NL2SQL 专用字段不会被复制到统一注册表中——
++        统一注册表只保存"业务层面有哪些指标/维度/实体可用"的信息。
++    """
++    domain = "logistics"
++
++    # 桥接指标：LogisticsCatalogMetric → SemanticMetric
++    for metric in getattr(logistics_catalog, "metrics", []):
++        unified_metric = SemanticMetric(
++            metric_id=getattr(metric, "metric_id", ""),
++            display_name=getattr(metric, "display_name", ""),
++            domain=domain,
++            aliases=list(getattr(metric, "aliases", [])),
++            unit=getattr(metric, "unit", None),
++            description=getattr(metric, "business_note", None),
++        )
++        unified.register_metric(unified_metric)
++
++    # 桥接维度：LogisticsCatalogDimension → SemanticDimension
++    for dim in getattr(logistics_catalog, "dimensions", []):
++        unified_dim = SemanticDimension(
++            dimension_id=getattr(dim, "dimension_id", ""),
++            display_name=getattr(dim, "display_name", ""),
++            domain=domain,
++            aliases=list(getattr(dim, "aliases", [])),
++            description=getattr(dim, "business_note", None),
++        )
++        unified.register_dimension(unified_dim)
++
++    # 桥接实体：从 dimensions 中提取 entity-type 维度作为实体
++    # 物流域中承运商(carrier)、委托人(entity) 可作为业务实体
++    entity_dimension_ids = {"carrier", "entity", "region"}
++    for dim in getattr(logistics_catalog, "dimensions", []):
++        dim_id = getattr(dim, "dimension_id", "")
++        if dim_id in entity_dimension_ids:
++            entity = SemanticEntity(
++                entity_id=dim_id,
++                display_name=getattr(dim, "display_name", ""),
++                domain=domain,
++                entity_type=dim_id,
++                aliases=list(getattr(dim, "aliases", [])),
++                description=getattr(dim, "business_note", None),
++            )
++            unified.register_entity(entity)
++
++
++__all__ = ["bridge_logistics_catalog_to_unified"]
+diff --git a/backend/app/domains/semantic_catalog/catalog.py b/backend/app/domains/semantic_catalog/catalog.py
+new file mode 100644
+index 00000000..984d96f0
+--- /dev/null
++++ b/backend/app/domains/semantic_catalog/catalog.py
+@@ -0,0 +1,210 @@
++"""
++统一语义资产注册表（BusinessSemanticCatalog）。
++
++业务逻辑：
++    提供按业务域（domain）和 capability 查询、注册统一语义资产的能力。
++    注册表是 NL2SQL/QueryPlanningV2 的辅助能力——它保存"哪些指标/维度/实体可用"，
++    但不替代现有领域 catalog 的 SQLPlan 校验、表白名单、Join 规则等内部实现。
++
++使用方式：
++    catalog = BusinessSemanticCatalog()
++    catalog.register_metric(SemanticMetric(metric_id="shipment_mw", ...))
++    found = catalog.get_metric("logistics", "shipment_mw")
++"""
++
++from __future__ import annotations
++
++from collections import OrderedDict
++
++from backend.app.domains.semantic_catalog.schema import (
++    SemanticMetric,
++    SemanticDimension,
++    SemanticEntity,
++)
++
++
++class BusinessSemanticCatalog:
++    """统一语义资产注册表。
++
++    支持按 domain 和 ID 查询已注册的指标、维度和实体。
++    注册表本身无状态依赖——所有资产通过 register_* 方法注入，
++    也可以从 YAML 文件或现有领域 catalog 桥接填充。
++
++    参数：
++        无（初始化为空注册表）。
++
++    返回：
++        可注册、查询的统一语义资产容器。
++    """
++
++    def __init__(self) -> None:
++        """初始化空注册表。
++
++        业务逻辑：
++            使用 OrderedDict 保证注册顺序可预测，方便测试和调试。
++            内部按 domain 组织数据：_metrics[domain][metric_id] = SemanticMetric。
++        """
++        # 指标注册表：_metrics[domain] = OrderedDict[metric_id → SemanticMetric]
++        self._metrics: dict[str, OrderedDict[str, SemanticMetric]] = {}
++        # 维度注册表：_dimensions[domain] = OrderedDict[dimension_id → SemanticDimension]
++        self._dimensions: dict[str, OrderedDict[str, SemanticDimension]] = {}
++        # 实体注册表：_entities[domain] = OrderedDict[entity_id → SemanticEntity]
++        self._entities: dict[str, OrderedDict[str, SemanticEntity]] = {}
++
++    # ── 指标操作 ──
++
++    def register_metric(self, metric: SemanticMetric) -> None:
++        """注册一个统一指标。
++
++        参数：
++            metric: 统一语义指标对象。
++
++        业务逻辑：
++            同一 domain + metric_id 重复注册时会覆盖旧值。
++        """
++        domain = metric.domain
++        if domain not in self._metrics:
++            self._metrics[domain] = OrderedDict()
++        self._metrics[domain][metric.metric_id] = metric
++
++    def get_metrics(self, domain: str) -> list[SemanticMetric]:
++        """获取指定域的全部已注册指标。
++
++        参数：
++            domain: 业务域。
++
++        返回：
++            指标列表（按注册顺序排列）。
++        """
++        return list(self._metrics.get(domain, {}).values())
++
++    def get_metric(self, domain: str, metric_id: str) -> SemanticMetric | None:
++        """按域和 ID 获取单个指标。
++
++        参数：
++            domain: 业务域。
++            metric_id: 指标 ID。
++
++        返回：
++            匹配的指标；不存在则返回 None。
++        """
++        return self._metrics.get(domain, {}).get(metric_id)
++
++    def resolve_metric_alias(self, domain: str, alias: str) -> SemanticMetric | None:
++        """按用户口语同义词解析受控指标。
++
++        参数：
++            domain: 业务域。
++            alias: 用户输入的同义词或指标名称。
++
++        返回：
++            匹配指标；不匹配则返回 None。
++
++        业务逻辑：
++            归一化匹配 metric_id、display_name 和 aliases。
++        """
++        normalized = self._normalize_text(alias)
++        for metric in self.get_metrics(domain):
++            candidates = [metric.metric_id, metric.display_name, *metric.aliases]
++            for candidate in candidates:
++                if normalized == self._normalize_text(candidate):
++                    return metric
++        return None
++
++    # ── 维度操作 ──
++
++    def register_dimension(self, dimension: SemanticDimension) -> None:
++        """注册一个统一维度。
++
++        参数：
++            dimension: 统一语义维度对象。
++        """
++        domain = dimension.domain
++        if domain not in self._dimensions:
++            self._dimensions[domain] = OrderedDict()
++        self._dimensions[domain][dimension.dimension_id] = dimension
++
++    def get_dimensions(self, domain: str) -> list[SemanticDimension]:
++        """获取指定域的全部已注册维度。
++
++        参数：
++            domain: 业务域。
++
++        返回：
++            维度列表（按注册顺序排列）。
++        """
++        return list(self._dimensions.get(domain, {}).values())
++
++    def get_dimension(self, domain: str, dimension_id: str) -> SemanticDimension | None:
++        """按域和 ID 获取单个维度。
++
++        参数：
++            domain: 业务域。
++            dimension_id: 维度 ID。
++
++        返回：
++            匹配的维度；不存在则返回 None。
++        """
++        return self._dimensions.get(domain, {}).get(dimension_id)
++
++    # ── 实体操作 ──
++
++    def register_entity(self, entity: SemanticEntity) -> None:
++        """注册一个统一实体。
++
++        参数：
++            entity: 统一语义实体对象。
++        """
++        domain = entity.domain
++        if domain not in self._entities:
++            self._entities[domain] = OrderedDict()
++        self._entities[domain][entity.entity_id] = entity
++
++    def get_entities(self, domain: str, entity_type: str | None = None) -> list[SemanticEntity]:
++        """获取指定域的已注册实体，可按类型过滤。
++
++        参数：
++            domain: 业务域。
++            entity_type: 可选实体类型过滤。
++
++        返回：
++            实体列表。
++        """
++        entities = list(self._entities.get(domain, {}).values())
++        if entity_type is not None:
++            entities = [e for e in entities if e.entity_type == entity_type]
++        return entities
++
++    # ── 域查询 ──
++
++    def domains(self) -> list[str]:
++        """返回所有已注册域名的有序列表。
++
++        返回：
++            域名列表（按首次注册顺序排列）。
++        """
++        seen: dict[str, bool] = {}
++        ordered: list[str] = []
++        for source in (self._metrics, self._dimensions, self._entities):
++            for domain in source:
++                if domain not in seen:
++                    seen[domain] = True
++                    ordered.append(domain)
++        return ordered
++
++    # ── 辅助方法 ──
++
++    @staticmethod
++    def _normalize_text(value: str) -> str:
++        """统一去空白并小写，避免中文/英文同义词匹配受格式影响。
++
++        参数：
++            value: 待归一化的文本。
++
++        返回：
++            归一化后的文本。
++        """
++        return "".join(str(value).strip().lower().split())
++
++
++__all__ = ["BusinessSemanticCatalog"]
+diff --git a/backend/app/domains/semantic_catalog/loader.py b/backend/app/domains/semantic_catalog/loader.py
+new file mode 100644
+index 00000000..ab163138
+--- /dev/null
++++ b/backend/app/domains/semantic_catalog/loader.py
+@@ -0,0 +1,99 @@
++"""
++YAML 文件加载器：从 YAML/JSON 文件加载统一语义资产注册表。
++
++业务逻辑：
++    1. 只读取仓库内人工审计的 YAML 文件。
++    2. 不连接生产库、不生成 SQL、不触及现有领域 catalog 内部。
++    3. 返回强 schema 的 BusinessSemanticCatalog 对象。
++"""
++
++from __future__ import annotations
++
++from pathlib import Path
++from typing import Any
++
++import yaml
++
++from backend.app.domains.semantic_catalog.schema import (
++    SemanticMetric,
++    SemanticDimension,
++    SemanticEntity,
++)
++from backend.app.domains.semantic_catalog.catalog import BusinessSemanticCatalog
++
++# 默认 catalog 目录：统一语义资产注册文件存放位置
++DEFAULT_UNIFIED_CATALOG_DIR = Path(__file__).resolve().parents[2] / "config" / "unified_catalog"
++
++
++class SemanticCatalogYamlLoader:
++    """统一语义资产 YAML 加载器。
++
++    参数：
++        catalog_dir: 可选 catalog 目录；测试可传临时目录。
++
++    返回：
++        加载器实例。
++    """
++
++    def __init__(self, catalog_dir: str | Path | None = None) -> None:
++        """初始化加载器。
++
++        参数：
++            catalog_dir: catalog 文件目录，默认使用 config/unified_catalog。
++        """
++        self.catalog_dir = Path(catalog_dir) if catalog_dir else DEFAULT_UNIFIED_CATALOG_DIR
++
++    def load(self) -> BusinessSemanticCatalog:
++        """加载全部 YAML 文件并合并到统一注册表。
++
++        返回：
++            填充完成的 BusinessSemanticCatalog 实例。
++
++        业务逻辑：
++            按 metrics.yaml → dimensions.yaml → entities.yaml 顺序读取。
++            缺失文件按空列表处理（不报错），方便分阶段交付。
++        """
++        catalog = BusinessSemanticCatalog()
++
++        metrics_data = self._read_yaml("metrics.yaml")
++        for item in metrics_data.get("metrics", []):
++            metric = SemanticMetric.model_validate(item)
++            catalog.register_metric(metric)
++
++        dimensions_data = self._read_yaml("dimensions.yaml")
++        for item in dimensions_data.get("dimensions", []):
++            dim = SemanticDimension.model_validate(item)
++            catalog.register_dimension(dim)
++
++        entities_data = self._read_yaml("entities.yaml")
++        for item in entities_data.get("entities", []):
++            entity = SemanticEntity.model_validate(item)
++            catalog.register_entity(entity)
++
++        return catalog
++
++    def _read_yaml(self, file_name: str) -> dict[str, Any]:
++        """读取单个 YAML 文件。
++
++        参数：
++            file_name: YAML 文件名。
++
++        返回：
++            解析后的字典；缺失文件返回空 dict。
++
++        业务逻辑：
++            缺失文件不抛错——支持分阶段交付 YAML 配置。
++        """
++        path = self.catalog_dir / file_name
++        if not path.exists():
++            return {}
++        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
++        if not isinstance(data, dict):
++            raise ValueError(f"catalog_yaml_must_be_mapping::{path}")
++        return data
++
++
++__all__ = [
++    "DEFAULT_UNIFIED_CATALOG_DIR",
++    "SemanticCatalogYamlLoader",
++]
+diff --git a/backend/app/domains/semantic_catalog/schema.py b/backend/app/domains/semantic_catalog/schema.py
+new file mode 100644
+index 00000000..95f9e125
+--- /dev/null
++++ b/backend/app/domains/semantic_catalog/schema.py
+@@ -0,0 +1,141 @@
++"""
++统一语义资产 Catalog Schema 定义。
++
++业务逻辑：
++    本模块定义跨业务域的统一语义资产数据结构标准。
++    包括指标（SemanticMetric）、维度（SemanticDimension）、实体（SemanticEntity）
++    和可插拔的业务值解析器协议（BusinessValueResolverProtocol）。
++
++    这些 Schema 是 NL2SQL / QueryPlanningV2 的辅助能力层，
++    不是替代现有领域 catalog 的新核心。
++"""
++
++from __future__ import annotations
++
++from typing import Protocol, runtime_checkable
++
++from pydantic import BaseModel, ConfigDict, Field
++
++
++class SemanticMetric(BaseModel):
++    """统一语义指标定义。
++
++    参数：
++        metric_id: 统一指标 ID，如 shipment_mw、total_fee。
++        display_name: 业务展示名称，如"发货量"、"总费用"。
++        domain: 所属业务域，如 logistics、plan_bom、business_analysis。
++        aliases: 用户口语同义词列表，如["件数", "发运量"]。
++        unit: 业务单位，如"MW"、"元"。
++        description: 业务口径说明，供 LLM 辅助理解。
++
++    返回：
++        业务域无关的统一指标条目。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    metric_id: str = Field(..., description="统一指标 ID")
++    display_name: str = Field(..., description="业务展示名称")
++    domain: str = Field(..., description="所属业务域")
++    aliases: list[str] = Field(default_factory=list, description="用户口语同义词")
++    unit: str | None = Field(default=None, description="业务单位")
++    description: str | None = Field(default=None, description="业务口径说明")
++
++
++class SemanticDimension(BaseModel):
++    """统一语义维度定义。
++
++    参数：
++        dimension_id: 统一维度 ID，如 material_category、version_no。
++        display_name: 业务展示名称，如"物料类别"、"版本号"。
++        domain: 所属业务域，如 logistics、plan_bom。
++        aliases: 用户口语同义词列表。
++        description: 业务口径说明。
++
++    返回：
++        业务域无关的统一维度条目。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    dimension_id: str = Field(..., description="统一维度 ID")
++    display_name: str = Field(..., description="业务展示名称")
++    domain: str = Field(..., description="所属业务域")
++    aliases: list[str] = Field(default_factory=list, description="用户口语同义词")
++    description: str | None = Field(default=None, description="业务口径说明")
++
++
++class SemanticEntity(BaseModel):
++    """统一语义实体定义。
++
++    参数：
++        entity_id: 统一实体 ID，如 carrier、material。
++        display_name: 业务展示名称，如"承运商"、"物料"。
++        domain: 所属业务域。
++        entity_type: 实体类型分类，如 carrier、customer、material。
++        aliases: 用户口语同义词列表。
++        description: 业务口径说明。
++
++    返回：
++        业务域无关的统一实体条目。
++    """
++
++    model_config = ConfigDict(extra="forbid")
++
++    entity_id: str = Field(..., description="统一实体 ID")
++    display_name: str = Field(..., description="业务展示名称")
++    domain: str = Field(..., description="所属业务域")
++    entity_type: str = Field(..., description="实体类型分类")
++    aliases: list[str] = Field(default_factory=list, description="用户口语同义词")
++    description: str | None = Field(default=None, description="业务口径说明")
++
++
++@runtime_checkable
++class BusinessValueResolverProtocol(Protocol):
++    """业务值解析器协议（可插拔）。
++
++    业务逻辑：
++        不同业务域的实体值解析逻辑可以不同（例如物流承运商从中间库查、
++        计划 BOM 物料从 Excel 查），但都必须实现统一的 resolve/register 接口。
++        这样可以支持后续的 ES 全文搜索、向量检索或其他解析器接入，
++        而不修改统一 catalog 核心。
++
++    Protocol 方法：
++        resolve(domain, entity_type, user_input) → list[dict]:
++            根据用户输入解析实体值候选列表。
++            返回列表包含 dict，至少包含 id 和 label 字段。
++
++        register(domain, entity_type, values):
++            注册一批实体值供后续 resolve 使用。
++    """
++
++    def resolve(self, domain: str, entity_type: str, user_input: str) -> list[dict[str, str]]:
++        """解析用户输入为实体值候选列表。
++
++        参数：
++            domain: 业务域，如 logistics、plan_bom。
++            entity_type: 实体类型，如 carrier、material。
++            user_input: 用户输入的实体名称或关键词。
++
++        返回：
++            候选实体值列表，每项 dict 至少包含 id 和 label。
++        """
++        ...
++
++    def register(self, domain: str, entity_type: str, values: list[dict[str, str]]) -> None:
++        """注册一批实体值。
++
++        参数：
++            domain: 业务域。
++            entity_type: 实体类型。
++            values: 实体值列表，每项 dict 至少包含 id 和 label。
++        """
++        ...
++
++
++__all__ = [
++    "SemanticMetric",
++    "SemanticDimension",
++    "SemanticEntity",
++    "BusinessValueResolverProtocol",
++]
+diff --git a/tests/unit/semantic_catalog/test_unified_semantic_catalog.py b/tests/unit/semantic_catalog/test_unified_semantic_catalog.py
+new file mode 100644
+index 00000000..fe553973
+--- /dev/null
++++ b/tests/unit/semantic_catalog/test_unified_semantic_catalog.py
+@@ -0,0 +1,475 @@
++"""
++NQE-N1：统一语义资产 Catalog Schema 与基础注册表 — 测试用例
++
++测试范围：
++    1. 核心 Schema（SemanticMetric / SemanticDimension / SemanticEntity）定义正确。
++    2. BusinessSemanticCatalog 支持按 domain 注册和查询。
++    3. 可从 YAML 文件加载注册数据。
++    4. 可与现有 LogisticsSemanticCatalog 桥接（不做内部修改，只做适配读取）。
++    5. BusinessValueResolverProtocol 定义可插拔的业务值解析接口。
++"""
++
++from __future__ import annotations
++
++import pytest
++
++from backend.app.domains.semantic_catalog.schema import (
++    SemanticMetric,
++    SemanticDimension,
++    SemanticEntity,
++    BusinessValueResolverProtocol,
++)
++from backend.app.domains.semantic_catalog.catalog import BusinessSemanticCatalog
++from backend.app.domains.semantic_catalog.loader import SemanticCatalogYamlLoader
++
++
++# ==================== Schema 基础测试 ====================
++
++
++class TestSemanticMetric:
++    """SemanticMetric Schema 定义测试。"""
++
++    def test_create_metric_minimal(self) -> None:
++        """创建最小字段的指标。"""
++        metric = SemanticMetric(
++            metric_id="shipment_mw",
++            display_name="发货量",
++            domain="logistics",
++        )
++        assert metric.metric_id == "shipment_mw"
++        assert metric.display_name == "发货量"
++        assert metric.domain == "logistics"
++        assert metric.aliases == []
++        assert metric.unit is None
++        assert metric.description is None
++
++    def test_create_metric_full(self) -> None:
++        """创建完整字段的指标。"""
++        metric = SemanticMetric(
++            metric_id="total_fee",
++            display_name="总费用",
++            domain="logistics",
++            aliases=["运费", "费用合计"],
++            unit="元",
++            description="物流发运总费用，含运费、装卸费等。",
++        )
++        assert metric.metric_id == "total_fee"
++        assert metric.aliases == ["运费", "费用合计"]
++        assert metric.unit == "元"
++        assert metric.description == "物流发运总费用，含运费、装卸费等。"
++
++    def test_create_metric_fails_without_required_fields(self) -> None:
++        """缺少必填字段时构造失败。"""
++        with pytest.raises(Exception):
++            SemanticMetric(display_name="发货量", domain="logistics")  # type: ignore[arg-type]
++
++        with pytest.raises(Exception):
++            SemanticMetric(metric_id="shipment_mw", domain="logistics")  # type: ignore[arg-type]
++
++        with pytest.raises(Exception):
++            SemanticMetric(metric_id="shipment_mw", display_name="发货量")  # type: ignore[arg-type]
++
++
++class TestSemanticDimension:
++    """SemanticDimension Schema 定义测试。"""
++
++    def test_create_dimension(self) -> None:
++        """创建维度定义。"""
++        dim = SemanticDimension(
++            dimension_id="material_category",
++            display_name="物料类别",
++            domain="plan_bom",
++            aliases=["物料类型", "产品类别"],
++            description="BOM 中物料的分类维度。",
++        )
++        assert dim.dimension_id == "material_category"
++        assert dim.domain == "plan_bom"
++        assert "物料类型" in dim.aliases
++
++
++class TestSemanticEntity:
++    """SemanticEntity Schema 定义测试。"""
++
++    def test_create_entity(self) -> None:
++        """创建实体定义。"""
++        entity = SemanticEntity(
++            entity_id="承运商",
++            display_name="承运商",
++            domain="logistics",
++            entity_type="carrier",
++            aliases=["物流商", "运输公司"],
++            description="物流承运商实体。",
++        )
++        assert entity.entity_id == "承运商"
++        assert entity.entity_type == "carrier"
++        assert entity.domain == "logistics"
++
++
++# ==================== BusinessSemanticCatalog 注册表测试 ====================
++
++
++class TestBusinessSemanticCatalog:
++    """BusinessSemanticCatalog 注册与查询测试。"""
++
++    @pytest.fixture
++    def catalog(self) -> BusinessSemanticCatalog:
++        """创建一个空的 catalog 实例。"""
++        return BusinessSemanticCatalog()
++
++    def test_catalog_empty_by_default(self, catalog: BusinessSemanticCatalog) -> None:
++        """新建 catalog 默认为空。"""
++        assert catalog.domains() == []
++
++    def test_register_and_query_metric(self, catalog: BusinessSemanticCatalog) -> None:
++        """注册一个指标后可按域和 ID 查询。"""
++        metric = SemanticMetric(
++            metric_id="shipment_mw",
++            display_name="发货量",
++            domain="logistics",
++            unit="MW",
++        )
++        catalog.register_metric(metric)
++
++        results = catalog.get_metrics(domain="logistics")
++        assert len(results) == 1
++        assert results[0].metric_id == "shipment_mw"
++
++        found = catalog.get_metric("logistics", "shipment_mw")
++        assert found is not None
++        assert found.display_name == "发货量"
++        assert found.unit == "MW"
++
++    def test_register_multiple_domains(self, catalog: BusinessSemanticCatalog) -> None:
++        """多个域的指标可分别注册和查询。"""
++        logistics_metric = SemanticMetric(
++            metric_id="shipment_mw",
++            display_name="发货量",
++            domain="logistics",
++        )
++        bom_metric = SemanticMetric(
++            metric_id="power_prediction",
++            display_name="功率预测",
++            domain="plan_bom",
++        )
++        catalog.register_metric(logistics_metric)
++        catalog.register_metric(bom_metric)
++
++        assert catalog.domains() == ["logistics", "plan_bom"]
++
++        logistics_results = catalog.get_metrics(domain="logistics")
++        assert len(logistics_results) == 1
++        assert logistics_results[0].metric_id == "shipment_mw"
++
++        bom_results = catalog.get_metrics(domain="plan_bom")
++        assert len(bom_results) == 1
++        assert bom_results[0].metric_id == "power_prediction"
++
++    def test_query_nonexistent_metric_returns_none(self, catalog: BusinessSemanticCatalog) -> None:
++        """查询不存在的指标返回 None。"""
++        assert catalog.get_metric("logistics", "nonexistent") is None
++
++    def test_register_dimension(self, catalog: BusinessSemanticCatalog) -> None:
++        """注册维度并查询。"""
++        dim = SemanticDimension(
++            dimension_id="material_category",
++            display_name="物料类别",
++            domain="plan_bom",
++        )
++        catalog.register_dimension(dim)
++
++        results = catalog.get_dimensions(domain="plan_bom")
++        assert len(results) == 1
++        assert results[0].dimension_id == "material_category"
++
++        found = catalog.get_dimension("plan_bom", "material_category")
++        assert found is not None
++
++    def test_register_entity(self, catalog: BusinessSemanticCatalog) -> None:
++        """注册实体并查询。"""
++        entity = SemanticEntity(
++            entity_id="carrier",
++            display_name="承运商",
++            domain="logistics",
++            entity_type="carrier",
++        )
++        catalog.register_entity(entity)
++
++        results = catalog.get_entities(domain="logistics")
++        assert len(results) == 1
++        assert results[0].entity_id == "carrier"
++
++        by_type = catalog.get_entities(domain="logistics", entity_type="carrier")
++        assert len(by_type) == 1
++
++    def test_resolve_metric_alias(self, catalog: BusinessSemanticCatalog) -> None:
++        """按用户口语同义词解析受控指标。"""
++        metric = SemanticMetric(
++            metric_id="shipment_mw",
++            display_name="发货量",
++            domain="logistics",
++            aliases=["件数", "发运量", "出货量"],
++        )
++        catalog.register_metric(metric)
++
++        resolved = catalog.resolve_metric_alias("logistics", "件数")
++        assert resolved is not None
++        assert resolved.metric_id == "shipment_mw"
++
++        resolved2 = catalog.resolve_metric_alias("logistics", "发货量")
++        assert resolved2 is not None
++        assert resolved2.metric_id == "shipment_mw"
++
++        not_found = catalog.resolve_metric_alias("logistics", "不存在")
++        assert not_found is None
++
++    def test_register_duplicate_metric_overwrites(self, catalog: BusinessSemanticCatalog) -> None:
++        """重复注册同一 domain + metric_id 会覆盖。"""
++        m1 = SemanticMetric(
++            metric_id="shipment_mw",
++            display_name="发货量",
++            domain="logistics",
++        )
++        m2 = SemanticMetric(
++            metric_id="shipment_mw",
++            display_name="发运量（更新）",
++            domain="logistics",
++        )
++        catalog.register_metric(m1)
++        catalog.register_metric(m2)
++
++        results = catalog.get_metrics(domain="logistics")
++        assert len(results) == 1
++        assert results[0].display_name == "发运量（更新）"
++
++
++# ==================== YAML Loader 测试 ====================
++
++
++class TestSemanticCatalogYamlLoader:
++    """YAML 文件加载器测试。"""
++
++    def test_load_metrics_from_yaml(self, tmp_path) -> None:
++        """从 YAML 文件加载指标注册表。"""
++        import yaml
++
++        yaml_content = {
++            "metrics": [
++                {
++                    "metric_id": "shipment_mw",
++                    "display_name": "发货量",
++                    "domain": "logistics",
++                    "aliases": ["件数", "发运量"],
++                    "unit": "MW",
++                    "description": "物流发运总兆瓦数。",
++                },
++                {
++                    "metric_id": "total_fee",
++                    "display_name": "总费用",
++                    "domain": "logistics",
++                    "aliases": ["运费"],
++                    "unit": "元",
++                },
++            ],
++            "dimensions": [
++                {
++                    "dimension_id": "carrier",
++                    "display_name": "承运商",
++                    "domain": "logistics",
++                    "aliases": ["物流商"],
++                },
++            ],
++            "entities": [],
++        }
++        yaml_path = tmp_path / "metrics.yaml"
++        yaml_path.write_text(yaml.dump(yaml_content, allow_unicode=True), encoding="utf-8")
++
++        loader = SemanticCatalogYamlLoader(catalog_dir=tmp_path)
++        catalog = loader.load()
++
++        assert "logistics" in catalog.domains()
++
++        found = catalog.get_metric("logistics", "shipment_mw")
++        assert found is not None
++        assert found.display_name == "发货量"
++        assert found.unit == "MW"
++        assert "件数" in found.aliases
++
++        total_fee = catalog.get_metric("logistics", "total_fee")
++        assert total_fee is not None
++        assert total_fee.unit == "元"
++
++    def test_load_dimensions_from_yaml(self, tmp_path) -> None:
++        """从 YAML 加载维度并正确查询 plan_bom 域。"""
++        import yaml
++
++        yaml_content = {
++            "dimensions": [
++                {
++                    "dimension_id": "material_category",
++                    "display_name": "物料类别",
++                    "domain": "plan_bom",
++                    "aliases": ["物料类型"],
++                    "description": "BOM 物料分类维度。",
++                },
++                {
++                    "dimension_id": "version_no",
++                    "display_name": "版本号",
++                    "domain": "plan_bom",
++                    "aliases": ["BOM版本"],
++                },
++            ],
++        }
++        yaml_path = tmp_path / "dimensions.yaml"
++        yaml_path.write_text(yaml.dump(yaml_content, allow_unicode=True), encoding="utf-8")
++
++        loader = SemanticCatalogYamlLoader(catalog_dir=tmp_path)
++        catalog = loader.load()
++
++        dims = catalog.get_dimensions(domain="plan_bom")
++        assert len(dims) == 2
++
++        mat_cat = catalog.get_dimension("plan_bom", "material_category")
++        assert mat_cat is not None
++        assert mat_cat.display_name == "物料类别"
++
++        ver = catalog.get_dimension("plan_bom", "version_no")
++        assert ver is not None
++        assert ver.display_name == "版本号"
++
++    def test_load_entities_from_yaml(self, tmp_path) -> None:
++        """从 YAML 加载实体定义。"""
++        import yaml
++
++        yaml_content = {
++            "entities": [
++                {
++                    "entity_id": "carrier",
++                    "display_name": "承运商",
++                    "domain": "logistics",
++                    "entity_type": "carrier",
++                    "aliases": ["物流商", "运输方"],
++                },
++            ],
++        }
++        yaml_path = tmp_path / "entities.yaml"
++        yaml_path.write_text(yaml.dump(yaml_content, allow_unicode=True), encoding="utf-8")
++
++        loader = SemanticCatalogYamlLoader(catalog_dir=tmp_path)
++        catalog = loader.load()
++
++        entities = catalog.get_entities(domain="logistics", entity_type="carrier")
++        assert len(entities) == 1
++        assert entities[0].entity_id == "carrier"
++
++
++# ==================== 与现有 LogisticsSemanticCatalog 兼容测试 ====================
++
++
++class TestBridgeToExistingCatalogs:
++    """验证统一 catalog 可与现有领域 catalog 桥接，不做内部修改。"""
++
++    def test_bridge_from_logistics_semantic_catalog(self) -> None:
++        """
++        从现有 LogisticsSemanticCatalog 读取数据并注册到统一 catalog。
++
++        验收条件：
++            - 不改动 LogisticsSemanticCatalog 内部实现。
++            - 统一 catalog 可查询物流的 shipment_mw、total_fee 等指标。
++            - 统一 catalog 可查询物流的 carrier、year 等维度。
++        """
++        from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
++            LogisticsSemanticCatalogLoader,
++        )
++        from backend.app.domains.semantic_catalog.bridge import (
++            bridge_logistics_catalog_to_unified,
++        )
++
++        # 加载现有物流 catalog
++        logistics_catalog = LogisticsSemanticCatalogLoader().load()
++
++        # 桥接到统一 catalog
++        unified = BusinessSemanticCatalog()
++        bridge_logistics_catalog_to_unified(logistics_catalog, unified)
++
++        # 验物物指标可查询
++        assert unified.get_metric("logistics", "shipment_mw") is not None
++        assert unified.get_metric("logistics", "total_fee") is not None
++
++        # 验物维度可查询（物流 catalog 中使用 logistics_company_name 作为承运商维度 ID）
++        found = unified.get_dimension("logistics", "logistics_company_name")
++        assert found is not None
++        assert found.display_name == "承运商"
++
++    def test_bridge_preserves_logistics_catalog_untouched(self) -> None:
++        """
++        桥接后原 LogisticsSemanticCatalog 对象状态不变。
++        """
++        from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
++            LogisticsSemanticCatalogLoader,
++        )
++        from backend.app.domains.semantic_catalog.bridge import (
++            bridge_logistics_catalog_to_unified,
++        )
++
++        logistics_catalog = LogisticsSemanticCatalogLoader().load()
++        original_metric_count = len(logistics_catalog.metrics)
++
++        unified = BusinessSemanticCatalog()
++        bridge_logistics_catalog_to_unified(logistics_catalog, unified)
++
++        # 原 catalog 数据不变
++        assert len(logistics_catalog.metrics) == original_metric_count
++
++
++# ==================== BusinessValueResolverProtocol 测试 ====================
++
++
++class TestBusinessValueResolverProtocol:
++    """业务值解析协议定义验证。"""
++
++    def test_protocol_structural_conformance(self) -> None:
++        """
++        验证实现了 resolve/register 方法的类满足 Protocol 结构。
++        """
++        from typing import Protocol, runtime_checkable
++
++        @runtime_checkable
++        class _ResolverProtocol(Protocol):
++            """业务值解析器协议（运行时检查版）。"""
++
++            def resolve(self, domain: str, entity_type: str, user_input: str) -> list[dict[str, str]]:
++                ...
++
++            def register(self, domain: str, entity_type: str, values: list[dict[str, str]]) -> None:
++                ...
++
++        class ConcreteResolver:
++            def resolve(self, domain: str, entity_type: str, user_input: str) -> list[dict[str, str]]:
++                return [{"id": "value1", "label": "显示值1"}]
++
++            def register(self, domain: str, entity_type: str, values: list[dict[str, str]]) -> None:
++                pass
++
++        resolver = ConcreteResolver()
++        assert isinstance(resolver, _ResolverProtocol)
++
++    def test_resolver_not_conforming_missing_method(self) -> None:
++        """缺少必要方法的类不符合 Protocol。"""
++        from typing import Protocol, runtime_checkable
++
++        @runtime_checkable
++        class _ResolverProtocol(Protocol):
++            """业务值解析器协议（运行时检查版）。"""
++
++            def resolve(self, domain: str, entity_type: str, user_input: str) -> list[dict[str, str]]:
++                ...
++
++            def register(self, domain: str, entity_type: str, values: list[dict[str, str]]) -> None:
++                ...
++
++        class IncompleteResolver:
++            def resolve(self, domain: str, entity_type: str, user_input: str) -> list[dict[str, str]]:
++                return []
++
++        incomplete = IncompleteResolver()
++        assert not isinstance(incomplete, _ResolverProtocol)

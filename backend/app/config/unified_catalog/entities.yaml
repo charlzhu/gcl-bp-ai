@@ -1,0 +1,64 @@
+# 统一语义资产 — 实体注册表
+# 业务域：物流（logistics）、计划 BOM（plan_bom）
+# 说明：本文件由人工审计，用于注册各业务域的实体定义。
+# 统一约束：禁止在此暴露 SQL、表名、字段名、query_key、planner 等技术实现细节。
+
+entities:
+  # ========== 物流域实体 ==========
+  - entity_id: carrier
+    display_name: 承运商
+    domain: logistics
+    entity_type: carrier
+    aliases:
+      - 物流商
+      - 运输公司
+      - 承运方
+    description: 物流承运商实体，可通过承运商名称查询。
+
+  - entity_id: entity
+    display_name: 委托人
+    domain: logistics
+    entity_type: entity
+    aliases:
+      - 委托方
+      - 客户
+      - 经营计划
+    description: 委托人/客户实体，可按委托人名或简称查询。
+
+  - entity_id: region
+    display_name: 行政区域
+    domain: logistics
+    entity_type: region
+    aliases:
+      - 地区
+      - 省市
+    description: 行政区划实体维度。
+
+  # ========== 计划 BOM 域实体 ==========
+  - entity_id: material
+    display_name: 物料
+    domain: plan_bom
+    entity_type: material
+    aliases:
+      - 产品
+      - 组件
+      - 元器件
+    description: BOM 物料/产品实体。
+
+  - entity_id: supplier
+    display_name: 供应商
+    domain: plan_bom
+    entity_type: supplier
+    aliases:
+      - 供货商
+      - 厂商
+    description: 供应商实体。
+
+  - entity_id: customer
+    display_name: 客户
+    domain: plan_bom
+    entity_type: customer
+    aliases:
+      - 业主
+      - 采购方
+    description: 客户/业主实体。
