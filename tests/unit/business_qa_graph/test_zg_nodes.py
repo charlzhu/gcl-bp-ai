@@ -126,13 +126,18 @@ class TestMergeRetrievedInfo:
         assert "base_name" in all_cols
 
     def test_key_columns_supplemented(self):
-        """主外键应被补充到表中。"""
+        """主外键仅从 catalog 引入，无 catalog 声明时不补充。
+
+        修改为使用真实 catalog 表名（dws_logistics_detail_union）。
+        当前 catalog 中该表无 primary_key/foreign_key 角色，故不补充任何键列。
+        若后续 catalog YAML 中为该表增加 pk/fk 声明，则此测试需同步更新。
+        """
         from app.domains.business_qa_graph.nodes.merge_retrieved_info_node import merge_retrieved_info_node
         state = {
             "retrieved_columns": [
                 {"catalog_id": "dim:base_name", "name": "base_name", "type": "varchar",
                  "role": "dimension", "examples": [], "description": "基地",
-                 "alias": [], "source_table": "dws"},
+                 "alias": [], "source_table": "dws_logistics_detail_union"},
             ],
             "retrieved_values": [],
             "retrieved_metrics": [],
@@ -140,8 +145,11 @@ class TestMergeRetrievedInfo:
         result = merge_retrieved_info_node(state)
         tables = result.get("table_infos", [])
         col_names = [c.get("name") for c in tables[0].get("columns", [])] if tables else []
-        # id 应被补充为主键
-        assert "id" in col_names, "id 主键应被补充"
+        # 核心断言：base_name 字段存在
+        assert "base_name" in col_names, "base_name 字段应存在"
+        # 无硬编码兜底：catalog 中该表未标记 pk/fk，不应补充 id/contract_no 等键列
+        for hardcoded_key in ("id", "contract_no", "trace_id", "biz_year", "biz_month"):
+            assert hardcoded_key not in col_names, f"硬编码键列 {hardcoded_key} 不应出现"
 
 
 # ============================================================

@@ -7,7 +7,7 @@
 
 | 阶段 | 总样本 | 通过 | 失败 / 拦截 |
 |------|--------|------|-------------|
-| M9 SQLPlan 生成 | 17 | 0 | 3 |
+| M9 SQLPlan 生成 | 17 | 0 | 8 |
 | M10 Shadow Gate | 17 | 1 | 16 |
 
 ---
@@ -26,27 +26,27 @@
 - expected_status_mismatch_count: 15
 
 ## By Status
-- disabled: 14
-- validation_failed: 3
+- error: 9
+- validation_failed: 8
 
 ## Samples
-- m9_success_carrier_mw_ranking_default_years: status=disabled, stage=generation, generated=False
-- m9_success_yearly_mw_breakdown: status=disabled, stage=generation, generated=False
+- m9_success_carrier_mw_ranking_default_years: status=error, stage=generation, generated=False
+- m9_success_yearly_mw_breakdown: status=error, stage=generation, generated=False
 - m9_guard_tonnage_fail_closed: status=validation_failed, stage=rewrite, generated=False
-- m9_success_total_fee_summary: status=disabled, stage=generation, generated=False
-- m9_success_mw_summary: status=disabled, stage=generation, generated=False
-- m9_success_carrier_mw_by_year: status=disabled, stage=generation, generated=False
-- m9_success_origin_customer_topn: status=disabled, stage=generation, generated=False
-- m9_success_route_pricing: status=disabled, stage=generation, generated=False
-- m9_success_multi_year_fee_compare: status=disabled, stage=generation, generated=False
-- m9_success_region_monthly_mw: status=disabled, stage=generation, generated=False
+- m9_success_total_fee_summary: status=error, stage=generation, generated=False
+- m9_success_mw_summary: status=error, stage=generation, generated=False
+- m9_success_carrier_mw_by_year: status=error, stage=generation, generated=False
+- m9_success_origin_customer_topn: status=validation_failed, stage=generation, generated=False
+- m9_success_route_pricing: status=validation_failed, stage=generation, generated=False
+- m9_success_multi_year_fee_compare: status=validation_failed, stage=generation, generated=False
+- m9_success_region_monthly_mw: status=error, stage=generation, generated=False
 - m9_success_multi_metric_aggregate: status=validation_failed, stage=rewrite, generated=False
-- m9_success_vehicle_type_summary: status=disabled, stage=generation, generated=False
-- m9_success_extra_fee_by_month: status=disabled, stage=generation, generated=False
+- m9_success_vehicle_type_summary: status=error, stage=generation, generated=False
+- m9_success_extra_fee_by_month: status=error, stage=generation, generated=False
 - m9_guard_tonnage_fail_closed: status=validation_failed, stage=rewrite, generated=False
-- m9_success_avg_fee_per_watt: status=disabled, stage=generation, generated=False
-- m9_success_extra_fee_ratio: status=disabled, stage=generation, generated=False
-- m9_success_customer_mw_by_year: status=disabled, stage=generation, generated=False
+- m9_success_avg_fee_per_watt: status=validation_failed, stage=generation, generated=False
+- m9_success_extra_fee_ratio: status=validation_failed, stage=generation, generated=False
+- m9_success_customer_mw_by_year: status=error, stage=generation, generated=False
 
 
 ---

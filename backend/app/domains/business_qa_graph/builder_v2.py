@@ -45,13 +45,15 @@ def _route_after_domain(state: BusinessQaGraphState) -> str:
 
 
 def _route_after_validate_sql(state: BusinessQaGraphState) -> str:
-    """SQL 验证分发：成功 → execute，失败 → correct（最多 3 次）。"""
+    """SQL 验证分发：成功 → execute，失败 → correct（最多 3 次）。
+    
+    注意：不在此函数中修改 state，重试计数由 correct_sql_node 维护。
+    """
     error = state.get("error")
     if not error:
         return "execute_sql"
     retry_count = state.get("_sql_retry_count", 0)
     if retry_count < 3:
-        state["_sql_retry_count"] = retry_count + 1
         return "correct_sql"
     return "error_handler"
 

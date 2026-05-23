@@ -27,14 +27,13 @@ _FILTER_TABLE_DEFAULT = '请从候选表中选择回答用户问题所需的表�
 
 
 def filter_table_node(state: dict[str, Any]) -> dict[str, Any]:
-    """过滤表信息节点（掌柜问数对齐版）。"""
+    """过滤表信息节点（掌柜问数对齐版，空输入短路优化）。"""
     _emit_progress(state, STEP_FILTER_TABLE, "running")
 
     question: str = state.get("question", "")
     table_infos: list[dict[str, Any]] = state.get("table_infos", [])
 
     if not question or not table_infos:
-        logger.info("filter_table skip empty input")
         _emit_progress(state, STEP_FILTER_TABLE, "success")
         return {"table_infos": table_infos}
 

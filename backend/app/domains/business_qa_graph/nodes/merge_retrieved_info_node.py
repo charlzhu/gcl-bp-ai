@@ -109,35 +109,20 @@ def merge_retrieved_info_node(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _supplement_key_columns(table_to_columns: dict[str, list[dict[str, Any]]]) -> None:
-    """补充主外键列：优先从 SQLCatalog 动态获取，不可用时用硬编码兜底。"""
-    # 1) 尝试从语义 catalog 获取主外键
+    """补充主外键列：仅从语义 catalog 中标记了 pk/fk 的列引入。
+
+    去除硬编码兜底 —— 主外键信息唯一来源是语义 catalog YAML 的 semantic_role 声明。
+    若 catalog 中未标记 pk/fk，则不补充任何键列。
+    """
     catalog_keys = _get_catalog_key_columns(table_to_columns)
-    if catalog_keys:
-        for table_name, columns in table_to_columns.items():
-            existing_names = {c.get("name", "") for c in columns}
-            for key_col in catalog_keys.get(table_name, []):
-                if key_col["name"] not in existing_names:
-                    columns.append(key_col)
+    if not catalog_keys:
         return
 
-    # 2) 硬编码兜底
-    _HARDCODED_KEY_PATTERNS = {
-        "id": "主键", "trace_id": "追踪号", "contract_no": "合同号（关联键）",
-        "biz_date": "业务日期（分区键）", "biz_year": "业务年份（分区键）",
-        "biz_month": "业务月份", "base_name": "基地名称（关联键）",
-        "project_name": "项目名称（关联键）", "bom_code": "BOM编码（关联键）",
-        "supplier_code": "供应商编码（关联键）",
-    }
     for table_name, columns in table_to_columns.items():
         existing_names = {c.get("name", "") for c in columns}
-        for key_name, key_desc in _HARDCODED_KEY_PATTERNS.items():
-            if key_name not in existing_names:
-                columns.append({
-                    "name": key_name,
-                    "type": "varchar" if key_name != "id" else "integer",
-                    "role": "primary_key" if key_name == "id" else "foreign_key",
-                    "examples": [], "description": key_desc, "alias": [],
-                })
+        for key_col in catalog_keys.get(table_name, []):
+            if key_col["name"] not in existing_names:
+                columns.append(key_col)
 
 
 def _get_catalog_key_columns(
@@ -156,11 +141,11 @@ def _get_catalog_key_columns(
             if table.name in table_names:
                 keys = []
                 for col in table.columns:
-                    if col.role in ("primary_key", "foreign_key", "partition_key"):
+                    if col.semantic_role in ("primary_key", "foreign_key", "partition_key"):
                         keys.append({
                             "name": col.name, "type": col.data_type or "varchar",
-                            "role": col.role, "examples": col.examples or [],
-                            "description": col.description or "", "alias": [],
+                            "role": col.semantic_role, "examples": col.field_value_examples or [],
+                            "description": col.business_name or "", "alias": [],
                         })
                 if keys:
                     result[table.name] = keys

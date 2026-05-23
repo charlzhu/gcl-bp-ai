@@ -336,16 +336,25 @@ class TestValidateSqlLoop:
     def test_error_with_retry_routes_to_correct(self):
         state = {"error": "syntax error", "_sql_retry_count": 0}
         assert _route_after_validate_sql(state) == "correct_sql"
-        assert state["_sql_retry_count"] == 1
+        # 重试计数由 correct_sql_node 维护，路由函数不修改 state
 
     def test_exceed_max_retry_routes_to_error(self):
         state = {"error": "syntax error", "_sql_retry_count": 3}
         assert _route_after_validate_sql(state) == "error_handler"
 
-    def test_retry_count_increments(self):
-        state = {"error": "err", "_sql_retry_count": 2}
-        _route_after_validate_sql(state)
-        assert state["_sql_retry_count"] == 3
+    def test_correct_sql_increments_retry(self):
+        """验证 correct_sql_node 正确递增重试计数。"""
+        from backend.app.domains.business_qa_graph.nodes.correct_sql_node import correct_sql_node
+        state = {
+            "sql": "SELECT 1",
+            "error": "test error",
+            "question": "test",
+            "table_infos": [],
+            "_sql_retry_count": 1,
+        }
+        # correct_sql_node 会在返回中更新 _sql_retry_count
+        result = correct_sql_node(state)
+        assert result.get("_sql_retry_count", 0) > state["_sql_retry_count"]
 
 
 class TestDomainServiceRegistry:

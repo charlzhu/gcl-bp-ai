@@ -22,20 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def execute_sql_node(state: dict[str, Any]) -> dict[str, Any]:
-    """执行 SQL 并流式返回结果（掌柜问数对齐版）。
-
-    参数：
-        state: 当前 Graph 运行态，必须包含 sql。
-        state 可选包含 _db_session 和 _stream_writer。
-    返回：
-        包含 execution_result 和 execution_status 的 state 更新字典。
-
-    业务逻辑（完全对齐掌柜问数 execute_sql）：
-        1. writer 发送 running 进度
-        2. 执行 SQL
-        3. writer 发送 success 进度 + result 数据
-        4. 失败时 writer 发送 error 进度 + raise
-    """
+    """执行 SQL 并流式返回结果（掌柜问数对齐版）。"""
     _emit_progress(state, STEP_EXECUTE_SQL, "running")
 
     sql: str = state.get("sql", "")
@@ -101,4 +88,11 @@ def execute_sql_node(state: dict[str, Any]) -> dict[str, Any]:
         error_msg = str(exc)[:200]
         logger.error("execute_sql_failed error=%s", error_msg)
         _emit_progress(state, STEP_EXECUTE_SQL, "error")
-        raise
+        return {
+            "execution_status": "EXECUTION_ERROR",
+            "execution_result": {
+                "answer_summary": f"SQL 执行失败。",
+                "result_table": {"columns": [], "rows": []},
+                "warnings": [error_msg],
+            },
+        }

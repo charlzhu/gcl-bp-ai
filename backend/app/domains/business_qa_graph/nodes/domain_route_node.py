@@ -137,8 +137,15 @@ def _llm_classify_domain(question: str, settings: Any) -> str:
     return domain if confidence >= 0.5 else "unknown"
 
 
+# catalog 摘要缓存（首次加载后复用）
+_catalog_summary_cache: str | None = None
+
+
 def _get_catalog_summary() -> str:
-    """从语义 catalog 动态加载表名摘要，不可用时用硬编码兜底。"""
+    """从语义 catalog 动态加载表名摘要（带缓存），不可用时用硬编码兜底。"""
+    global _catalog_summary_cache
+    if _catalog_summary_cache is not None:
+        return _catalog_summary_cache
     try:
         from backend.app.domains.logistics.services.nl2sql.semantic_catalog import (
             LogisticsSemanticCatalogLoader,
@@ -159,7 +166,9 @@ def _get_catalog_summary() -> str:
         for domain, tables in tables_by_domain.items():
             label = domain_labels.get(domain, domain)
             lines.append(f"- {label}: {', '.join(tables[:10])}")
-        return "\n".join(lines) if len(lines) > 1 else "catalog 为空。"
+        result = "\n".join(lines) if len(lines) > 1 else "catalog 为空。"
+        _catalog_summary_cache = result
+        return result
     except Exception:
         return (
             "当前 catalog 注册的域：\n"

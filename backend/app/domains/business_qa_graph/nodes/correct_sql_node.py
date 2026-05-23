@@ -86,9 +86,10 @@ def correct_sql_node(state: dict[str, Any]) -> dict[str, Any]:
                 lines = lines[:-1]
             corrected_sql = "\n".join(lines)
 
-        logger.info("correct_sql_success corrected length=%d", len(corrected_sql))
+        retry_count = state.get("_sql_retry_count", 0)
+        logger.info("correct_sql_success retry=%d length=%d", retry_count, len(corrected_sql))
         _emit_progress(state, STEP_CORRECT_SQL, "success")
-        return {"sql": corrected_sql}
+        return {"sql": corrected_sql, "_sql_retry_count": retry_count + 1}
 
     except Exception as exc:
         logger.error("correct_sql_failed error=%s", exc)

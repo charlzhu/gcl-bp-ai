@@ -707,7 +707,16 @@ class LogisticsMilvusCatalogVectorStore:
             client.insert(collection_name=self.collection_name, data=data)
         return len(data)
 
-    def search(self, vector: list[float], *, top_k: int) -> list[LogisticsCatalogRecallHit]:
+    def search(
+        self, vector: list[float], *, top_k: int, score_threshold: float | None = None
+    ) -> list[LogisticsCatalogRecallHit]:
+        """向量检索，支持按 score_threshold 过滤低质量结果。
+
+        参数：
+            vector: 查询向量。
+            top_k: 返回的最大结果数。
+            score_threshold: 最低向量相似度阈值，低于此值的结果会被过滤。
+        """
         client = self._client_or_create()
         raw = client.search(
             collection_name=self.collection_name,
@@ -726,7 +735,11 @@ class LogisticsMilvusCatalogVectorStore:
             ],
         )
         first_batch = raw[0] if raw else []
-        return [_coerce_milvus_hit(item) for item in first_batch]
+        hits = [_coerce_milvus_hit(item) for item in first_batch]
+        # 按 score_threshold 过滤低质量检索结果
+        if score_threshold is not None:
+            hits = [h for h in hits if h.vector_score >= score_threshold]
+        return hits
 
     def _record_for_document(self, document: LogisticsCatalogRecallDocument, vector: list[float]) -> dict[str, Any]:
         return {
