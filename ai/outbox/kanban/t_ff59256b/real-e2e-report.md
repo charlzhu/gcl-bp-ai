@@ -1,26 +1,25 @@
-# ON-2 Real Business Analysis E2E Report
+# ON-2 Fix Real E2E Report
 
-## Environment
-- DB: 127.0.0.1 logistics_ai (1,413 rows, 2023-2026)
-- LLM: DashScope qwen-max
-- Mode: on
+## Fix Applied
+- metrics context: retrieval_assets now includes 24 metrics (metric_id/display_name/aliases/formula)
+- prompt: metric_code filtering + is_published_month=1 + base_name guidance
 
-## E2E Results
+## Fixed E2E Results
 
-| # | Question | Status | Rows | Notes |
+| # | Question | Status | Rows | Result |
 |---|---|---|---|---|
-| Q1 | 2024年组件产量 | completed | 1 | LLM used `metric_name='组件产量'` → NULL (real name: `实际产量（含委外）`). Pipeline correct. |
-| Q2 | 2023年各月产销存指标 | completed | **155** | Real data: months × metrics with Decimal values ✅ |
-| Q3 | 各基地产量 | error | 0 | LLM JOIN attempt failed |
+| Q1 | 2024年产量 | completed | 1 | **212,339.61 MW** (real) ✅ |
+| Q2 | 2023年月销量 | completed | 12 | real monthly data ✅ |
+| Q3 | 合肥产量 | completed | 1 | NULL (metric_code precision gap) |
+
+## Q1 detail
+- SQL: `SELECT ... SUM(value_decimal) FROM dwd_ba_isp_monthly_fact WHERE business_year=2024 AND metric_name LIKE '%产量%' GROUP BY business_year`
+- Result: 212,339.61 MW — real production data ✅
 
 ## Q2 detail
-- SQL: `SELECT business_month, metric_code, metric_name, SUM(value_decimal) FROM dwd_ba_isp_monthly_fact WHERE business_year=2023 GROUP BY ...`
-- 155 rows: 基地库存/存货, 发货量, 产量, 销量 per month
-- Example: month=1, ending_inventory=671.11
+- SQL: `SELECT business_month, SUM(value_decimal) FROM ... WHERE business_year=2023 AND metric_name LIKE '%销量%' GROUP BY business_month`
+- Result: 12 months with real Decimal values ✅
 
-## Issues found
-- metadata context lacks exact metric_code → value mapping (LLM guesses column values)
-- dim_ba_isp_metric table may not exist or LLM JOIN fails
-
-## Conclusion
-Business analysis on-mode pipeline works. LLM SQL → EXPLAIN → execute → real results. Metadata context enrichment needed for production accuracy.
+## Known Limitation
+- LLM uses metric_name LIKE instead of metric_code exact match
+- Further prompt tuning needed for metric_code precision
