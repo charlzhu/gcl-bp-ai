@@ -1,0 +1,31 @@
+# NQE-SQL-MAIN-11-R changed files
+
+## 从恢复工作树回填的新文件 (untracked)
+
+来源：.worktrees/nqe-sql-main-6-metadata-migrations/
+
+1. backend/app/domains/business_qa_graph/nqe_sql_safety.py (418 行)
+2. backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py (1169 行)
+3. backend/app/domains/business_qa_graph/nqe_sql_agent_state.py (133 行)
+4. backend/app/domains/business_qa_graph/nqe_sql_agent_trace.py (369 行)
+5. tests/unit/business_qa_graph/test_nqe_sql_agent_safety_precheck.py (275 行)
+6. tests/unit/business_qa_graph/test_nqe_sql_agent_explain_correct.py (195 行)
+7. tests/unit/business_qa_graph/test_nqe_sql_agent_trace_replay.py (149 行)
+8. tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py (277 行)
+
+## 为适配根工作区环境所做的修改
+
+1. backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py:
+   - 将 `from backend.app.services.nqe_metadata_sync import ...` 改为 try/except 条件导入
+   - 在 `_build_logistics_metadata_context_package()` 中增加 None 守卫
+   - 原因：nqe_metadata_sync 模块属于 NQE-14 范围，尚未回填
+
+## 禁止修改确认
+
+- docs/CURRENT_STATUS.md: 未修改 ✅
+- docs/NEXT_TASK.md: 未修改 ✅
+- docs/HANDOFF.md: 未修改 ✅
+- frontend/: 未修改 ✅
+- .env / 密钥文件: 未修改 ✅
+- 非 NQE 业务域文件: 未修改 ✅
+- 物管/SAP MID 状态文件: 未修改 ✅
