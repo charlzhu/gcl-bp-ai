@@ -645,39 +645,59 @@ def check_context_readiness(state: NqeSqlAgentState) -> NqeSqlAgentState:
 
 
 def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
-    """生成内部候选查询文本。
+    """真实 LLM SQL 生成节点。
 
+    NQE-SQL-REAL-1: 替换占位逻辑，调用真实 LLM 生成 SQL。
     参数：
         state: readiness 通过后的运行态。
     返回：
         写入 generated_sql 的运行态。
-    业务逻辑：
-        本骨架优先使用测试显式注入的候选文本；未注入时只给出不可通过预检的
-        确定性占位，避免在缺少上下文时误入后续校验。
     """
     package = dict(state.get("retrieval_context_package") or {})
+    question = str(state.get("question") or state.get("normalized_question") or "")
+
+    # 优先测试注入，其次 LLM 生成
     candidate = str(
         state.get("generated_sql")
         or package.get("generated_sql_candidate")
         or package.get("sql_candidate")
         or ""
     ).strip()
-    # 中文注释：auto-context 不含生成候选时，用白名单第一张表的实际字段构造安全默认查询。
+
+    if not candidate and question:
+        try:
+            from backend.app.core.config import get_settings
+            settings = get_settings()
+            if settings.llm_api_key:
+                from backend.app.domains.business_qa_graph.nodes.generate_sql_node import _llm_generate_sql
+                # 将 context_package 转为 LLM 期望的 table_infos / metric_infos
+                table_infos = []
+                for table in package.get("allowed_tables", []):
+                    columns = (package.get("table_columns") or {}).get(table, [])
+                    table_infos.append({"table": table, "columns": columns})
+                metric_infos = package.get("retrieval_assets", {}).get("metrics", [])
+                candidate = _llm_generate_sql(
+                    question, table_infos, metric_infos,
+                    date_info={}, db_info={"dialect": "MySQL"},
+                    settings=settings,
+                )
+                if not candidate or not candidate.strip():
+                    raise ValueError("LLM returned empty SQL")
+        except Exception:
+            # 无 LLM 时保留 tests stub 兼容路径（但不再用 first-column 占位）
+            candidate = ""
+
+    # 最终兜底：仍然无候选时标记错误
     if not candidate:
-        allowed = package.get("allowed_tables") or []
-        if allowed:
-            table = allowed[0]
-            columns = (package.get("table_columns") or {}).get(table, [])
-            col = columns[0] if columns else "*"
-            candidate = f"SELECT {col} FROM {table} LIMIT 10"
-        else:
-            candidate = "SELECT 1"
-    next_state = _append_trace(
-        state,
-        node="generate_sql_direct",
-        summary="已生成内部只读查询候选",
-    )
+        next_state = _append_trace(state, node="generate_sql_direct", status="error", summary="LLM SQL 生成失败")
+        next_state["generated_sql"] = ""
+        next_state["generation_status"] = "failed"
+        next_state["generation_error"] = "no_candidate"
+        return next_state
+
+    next_state = _append_trace(state, node="generate_sql_direct", summary="已生成真实 LLM SQL 查询候选")
     next_state["generated_sql"] = candidate
+    next_state["generation_status"] = "generated"
     return next_state
 
 
