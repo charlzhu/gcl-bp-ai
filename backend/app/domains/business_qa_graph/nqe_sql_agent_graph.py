@@ -564,8 +564,8 @@ def _build_domain_metadata_context_package(domain_code: str) -> dict[str, Any]:
     return build_nqe_context_package_from_bundle(bundle, domain_code=domain_code)
 
 
-# NQE-SQL-MAIN-14: 物流；NQE-SQL-MAIN-19: 产销存；后续按需扩展
-_AUTO_CONTEXT_DOMAINS = frozenset({"logistics", "business_analysis"})
+# NQE-SQL-MAIN-14: 物流；NQE-SQL-MAIN-19: 产销存；NQE-SQL-MAIN-23: BOM；后续按需扩展
+_AUTO_CONTEXT_DOMAINS = frozenset({"logistics", "business_analysis", "plan_bom"})
 
 
 def retrieve_context_multiway(state: NqeSqlAgentState) -> NqeSqlAgentState:

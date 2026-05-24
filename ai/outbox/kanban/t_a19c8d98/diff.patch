@@ -1,0 +1,57 @@
+diff --git a/ai/outbox/kanban/nqe_s3/shadow_compare.jsonl b/ai/outbox/kanban/nqe_s3/shadow_compare.jsonl
+index f251793d..e8c1d915 100644
+--- a/ai/outbox/kanban/nqe_s3/shadow_compare.jsonl
++++ b/ai/outbox/kanban/nqe_s3/shadow_compare.jsonl
+@@ -78,3 +78,7 @@
+ {"ts": "2026-05-22T07:34:48.142413+00:00", "question": "2024 年总发运量是多少？", "trace_id": "trace-s3-diff", "old_signature": {"status": "success", "row_count": 42, "key_numbers": [], "hash": "13e67a5c65bcc7d19fb4dcf5bdf9c3f81125ab872f53a7b860b0a0e8dc5c8b57"}, "nl2sql_signature": {"status": "success", "row_count": 50, "key_numbers": [], "hash": "ee69f334a462e63525276f85e37a63619d2b39e2565627ba53e541030e66d03c"}, "comparison": {"overall_match": false, "status_match": true, "row_count_match": false, "row_count_diff": 8, "key_numbers_match": true, "hash_match": false, "mismatch_reasons": ["行数不一致：旧链路=42，NL2SQL=50，差异=8", "结果哈希不一致"]}}
+ {"ts": "2026-05-22T07:34:48.143071+00:00", "question": "2024 年总发运量是多少？", "trace_id": "trace-s3-fail", "old_signature": {"status": "success", "row_count": 42, "key_numbers": [], "hash": "13e67a5c65bcc7d19fb4dcf5bdf9c3f81125ab872f53a7b860b0a0e8dc5c8b57"}, "nl2sql_signature": {"status": "error", "row_count": 0, "key_numbers": [], "hash": "2378fac2411ed93dcf171a8f74fced9ce3fc0e681a95689256fb52d51bb4c4b4"}, "comparison": {"overall_match": false, "status_match": false, "row_count_match": false, "row_count_diff": -42, "key_numbers_match": true, "hash_match": false, "mismatch_reasons": ["状态不一致：旧链路=success，NL2SQL=error", "行数不一致：旧链路=42，NL2SQL=0，差异=-42", "结果哈希不一致"]}}
+ {"ts": "2026-05-22T07:34:48.150265+00:00", "question": "2024 年总发运量是多少？", "trace_id": "trace-e2e-s3", "old_signature": {"status": "success", "row_count": 42, "key_numbers": [42.0], "hash": "34355f9768b8f37967474990850618fab0b7b79e75c180a422e0e9beaf277f41"}, "nl2sql_signature": {"status": "success", "row_count": 42, "key_numbers": [42.0], "hash": "c112df94b0dadcf0a3ba2035b4acc396892edf7ced34d4525caa9fd36c5ba543"}, "comparison": {"overall_match": true, "status_match": true, "row_count_match": true, "row_count_diff": 0, "key_numbers_match": true, "hash_match": false, "mismatch_reasons": ["结果哈希不一致"]}}
++{"ts": "2026-05-24T09:02:42.916800+00:00", "question": "2024 年总发运量是多少？", "trace_id": "trace-s3-node", "old_signature": {"status": "success", "row_count": 42, "key_numbers": [42.0], "hash": "34355f9768b8f37967474990850618fab0b7b79e75c180a422e0e9beaf277f41"}, "nl2sql_signature": {"status": "success", "row_count": 42, "key_numbers": [42.0], "hash": "c112df94b0dadcf0a3ba2035b4acc396892edf7ced34d4525caa9fd36c5ba543"}, "comparison": {"overall_match": true, "status_match": true, "row_count_match": true, "row_count_diff": 0, "key_numbers_match": true, "hash_match": false, "mismatch_reasons": ["结果哈希不一致"]}}
++{"ts": "2026-05-24T09:02:42.917477+00:00", "question": "2024 年总发运量是多少？", "trace_id": "trace-s3-diff", "old_signature": {"status": "success", "row_count": 42, "key_numbers": [], "hash": "13e67a5c65bcc7d19fb4dcf5bdf9c3f81125ab872f53a7b860b0a0e8dc5c8b57"}, "nl2sql_signature": {"status": "success", "row_count": 50, "key_numbers": [], "hash": "ee69f334a462e63525276f85e37a63619d2b39e2565627ba53e541030e66d03c"}, "comparison": {"overall_match": false, "status_match": true, "row_count_match": false, "row_count_diff": 8, "key_numbers_match": true, "hash_match": false, "mismatch_reasons": ["行数不一致：旧链路=42，NL2SQL=50，差异=8", "结果哈希不一致"]}}
++{"ts": "2026-05-24T09:02:42.918416+00:00", "question": "2024 年总发运量是多少？", "trace_id": "trace-s3-fail", "old_signature": {"status": "success", "row_count": 42, "key_numbers": [], "hash": "13e67a5c65bcc7d19fb4dcf5bdf9c3f81125ab872f53a7b860b0a0e8dc5c8b57"}, "nl2sql_signature": {"status": "error", "row_count": 0, "key_numbers": [], "hash": "2378fac2411ed93dcf171a8f74fced9ce3fc0e681a95689256fb52d51bb4c4b4"}, "comparison": {"overall_match": false, "status_match": false, "row_count_match": false, "row_count_diff": -42, "key_numbers_match": true, "hash_match": false, "mismatch_reasons": ["状态不一致：旧链路=success，NL2SQL=error", "行数不一致：旧链路=42，NL2SQL=0，差异=-42", "结果哈希不一致"]}}
++{"ts": "2026-05-24T09:02:42.930826+00:00", "question": "2024 年总发运量是多少？", "trace_id": "trace-e2e-s3", "old_signature": {"status": "success", "row_count": 42, "key_numbers": [42.0], "hash": "34355f9768b8f37967474990850618fab0b7b79e75c180a422e0e9beaf277f41"}, "nl2sql_signature": {"status": "success", "row_count": 42, "key_numbers": [42.0], "hash": "c112df94b0dadcf0a3ba2035b4acc396892edf7ced34d4525caa9fd36c5ba543"}, "comparison": {"overall_match": true, "status_match": true, "row_count_match": true, "row_count_diff": 0, "key_numbers_match": true, "hash_match": false, "mismatch_reasons": ["结果哈希不一致"]}}
+diff --git a/backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py b/backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py
+index a71fa23b..012948e9 100644
+--- a/backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py
++++ b/backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py
+@@ -564,8 +564,8 @@ def _build_domain_metadata_context_package(domain_code: str) -> dict[str, Any]:
+     return build_nqe_context_package_from_bundle(bundle, domain_code=domain_code)
+ 
+ 
+-# NQE-SQL-MAIN-14: 物流；NQE-SQL-MAIN-19: 产销存；后续按需扩展
+-_AUTO_CONTEXT_DOMAINS = frozenset({"logistics", "business_analysis"})
++# NQE-SQL-MAIN-14: 物流；NQE-SQL-MAIN-19: 产销存；NQE-SQL-MAIN-23: BOM；后续按需扩展
++_AUTO_CONTEXT_DOMAINS = frozenset({"logistics", "business_analysis", "plan_bom"})
+ 
+ 
+ def retrieve_context_multiway(state: NqeSqlAgentState) -> NqeSqlAgentState:
+diff --git a/tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py b/tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py
+index 9aa8c2b8..2d6ce66c 100644
+--- a/tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py
++++ b/tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py
+@@ -239,20 +239,17 @@ def test_retrieve_context_multiway_builds_logistics_context_when_cwd_changes(mon
+     assert package["retrieval_assets"]["summary"]["chunks"] > 0
+ 
+ 
+-def test_retrieve_context_multiway_does_not_auto_ready_plan_bom() -> None:
+-    """验证非本卡接入域仍保持占位澄清，不自动 ready。"""
+-
++def test_retrieve_context_multiway_does_not_auto_ready_unknown_domain() -> None:
++    """验证未接入域仍保持占位澄清，不自动 ready。"""
+     graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
+-
+     state = graph_module.retrieve_context_multiway(
+         {
+-            "question": "查询计划 BOM",
+-            "normalized_question": "查询计划 BOM",
++            "question": "未知域查询",
++            "normalized_question": "未知域查询",
+             "nqe_mode": "on",
+-            "domain_hint": "plan_bom",
++            "domain_hint": "unknown_domain",
+         }
+     )
+-
+     assert state["retrieval_context_package"] == {}
+     assert state["retrieval_candidates"] == []
+ 
