@@ -116,6 +116,12 @@ class Settings(BaseSettings):
     business_qa_graph_domains: list[str] = Field(default_factory=lambda: ["logistics", "plan_bom", "plan_power"])
     business_qa_graph_stream_events_enabled: bool = True
     business_qa_graph_audit_enabled: bool = True
+    # NQE 统一 SQL Agent 物流域独立灰度开关
+    # off = 不启用 NQE SQL Agent，完全走旧物流链路（默认）
+    # shadow = 旧链路返回用户结果，NQE SQL Agent 后台运行并记录 shadow compare
+    # assist = NQE SQL Agent 参与辅助，失败时 fallback 旧链路（接口预留）
+    # on = NQE SQL Agent 作为主链路，旧链路作为 fallback（接口预留）
+    nqe_logistics_mode: Literal["off", "shadow", "assist", "on"] = "off"
     query_planning_v2_response_meta_enabled: bool = False
     business_qa_langgraph_enabled: bool = False
     # 掌柜问数对齐版 Graph 灰度开关

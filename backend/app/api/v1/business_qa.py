@@ -42,6 +42,53 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
+def _nqe_shadow_attach(
+    final_payload: dict[str, Any],
+    question: str,
+    trace_id: str,
+    old_result_payload: dict[str, Any],
+) -> None:
+    """NQE SQL Agent 物流灰度接入：执行 shadow compare 并附加结果。
+
+    参数：
+        final_payload: 即将返回给前端的 done 事件负载。
+        question: 用户原始问题。
+        trace_id: 查询追踪号。
+        old_result_payload: 旧链路返回结果。
+    业务逻辑：
+        - off 模式：不执行，直接返回（默认保护旧链路）。
+        - shadow / assist / on 模式：后台执行 NQE Graph，将 shadow compare
+          记录写入 final_payload["_nqe_shadow"]。
+        - 执行异常时只记录 warning 日志，不中断用户响应。
+    """
+    try:
+        from backend.app.domains.business_qa_graph.nqe_logistics_gray import (
+            build_nqe_shadow_compare_record,
+            get_nqe_logistics_mode,
+        )
+
+        mode = get_nqe_logistics_mode()
+        if mode == "off":
+            return
+
+        shadow_record = build_nqe_shadow_compare_record(
+            question=question,
+            trace_id=trace_id,
+            old_result=old_result_payload,
+        )
+        # 中文注释：shadow compare 只写入内部审计键，不暴露给用户
+        final_payload["_nqe_shadow"] = {
+            "mode": mode,
+            "record": shadow_record,
+        }
+    except Exception:
+        logger.warning(
+            "NQE shadow attach failed (non-blocking), trace_id=%s",
+            trace_id,
+            exc_info=True,
+        )
+
 # ---- 统一流式事件 stage 常量（与 schemas 中的 UNIFIED_STREAM_STAGES 一致） ----
 STAGE_RECEIVED = "received"
 STAGE_UNDERSTANDING = "understanding"
@@ -233,6 +280,10 @@ def business_qa_stream(
                 )
                 if query_plan_v2_meta:
                     final_payload["query_plan_v2_meta"] = query_plan_v2_meta
+
+                # ---- NQE SQL Agent 物流灰度接入 (NQE-SQL-MAIN-16) ----
+                # 在 shadow / assist / on 模式下执行 NQE Graph 并记录对比
+                _nqe_shadow_attach(final_payload, payload.question, trace_id, result_payload)
 
             elif domain == "plan_bom":
                 result = plan_bom_service.ask(payload.question, use_llm=True, trace_id=trace_id)

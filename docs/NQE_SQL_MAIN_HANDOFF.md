@@ -1,38 +1,38 @@
 # NQE_SQL_MAIN_HANDOFF.md
 
-## 交接结论：NQE-SQL-MAIN-15 完成
+## 交接结论：NQE-SQL-MAIN-16 完成
 
-更新时间：2026-05-24 16:00 CST
+更新时间：2026-05-24 16:30 CST
 
 ---
 
-## 一、NQE-SQL-MAIN-15 完成 (t_b280ecb1)
+## 一、NQE-SQL-MAIN-16 交付 (t_5a833e34)
 
-### 测试结果
+### 新增配置
 
-- **44 passed, 0 failed, 7 warnings**
-- 新增 logistics 测试 9 个用例全部通过
-- 存量 35 个用例保持通过
+`nqe_logistics_mode: Literal["off", "shadow", "assist", "on"] = "off"`
 
-### 交付文件
+### 模式实现
 
-- backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py（generate_sql_direct 增强）
-- tests/unit/business_qa_graph/test_nqe_sql_agent_logistics.py（NEW, 9 用例）
+| 模式 | 状态 |
+|---|---|
+| off | ✅ 默认，不调用 NQE |
+| shadow | ✅ NQE 后台 shadow compare |
+| assist | 🔧 接口预留 |
+| on | 🔧 接口预留 |
 
-### outbox
+### 测试
 
-ai/outbox/kanban/t_b280ecb1/
+53/53 passed, 0 failed
 
 ---
 
 ## 二、当前 git 状态
 
-- 分支：agent/bp-main
-- unstaged: nqe_sql_agent_graph.py
-- untracked: test_nqe_sql_agent_logistics.py, t_b280ecb1 outbox, NQE docs
-
----
+- 未 commit
+- 修改：config.py, business_qa.py, nqe_logistics_gray.py
+- 新增：test_nqe_logistics_gray.py, outbox
 
 ## 三、下一步
 
-建议先 checkpoint commit，再进入 NQE-SQL-MAIN-16：物流正式链路灰度切换。
+建议 checkpoint commit 后再进入 NQE-SQL-MAIN-17。
