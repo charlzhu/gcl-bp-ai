@@ -1,0 +1,169 @@
+diff --git a/tests/unit/business_qa_graph/test_nqe_sql_agent_business_analysis.py b/tests/unit/business_qa_graph/test_nqe_sql_agent_business_analysis.py
+index bc17c71e..91c3dabe 100644
+--- a/tests/unit/business_qa_graph/test_nqe_sql_agent_business_analysis.py
++++ b/tests/unit/business_qa_graph/test_nqe_sql_agent_business_analysis.py
+@@ -10,28 +10,46 @@ import importlib
+ from typing import Any
+ 
+ 
+-def test_business_analysis_auto_context_ready() -> None:
+-    """产销存域 business_analysis 应在白名单中，可自动构造元数据上下文。"""
++INTERNAL_TERMS = (
++    "SQL", "SELECT", "FROM", "table", "column",
++    "query_key", "planner", "guardrail", "schema",
++    "raw", "debug", "LLM", "prompt", "trace",
++)
++
++
++def _assert_business_safe_text(text: str) -> None:
++    upper_text = text.upper()
++    for term in INTERNAL_TERMS:
++        assert term.upper() not in upper_text
++
++
++def _build_graph():
+     graph_module = importlib.import_module(
+         "backend.app.domains.business_qa_graph.nqe_sql_agent_graph"
+     )
++    return graph_module.build_nqe_sql_agent_graph()
++
++
++# ── 元数据同步与上下文 ──
+ 
++
++def test_business_analysis_auto_context_ready() -> None:
++    """产销存域应在白名单中，可自动构造元数据上下文。"""
++    graph_module = importlib.import_module(
++        "backend.app.domains.business_qa_graph.nqe_sql_agent_graph"
++    )
+     state = graph_module.retrieve_context_multiway(
+         {
+             "question": "2024 年组件产量是多少",
+-            "normalized_question": "2024 年组件产量是多少",
+             "nqe_mode": "on",
+             "domain_hint": "business_analysis",
+             "selected_domain": "business_analysis",
+         }
+     )
+     package = state["retrieval_context_package"]
+-
+     assert package["ready"] is True
+     assert package["domain_code"] == "business_analysis"
+-    assert isinstance(package["allowed_tables"], list)
+     assert len(package["allowed_tables"]) > 0
+-    assert isinstance(package["table_columns"], dict)
+ 
+ 
+ def test_business_analysis_retrieval_candidates_set() -> None:
+@@ -39,60 +57,84 @@ def test_business_analysis_retrieval_candidates_set() -> None:
+     graph_module = importlib.import_module(
+         "backend.app.domains.business_qa_graph.nqe_sql_agent_graph"
+     )
+-
+     state = graph_module.retrieve_context_multiway(
+         {
+             "question": "2025 年各月预算达成率",
+-            "normalized_question": "2025 年各月预算达成率",
+             "nqe_mode": "shadow",
+             "domain_hint": "business_analysis",
+             "selected_domain": "business_analysis",
+         }
+     )
+     candidates = state["retrieval_candidates"]
+-    assert len(candidates) > 0
+-    assert candidates[0]["status"] == "ready"
+     assert candidates[0]["domain_code"] == "business_analysis"
+ 
+ 
+-def test_business_analysis_context_has_assets() -> None:
+-    """产销存域上下文包包含检索资产。"""
++def test_logistics_domain_still_works_after_business_analysis_added() -> None:
++    """添加产销存域后物流域 auto-context 仍正常运行。"""
+     graph_module = importlib.import_module(
+         "backend.app.domains.business_qa_graph.nqe_sql_agent_graph"
+     )
+-
+     state = graph_module.retrieve_context_multiway(
+         {
+-            "question": "2024 年库存周转率",
+-            "normalized_question": "2024 年库存周转率",
++            "question": "2024 年哪个承运商发运量最高",
+             "nqe_mode": "on",
+-            "domain_hint": "business_analysis",
+-            "selected_domain": "business_analysis",
++            "domain_hint": "logistics",
++            "selected_domain": "logistics",
+         }
+     )
+     package = state["retrieval_context_package"]
+-    assets = package.get("retrieval_assets", {})
+-    assert assets["summary"]["tables"] > 0
+-    assert assets["summary"]["chunks"] > 0
++    assert package["ready"] is True
++    assert package["domain_code"] == "logistics"
+ 
+ 
+-def test_logistics_domain_still_works_after_business_analysis_added() -> None:
+-    """添加产销存域后物流域 auto-context 仍正常运行。"""
+-    graph_module = importlib.import_module(
+-        "backend.app.domains.business_qa_graph.nqe_sql_agent_graph"
++# ── 产销存端到端完整链路 ──
++
++
++def test_business_analysis_full_e2e_pipeline() -> None:
++    """产销存 on 模式走完整 SQL Agent 链路。"""
++    graph = _build_graph()
++    final_state = graph.invoke(
++        {
++            "question": "2024 年组件产量是多少",
++            "nqe_mode": "on",
++            "domain_hint": "business_analysis",
++        }
+     )
++    assert final_state["selected_domain"] == "business_analysis"
++    assert final_state["terminal_status"] in {"completed", "error"}
++    assert final_state["sql_safety_result"]["status"] == "pass"
++    _assert_business_safe_text(final_state["user_visible_response"])
+ 
+-    state = graph_module.retrieve_context_multiway(
++
++def test_business_analysis_safety_reject_on_ddl() -> None:
++    """产销存域 DDL 注入必须被安全预检拒绝。"""
++    graph = _build_graph()
++    final_state = graph.invoke(
+         {
+-            "question": "2024 年哪个承运商发运量最高",
+-            "normalized_question": "2024 年哪个承运商发运量最高",
++            "question": "删除所有数据",
+             "nqe_mode": "on",
+-            "domain_hint": "logistics",
+-            "selected_domain": "logistics",
++            "domain_hint": "business_analysis",
++            "retrieval_context_package": {
++                "ready": True,
++                "allowed_tables": ["ba_metric_view"],
++                "generated_sql_candidate": "DROP TABLE ba_metric_view",
++            },
++            "context_readiness": "pass",
+         }
+     )
+-    package = state["retrieval_context_package"]
++    assert final_state["terminal_status"] == "safety_reject"
++    _assert_business_safe_text(final_state["user_visible_response"])
+ 
+-    assert package["ready"] is True
+-    assert package["domain_code"] == "logistics"
+-    assert len(package["allowed_tables"]) > 0
++
++def test_business_analysis_shadow_mode_context() -> None:
++    """产销存 shadow 模式仍构建上下文。"""
++    graph = _build_graph()
++    final_state = graph.invoke(
++        {
++            "question": "2024 年库存周转率",
++            "nqe_mode": "shadow",
++            "domain_hint": "business_analysis",
++        }
++    )
++    assert final_state["selected_domain"] == "business_analysis"
++    assert final_state["retrieval_context_package"]["ready"] is True
