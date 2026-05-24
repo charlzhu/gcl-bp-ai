@@ -1,0 +1,22 @@
+{
+  "counts": {
+    "business_rules": 21,
+    "columns": 226,
+    "data_sources": 3,
+    "dimensions": 51,
+    "domains": 3,
+    "metadata_versions": 1,
+    "metrics": 65,
+    "quality_gates": 1,
+    "retrieval_chunks": 382,
+    "tables": 19
+  },
+  "domains": [
+    "logistics",
+    "business_analysis",
+    "plan_bom"
+  ],
+  "metadata_version": "nqe_catalog_v1",
+  "quality_gate_status": "passed",
+  "warnings": []
+}

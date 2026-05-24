@@ -28,6 +28,23 @@ from backend.app.domains.plan_bom.models import (
     PlanPowerPowerBin,
     PlanPowerSupplierEfficiencyDistribution,
 )
+from backend.app.models.nqe_metadata import (
+    NqeBusinessRule,
+    NqeColumnInfo,
+    NqeDataSource,
+    NqeDimensionInfo,
+    NqeDomain,
+    NqeMetadataVersion,
+    NqeMetricInfo,
+    NqeQualityGate,
+    NqeQueryTrace,
+    NqeQueryTraceStep,
+    NqeRetrievalChunk,
+    NqeSqlRevision,
+    NqeTableInfo,
+    NqeValueIndex,
+    NqeValueInfo,
+)
 from backend.app.models.sys_query_log import SysQueryLog
 from backend.app.models.sys_task_error_log import SysTaskErrorLog
 from backend.app.models.sys_task_log import SysTaskLog
@@ -55,4 +72,19 @@ __all__ = [
     "PlanPowerBenchmarkFactor",
     "PlanPowerModelValidationCase",
     "PlanPowerParseIssue",
+    "NqeDomain",
+    "NqeDataSource",
+    "NqeTableInfo",
+    "NqeColumnInfo",
+    "NqeValueInfo",
+    "NqeValueIndex",
+    "NqeMetricInfo",
+    "NqeDimensionInfo",
+    "NqeBusinessRule",
+    "NqeRetrievalChunk",
+    "NqeQueryTrace",
+    "NqeQueryTraceStep",
+    "NqeSqlRevision",
+    "NqeMetadataVersion",
+    "NqeQualityGate",
 ]

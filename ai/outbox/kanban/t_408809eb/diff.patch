@@ -1,0 +1,706 @@
+diff --git a/backend/app/domains/business_qa_graph/nqe_sql_safety.py b/backend/app/domains/business_qa_graph/nqe_sql_safety.py
+new file mode 100644
+index 00000000..2a3a107b
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/nqe_sql_safety.py
+@@ -0,0 +1,418 @@
++"""NQE 独立 Graph 内部查询安全预检。
++
++本模块只做确定性字符串级安全拦截，不连接数据库、不访问真实业务入口，
++也不把内部候选文本暴露给用户。
++"""
++
++from __future__ import annotations
++
++import re
++from typing import Any
++
++
++DEFAULT_RESULT_CAP = 200
++
++_COMMENT_TOKENS = ("--", "/*", "*/", "#")
++_BANNED_STATEMENT_KEYWORDS = {
++    "insert",
++    "update",
++    "delete",
++    "merge",
++    "create",
++    "alter",
++    "drop",
++    "truncate",
++    "replace",
++    "call",
++    "exec",
++    "execute",
++    "grant",
++    "revoke",
++    "commit",
++    "rollback",
++}
++_BANNED_EXPRESSION_PATTERNS = (
++    "sleep",
++    "pg_sleep",
++    "benchmark",
++    "load_file",
++    "pg_read_file",
++    "pg_read_binary_file",
++    "pg_ls_dir",
++    "pg_stat_file",
++    "dblink",
++    "dblink_exec",
++    "xp_cmdshell",
++    "sys_exec",
++    "sys_eval",
++    "lo_import",
++    "lo_export",
++    "outfile",
++    "dumpfile",
++    "into outfile",
++    "into dumpfile",
++)
++_SYSTEM_OBJECT_PREFIXES = (
++    "information_schema",
++    "performance_schema",
++    "mysql",
++    "sys",
++    "pg_catalog",
++    "pg_toast",
++    "sqlite_master",
++)
++_IDENTIFIER_PATTERN = r"[`\"\[]?[A-Za-z_][\w$]*(?:\s*\.\s*[`\"\[]?[A-Za-z_][\w$]*){0,2}"
++_TABLE_REF_PATTERN = re.compile(
++    rf"\b(?:from|join)\s+({_IDENTIFIER_PATTERN})",
++    re.IGNORECASE,
++)
++_LEADING_TABLE_REF_PATTERN = re.compile(rf"^\s*({_IDENTIFIER_PATTERN})\b", re.IGNORECASE)
++_CLAUSE_STOP_PATTERN = re.compile(
++    r"\b(?:where|group\s+by|order\s+by|having|limit|union|intersect|except|for\s+update)\b",
++    re.IGNORECASE,
++)
++_FROM_CLAUSE_PATTERN = re.compile(
++    r"\bfrom\b\s+([^()]*?)(?=\)|\bwhere\b|\bgroup\s+by\b|\border\s+by\b|\bhaving\b|\blimit\b|\bunion\b|\bintersect\b|\bexcept\b|$)",
++    re.IGNORECASE,
++)
++_LIMIT_PATTERN = re.compile(r"\blimit\s+(\d+)\b", re.IGNORECASE)
++
++
++def _normalize_identifier(identifier: str) -> str:
++    """归一化对象标识。
++
++    参数：
++        identifier: 候选文本中或上下文白名单中出现的对象名称。
++    返回：
++        去除常见引用符号并统一小写后的对象名称。
++    业务逻辑：
++        仅做确定性规整，不补全业务对象，也不把非白名单对象自动映射为可用对象。
++    """
++    parts = []
++    for part in identifier.split("."):
++        cleaned = part.strip().strip("`\"[]").strip()
++        if cleaned:
++            parts.append(cleaned.lower())
++    return ".".join(parts)
++
++
++def _extract_allowed_tables(context_package: dict[str, Any]) -> set[str]:
++    """从召回上下文包中读取白名单对象。
++
++    参数：
++        context_package: Graph 上游注入的召回上下文包。
++    返回：
++        归一化后的白名单集合；缺失或格式不合法时返回空集合。
++    业务逻辑：
++        安全预检只信任上下文包显式注入的白名单，不读取外部配置或业务元数据。
++    """
++    raw_allowed = (
++        context_package.get("allowed_tables")
++        or context_package.get("allowed_table_names")
++        or context_package.get("table_whitelist")
++        or context_package.get("whitelist_tables")
++    )
++    if not isinstance(raw_allowed, list | tuple | set):
++        return set()
++
++    allowed: set[str] = set()
++    for item in raw_allowed:
++        if isinstance(item, str):
++            normalized = _normalize_identifier(item)
++        elif isinstance(item, dict):
++            normalized = _normalize_identifier(
++                str(
++                    item.get("name")
++                    or item.get("table")
++                    or item.get("table_name")
++                    or item.get("object_name")
++                    or item.get("qualified_name")
++                    or ""
++                )
++            )
++        else:
++            normalized = ""
++        if normalized:
++            allowed.add(normalized)
++    return allowed
++
++
++def _normalize_sql_text(sql_text: str) -> tuple[str, list[str]]:
++    """归一化候选文本并识别基础文本风险。
++
++    参数：
++        sql_text: 待预检的内部候选文本。
++    返回：
++        二元组：归一化文本、违规原因列表。
++    业务逻辑：
++        单条语句可带一个末尾分号；多分号、内嵌分号或注释标记一律拒绝。
++    """
++    violations: list[str] = []
++    stripped = str(sql_text or "").strip()
++    if not stripped:
++        return "", ["missing_candidate"]
++
++    lowered = stripped.lower()
++    if any(token in lowered for token in _COMMENT_TOKENS):
++        violations.append("comment_token_detected")
++
++    semicolon_count = stripped.count(";")
++    if semicolon_count > 1 or (semicolon_count == 1 and not stripped.endswith(";")):
++        violations.append("multiple_statements")
++    if semicolon_count == 1:
++        stripped = stripped[:-1].strip()
++
++    normalized = " ".join(stripped.split())
++    return normalized, violations
++
++
++def _split_top_level_commas(clause: str) -> list[str]:
++    """按顶层逗号拆分 FROM 片段。
++
++    参数：
++        clause: FROM 后、WHERE/GROUP/LIMIT 等边界前的文本片段。
++    返回：
++        顶层逗号拆分后的片段列表。
++    业务逻辑：
++        逗号连接是常见白名单绕过点；拆分时忽略括号内逗号，无法解析的片段由上层拒绝。
++    """
++    parts: list[str] = []
++    start = 0
++    depth = 0
++    for index, char in enumerate(clause):
++        if char == "(":
++            depth += 1
++        elif char == ")" and depth > 0:
++            depth -= 1
++        elif char == "," and depth == 0:
++            parts.append(clause[start:index].strip())
++            start = index + 1
++    parts.append(clause[start:].strip())
++    return [part for part in parts if part]
++
++
++def _extract_from_clause(normalized_sql: str) -> str:
++    """截取主 FROM 子句中可用于对象抽取的片段。
++
++    参数：
++        normalized_sql: 已压缩空白并去掉末尾分号的候选文本。
++    返回：
++        FROM 后到 WHERE/GROUP/ORDER/LIMIT 等边界前的片段；缺少 FROM 时返回空字符串。
++    业务逻辑：
++        本骨架不解析完整 SQL AST，只做安全前置拦截；能定位的 FROM 范围越窄，越不容易把 SELECT 列表逗号误当成表。
++    """
++    match = re.search(r"\bfrom\b\s+(.+)", normalized_sql, re.IGNORECASE)
++    if not match:
++        return ""
++    clause = match.group(1)
++    stop_match = _CLAUSE_STOP_PATTERN.search(clause)
++    if stop_match:
++        clause = clause[: stop_match.start()]
++    return clause.strip()
++
++
++def _extract_from_clauses(normalized_sql: str) -> list[str]:
++    """抽取候选文本中所有 FROM 片段。
++
++    参数：
++        normalized_sql: 已压缩空白并去掉末尾分号的候选文本。
++    返回：
++        每个 FROM 后到 WHERE/GROUP/右括号等边界前的片段列表。
++    业务逻辑：
++        安全预检必须覆盖嵌套子查询；只取首个 FROM 会漏掉子查询里的逗号连接对象。
++        本函数用保守边界扫描所有 FROM 片段，无法解析的复杂片段由上层 fail-closed。
++    """
++    clauses: list[str] = []
++    for match in _FROM_CLAUSE_PATTERN.finditer(normalized_sql):
++        clause = match.group(1).strip()
++        if clause:
++            clauses.append(clause)
++    return clauses
++
++
++def _extract_table_refs(normalized_sql: str) -> tuple[set[str], list[str]]:
++    """抽取候选文本中的对象引用。
++
++    参数：
++        normalized_sql: 已压缩空白并去掉末尾分号的候选文本。
++    返回：
++        二元组：归一化后的对象引用集合、对象抽取违规原因列表。
++    业务逻辑：
++        同时覆盖 FROM/JOIN、顶层逗号连接和嵌套子查询里的逗号连接。遇到子查询、函数表或无法识别的逗号片段时保守拒绝，避免漏抽非白名单对象。
++    """
++    refs: set[str] = set()
++    violations: list[str] = []
++    for match in _TABLE_REF_PATTERN.finditer(normalized_sql):
++        normalized = _normalize_identifier(match.group(1))
++        if normalized:
++            refs.add(normalized)
++
++    for from_clause in _extract_from_clauses(normalized_sql):
++        comma_parts = _split_top_level_commas(from_clause)
++        for part in comma_parts[1:]:
++            if part.lstrip().startswith("("):
++                violations.append("unsupported_table_reference")
++                continue
++            match = _LEADING_TABLE_REF_PATTERN.search(part)
++            if not match:
++                violations.append("unsupported_table_reference")
++                continue
++            normalized = _normalize_identifier(match.group(1))
++            if normalized:
++                refs.add(normalized)
++            else:
++                violations.append("unsupported_table_reference")
++    return refs, violations
++
++
++def _is_system_or_high_risk_object(table_ref: str) -> bool:
++    """判断对象是否属于系统库或高风险对象。
++
++    参数：
++        table_ref: 已归一化的对象引用。
++    返回：
++        属于系统库、高风险前缀或外部系统对象时返回 True。
++    业务逻辑：
++        系统对象即使被误放入白名单也拒绝，避免通过白名单配置错误绕过安全边界。
++    """
++    parts = table_ref.split(".")
++    first_part = parts[0] if parts else table_ref
++    return first_part in _SYSTEM_OBJECT_PREFIXES or table_ref in _SYSTEM_OBJECT_PREFIXES
++
++
++def _is_table_ref_allowed(table_ref: str, allowed_tables: set[str]) -> bool:
++    """判断候选对象是否被白名单精确授权。
++
++    参数：
++        table_ref: 从候选文本中抽取并归一化后的对象名。
++        allowed_tables: 上下文包显式给出的白名单对象集合。
++    返回：
++        候选对象与白名单对象完全一致时返回 True。
++    业务逻辑：
++        不能用 basename 放行跨 schema 对象；例如白名单只有 `table_a` 时，
++        `other_schema.table_a` 必须拒绝，避免同名对象绕过业务域边界。
++    """
++    return table_ref in allowed_tables
++
++
++def _apply_result_cap(normalized_sql: str, result_cap: int) -> tuple[str, bool, list[str]]:
++    """校验或追加结果行数上限。
++
++    参数：
++        normalized_sql: 已通过基础安全检查的候选文本。
++        result_cap: 允许的最大结果行数。
++    返回：
++        三元组：带上限的安全候选、是否由预检修改上限、违规原因列表。
++    业务逻辑：
++        无上限时追加最小上限；已有上限超过 cap 时收敛到 cap；无法解析时拒绝。
++    """
++    violations: list[str] = []
++    limit_matches = list(_LIMIT_PATTERN.finditer(normalized_sql))
++    if len(limit_matches) > 1:
++        return normalized_sql, False, ["invalid_limit"]
++    if not limit_matches:
++        return f"{normalized_sql} LIMIT {result_cap}", True, violations
++
++    limit_match = limit_matches[0]
++    if re.search(r"\blimit\s+\d+\s*,\s*\d+\b", normalized_sql, re.IGNORECASE):
++        return normalized_sql, False, ["invalid_limit"]
++    try:
++        limit_value = int(limit_match.group(1))
++    except ValueError:
++        return normalized_sql, False, ["invalid_limit"]
++    if limit_value <= 0:
++        return normalized_sql, False, ["invalid_limit"]
++    if limit_value <= result_cap:
++        return normalized_sql, False, violations
++
++    capped_sql = f"{normalized_sql[: limit_match.start(1)]}{result_cap}{normalized_sql[limit_match.end(1) :]}"
++    return capped_sql, True, violations
++
++
++def precheck_nqe_sql_safety(
++    sql_text: str | None,
++    context_package: dict[str, Any] | None,
++    domain: str | None = None,
++    *,
++    result_cap: int = DEFAULT_RESULT_CAP,
++) -> dict[str, Any]:
++    """执行 NQE 内部候选文本安全预检。
++
++    参数：
++        sql_text: Graph 生成或测试注入的内部候选文本。
++        context_package: 上游召回上下文包，必须显式包含对象白名单。
++        domain: 当前业务域，仅用于结构化结果追溯，不参与放宽校验。
++        result_cap: 默认结果行数上限，必须为正整数。
++    返回：
++        结构化预检结果，包含 status、reason_code、normalized_sql、safe_sql、
++        limit_applied、violations、allowed_tables。
++    业务逻辑：
++        预检采用 fail-closed：缺少候选、缺少白名单、非只读、多语句、系统对象、
++        非白名单对象或无法确定时全部拒绝。
++    """
++    context = dict(context_package or {})
++    cap = result_cap if isinstance(result_cap, int) and result_cap > 0 else DEFAULT_RESULT_CAP
++    allowed_tables = _extract_allowed_tables(context)
++    normalized_sql, violations = _normalize_sql_text(sql_text or "")
++    domain_value = str(domain or context.get("domain") or "").strip()
++
++    if not allowed_tables:
++        violations.append("missing_whitelist")
++    if not normalized_sql:
++        violations.append("missing_candidate")
++
++    lowered = normalized_sql.lower()
++    if normalized_sql and not lowered.startswith("select "):
++        violations.append("not_select_only")
++
++    keyword_matches = {
++        keyword for keyword in _BANNED_STATEMENT_KEYWORDS if re.search(rf"\b{re.escape(keyword)}\b", lowered)
++    }
++    if keyword_matches:
++        violations.append("mutating_or_ddl_keyword")
++
++    expression_matches = {
++        pattern for pattern in _BANNED_EXPRESSION_PATTERNS if re.search(rf"\b{re.escape(pattern)}\b", lowered)
++    }
++    if re.search(r"\bdblink(?:_\w+)?\s*\(", lowered):
++        # dblink 扩展函数族可建立外部连接或读取远端结果，不能只拦截精确 dblink/dblink_exec。
++        expression_matches.add("dblink_family")
++    if expression_matches:
++        violations.append("dangerous_expression")
++
++    if any(prefix in lowered for prefix in _SYSTEM_OBJECT_PREFIXES):
++        violations.append("system_object")
++
++    extracted_table_refs = _extract_table_refs(normalized_sql) if normalized_sql else (set(), [])
++    table_refs, table_ref_warnings = extracted_table_refs
++    violations.extend(table_ref_warnings)
++    if normalized_sql and not table_refs:
++        violations.append("missing_table_reference")
++
++    for table_ref in table_refs:
++        if _is_system_or_high_risk_object(table_ref):
++            violations.append("system_object")
++        if not _is_table_ref_allowed(table_ref, allowed_tables):
++            violations.append("table_not_whitelisted")
++
++    safe_sql = ""
++    limit_applied = False
++    if not violations:
++        safe_sql, limit_applied, limit_violations = _apply_result_cap(normalized_sql, cap)
++        violations.extend(limit_violations)
++
++    unique_violations = sorted(set(violations))
++    status = "pass" if not unique_violations else "reject"
++    reason_code = "safe" if status == "pass" else unique_violations[0]
++
++    return {
++        "status": status,
++        "reason_code": reason_code,
++        "normalized_sql": normalized_sql,
++        "safe_sql": safe_sql if status == "pass" else "",
++        "limit_applied": limit_applied if status == "pass" else False,
++        "violations": unique_violations,
++        "allowed_tables": sorted(allowed_tables),
++        "referenced_tables": sorted(table_refs),
++        "domain": domain_value,
++    }
+
+diff --git a/tests/unit/business_qa_graph/test_nqe_sql_agent_safety_precheck.py b/tests/unit/business_qa_graph/test_nqe_sql_agent_safety_precheck.py
+new file mode 100644
+index 00000000..56b5be24
+--- /dev/null
++++ b/tests/unit/business_qa_graph/test_nqe_sql_agent_safety_precheck.py
+@@ -0,0 +1,275 @@
++from __future__ import annotations
++
++import importlib
++from typing import Any
++
++from backend.app.domains.business_qa_graph.nqe_sql_safety import precheck_nqe_sql_safety
++
++
++INTERNAL_TERMS = (
++    "SQL",
++    "SELECT",
++    "FROM",
++    "table",
++    "column",
++    "query_key",
++    "planner",
++    "guardrail",
++    "schema",
++    "raw",
++    "debug",
++    "LLM",
++    "prompt",
++    "trace",
++)
++
++
++def _node_names(state: dict[str, Any]) -> list[str]:
++    """读取 Graph 测试态中的节点名称。"""
++    return [step["node"] for step in state.get("trace_steps", [])]
++
++
++def _assert_business_safe_text(text: str) -> None:
++    """断言用户可见文本不暴露内部技术词。"""
++    upper_text = text.upper()
++    for term in INTERNAL_TERMS:
++        assert term.upper() not in upper_text
++
++
++def _safe_package(candidate: str = "SELECT metric_value FROM nqe_safe_metric_view") -> dict[str, Any]:
++    """构造带白名单和候选文本的安全测试上下文。"""
++    return {
++        "ready": True,
++        "allowed_tables": ["nqe_safe_metric_view"],
++        "generated_sql_candidate": candidate,
++    }
++
++
++def test_precheck_allows_whitelisted_select_and_builds_safe_candidate() -> None:
++    """白名单内的单条只读查询应通过，并生成带结果上限的安全候选。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "pass"
++    assert result["reason_code"] == "safe"
++    assert result["safe_sql"] == "SELECT metric_value FROM nqe_safe_metric_view LIMIT 200"
++    assert result["limit_applied"] is True
++    assert result["allowed_tables"] == ["nqe_safe_metric_view"]
++
++
++def test_precheck_rejects_non_whitelisted_table() -> None:
++    """候选文本引用非白名单对象时必须拒绝。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_other_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "table_not_whitelisted" in result["violations"]
++    assert result["safe_sql"] == ""
++
++
++def test_precheck_rejects_dml_and_ddl_keywords() -> None:
++    """写入、变更结构或过程调用类语句必须拒绝。"""
++    dml_result = precheck_nqe_sql_safety(
++        "UPDATE nqe_safe_metric_view SET metric_value = 1",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++    ddl_result = precheck_nqe_sql_safety(
++        "DROP TABLE nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert dml_result["status"] == "reject"
++    assert ddl_result["status"] == "reject"
++    assert "mutating_or_ddl_keyword" in dml_result["violations"]
++    assert "mutating_or_ddl_keyword" in ddl_result["violations"]
++
++
++def test_precheck_rejects_multiple_statements() -> None:
++    """多语句候选必须拒绝，避免绕过后续只读边界。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_safe_metric_view; SELECT metric_value FROM nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "multiple_statements" in result["violations"]
++
++
++def test_precheck_rejects_system_or_high_risk_objects() -> None:
++    """系统库或高风险对象必须拒绝，即使上下文误配白名单也不能放行。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT table_name FROM information_schema.tables",
++        {"allowed_tables": ["information_schema.tables"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "system_object" in result["violations"]
++
++
++def test_precheck_rejects_dangerous_functions_and_export_expressions() -> None:
++    """危险函数和导出类表达式必须拒绝。"""
++    function_result = precheck_nqe_sql_safety(
++        "SELECT sleep(1) FROM nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++    export_result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_safe_metric_view INTO OUTFILE '/tmp/a.txt'",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert function_result["status"] == "reject"
++    assert export_result["status"] == "reject"
++    assert "dangerous_expression" in function_result["violations"]
++    assert "dangerous_expression" in export_result["violations"]
++
++
++def test_precheck_rejects_missing_whitelist_fail_closed() -> None:
++    """缺少上下文白名单时必须 fail-closed 拒绝。"""
++    result = precheck_nqe_sql_safety("SELECT metric_value FROM nqe_safe_metric_view", {}, "logistics")
++
++    assert result["status"] == "reject"
++    assert "missing_whitelist" in result["violations"]
++    assert result["safe_sql"] == ""
++
++
++def test_precheck_rejects_comma_join_non_whitelisted_table() -> None:
++    """逗号连接中的每个对象都必须纳入白名单校验。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT a.metric_value FROM nqe_safe_metric_view a, nqe_secret_metric_view b",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "table_not_whitelisted" in result["violations"]
++    assert "nqe_secret_metric_view" in result["referenced_tables"]
++
++
++def test_precheck_rejects_schema_qualified_basename_bypass() -> None:
++    """候选带 schema 时不能只凭同名表 basename 放行。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM other_schema.nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "table_not_whitelisted" in result["violations"]
++
++
++def test_precheck_rejects_database_file_and_external_access_functions() -> None:
++    """数据库文件读取、外联和命令类函数必须保守拒绝。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT pg_read_file('/etc/passwd') FROM nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "dangerous_expression" in result["violations"]
++
++
++def test_precheck_rejects_dblink_family_functions() -> None:
++    """dblink 下划线同族函数可能建立外部连接或读取远端结果，必须统一拒绝。"""
++    for sql in (
++        "SELECT dblink_connect('x') FROM nqe_safe_metric_view",
++        "SELECT dblink_get_result('x') FROM nqe_safe_metric_view",
++        "SELECT dblink_disconnect('x') FROM nqe_safe_metric_view",
++    ):
++        result = precheck_nqe_sql_safety(sql, {"allowed_tables": ["nqe_safe_metric_view"]}, "logistics")
++
++        assert result["status"] == "reject"
++        assert "dangerous_expression" in result["violations"]
++        assert result["safe_sql"] == ""
++
++
++def test_precheck_rejects_nested_subquery_comma_join_non_whitelisted_table() -> None:
++    """嵌套子查询中的逗号连接也必须抽取每个对象，不能只校验外层 FROM。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_safe_metric_view "
++        "WHERE EXISTS (SELECT 1 FROM nqe_safe_metric_view a, nqe_secret_metric_view b)",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "table_not_whitelisted" in result["violations"]
++    assert "nqe_secret_metric_view" in result["referenced_tables"]
++
++
++def test_graph_writes_safe_candidate_after_whitelisted_precheck() -> None:
++    """Graph 安全预检通过后应写入安全候选和结构化预检结果。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _safe_package(),
++            "context_readiness": "pass",
++        }
++    )
++
++    assert final_state["terminal_status"] == "completed"
++    assert final_state["sql_safety_result"]["status"] == "pass"
++    assert final_state["safe_sql_candidate"].endswith("LIMIT 200")
++
++
++def test_safety_reject_still_records_trace_and_masks_user_response() -> None:
++    """安全拒绝终态仍必须记录运行摘要，且用户回答不暴露内部技术词。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _safe_package("SELECT metric_value FROM nqe_other_metric_view"),
++            "context_readiness": "pass",
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "safety_reject"
++    assert node_names[-1] == "record_query_log_and_trace"
++    assert "terminal_safety_reject" in node_names
++    assert "table_not_whitelisted" in final_state["sql_safety_result"]["violations"]
++    assert "safe_sql_candidate" not in final_state
++    _assert_business_safe_text(final_state["user_visible_response"])
++
++
++def test_correct_sql_returns_to_safety_precheck() -> None:
++    """修正循环后必须重新经过安全预检，不能直接进入后续校验。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _safe_package(),
++            "context_readiness": "pass",
++            "force_explain_fail": True,
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "error"
++    assert final_state["sql_revision_round"] == 2
++    assert node_names.count("correct_sql") == 2
++    assert node_names.count("precheck_sql_safety") == 3
++    first_correct = node_names.index("correct_sql")
++    assert node_names[first_correct + 1] == "precheck_sql_safety"

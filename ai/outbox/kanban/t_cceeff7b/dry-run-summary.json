@@ -1,0 +1,25 @@
+{
+  "apply_status": "dry_run",
+  "asset_type_counts": {
+    "column": 226,
+    "dimension": 51,
+    "metric": 65,
+    "rule": 21,
+    "table": 19
+  },
+  "counts": {
+    "documents": 382,
+    "indexed": 0
+  },
+  "documents": 382,
+  "domains": {
+    "business_analysis": 98,
+    "logistics": 151,
+    "plan_bom": 133
+  },
+  "dry_run": true,
+  "errors": [],
+  "indexed": 0,
+  "metadata_version": "nqe_catalog_v1",
+  "warnings": []
+}
