@@ -550,22 +550,15 @@ def _domain_for_retrieval(state: NqeSqlAgentState) -> str:
     return str(state.get("selected_domain") or state.get("domain_hint") or "").strip().lower()
 
 
-def _build_domain_metadata_context_package(domain_code: str) -> dict[str, Any]:
-    """构造指定业务域的静态元数据上下文包。
+def _build_logistics_metadata_context_package() -> dict[str, Any]:
+    """构造物流域静态元数据上下文包。
 
-    参数：
-        domain_code: 业务域编码（如 logistics、business_analysis）。
-    返回：
-        NQE Graph 可直接使用的上下文包，包含 ready、allowed_tables 等字段。
-
-    中文注释：仅从仓库受控 catalog 构建对应域上下文，不连接真实库，不读取运行时配置。
+    业务逻辑：
+        中文注释：仅从仓库受控 catalog 构建物流单域上下文，不连接真实库，不读取运行时配置。
     """
-    bundle = NqeMetadataSyncBuilder(include_domains=(domain_code,)).build()
-    return build_nqe_context_package_from_bundle(bundle, domain_code=domain_code)
 
-
-# NQE-SQL-MAIN-14: 物流；NQE-SQL-MAIN-19: 产销存；NQE-SQL-MAIN-23: BOM；后续按需扩展
-_AUTO_CONTEXT_DOMAINS = frozenset({"logistics", "business_analysis", "plan_bom"})
+    bundle = NqeMetadataSyncBuilder(include_domains=("logistics",)).build()
+    return build_nqe_context_package_from_bundle(bundle, domain_code="logistics")
 
 
 def retrieve_context_multiway(state: NqeSqlAgentState) -> NqeSqlAgentState:
@@ -576,18 +569,17 @@ def retrieve_context_multiway(state: NqeSqlAgentState) -> NqeSqlAgentState:
     返回：
         写入 retrieval_query 与 retrieval_candidates 的运行态。
     业务逻辑：
-        优先保留调用方测试注入的 retrieval_context_package；未注入且业务域在
-        _AUTO_CONTEXT_DOMAINS 白名单中时，从受控 catalog 构造元数据上下文。
+        优先保留调用方测试注入的 retrieval_context_package；未注入且业务域为 logistics
+        时，从受控 catalog 构造非敏感物流元数据上下文。其他业务域仍保持占位澄清。
     """
     injected_package = dict(state.get("retrieval_context_package") or {})
     context_package = injected_package
     auto_built = False
-    domain = _domain_for_retrieval(state)
-    if not context_package and domain in _AUTO_CONTEXT_DOMAINS:
-        context_package = _build_domain_metadata_context_package(domain)
+    if not context_package and _domain_for_retrieval(state) == "logistics":
+        context_package = _build_logistics_metadata_context_package()
         auto_built = True
     if auto_built:
-        summary = f"已构造 {domain} 元数据召回上下文"
+        summary = "已构造物流元数据召回上下文"
     elif context_package:
         summary = "已保留测试注入的召回上下文"
     else:
@@ -660,26 +652,16 @@ def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
     返回：
         写入 generated_sql 的运行态。
     业务逻辑：
-        本骨架优先使用测试显式注入的候选文本；未注入时尝试从物流 auto-context
-        构造安全默认候选；无上下文时给出确定性占位。
+        本骨架优先使用测试显式注入的候选文本；未注入时只给出不可通过预检的
+        确定性占位，避免在缺少上下文时误入后续校验。
     """
     package = dict(state.get("retrieval_context_package") or {})
     candidate = str(
         state.get("generated_sql")
         or package.get("generated_sql_candidate")
         or package.get("sql_candidate")
-        or ""
+        or "SELECT 1"
     ).strip()
-    # 中文注释：物流 auto-context 不含生成候选时，用白名单第一张表的实际字段构造安全默认查询。
-    if not candidate:
-        allowed = package.get("allowed_tables") or []
-        if allowed:
-            table = allowed[0]
-            columns = (package.get("table_columns") or {}).get(table, [])
-            col = columns[0] if columns else "*"
-            candidate = f"SELECT {col} FROM {table} LIMIT 10"
-        else:
-            candidate = "SELECT 1"
     next_state = _append_trace(
         state,
         node="generate_sql_direct",

@@ -1,0 +1,974 @@
+diff --git a/backend/app/domains/business_qa_graph/nqe_sql_agent_state.py b/backend/app/domains/business_qa_graph/nqe_sql_agent_state.py
+new file mode 100644
+index 00000000..d7b25aa3
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/nqe_sql_agent_state.py
+@@ -0,0 +1,127 @@
++"""NQE 统一 SQL Agent Graph 运行态定义。
++
++本模块只定义独立骨架的状态字段，不接入正式问答入口、不连接数据库、
++不调用真实模型，也不承载用户可见的内部执行细节。
++"""
++
++from __future__ import annotations
++
++from typing import Any, Literal, TypedDict
++
++
++NqeMode = Literal["off", "shadow", "assist", "on"]
++NqeTerminalStatus = Literal["clarify", "safety_reject", "error", "legacy_fallback", "completed"]
++
++
++class NqeSqlAgentState(TypedDict, total=False):
++    """NQE SQL Agent LangGraph 节点之间传递的状态。
++
++    参数：
++        所有字段均由 Graph 节点按阶段增量写入；调用方可传入 question、
++        nqe_mode、retrieval_context_package 等测试态字段驱动骨架分支。
++    返回：
++        StateGraph 节点之间共享和更新的字典态。
++    业务边界：
++        本状态允许保存内部占位执行信息，但用户可见回答只能写入
++        user_visible_response，且必须屏蔽内部技术词。
++    """
++
++    # 请求上下文：用户原始问题。
++    question: str
++    # 请求上下文：归一化后的业务问题文本。
++    normalized_question: str
++    # 请求上下文：调用方提供的业务域提示。
++    domain_hint: str | None
++    # 请求上下文：前端、渠道或会话侧非敏感上下文。
++    client_context: dict[str, Any]
++    # 请求上下文：用户身份、权限候选等非敏感上下文。
++    user_context: dict[str, Any]
++    # 请求上下文：本次请求的追踪号，不应暴露给用户。
++    trace_id: str | None
++
++    # trace：节点审计轨迹，只记录节点名、状态和业务摘要。
++    trace_steps: list[dict[str, str]]
++
++    # 运行模式：NQE 灰度总开关，off/shadow/assist/on。
++    nqe_mode: NqeMode
++    # 运行模式：领域级灰度模式，未设置时继承 nqe_mode。
++    domain_mode: NqeMode
++    # 运行模式：降级策略，例如 legacy_first 或 nqe_first。
++    fallback_policy: str
++    # 运行模式：Graph 骨架版本。
++    graph_version: str
++    # 运行模式：元数据版本标识，仅作追溯占位。
++    metadata_version_id: str | None
++    # 运行模式：表达模板版本标识，仅作追溯占位。
++    prompt_version_id: str | None
++
++    # 领域：已选择的业务域。
++    selected_domain: str | None
++    # 领域：已选择的业务能力。
++    selected_capability: str | None
++    # 领域：候选业务域列表。
++    domain_candidates: list[dict[str, Any]]
++    # 领域：候选业务能力列表。
++    capability_candidates: list[dict[str, Any]]
++
++    # 理解：关键词候选。
++    keyword_terms: list[str]
++    # 理解：实体候选。
++    entity_terms: list[str]
++    # 理解：指标候选。
++    metric_terms: list[str]
++    # 理解：时间候选。
++    time_terms: list[str]
++    # 理解：对比条件候选。
++    compare_terms: list[str]
++
++    # 召回：用于元数据召回的查询文本。
++    retrieval_query: str
++    # 召回：多路召回候选。
++    retrieval_candidates: list[dict[str, Any]]
++    # 召回：合并排序后的上下文包；本卡只支持测试注入占位包。
++    retrieval_context_package: dict[str, Any]
++    # 召回：上下文是否满足生成占位查询的要求。
++    context_readiness: Literal["unknown", "pass", "fail"]
++    # 召回：需要用户补充的信息提示。
++    clarification_hints: list[str]
++    # 召回：降级提示。
++    fallback_hints: list[str]
++
++    # SQL 生命周期：内部占位查询文本，禁止直接展示给用户。
++    generated_sql: str
++    # SQL 生命周期：通过预检后的内部候选文本。
++    safe_sql_candidate: str
++    # SQL 生命周期：安全预检占位结果。
++    sql_safety_result: dict[str, Any]
++    # SQL 生命周期：解释校验占位结果。
++    explain_result: dict[str, Any]
++    # SQL 生命周期：当前修正轮次，最多 2 轮。
++    sql_revision_round: int
++    # SQL 生命周期：修正记录摘要，不记录用户可见技术细节。
++    sql_revisions: list[dict[str, Any]]
++    # SQL 生命周期：最近一次修正原因。
++    correction_reason: str | None
++
++    # 执行：内部执行结果占位，不连接真实数据库。
++    execution_result_internal: dict[str, Any]
++    # 执行：执行状态。
++    execution_status: Literal["not_started", "skipped", "executed", "failed"]
++    # 执行：结果行数占位。
++    row_count: int
++    # 执行：结果是否被截断。
++    result_truncated: bool
++
++    # 输出：用户可见的业务化回答。
++    user_visible_response: str
++    # 输出：Graph 终态。
++    terminal_status: NqeTerminalStatus
++    # 输出：降级或终止原因。
++    fallback_reason: str | None
++    # 输出：shadow 对比占位结果，不进入用户可见回答。
++    shadow_compare_result: dict[str, Any]
++
++    # 测试控制：强制安全预检拒绝，用于覆盖 safety_reject 终态。
++    force_safety_reject: bool
++    # 测试控制：强制解释校验失败，用于覆盖修正循环。
++    force_explain_fail: bool
+diff --git a/backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py b/backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py
+new file mode 100644
+index 00000000..3da8c242
+--- /dev/null
++++ b/backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py
+@@ -0,0 +1,647 @@
++"""NQE 统一 SQL Agent Graph 独立骨架。
++
++本模块只提供可单测、可编译的 LangGraph 编排骨架。它不替换正式问答入口、
++不访问生产库、不调用真实模型、不执行真实查询，也不把内部过程暴露给用户。
++"""
++
++from __future__ import annotations
++
++from typing import Literal
++
++from langgraph.graph import END, START, StateGraph
++
++from backend.app.domains.business_qa_graph.nqe_sql_agent_state import NqeMode, NqeSqlAgentState
++
++
++NQE_SQL_AGENT_GRAPH_VERSION = "nqe_sql_agent_graph.skeleton.v1"
++MAX_SQL_REVISION_ROUNDS = 2
++
++NQE_SQL_AGENT_NODE_SEQUENCE = (
++    "receive_query",
++    "init_trace_and_mode",
++    "route_domain_and_capability",
++    "normalize_query",
++    "retrieve_context_multiway",
++    "merge_rank_and_build_context",
++    "check_context_readiness",
++    "generate_sql_direct",
++    "precheck_sql_safety",
++    "explain_validate_sql",
++    "correct_sql",
++    "execute_sql_readonly",
++    "present_business_answer",
++    "record_query_log_and_trace",
++    "legacy_fallback",
++    "shadow_compare",
++    "terminal_clarify",
++    "terminal_safety_reject",
++    "terminal_error",
++)
++
++
++def _append_trace(
++    state: NqeSqlAgentState,
++    *,
++    node: str,
++    status: str = "ok",
++    summary: str,
++) -> NqeSqlAgentState:
++    """复制 state 并追加节点轨迹。
++
++    参数：
++        state: 当前 Graph 运行态。
++        node: 当前节点名称。
++        status: 节点处理状态。
++        summary: 面向审计的业务摘要，不写入内部查询文本。
++    返回：
++        带有新增 trace_steps 记录的新 state。
++    业务逻辑：
++        trace_steps 只记录节点、状态和摘要，避免把内部实现细节误放到用户可见输出。
++    """
++    next_state: NqeSqlAgentState = dict(state)
++    steps = list(next_state.get("trace_steps", []))
++    steps.append({"node": node, "status": status, "summary": summary})
++    next_state["trace_steps"] = steps
++    return next_state
++
++
++def _coerce_nqe_mode(value: object) -> NqeMode:
++    """把外部传入模式收敛到 NQE 支持的灰度模式。
++
++    参数：
++        value: 调用方传入的模式值。
++    返回：
++        off、shadow、assist、on 之一；未知值按 off 处理。
++    业务逻辑：
++        默认关闭，避免骨架在未显式授权时进入新链路。
++    """
++    if value in {"shadow", "assist", "on"}:
++        return value  # type: ignore[return-value]
++    return "off"
++
++
++def receive_query(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """接收并校验用户问题。
++
++    参数：
++        state: 初始运行态，至少可包含 question。
++    返回：
++        写入 question 与基础执行状态后的运行态。
++    业务逻辑：
++        空问题或超长问题直接标记为 error 终态，后续由路由进入错误终端节点。
++    """
++    question = str(state.get("question", "") or "").strip()
++    next_state = _append_trace(
++        state,
++        node="receive_query",
++        status="ok" if question and len(question) <= 1000 else "error",
++        summary="已接收业务问题" if question and len(question) <= 1000 else "问题为空或长度超出限制",
++    )
++    next_state["question"] = question
++    next_state.setdefault("execution_status", "not_started")
++    next_state.setdefault("sql_revision_round", 0)
++    next_state.setdefault("row_count", 0)
++    next_state.setdefault("result_truncated", False)
++    if not question or len(question) > 1000:
++        next_state["terminal_status"] = "error"
++        next_state["fallback_reason"] = "invalid_question"
++    return next_state
++
++
++def init_trace_and_mode(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """初始化追踪字段和灰度模式。
++
++    参数：
++        state: receive_query 后的运行态。
++    返回：
++        写入 nqe_mode、domain_mode、版本和默认策略后的运行态。
++    业务逻辑：
++        nqe_mode 默认 off；只有调用方显式传入 shadow、assist、on 才进入 NQE 骨架链路。
++    """
++    mode = _coerce_nqe_mode(state.get("nqe_mode"))
++    next_state = _append_trace(
++        state,
++        node="init_trace_and_mode",
++        summary=f"灰度模式已初始化为 {mode}",
++    )
++    next_state["nqe_mode"] = mode
++    next_state["domain_mode"] = _coerce_nqe_mode(next_state.get("domain_mode", mode))
++    next_state["fallback_policy"] = str(next_state.get("fallback_policy") or "legacy_first")
++    next_state["graph_version"] = NQE_SQL_AGENT_GRAPH_VERSION
++    next_state.setdefault("metadata_version_id", None)
++    next_state.setdefault("prompt_version_id", None)
++    return next_state
++
++
++def route_domain_and_capability(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """写入确定性领域和能力占位结果。
++
++    参数：
++        state: 已初始化模式的运行态。
++    返回：
++        带有 selected_domain 与 selected_capability 的运行态。
++    业务逻辑：
++        本卡只建立骨架，不做真实领域识别；如调用方提供 domain_hint 则作为候选业务域。
++    """
++    domain = str(state.get("domain_hint") or state.get("selected_domain") or "business_qa")
++    capability = str(state.get("selected_capability") or "nqe_sql_agent_skeleton")
++    next_state = _append_trace(
++        state,
++        node="route_domain_and_capability",
++        summary="已形成业务域与能力候选",
++    )
++    next_state["selected_domain"] = domain
++    next_state["selected_capability"] = capability
++    next_state["domain_candidates"] = [{"domain": domain, "status": "candidate"}]
++    next_state["capability_candidates"] = [{"capability": capability, "status": "candidate"}]
++    return next_state
++
++
++def normalize_query(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """归一化用户问题并抽取最小理解占位字段。
++
++    参数：
++        state: 领域路由后的运行态。
++    返回：
++        写入 normalized_question 和理解候选的运行态。
++    业务逻辑：
++        只做安全的字符串规整，不调用真实模型，不做业务事实计算。
++    """
++    normalized = " ".join(str(state.get("question") or "").split())
++    next_state = _append_trace(
++        state,
++        node="normalize_query",
++        summary="已完成问题文本归一化",
++    )
++    next_state["normalized_question"] = normalized
++    next_state["keyword_terms"] = [term for term in normalized.split() if term][:8]
++    next_state.setdefault("entity_terms", [])
++    next_state.setdefault("metric_terms", [])
++    next_state.setdefault("time_terms", [])
++    next_state.setdefault("compare_terms", [])
++    return next_state
++
++
++def retrieve_context_multiway(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行多路召回占位。
++
++    参数：
++        state: 已归一化的问题运行态。
++    返回：
++        写入 retrieval_query 与 retrieval_candidates 的运行态。
++    业务逻辑：
++        本卡不接向量库或元数据服务，只保留测试注入的 retrieval_context_package。
++    """
++    context_package = dict(state.get("retrieval_context_package") or {})
++    next_state = _append_trace(
++        state,
++        node="retrieve_context_multiway",
++        summary="已保留测试注入的召回上下文",
++    )
++    next_state["retrieval_query"] = str(state.get("normalized_question") or state.get("question") or "")
++    next_state["retrieval_context_package"] = context_package
++    next_state["retrieval_candidates"] = [{"status": "ready"}] if context_package.get("ready") else []
++    return next_state
++
++
++def merge_rank_and_build_context(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """合并召回候选并构造上下文包。
++
++    参数：
++        state: 多路召回后的运行态。
++    返回：
++        保留或更新 retrieval_context_package 的运行态。
++    业务逻辑：
++        骨架不做真实排序；只根据测试注入 ready 标记决定后续 readiness。
++    """
++    package = dict(state.get("retrieval_context_package") or {})
++    package.setdefault("ready", bool(state.get("retrieval_candidates")))
++    next_state = _append_trace(
++        state,
++        node="merge_rank_and_build_context",
++        summary="已合并上下文候选",
++    )
++    next_state["retrieval_context_package"] = package
++    return next_state
++
++
++def check_context_readiness(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """检查上下文是否足以进入内部查询生命周期。
++
++    参数：
++        state: 已构造上下文包的运行态。
++    返回：
++        写入 context_readiness 和澄清提示的运行态。
++    业务逻辑：
++        只有显式传入 context_readiness=pass 或 ready 上下文包，才允许进入后续占位链路。
++    """
++    package = dict(state.get("retrieval_context_package") or {})
++    ready = state.get("context_readiness") == "pass" or package.get("ready") is True
++    next_state = _append_trace(
++        state,
++        node="check_context_readiness",
++        status="ok" if ready else "clarify",
++        summary="上下文满足最小问数条件" if ready else "上下文不足，需要补充业务条件",
++    )
++    next_state["context_readiness"] = "pass" if ready else "fail"
++    if not ready:
++        next_state["terminal_status"] = "clarify"
++        next_state["clarification_hints"] = ["请补充业务范围、时间或对象。"]
++    return next_state
++
++
++def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成内部占位查询文本。
++
++    参数：
++        state: readiness 通过后的运行态。
++    返回：
++        写入 generated_sql 的运行态。
++    业务逻辑：
++        仅在测试显式注入 ready 上下文时写入内部占位文本；该文本绝不进入用户可见回答。
++    """
++    next_state = _append_trace(
++        state,
++        node="generate_sql_direct",
++        summary="已生成内部只读查询候选",
++    )
++    next_state["generated_sql"] = "SELECT 1"
++    return next_state
++
++
++def precheck_sql_safety(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行内部查询候选的安全预检占位。
++
++    参数：
++        state: 已生成内部查询候选的运行态。
++    返回：
++        写入 sql_safety_result 和 safe_sql_candidate 的运行态。
++    业务逻辑：
++        本卡不实现完整安全解析；如测试强制拒绝则进入 safety_reject。
++    """
++    rejected = bool(state.get("force_safety_reject"))
++    next_state = _append_trace(
++        state,
++        node="precheck_sql_safety",
++        status="blocked" if rejected else "ok",
++        summary="安全边界未通过" if rejected else "安全边界占位检查通过",
++    )
++    next_state["sql_safety_result"] = {"status": "reject" if rejected else "pass"}
++    if rejected:
++        next_state["terminal_status"] = "safety_reject"
++        next_state["fallback_reason"] = "safety_boundary"
++    else:
++        next_state["safe_sql_candidate"] = str(state.get("generated_sql") or "")
++    return next_state
++
++
++def explain_validate_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行解释校验占位。
++
++    参数：
++        state: 安全预检通过后的运行态。
++    返回：
++        写入 explain_result 的运行态。
++    业务逻辑：
++        本卡不执行真实解释计划；测试可通过 force_explain_fail 驱动修正循环。
++    """
++    failed = bool(state.get("force_explain_fail"))
++    next_state = _append_trace(
++        state,
++        node="explain_validate_sql",
++        status="error" if failed else "ok",
++        summary="解释校验未通过" if failed else "解释校验占位通过",
++    )
++    next_state["explain_result"] = {"status": "fail" if failed else "pass"}
++    if failed and int(state.get("sql_revision_round", 0)) >= MAX_SQL_REVISION_ROUNDS:
++        next_state["terminal_status"] = "error"
++        next_state["fallback_reason"] = "explain_validation_failed"
++    return next_state
++
++
++def correct_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行内部候选修正占位。
++
++    参数：
++        state: 解释校验失败后的运行态。
++    返回：
++        递增 sql_revision_round 并记录修正摘要的运行态。
++    业务逻辑：
++        修正后必须回到 precheck_sql_safety；最多修正两轮。
++    """
++    next_round = int(state.get("sql_revision_round", 0)) + 1
++    next_state = _append_trace(
++        state,
++        node="correct_sql",
++        status="retry",
++        summary=f"已完成第 {next_round} 轮内部候选修正",
++    )
++    revisions = list(next_state.get("sql_revisions", []))
++    revisions.append({"round": next_round, "reason": "explain_validation_failed"})
++    next_state["sql_revision_round"] = next_round
++    next_state["sql_revisions"] = revisions
++    next_state["correction_reason"] = "explain_validation_failed"
++    next_state["generated_sql"] = str(state.get("generated_sql") or "SELECT 1")
++    return next_state
++
++
++def execute_sql_readonly(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行只读查询占位。
++
++    参数：
++        state: 解释校验通过后的运行态。
++    返回：
++        写入内部执行结果和行数的运行态。
++    业务逻辑：
++        本卡不连接数据库，仅返回确定性占位结果用于验证编排顺序。
++    """
++    next_state = _append_trace(
++        state,
++        node="execute_sql_readonly",
++        summary="已完成只读执行占位",
++    )
++    next_state["execution_status"] = "executed"
++    next_state["execution_result_internal"] = {"rows": [{"value": 1}], "source": "stub"}
++    next_state["row_count"] = 1
++    next_state["result_truncated"] = False
++    return next_state
++
++
++def present_business_answer(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成业务化用户回答。
++
++    参数：
++        state: 执行占位完成后的运行态。
++    返回：
++        写入 completed 终态和用户可见回答的运行态。
++    业务逻辑：
++        回答只表达业务处理结果，不暴露内部查询、字段、调度、提示词或追踪细节。
++    """
++    next_state = _append_trace(
++        state,
++        node="present_business_answer",
++        summary="已生成业务化回答",
++    )
++    next_state["terminal_status"] = "completed"
++    next_state["user_visible_response"] = "已完成本次业务问数骨架处理，后续能力卡将补齐真实数据校验与结果呈现。"
++    return next_state
++
++
++def shadow_compare(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """记录 shadow 对比占位。
++
++    参数：
++        state: 已生成业务回答的运行态。
++    返回：
++        写入 shadow_compare_result 的运行态。
++    业务逻辑：
++        shadow 仅记录内部对比摘要，不影响用户可见回答。
++    """
++    next_state = _append_trace(
++        state,
++        node="shadow_compare",
++        summary="已记录灰度对比占位结果",
++    )
++    next_state["shadow_compare_result"] = {"status": "not_compared", "reason": "skeleton_only"}
++    return next_state
++
++
++def legacy_fallback(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """off 模式降级到既有入口占位。
++
++    参数：
++        state: 灰度模式为 off 的运行态。
++    返回：
++        写入 legacy_fallback 终态和业务化提示的运行态。
++    业务逻辑：
++        off 模式不允许进入内部查询生命周期。
++    """
++    next_state = _append_trace(
++        state,
++        node="legacy_fallback",
++        summary="已按关闭模式交由既有能力处理",
++    )
++    next_state["terminal_status"] = "legacy_fallback"
++    next_state["execution_status"] = "skipped"
++    next_state["fallback_reason"] = "nqe_mode_off"
++    next_state["user_visible_response"] = "已转交既有业务问答能力处理。"
++    return next_state
++
++
++def terminal_clarify(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成澄清终态回答。
++
++    参数：
++        state: 上下文不足或问题需要补充的运行态。
++    返回：
++        写入 clarify 终态和业务化澄清文本的运行态。
++    业务逻辑：
++        澄清文本只说明需要补充业务条件，不暴露内部原因。
++    """
++    next_state = _append_trace(
++        state,
++        node="terminal_clarify",
++        status="clarify",
++        summary="已进入业务澄清终态",
++    )
++    next_state["terminal_status"] = "clarify"
++    next_state["execution_status"] = "skipped"
++    next_state["user_visible_response"] = "请补充业务范围、时间或对象后再查询。"
++    return next_state
++
++
++def terminal_safety_reject(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成安全拒答终态回答。
++
++    参数：
++        state: 安全边界未通过的运行态。
++    返回：
++        写入 safety_reject 终态和业务化拒答文本的运行态。
++    业务逻辑：
++        拒答只说明当前请求不能处理，不展示内部校验细节。
++    """
++    next_state = _append_trace(
++        state,
++        node="terminal_safety_reject",
++        status="blocked",
++        summary="已进入安全拒答终态",
++    )
++    next_state["terminal_status"] = "safety_reject"
++    next_state["execution_status"] = "skipped"
++    next_state["user_visible_response"] = "当前请求不满足只读问数边界，已停止处理。"
++    return next_state
++
++
++def terminal_error(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成错误终态回答。
++
++    参数：
++        state: 问题无效或骨架占位校验失败的运行态。
++    返回：
++        写入 error 终态和业务化错误文本的运行态。
++    业务逻辑：
++        错误文本只给出可理解的业务提示，不输出内部异常或调试信息。
++    """
++    next_state = _append_trace(
++        state,
++        node="terminal_error",
++        status="error",
++        summary="已进入错误终态",
++    )
++    next_state["terminal_status"] = "error"
++    next_state["execution_status"] = "failed"
++    next_state["user_visible_response"] = "当前请求暂时无法完成，请补充条件后重试或联系管理员核查配置。"
++    return next_state
++
++
++def record_query_log_and_trace(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """记录查询日志和轨迹占位。
++
++    参数：
++        state: 任一终态节点后的运行态。
++    返回：
++        追加记录节点后的最终运行态。
++    业务逻辑：
++        本卡不写入数据库，只保留内存态轨迹，确保所有终态都先经过记录节点再结束。
++    """
++    return _append_trace(
++        state,
++        node="record_query_log_and_trace",
++        summary="已记录本次骨架运行摘要",
++    )
++
++
++def _route_after_init(state: NqeSqlAgentState) -> str:
++    """按初始化结果选择 off 降级、错误终态或 NQE 链路。"""
++    if state.get("terminal_status") == "error":
++        return "terminal_error"
++    if state.get("nqe_mode") == "off":
++        return "legacy_fallback"
++    return "route_domain_and_capability"
++
++
++def _route_after_readiness(state: NqeSqlAgentState) -> str:
++    """上下文不足时转澄清，否则进入内部查询生命周期。"""
++    if state.get("context_readiness") != "pass":
++        return "terminal_clarify"
++    return "generate_sql_direct"
++
++
++def _route_after_precheck(state: NqeSqlAgentState) -> str:
++    """安全预检失败时转拒答，否则继续解释校验。"""
++    if state.get("terminal_status") == "safety_reject":
++        return "terminal_safety_reject"
++    return "explain_validate_sql"
++
++
++def _route_after_explain(state: NqeSqlAgentState) -> str:
++    """解释校验失败时最多修正两轮，超过后转错误终态。"""
++    if state.get("terminal_status") == "error":
++        return "terminal_error"
++    if state.get("explain_result", {}).get("status") == "fail":
++        return "correct_sql"
++    return "execute_sql_readonly"
++
++
++def _route_after_present(state: NqeSqlAgentState) -> Literal["shadow_compare", "record_query_log_and_trace"]:
++    """shadow 模式下先记录对比占位，其余模式直接进入记录节点。"""
++    if state.get("nqe_mode") == "shadow":
++        return "shadow_compare"
++    return "record_query_log_and_trace"
++
++
++def build_nqe_sql_agent_graph():
++    """构建并编译 NQE SQL Agent 独立骨架 Graph。
++
++    参数：
++        无。
++    返回：
++        已 compile 的 LangGraph graph，可通过 invoke 运行确定性骨架。
++    业务逻辑：
++        Graph 显式建模灰度模式、上下文 readiness、内部查询生命周期、两轮修正循环
++        和五类终态；所有终态都进入 record_query_log_and_trace 后再结束。
++    """
++    graph = StateGraph(NqeSqlAgentState)
++
++    graph.add_node("receive_query", receive_query)
++    graph.add_node("init_trace_and_mode", init_trace_and_mode)
++    graph.add_node("route_domain_and_capability", route_domain_and_capability)
++    graph.add_node("normalize_query", normalize_query)
++    graph.add_node("retrieve_context_multiway", retrieve_context_multiway)
++    graph.add_node("merge_rank_and_build_context", merge_rank_and_build_context)
++    graph.add_node("check_context_readiness", check_context_readiness)
++    graph.add_node("generate_sql_direct", generate_sql_direct)
++    graph.add_node("precheck_sql_safety", precheck_sql_safety)
++    graph.add_node("explain_validate_sql", explain_validate_sql)
++    graph.add_node("correct_sql", correct_sql)
++    graph.add_node("execute_sql_readonly", execute_sql_readonly)
++    graph.add_node("present_business_answer", present_business_answer)
++    graph.add_node("record_query_log_and_trace", record_query_log_and_trace)
++    graph.add_node("legacy_fallback", legacy_fallback)
++    graph.add_node("shadow_compare", shadow_compare)
++    graph.add_node("terminal_clarify", terminal_clarify)
++    graph.add_node("terminal_safety_reject", terminal_safety_reject)
++    graph.add_node("terminal_error", terminal_error)
++
++    graph.add_edge(START, "receive_query")
++    graph.add_edge("receive_query", "init_trace_and_mode")
++    graph.add_conditional_edges(
++        "init_trace_and_mode",
++        _route_after_init,
++        {
++            "route_domain_and_capability": "route_domain_and_capability",
++            "legacy_fallback": "legacy_fallback",
++            "terminal_error": "terminal_error",
++        },
++    )
++
++    graph.add_edge("route_domain_and_capability", "normalize_query")
++    graph.add_edge("normalize_query", "retrieve_context_multiway")
++    graph.add_edge("retrieve_context_multiway", "merge_rank_and_build_context")
++    graph.add_edge("merge_rank_and_build_context", "check_context_readiness")
++    graph.add_conditional_edges(
++        "check_context_readiness",
++        _route_after_readiness,
++        {
++            "generate_sql_direct": "generate_sql_direct",
++            "terminal_clarify": "terminal_clarify",
++        },
++    )
++
++    graph.add_edge("generate_sql_direct", "precheck_sql_safety")
++    graph.add_conditional_edges(
++        "precheck_sql_safety",
++        _route_after_precheck,
++        {
++            "explain_validate_sql": "explain_validate_sql",
++            "terminal_safety_reject": "terminal_safety_reject",
++        },
++    )
++    graph.add_conditional_edges(
++        "explain_validate_sql",
++        _route_after_explain,
++        {
++            "execute_sql_readonly": "execute_sql_readonly",
++            "correct_sql": "correct_sql",
++            "terminal_error": "terminal_error",
++        },
++    )
++    graph.add_edge("correct_sql", "precheck_sql_safety")
++    graph.add_edge("execute_sql_readonly", "present_business_answer")
++    graph.add_conditional_edges(
++        "present_business_answer",
++        _route_after_present,
++        {
++            "shadow_compare": "shadow_compare",
++            "record_query_log_and_trace": "record_query_log_and_trace",
++        },
++    )
++
++    graph.add_edge("legacy_fallback", "record_query_log_and_trace")
++    graph.add_edge("shadow_compare", "record_query_log_and_trace")
++    graph.add_edge("terminal_clarify", "record_query_log_and_trace")
++    graph.add_edge("terminal_safety_reject", "record_query_log_and_trace")
++    graph.add_edge("terminal_error", "record_query_log_and_trace")
++    graph.add_edge("record_query_log_and_trace", END)
++
++    return graph.compile()
+diff --git a/tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py b/tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py
+new file mode 100644
+index 00000000..a0005837
+--- /dev/null
++++ b/tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py
+@@ -0,0 +1,182 @@
++from __future__ import annotations
++
++import importlib
++from typing import Any
++
++
++INTERNAL_TERMS = (
++    "SQL",
++    "SELECT",
++    "FROM",
++    "table",
++    "column",
++    "query_key",
++    "planner",
++    "guardrail",
++    "schema",
++    "raw",
++    "debug",
++    "LLM",
++    "prompt",
++    "trace",
++)
++
++
++def _node_names(state: dict[str, Any]) -> list[str]:
++    """读取测试态中的节点轨迹名称。"""
++    return [step["node"] for step in state.get("trace_steps", [])]
++
++
++def _assert_business_safe_text(text: str) -> None:
++    """断言用户可见文本不暴露内部技术词。"""
++    upper_text = text.upper()
++    for term in INTERNAL_TERMS:
++        assert term.upper() not in upper_text
++
++
++def test_nqe_graph_declares_expected_node_sequence() -> None:
++    """NQE Graph 必须声明 NQE-SQL-MAIN-4 约定的 19 个节点及顺序。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++
++    assert graph_module.NQE_SQL_AGENT_NODE_SEQUENCE == (
++        "receive_query",
++        "init_trace_and_mode",
++        "route_domain_and_capability",
++        "normalize_query",
++        "retrieve_context_multiway",
++        "merge_rank_and_build_context",
++        "check_context_readiness",
++        "generate_sql_direct",
++        "precheck_sql_safety",
++        "explain_validate_sql",
++        "correct_sql",
++        "execute_sql_readonly",
++        "present_business_answer",
++        "record_query_log_and_trace",
++        "legacy_fallback",
++        "shadow_compare",
++        "terminal_clarify",
++        "terminal_safety_reject",
++        "terminal_error",
++    )
++    assert len(graph_module.NQE_SQL_AGENT_NODE_SEQUENCE) == 19
++
++
++def test_nqe_graph_compiles_without_touching_runtime_entrypoint() -> None:
++    """独立 NQE builder 可编译，且不需要导入正式 API 或修改运行入口。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    assert graph is not None
++    assert "backend.app.api.router" not in graph_module.__dict__
++    assert "BusinessQaGraphRunner" not in graph_module.__dict__
++
++
++def test_off_mode_routes_to_legacy_fallback_without_sql_generation() -> None:
++    """off 模式应进入 legacy_fallback，不能生成、预检或执行 SQL。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke({"question": "查询本月经营情况", "nqe_mode": "off"})
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "legacy_fallback"
++    assert "legacy_fallback" in node_names
++    assert "record_query_log_and_trace" in node_names
++    assert "generate_sql_direct" not in node_names
++    assert "precheck_sql_safety" not in node_names
++    assert "execute_sql_readonly" not in node_names
++
++
++def test_context_not_ready_returns_business_clarification() -> None:
++    """on 模式上下文不足时应业务化澄清，不能泄露内部实现。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke({"question": "查一下库存", "nqe_mode": "on"})
++
++    assert final_state["terminal_status"] == "clarify"
++    assert "terminal_clarify" in _node_names(final_state)
++    _assert_business_safe_text(final_state["user_visible_response"])
++
++
++def test_sql_lifecycle_orders_precheck_before_explain_and_execute() -> None:
++    """ready 上下文下 SQL 生命周期顺序必须先预检，再解释校验，再只读执行。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": {"ready": True, "business_object": "shipment"},
++            "context_readiness": "pass",
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "completed"
++    expected = ["generate_sql_direct", "precheck_sql_safety", "explain_validate_sql", "execute_sql_readonly"]
++    positions = [node_names.index(node) for node in expected]
++    assert positions == sorted(positions)
++
++
++def test_correct_loop_returns_to_precheck_and_stops_after_two_rounds() -> None:
++    """解释校验失败后必须 correct→precheck 循环，且最多两轮后进入终态。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": {"ready": True, "business_object": "shipment"},
++            "context_readiness": "pass",
++            "force_explain_fail": True,
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] in {"error", "safety_reject", "clarify"}
++    assert node_names.count("correct_sql") == 2
++    assert node_names.count("precheck_sql_safety") == 3
++    assert final_state["sql_revision_round"] == 2
++    first_correct = node_names.index("correct_sql")
++    assert "precheck_sql_safety" in node_names[first_correct + 1 :]
++
++
++def test_terminal_states_are_recorded_before_end() -> None:
++    """所有终态都必须先经过 record_query_log_and_trace 再结束。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++    cases = [
++        ({"question": "查一下", "nqe_mode": "on"}, "clarify"),
++        ({"question": "查一下", "nqe_mode": "on", "retrieval_context_package": {"ready": True}, "context_readiness": "pass", "force_safety_reject": True}, "safety_reject"),
++        ({"question": "查一下", "nqe_mode": "on", "retrieval_context_package": {"ready": True}, "context_readiness": "pass", "force_explain_fail": True}, "error"),
++        ({"question": "查一下", "nqe_mode": "off"}, "legacy_fallback"),
++        ({"question": "查一下", "nqe_mode": "on", "retrieval_context_package": {"ready": True}, "context_readiness": "pass"}, "completed"),
++    ]
++
++    for initial_state, status in cases:
++        final_state = graph.invoke(initial_state)
++        node_names = _node_names(final_state)
++        assert final_state["terminal_status"] == status
++        assert node_names[-1] == "record_query_log_and_trace"
++
++
++def test_user_visible_response_masks_internal_terms() -> None:
++    """所有用户可见输出必须屏蔽内部技术词。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++    states = [
++        {"question": "查一下", "nqe_mode": "on"},
++        {"question": "查一下", "nqe_mode": "off"},
++        {"question": "查一下", "nqe_mode": "on", "retrieval_context_package": {"ready": True}, "context_readiness": "pass"},
++        {"question": "查一下", "nqe_mode": "on", "retrieval_context_package": {"ready": True}, "context_readiness": "pass", "force_safety_reject": True},
++        {"question": "查一下", "nqe_mode": "on", "retrieval_context_package": {"ready": True}, "context_readiness": "pass", "force_explain_fail": True},
++    ]
++
++    for state in states:
++        final_state = graph.invoke(state)
++        _assert_business_safe_text(final_state["user_visible_response"])

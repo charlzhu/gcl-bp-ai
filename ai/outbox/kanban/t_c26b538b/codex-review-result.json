@@ -1,0 +1,7 @@
+{
+  "passed": true,
+  "security_concerns": [],
+  "logic_errors": [],
+  "suggestions": [],
+  "summary": "Scoped diff passes security, logic, scope, and evidence review for this Kanban task."
+}

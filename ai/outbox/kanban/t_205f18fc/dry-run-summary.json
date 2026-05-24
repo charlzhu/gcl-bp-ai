@@ -1,0 +1,17 @@
+{
+  "apply_status": "dry_run",
+  "domain_counts": {
+    "business_analysis": 57,
+    "logistics": 58,
+    "plan_bom": 62
+  },
+  "dry_run": true,
+  "errors": [],
+  "indexed_columns": 126,
+  "metadata_version": "nqe_value_index_v1",
+  "skipped_columns": 100,
+  "top_k": 10,
+  "total_columns": 226,
+  "total_values": 177,
+  "warnings": []
+}

@@ -1,0 +1,2883 @@
+--- a/backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py
++++ b/backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py
+@@ -0,0 +1,1128 @@
++"""NQE 统一 SQL Agent Graph 独立骨架。
++
++本模块只提供可单测、可编译的 LangGraph 编排骨架。它不替换正式问答入口、
++不访问生产库、不调用真实模型、不执行真实查询，也不把内部过程暴露给用户。
++"""
++
++from __future__ import annotations
++
++import re
++from typing import Any, Literal
++
++from langgraph.graph import END, START, StateGraph
++
++from backend.app.domains.business_qa_graph.nqe_sql_agent_state import NqeMode, NqeSqlAgentState
++from backend.app.domains.business_qa_graph.nqe_sql_agent_trace import (
++    build_nqe_query_log_record,
++    build_nqe_replay_record,
++    compare_nqe_replay_summary,
++)
++from backend.app.domains.business_qa_graph.nqe_sql_safety import precheck_nqe_sql_safety
++
++
++NQE_SQL_AGENT_GRAPH_VERSION = "nqe_sql_agent_graph.skeleton.v1"
++MAX_SQL_REVISION_ROUNDS = 2
++_SQL_EXPRESSION_KEYWORDS = {
++    "abs",
++    "and",
++    "as",
++    "avg",
++    "between",
++    "case",
++    "cast",
++    "ceil",
++    "ceiling",
++    "coalesce",
++    "count",
++    "date",
++    "decimal",
++    "distinct",
++    "else",
++    "end",
++    "exists",
++    "false",
++    "floor",
++    "from",
++    "group",
++    "ifnull",
++    "in",
++    "integer",
++    "is",
++    "like",
++    "limit",
++    "max",
++    "min",
++    "not",
++    "null",
++    "nullif",
++    "numeric",
++    "or",
++    "order",
++    "over",
++    "round",
++    "select",
++    "string",
++    "sum",
++    "then",
++    "true",
++    "when",
++    "where",
++}
++
++NQE_SQL_AGENT_NODE_SEQUENCE = (
++    "receive_query",
++    "init_trace_and_mode",
++    "route_domain_and_capability",
++    "normalize_query",
++    "retrieve_context_multiway",
++    "merge_rank_and_build_context",
++    "check_context_readiness",
++    "generate_sql_direct",
++    "precheck_sql_safety",
++    "explain_validate_sql",
++    "correct_sql",
++    "execute_sql_readonly",
++    "present_business_answer",
++    "record_query_log_and_trace",
++    "legacy_fallback",
++    "shadow_compare",
++    "terminal_clarify",
++    "terminal_safety_reject",
++    "terminal_error",
++)
++
++
++def _append_trace(
++    state: NqeSqlAgentState,
++    *,
++    node: str,
++    status: str = "ok",
++    summary: str,
++) -> NqeSqlAgentState:
++    """复制 state 并追加节点轨迹。
++
++    参数：
++        state: 当前 Graph 运行态。
++        node: 当前节点名称。
++        status: 节点处理状态。
++        summary: 面向审计的业务摘要，不写入内部查询文本。
++    返回：
++        带有新增 trace_steps 记录的新 state。
++    业务逻辑：
++        trace_steps 只记录节点、状态和摘要，避免把内部实现细节误放到用户可见输出。
++    """
++    next_state: NqeSqlAgentState = dict(state)
++    steps = list(next_state.get("trace_steps", []))
++    steps.append({"node": node, "status": status, "summary": summary})
++    next_state["trace_steps"] = steps
++    return next_state
++
++
++def _coerce_nqe_mode(value: object) -> NqeMode:
++    """把外部传入模式收敛到 NQE 支持的灰度模式。
++
++    参数：
++        value: 调用方传入的模式值。
++    返回：
++        off、shadow、assist、on 之一；未知值按 off 处理。
++    业务逻辑：
++        默认关闭，避免骨架在未显式授权时进入新链路。
++    """
++    if value in {"shadow", "assist", "on"}:
++        return value  # type: ignore[return-value]
++    return "off"
++
++
++def _normalize_metadata_identifier(value: object) -> str:
++    """归一化元数据中的对象或字段标识。
++
++    参数：
++        value: 上下文包注入的对象名、字段名或字段描述字典中的值。
++    返回：
++        去除常见引用符号并统一小写后的标识；无法识别时返回空字符串。
++    业务逻辑：
++        本函数只做确定性文本规整，不把未知对象映射到白名单，也不补全业务字段。
++    """
++    normalized_parts: list[str] = []
++    for part in str(value or "").split("."):
++        cleaned = part.strip().strip("`\"[]").strip().lower()
++        if cleaned:
++            normalized_parts.append(cleaned)
++    return ".".join(normalized_parts)
++
++
++def _extract_table_columns(context_package: dict[str, Any]) -> dict[str, set[str]]:
++    """从上下文包读取表级字段白名单。
++
++    参数：
++        context_package: 召回阶段注入的非敏感元数据上下文。
++    返回：
++        结构为 {对象名: {字段名}} 的归一化字段白名单；缺失时返回空字典。
++    业务逻辑：
++        解释校验只信任上下文包显式给出的字段元数据。字段元数据不存在时不放宽
++        安全预检，只跳过字段级解释校验，保持当前骨架兼容。
++    """
++    raw_table_columns = (
++        context_package.get("table_columns")
++        or context_package.get("columns_by_table")
++        or context_package.get("table_column_whitelist")
++    )
++    if not isinstance(raw_table_columns, dict):
++        return {}
++
++    table_columns: dict[str, set[str]] = {}
++    for raw_table, raw_columns in raw_table_columns.items():
++        table_name = _normalize_metadata_identifier(raw_table)
++        if not table_name:
++            continue
++        if not isinstance(raw_columns, list | tuple | set):
++            continue
++        columns: set[str] = set()
++        for raw_column in raw_columns:
++            if isinstance(raw_column, dict):
++                raw_name = (
++                    raw_column.get("name")
++                    or raw_column.get("column")
++                    or raw_column.get("column_name")
++                    or raw_column.get("field")
++                    or raw_column.get("field_name")
++                )
++            else:
++                raw_name = raw_column
++            column_name = _normalize_metadata_identifier(raw_name).split(".")[-1]
++            if column_name:
++                columns.add(column_name)
++        if columns:
++            table_columns[table_name] = columns
++    return table_columns
++
++
++def _split_top_level_csv(text: str) -> list[str]:
++    """按顶层逗号拆分候选表达式列表。
++
++    参数：
++        text: 内部候选中的投影表达式片段。
++    返回：
++        顶层逗号分隔后的表达式列表。
++    业务逻辑：
++        只为解释校验抽取字段名，遇到函数参数或括号中的逗号不拆分，避免误判。
++    """
++    parts: list[str] = []
++    start = 0
++    depth = 0
++    for index, char in enumerate(text):
++        if char == "(":
++            depth += 1
++        elif char == ")" and depth > 0:
++            depth -= 1
++        elif char == "," and depth == 0:
++            parts.append(text[start:index].strip())
++            start = index + 1
++    parts.append(text[start:].strip())
++    return [part for part in parts if part]
++
++
++def _strip_projection_alias(expression: str) -> str:
++    """移除投影表达式中的显示别名。
++
++    参数：
++        expression: 单个投影表达式。
++    返回：
++        去掉 AS 别名或简单尾部别名后的表达式主体。
++    业务逻辑：
++        解释校验关注实际引用字段，不把业务展示别名当成待校验字段。
++    """
++    cleaned = re.split(r"\s+as\s+", expression.strip(), maxsplit=1, flags=re.IGNORECASE)[0].strip()
++    if re.fullmatch(r"[`\"\[]?[A-Za-z_][\w$]*(?:\.[`\"\[]?[A-Za-z_][\w$]*)?\s+[A-Za-z_][\w$]*", cleaned):
++        cleaned = cleaned.rsplit(None, 1)[0]
++    return cleaned
++
++
++def _extract_identifier_columns(expression: str) -> set[str]:
++    """从投影表达式中抽取可能的字段标识。
++
++    参数：
++        expression: 已去除别名的投影表达式。
++    返回：
++        归一化字段名集合；函数名、类型名和 SQL 关键字会被剔除。
++    业务逻辑：
++        对函数表达式采取 fail-closed 字段识别：只要表达式中出现未知字段，后续
++        元数据校验就会失败，避免 SUM(未知字段) 等形式绕过解释校验。
++    """
++    expression_without_literals = re.sub(r"'[^']*'", " ", expression)
++    raw_identifiers = re.findall(
++        r"[`\"\[]?[A-Za-z_][\w$]*[`\"\]]?(?:\.[`\"\[]?[A-Za-z_][\w$]*[`\"\]]?)*",
++        expression_without_literals,
++    )
++    columns: set[str] = set()
++    for raw_identifier in raw_identifiers:
++        column_name = _normalize_metadata_identifier(raw_identifier).split(".")[-1]
++        if column_name and column_name not in _SQL_EXPRESSION_KEYWORDS:
++            columns.add(column_name)
++    return columns
++
++
++def _extract_projected_columns(candidate_text: str) -> set[str]:
++    """从已通过安全预检的候选文本中抽取投影字段。
++
++    参数：
++        candidate_text: 安全预检输出的内部只读候选文本。
++    返回：
++        候选文本 SELECT 列表中可确定的字段集合；常量与无法确定表达式不返回。
++    业务逻辑：
++        本函数用于离线解释校验，不连接数据库。复杂表达式先保守跳过，由安全预检
++        与后续真实执行阶段继续收敛；简单字段必须与上下文字段元数据匹配。
++    """
++    normalized = " ".join(str(candidate_text or "").split())
++    match = re.search(r"^select\s+(.+?)\s+from\s+", normalized, re.IGNORECASE)
++    if not match:
++        return set()
++
++    columns: set[str] = set()
++    for projection in _split_top_level_csv(match.group(1)):
++        expression = _strip_projection_alias(projection)
++        expression = re.sub(r"^distinct\s+", "", expression, flags=re.IGNORECASE).strip()
++        if not expression or expression == "*":
++            continue
++        if re.fullmatch(r"\d+(?:\.\d+)?|'[^']*'", expression):
++            continue
++        columns.update(_extract_identifier_columns(expression))
++    return columns
++
++
++def _select_projection_clause(candidate_text: str) -> str:
++    """截取候选文本的 SELECT 投影子句。
++
++    参数：
++        candidate_text: 安全预检输出的内部只读候选文本。
++    返回：
++        SELECT 与 FROM 之间的投影片段；无法识别时返回空字符串。
++    业务逻辑：
++        投影片段用于发现通配投影。通配投影会返回过宽结果，必须在只读执行前
++        fail-closed 拒绝，不能依赖真实数据库执行阶段兜底。
++    """
++    normalized = " ".join(str(candidate_text or "").split())
++    match = re.search(r"^select\s+(.+?)\s+from\s+", normalized, re.IGNORECASE)
++    return match.group(1).strip() if match else ""
++
++
++def _contains_select_star(candidate_text: str) -> bool:
++    """判断投影列表是否包含过宽通配字段。
++
++    参数：
++        candidate_text: 安全预检后的内部候选文本。
++    返回：
++        发现 *、对象.* 或引用符包裹通配符时返回 True。
++    业务逻辑：
++        通配投影会绕开字段白名单粒度，解释校验必须 fail-closed 拒绝。
++    """
++    projection_clause = _select_projection_clause(candidate_text)
++    if not projection_clause:
++        return False
++    for projection in _split_top_level_csv(projection_clause):
++        expression = _strip_projection_alias(projection)
++        expression = re.sub(r"^distinct\s+", "", expression, flags=re.IGNORECASE).strip()
++        normalized = _normalize_metadata_identifier(expression)
++        if normalized == "*" or normalized.endswith(".*"):
++            return True
++    return False
++
++
++def _extract_where_clause(candidate_text: str) -> str:
++    """截取 WHERE 条件片段。
++
++    参数：
++        candidate_text: 安全预检输出的内部只读候选文本。
++    返回：
++        WHERE 后到 GROUP/ORDER/HAVING/LIMIT 等边界前的条件片段；缺失时返回空字符串。
++    业务逻辑：
++        字段级解释校验不能只看 SELECT 投影，过滤条件引用未知字段同样会影响
++        问数语义和执行安全，因此需要单独抽取并进入白名单比对。
++    """
++    normalized = " ".join(str(candidate_text or "").split())
++    match = re.search(
++        r"\bwhere\b\s+(.+?)(?=\bgroup\s+by\b|\border\s+by\b|\bhaving\b|\blimit\b|\bunion\b|\bintersect\b|\bexcept\b|$)",
++        normalized,
++        re.IGNORECASE,
++    )
++    return match.group(1).strip() if match else ""
++
++
++def _extract_filter_columns(candidate_text: str) -> set[str]:
++    """从 WHERE 条件中抽取字段标识。
++
++    参数：
++        candidate_text: 安全预检后的内部候选文本。
++    返回：
++        WHERE 条件中可识别的字段名集合。
++    业务逻辑：
++        对过滤条件采用与投影一致的保守字段识别策略：函数名、常量和 SQL 关键字
++        被剔除，剩余标识必须在上下文字段白名单中出现。
++    """
++    where_clause = _extract_where_clause(candidate_text)
++    return _extract_identifier_columns(where_clause) if where_clause else set()
++
++
++def _validate_explain_against_metadata(
++    *,
++    safe_candidate: str,
++    safety_result: dict[str, Any],
++    context_package: dict[str, Any],
++) -> list[str]:
++    """用上下文字段元数据执行离线解释校验。
++
++    参数：
++        safe_candidate: 通过安全预检后的内部候选文本。
++        safety_result: 安全预检结构化结果，包含已识别对象。
++        context_package: 召回上下文包，包含字段白名单。
++    返回：
++        稳定违规码列表；无违规返回空列表。
++    业务逻辑：
++        这里不执行真实数据库 EXPLAIN，只做确定性字段存在性校验。若候选引用了
++        上下文字段元数据中不存在的字段或通配过宽投影，必须在只读执行前失败。
++    """
++    violations: list[str] = []
++    if _contains_select_star(safe_candidate):
++        violations.append("select_star_not_allowed")
++
++    table_columns = _extract_table_columns(context_package)
++    if not table_columns:
++        return sorted(set(violations))
++
++    referenced_tables = [
++        normalized
++        for table_ref in safety_result.get("referenced_tables", [])
++        if (normalized := _normalize_metadata_identifier(table_ref))
++    ]
++    allowed_columns: set[str] = set()
++    for table_ref in referenced_tables:
++        allowed_columns.update(table_columns.get(table_ref, set()))
++    if not allowed_columns and len(table_columns) == 1:
++        allowed_columns.update(next(iter(table_columns.values())))
++
++    referenced_columns = _extract_projected_columns(safe_candidate)
++    referenced_columns.update(_extract_filter_columns(safe_candidate))
++    if not referenced_columns:
++        return sorted(set(violations))
++    if not allowed_columns:
++        violations.append("missing_column_metadata")
++        return sorted(set(violations))
++
++    unknown_columns = sorted(referenced_columns - allowed_columns)
++    if unknown_columns:
++        violations.append("unknown_column")
++    return sorted(set(violations))
++
++
++def _select_correction_candidate(context_package: dict[str, Any], revision_round: int) -> str:
++    """选择本轮受控修正候选。
++
++    参数：
++        context_package: 召回上下文包，可包含 sql_correction_candidates。
++        revision_round: 即将写入的修正轮次，从 1 开始。
++    返回：
++        当前轮次可用的候选文本；不存在时返回空字符串。
++    业务逻辑：
++        修正只能使用上下文包显式注入的候选，不调用模型、不自由生成新候选。
++    """
++    raw_candidates = (
++        context_package.get("sql_correction_candidates")
++        or context_package.get("correction_candidates")
++        or []
++    )
++    if not isinstance(raw_candidates, list | tuple):
++        return ""
++    index = revision_round - 1
++    if index < 0 or index >= len(raw_candidates):
++        return ""
++    raw_candidate = raw_candidates[index]
++    if isinstance(raw_candidate, dict):
++        raw_candidate = raw_candidate.get("sql") or raw_candidate.get("candidate") or raw_candidate.get("text")
++    return str(raw_candidate or "").strip()
++
++
++def receive_query(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """接收并校验用户问题。
++
++    参数：
++        state: 初始运行态，至少可包含 question。
++    返回：
++        写入 question 与基础执行状态后的运行态。
++    业务逻辑：
++        空问题或超长问题直接标记为 error 终态，后续由路由进入错误终端节点。
++    """
++    question = str(state.get("question", "") or "").strip()
++    next_state = _append_trace(
++        state,
++        node="receive_query",
++        status="ok" if question and len(question) <= 1000 else "error",
++        summary="已接收业务问题" if question and len(question) <= 1000 else "问题为空或长度超出限制",
++    )
++    next_state["question"] = question
++    next_state.setdefault("execution_status", "not_started")
++    next_state.setdefault("sql_revision_round", 0)
++    next_state.setdefault("row_count", 0)
++    next_state.setdefault("result_truncated", False)
++    if not question or len(question) > 1000:
++        next_state["terminal_status"] = "error"
++        next_state["fallback_reason"] = "invalid_question"
++    return next_state
++
++
++def init_trace_and_mode(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """初始化追踪字段和灰度模式。
++
++    参数：
++        state: receive_query 后的运行态。
++    返回：
++        写入 nqe_mode、domain_mode、版本和默认策略后的运行态。
++    业务逻辑：
++        nqe_mode 默认 off；只有调用方显式传入 shadow、assist、on 才进入 NQE 骨架链路。
++    """
++    mode = _coerce_nqe_mode(state.get("nqe_mode"))
++    next_state = _append_trace(
++        state,
++        node="init_trace_and_mode",
++        summary=f"灰度模式已初始化为 {mode}",
++    )
++    next_state["nqe_mode"] = mode
++    next_state["domain_mode"] = _coerce_nqe_mode(next_state.get("domain_mode", mode))
++    next_state["fallback_policy"] = str(next_state.get("fallback_policy") or "legacy_first")
++    next_state["graph_version"] = NQE_SQL_AGENT_GRAPH_VERSION
++    next_state.setdefault("metadata_version_id", None)
++    next_state.setdefault("prompt_version_id", None)
++    return next_state
++
++
++def route_domain_and_capability(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """写入确定性领域和能力占位结果。
++
++    参数：
++        state: 已初始化模式的运行态。
++    返回：
++        带有 selected_domain 与 selected_capability 的运行态。
++    业务逻辑：
++        本卡只建立骨架，不做真实领域识别；如调用方提供 domain_hint 则作为候选业务域。
++    """
++    domain = str(state.get("domain_hint") or state.get("selected_domain") or "business_qa")
++    capability = str(state.get("selected_capability") or "nqe_sql_agent_skeleton")
++    next_state = _append_trace(
++        state,
++        node="route_domain_and_capability",
++        summary="已形成业务域与能力候选",
++    )
++    next_state["selected_domain"] = domain
++    next_state["selected_capability"] = capability
++    next_state["domain_candidates"] = [{"domain": domain, "status": "candidate"}]
++    next_state["capability_candidates"] = [{"capability": capability, "status": "candidate"}]
++    return next_state
++
++
++def normalize_query(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """归一化用户问题并抽取最小理解占位字段。
++
++    参数：
++        state: 领域路由后的运行态。
++    返回：
++        写入 normalized_question 和理解候选的运行态。
++    业务逻辑：
++        只做安全的字符串规整，不调用真实模型，不做业务事实计算。
++    """
++    normalized = " ".join(str(state.get("question") or "").split())
++    next_state = _append_trace(
++        state,
++        node="normalize_query",
++        summary="已完成问题文本归一化",
++    )
++    next_state["normalized_question"] = normalized
++    next_state["keyword_terms"] = [term for term in normalized.split() if term][:8]
++    next_state.setdefault("entity_terms", [])
++    next_state.setdefault("metric_terms", [])
++    next_state.setdefault("time_terms", [])
++    next_state.setdefault("compare_terms", [])
++    return next_state
++
++
++def retrieve_context_multiway(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行多路召回占位。
++
++    参数：
++        state: 已归一化的问题运行态。
++    返回：
++        写入 retrieval_query 与 retrieval_candidates 的运行态。
++    业务逻辑：
++        本卡不接向量库或元数据服务，只保留测试注入的 retrieval_context_package。
++    """
++    context_package = dict(state.get("retrieval_context_package") or {})
++    next_state = _append_trace(
++        state,
++        node="retrieve_context_multiway",
++        summary="已保留测试注入的召回上下文",
++    )
++    next_state["retrieval_query"] = str(state.get("normalized_question") or state.get("question") or "")
++    next_state["retrieval_context_package"] = context_package
++    next_state["retrieval_candidates"] = [{"status": "ready"}] if context_package.get("ready") else []
++    return next_state
++
++
++def merge_rank_and_build_context(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """合并召回候选并构造上下文包。
++
++    参数：
++        state: 多路召回后的运行态。
++    返回：
++        保留或更新 retrieval_context_package 的运行态。
++    业务逻辑：
++        骨架不做真实排序；只根据测试注入 ready 标记决定后续 readiness。
++    """
++    package = dict(state.get("retrieval_context_package") or {})
++    package.setdefault("ready", bool(state.get("retrieval_candidates")))
++    next_state = _append_trace(
++        state,
++        node="merge_rank_and_build_context",
++        summary="已合并上下文候选",
++    )
++    next_state["retrieval_context_package"] = package
++    return next_state
++
++
++def check_context_readiness(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """检查上下文是否足以进入内部查询生命周期。
++
++    参数：
++        state: 已构造上下文包的运行态。
++    返回：
++        写入 context_readiness 和澄清提示的运行态。
++    业务逻辑：
++        只有显式传入 context_readiness=pass 或 ready 上下文包，才允许进入后续占位链路。
++    """
++    package = dict(state.get("retrieval_context_package") or {})
++    ready = state.get("context_readiness") == "pass" or package.get("ready") is True
++    next_state = _append_trace(
++        state,
++        node="check_context_readiness",
++        status="ok" if ready else "clarify",
++        summary="上下文满足最小问数条件" if ready else "上下文不足，需要补充业务条件",
++    )
++    next_state["context_readiness"] = "pass" if ready else "fail"
++    if not ready:
++        next_state["terminal_status"] = "clarify"
++        next_state["clarification_hints"] = ["请补充业务范围、时间或对象。"]
++    return next_state
++
++
++def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成内部候选查询文本。
++
++    参数：
++        state: readiness 通过后的运行态。
++    返回：
++        写入 generated_sql 的运行态。
++    业务逻辑：
++        本骨架优先使用测试显式注入的候选文本；未注入时只给出不可通过预检的
++        确定性占位，避免在缺少上下文时误入后续校验。
++    """
++    package = dict(state.get("retrieval_context_package") or {})
++    candidate = str(
++        state.get("generated_sql")
++        or package.get("generated_sql_candidate")
++        or package.get("sql_candidate")
++        or "SELECT 1"
++    ).strip()
++    next_state = _append_trace(
++        state,
++        node="generate_sql_direct",
++        summary="已生成内部只读查询候选",
++    )
++    next_state["generated_sql"] = candidate
++    return next_state
++
++
++def precheck_sql_safety(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行内部查询候选的确定性安全预检。
++
++    参数：
++        state: 已生成内部查询候选的运行态。
++    返回：
++        写入 sql_safety_result 和 safe_sql_candidate 的运行态。
++    业务逻辑：
++        预检由独立安全模块执行；测试强制拒绝入口仍保留，但不能绕过真实预检。
++    """
++    package = dict(state.get("retrieval_context_package") or {})
++    safety_result = precheck_nqe_sql_safety(
++        str(state.get("generated_sql") or ""),
++        package,
++        str(state.get("selected_domain") or ""),
++    )
++    rejected = bool(state.get("force_safety_reject")) or safety_result.get("status") != "pass"
++    if state.get("force_safety_reject"):
++        violations = list(safety_result.get("violations") or [])
++        if "forced_reject" not in violations:
++            violations.append("forced_reject")
++        safety_result = dict(safety_result)
++        safety_result["status"] = "reject"
++        safety_result["reason_code"] = "forced_reject"
++        safety_result["safe_sql"] = ""
++        safety_result["limit_applied"] = False
++        safety_result["violations"] = sorted(violations)
++    next_state = _append_trace(
++        state,
++        node="precheck_sql_safety",
++        status="blocked" if rejected else "ok",
++        summary="安全边界未通过" if rejected else "安全边界检查通过",
++    )
++    next_state["sql_safety_result"] = safety_result
++    next_state.pop("safe_sql_candidate", None)
++    if rejected:
++        next_state["terminal_status"] = "safety_reject"
++        next_state["fallback_reason"] = str(safety_result.get("reason_code") or "safety_boundary")
++    else:
++        next_state["safe_sql_candidate"] = str(safety_result.get("safe_sql") or "")
++    return next_state
++
++
++def explain_validate_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行离线解释校验。
++
++    参数：
++        state: 安全预检通过后的运行态。
++    返回：
++        写入 explain_result 的运行态。
++    业务逻辑：
++        本节点不连接真实数据库，也不执行真实 EXPLAIN；它基于安全预检产物和
++        上下文字段元数据做确定性字段存在性校验，失败时进入受控修正循环。
++    """
++    package = dict(state.get("retrieval_context_package") or {})
++    safety_result = dict(state.get("sql_safety_result") or {})
++    violations = _validate_explain_against_metadata(
++        safe_candidate=str(state.get("safe_sql_candidate") or ""),
++        safety_result=safety_result,
++        context_package=package,
++    )
++    if state.get("force_explain_fail"):
++        violations.append("forced_explain_failure")
++
++    unique_violations = sorted(set(violations))
++    failed = bool(unique_violations)
++    next_state = _append_trace(
++        state,
++        node="explain_validate_sql",
++        status="error" if failed else "ok",
++        summary="解释校验未通过" if failed else "解释校验通过",
++    )
++    next_state["explain_result"] = {
++        "status": "fail" if failed else "pass",
++        "violations": unique_violations,
++        "revision_round": int(state.get("sql_revision_round", 0)),
++    }
++    if failed and int(state.get("sql_revision_round", 0)) >= MAX_SQL_REVISION_ROUNDS:
++        next_state["terminal_status"] = "error"
++        next_state["fallback_reason"] = "explain_validation_failed"
++    return next_state
++
++
++def correct_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行内部候选受控修正。
++
++    参数：
++        state: 解释校验失败后的运行态。
++    返回：
++        递增 sql_revision_round、记录修正摘要并回写候选后的运行态。
++    业务逻辑：
++        修正只能使用上下文包显式注入的受控候选；没有候选时沿用原候选触发
++        下一轮校验，且修正后必须回到 precheck_sql_safety 重新过安全边界。
++    """
++    next_round = int(state.get("sql_revision_round", 0)) + 1
++    package = dict(state.get("retrieval_context_package") or {})
++    corrected_candidate = _select_correction_candidate(package, next_round)
++    used_controlled_candidate = bool(corrected_candidate)
++    next_state = _append_trace(
++        state,
++        node="correct_sql",
++        status="retry",
++        summary=f"已完成第 {next_round} 轮内部候选修正",
++    )
++    revisions = list(next_state.get("sql_revisions", []))
++    revisions.append(
++        {
++            "round": next_round,
++            "reason": "explain_validation_failed",
++            "used_controlled_candidate": used_controlled_candidate,
++        }
++    )
++    next_state["sql_revision_round"] = next_round
++    next_state["sql_revisions"] = revisions
++    next_state["correction_reason"] = "explain_validation_failed"
++    next_state["generated_sql"] = corrected_candidate or str(state.get("generated_sql") or "SELECT 1")
++    return next_state
++
++
++def execute_sql_readonly(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """执行只读查询占位。
++
++    参数：
++        state: 解释校验通过后的运行态。
++    返回：
++        写入内部执行结果和行数的运行态。
++    业务逻辑：
++        本卡不连接数据库，仅返回确定性占位结果用于验证编排顺序。
++    """
++    next_state = _append_trace(
++        state,
++        node="execute_sql_readonly",
++        summary="已完成只读执行占位",
++    )
++    next_state["execution_status"] = "executed"
++    next_state["execution_result_internal"] = {"rows": [{"value": 1}], "source": "stub"}
++    next_state["row_count"] = 1
++    next_state["result_truncated"] = False
++    return next_state
++
++
++def present_business_answer(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成业务化用户回答。
++
++    参数：
++        state: 执行占位完成后的运行态。
++    返回：
++        写入 completed 终态和用户可见回答的运行态。
++    业务逻辑：
++        回答只表达业务处理结果，不暴露内部查询、字段、调度、提示词或追踪细节。
++    """
++    next_state = _append_trace(
++        state,
++        node="present_business_answer",
++        summary="已生成业务化回答",
++    )
++    next_state["terminal_status"] = "completed"
++    next_state["user_visible_response"] = "已完成本次业务问数骨架处理，后续能力卡将补齐真实数据校验与结果呈现。"
++    return next_state
++
++
++def shadow_compare(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """记录 shadow 对比占位。
++
++    参数：
++        state: 已生成业务回答的运行态。
++    返回：
++        写入 shadow_compare_result 的运行态。
++    业务逻辑：
++        shadow 仅记录内部对比摘要，不影响用户可见回答。
++    """
++    next_state = _append_trace(
++        state,
++        node="shadow_compare",
++        summary="已记录灰度对比占位结果",
++    )
++    next_state["shadow_compare_result"] = {"status": "not_compared", "reason": "skeleton_only"}
++    return next_state
++
++
++def legacy_fallback(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """off 模式降级到既有入口占位。
++
++    参数：
++        state: 灰度模式为 off 的运行态。
++    返回：
++        写入 legacy_fallback 终态和业务化提示的运行态。
++    业务逻辑：
++        off 模式不允许进入内部查询生命周期。
++    """
++    next_state = _append_trace(
++        state,
++        node="legacy_fallback",
++        summary="已按关闭模式交由既有能力处理",
++    )
++    next_state["terminal_status"] = "legacy_fallback"
++    next_state["execution_status"] = "skipped"
++    next_state["fallback_reason"] = "nqe_mode_off"
++    next_state["user_visible_response"] = "已转交既有业务问答能力处理。"
++    return next_state
++
++
++def terminal_clarify(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成澄清终态回答。
++
++    参数：
++        state: 上下文不足或问题需要补充的运行态。
++    返回：
++        写入 clarify 终态和业务化澄清文本的运行态。
++    业务逻辑：
++        澄清文本只说明需要补充业务条件，不暴露内部原因。
++    """
++    next_state = _append_trace(
++        state,
++        node="terminal_clarify",
++        status="clarify",
++        summary="已进入业务澄清终态",
++    )
++    next_state["terminal_status"] = "clarify"
++    next_state["execution_status"] = "skipped"
++    next_state["user_visible_response"] = "请补充业务范围、时间或对象后再查询。"
++    return next_state
++
++
++def terminal_safety_reject(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成安全拒答终态回答。
++
++    参数：
++        state: 安全边界未通过的运行态。
++    返回：
++        写入 safety_reject 终态和业务化拒答文本的运行态。
++    业务逻辑：
++        拒答只说明当前请求不能处理，不展示内部校验细节。
++    """
++    next_state = _append_trace(
++        state,
++        node="terminal_safety_reject",
++        status="blocked",
++        summary="已进入安全拒答终态",
++    )
++    next_state["terminal_status"] = "safety_reject"
++    next_state["execution_status"] = "skipped"
++    next_state["user_visible_response"] = "当前请求不满足只读问数边界，已停止处理。"
++    return next_state
++
++
++def terminal_error(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """生成错误终态回答。
++
++    参数：
++        state: 问题无效或骨架占位校验失败的运行态。
++    返回：
++        写入 error 终态和业务化错误文本的运行态。
++    业务逻辑：
++        错误文本只给出可理解的业务提示，不输出内部异常或调试信息。
++    """
++    next_state = _append_trace(
++        state,
++        node="terminal_error",
++        status="error",
++        summary="已进入错误终态",
++    )
++    next_state["terminal_status"] = "error"
++    next_state["execution_status"] = "failed"
++    next_state["user_visible_response"] = "当前请求暂时无法完成，请补充条件后重试或联系管理员核查配置。"
++    return next_state
++
++
++def record_query_log_and_trace(state: NqeSqlAgentState) -> NqeSqlAgentState:
++    """记录查询日志和轨迹占位。
++
++    参数：
++        state: 任一终态节点后的运行态。
++    返回：
++        追加记录节点、脱敏 query log 和 replay 记录后的最终运行态。
++    业务逻辑：
++        本卡不写入数据库，只在 state 内构造结构化追溯材料。query_log_record
++        不保存内部候选文本；replay_record 单独保存受控重放输入，用于离线复现。
++    """
++    next_state = _append_trace(
++        state,
++        node="record_query_log_and_trace",
++        summary="已记录本次骨架运行摘要",
++    )
++    query_log_record = build_nqe_query_log_record(next_state)
++    next_state["query_log_record"] = query_log_record
++    next_state["replay_record"] = build_nqe_replay_record(next_state, query_log_record)
++    return next_state
++
++
++def _route_after_init(state: NqeSqlAgentState) -> str:
++    """按初始化结果选择 off 降级、错误终态或 NQE 链路。"""
++    if state.get("terminal_status") == "error":
++        return "terminal_error"
++    if state.get("nqe_mode") == "off":
++        return "legacy_fallback"
++    return "route_domain_and_capability"
++
++
++def _route_after_readiness(state: NqeSqlAgentState) -> str:
++    """上下文不足时转澄清，否则进入内部查询生命周期。"""
++    if state.get("context_readiness") != "pass":
++        return "terminal_clarify"
++    return "generate_sql_direct"
++
++
++def _route_after_precheck(state: NqeSqlAgentState) -> str:
++    """安全预检失败时转拒答，否则继续解释校验。"""
++    if state.get("terminal_status") == "safety_reject":
++        return "terminal_safety_reject"
++    return "explain_validate_sql"
++
++
++def _route_after_explain(state: NqeSqlAgentState) -> str:
++    """解释校验失败时最多修正两轮，超过后转错误终态。"""
++    if state.get("terminal_status") == "error":
++        return "terminal_error"
++    if state.get("explain_result", {}).get("status") == "fail":
++        return "correct_sql"
++    return "execute_sql_readonly"
++
++
++def _route_after_present(state: NqeSqlAgentState) -> Literal["shadow_compare", "record_query_log_and_trace"]:
++    """shadow 模式下先记录对比占位，其余模式直接进入记录节点。"""
++    if state.get("nqe_mode") == "shadow":
++        return "shadow_compare"
++    return "record_query_log_and_trace"
++
++
++def build_nqe_sql_agent_graph():
++    """构建并编译 NQE SQL Agent 独立骨架 Graph。
++
++    参数：
++        无。
++    返回：
++        已 compile 的 LangGraph graph，可通过 invoke 运行确定性骨架。
++    业务逻辑：
++        Graph 显式建模灰度模式、上下文 readiness、内部查询生命周期、两轮修正循环
++        和五类终态；所有终态都进入 record_query_log_and_trace 后再结束。
++    """
++    graph = StateGraph(NqeSqlAgentState)
++
++    graph.add_node("receive_query", receive_query)
++    graph.add_node("init_trace_and_mode", init_trace_and_mode)
++    graph.add_node("route_domain_and_capability", route_domain_and_capability)
++    graph.add_node("normalize_query", normalize_query)
++    graph.add_node("retrieve_context_multiway", retrieve_context_multiway)
++    graph.add_node("merge_rank_and_build_context", merge_rank_and_build_context)
++    graph.add_node("check_context_readiness", check_context_readiness)
++    graph.add_node("generate_sql_direct", generate_sql_direct)
++    graph.add_node("precheck_sql_safety", precheck_sql_safety)
++    graph.add_node("explain_validate_sql", explain_validate_sql)
++    graph.add_node("correct_sql", correct_sql)
++    graph.add_node("execute_sql_readonly", execute_sql_readonly)
++    graph.add_node("present_business_answer", present_business_answer)
++    graph.add_node("record_query_log_and_trace", record_query_log_and_trace)
++    graph.add_node("legacy_fallback", legacy_fallback)
++    graph.add_node("shadow_compare", shadow_compare)
++    graph.add_node("terminal_clarify", terminal_clarify)
++    graph.add_node("terminal_safety_reject", terminal_safety_reject)
++    graph.add_node("terminal_error", terminal_error)
++
++    graph.add_edge(START, "receive_query")
++    graph.add_edge("receive_query", "init_trace_and_mode")
++    graph.add_conditional_edges(
++        "init_trace_and_mode",
++        _route_after_init,
++        {
++            "route_domain_and_capability": "route_domain_and_capability",
++            "legacy_fallback": "legacy_fallback",
++            "terminal_error": "terminal_error",
++        },
++    )
++
++    graph.add_edge("route_domain_and_capability", "normalize_query")
++    graph.add_edge("normalize_query", "retrieve_context_multiway")
++    graph.add_edge("retrieve_context_multiway", "merge_rank_and_build_context")
++    graph.add_edge("merge_rank_and_build_context", "check_context_readiness")
++    graph.add_conditional_edges(
++        "check_context_readiness",
++        _route_after_readiness,
++        {
++            "generate_sql_direct": "generate_sql_direct",
++            "terminal_clarify": "terminal_clarify",
++        },
++    )
++
++    graph.add_edge("generate_sql_direct", "precheck_sql_safety")
++    graph.add_conditional_edges(
++        "precheck_sql_safety",
++        _route_after_precheck,
++        {
++            "explain_validate_sql": "explain_validate_sql",
++            "terminal_safety_reject": "terminal_safety_reject",
++        },
++    )
++    graph.add_conditional_edges(
++        "explain_validate_sql",
++        _route_after_explain,
++        {
++            "execute_sql_readonly": "execute_sql_readonly",
++            "correct_sql": "correct_sql",
++            "terminal_error": "terminal_error",
++        },
++    )
++    graph.add_edge("correct_sql", "precheck_sql_safety")
++    graph.add_edge("execute_sql_readonly", "present_business_answer")
++    graph.add_conditional_edges(
++        "present_business_answer",
++        _route_after_present,
++        {
++            "shadow_compare": "shadow_compare",
++            "record_query_log_and_trace": "record_query_log_and_trace",
++        },
++    )
++
++    graph.add_edge("legacy_fallback", "record_query_log_and_trace")
++    graph.add_edge("shadow_compare", "record_query_log_and_trace")
++    graph.add_edge("terminal_clarify", "record_query_log_and_trace")
++    graph.add_edge("terminal_safety_reject", "record_query_log_and_trace")
++    graph.add_edge("terminal_error", "record_query_log_and_trace")
++    graph.add_edge("record_query_log_and_trace", END)
++
++    return graph.compile()
++
++
++def _build_runtime_input_from_replay_record(replay_record: dict[str, Any]) -> dict[str, Any]:
++    """把脱敏 replay_record 转换为仅内存使用的重放输入。
++
++    参数：
++        replay_record: 持久化的脱敏重放记录。
++    返回：
++        可传给 Graph invoke 的运行态输入。
++    业务逻辑：
++        持久化 replay_input 不保存原始召回包、内部候选或对象字段元数据；重放时
++        根据期望终态注入合成上下文，只验证路径形状和摘要，不还原真实内部资料。
++    """
++    replay_input = dict(replay_record.get("replay_input") or {})
++    expected_summary = dict(replay_record.get("expected_summary") or {})
++    runtime_input: dict[str, Any] = {
++        key: value
++        for key, value in replay_input.items()
++        if key not in {"replay_context_summary"}
++    }
++    runtime_input["question"] = str(runtime_input.get("question") or "已脱敏重放问题")
++
++    terminal_status = str(expected_summary.get("terminal_status") or "")
++    if terminal_status == "legacy_fallback":
++        runtime_input["nqe_mode"] = "off"
++        runtime_input.pop("retrieval_context_package", None)
++        return runtime_input
++    if terminal_status == "clarify":
++        runtime_input["context_readiness"] = "fail"
++        runtime_input["retrieval_context_package"] = {"ready": False}
++        return runtime_input
++
++    synthetic_context = {
++        "ready": True,
++        "allowed_tables": ["replay_safe_source"],
++        "table_columns": {"replay_safe_source": ["replay_value"]},
++        "generated_sql_candidate": "SELECT replay_value FROM replay_safe_source",
++    }
++    runtime_input["context_readiness"] = "pass"
++    runtime_input["retrieval_context_package"] = synthetic_context
++    if terminal_status == "safety_reject":
++        runtime_input["force_safety_reject"] = True
++    return runtime_input
++
++
++def replay_nqe_sql_agent_record(replay_record: dict[str, Any]) -> NqeSqlAgentState:
++    """按 replay_record 重放 NQE SQL Agent 骨架。
++
++    参数：
++        replay_record: record_query_log_and_trace 生成的内部重放记录。
++    返回：
++        重放后的 Graph 最终态，并附加 replay_summary 对比结果。
++    业务逻辑：
++        replay_record 持久化部分只保存脱敏摘要；本函数在内存中合成最小上下文，
++        重新经过完整 Graph，以验证终态、节点顺序和关键摘要是否仍可复现。
++    """
++    replay_input = _build_runtime_input_from_replay_record(replay_record)
++    graph = build_nqe_sql_agent_graph()
++    final_state = graph.invoke(replay_input)
++    final_state["replay_summary"] = compare_nqe_replay_summary(
++        dict(replay_record.get("expected_summary") or {}),
++        final_state,
++    )
++    return final_state
+--- a/backend/app/domains/business_qa_graph/nqe_sql_agent_state.py
++++ b/backend/app/domains/business_qa_graph/nqe_sql_agent_state.py
+@@ -0,0 +1,133 @@
++"""NQE 统一 SQL Agent Graph 运行态定义。
++
++本模块只定义独立骨架的状态字段，不接入正式问答入口、不连接数据库、
++不调用真实模型，也不承载用户可见的内部执行细节。
++"""
++
++from __future__ import annotations
++
++from typing import Any, Literal, TypedDict
++
++
++NqeMode = Literal["off", "shadow", "assist", "on"]
++NqeTerminalStatus = Literal["clarify", "safety_reject", "error", "legacy_fallback", "completed"]
++
++
++class NqeSqlAgentState(TypedDict, total=False):
++    """NQE SQL Agent LangGraph 节点之间传递的状态。
++
++    参数：
++        所有字段均由 Graph 节点按阶段增量写入；调用方可传入 question、
++        nqe_mode、retrieval_context_package 等测试态字段驱动骨架分支。
++    返回：
++        StateGraph 节点之间共享和更新的字典态。
++    业务边界：
++        本状态允许保存内部占位执行信息，但用户可见回答只能写入
++        user_visible_response，且必须屏蔽内部技术词。
++    """
++
++    # 请求上下文：用户原始问题。
++    question: str
++    # 请求上下文：归一化后的业务问题文本。
++    normalized_question: str
++    # 请求上下文：调用方提供的业务域提示。
++    domain_hint: str | None
++    # 请求上下文：前端、渠道或会话侧非敏感上下文。
++    client_context: dict[str, Any]
++    # 请求上下文：用户身份、权限候选等非敏感上下文。
++    user_context: dict[str, Any]
++    # 请求上下文：本次请求的追踪号，不应暴露给用户。
++    trace_id: str | None
++
++    # trace：节点审计轨迹，只记录节点名、状态和业务摘要。
++    trace_steps: list[dict[str, str]]
++    # trace：脱敏查询日志记录，不包含内部候选查询文本。
++    query_log_record: dict[str, Any]
++    # trace：内部可重放记录，保存最小重放输入和期望摘要。
++    replay_record: dict[str, Any]
++    # trace：重放结果摘要，仅用于内部验收对比。
++    replay_summary: dict[str, Any]
++
++    # 运行模式：NQE 灰度总开关，off/shadow/assist/on。
++    nqe_mode: NqeMode
++    # 运行模式：领域级灰度模式，未设置时继承 nqe_mode。
++    domain_mode: NqeMode
++    # 运行模式：降级策略，例如 legacy_first 或 nqe_first。
++    fallback_policy: str
++    # 运行模式：Graph 骨架版本。
++    graph_version: str
++    # 运行模式：元数据版本标识，仅作追溯占位。
++    metadata_version_id: str | None
++    # 运行模式：表达模板版本标识，仅作追溯占位。
++    prompt_version_id: str | None
++
++    # 领域：已选择的业务域。
++    selected_domain: str | None
++    # 领域：已选择的业务能力。
++    selected_capability: str | None
++    # 领域：候选业务域列表。
++    domain_candidates: list[dict[str, Any]]
++    # 领域：候选业务能力列表。
++    capability_candidates: list[dict[str, Any]]
++
++    # 理解：关键词候选。
++    keyword_terms: list[str]
++    # 理解：实体候选。
++    entity_terms: list[str]
++    # 理解：指标候选。
++    metric_terms: list[str]
++    # 理解：时间候选。
++    time_terms: list[str]
++    # 理解：对比条件候选。
++    compare_terms: list[str]
++
++    # 召回：用于元数据召回的查询文本。
++    retrieval_query: str
++    # 召回：多路召回候选。
++    retrieval_candidates: list[dict[str, Any]]
++    # 召回：合并排序后的上下文包；本卡只支持测试注入占位包。
++    retrieval_context_package: dict[str, Any]
++    # 召回：上下文是否满足生成占位查询的要求。
++    context_readiness: Literal["unknown", "pass", "fail"]
++    # 召回：需要用户补充的信息提示。
++    clarification_hints: list[str]
++    # 召回：降级提示。
++    fallback_hints: list[str]
++
++    # SQL 生命周期：内部候选查询文本，禁止直接展示给用户。
++    generated_sql: str
++    # SQL 生命周期：通过安全预检后的内部候选文本。
++    safe_sql_candidate: str
++    # SQL 生命周期：安全预检结构化结果。
++    sql_safety_result: dict[str, Any]
++    # SQL 生命周期：解释校验占位结果。
++    explain_result: dict[str, Any]
++    # SQL 生命周期：当前修正轮次，最多 2 轮。
++    sql_revision_round: int
++    # SQL 生命周期：修正记录摘要，不记录用户可见技术细节。
++    sql_revisions: list[dict[str, Any]]
++    # SQL 生命周期：最近一次修正原因。
++    correction_reason: str | None
++
++    # 执行：内部执行结果占位，不连接真实数据库。
++    execution_result_internal: dict[str, Any]
++    # 执行：执行状态。
++    execution_status: Literal["not_started", "skipped", "executed", "failed"]
++    # 执行：结果行数占位。
++    row_count: int
++    # 执行：结果是否被截断。
++    result_truncated: bool
++
++    # 输出：用户可见的业务化回答。
++    user_visible_response: str
++    # 输出：Graph 终态。
++    terminal_status: NqeTerminalStatus
++    # 输出：降级或终止原因。
++    fallback_reason: str | None
++    # 输出：shadow 对比占位结果，不进入用户可见回答。
++    shadow_compare_result: dict[str, Any]
++
++    # 测试控制：强制安全预检拒绝，用于覆盖 safety_reject 终态。
++    force_safety_reject: bool
++    # 测试控制：强制解释校验失败，用于覆盖修正循环。
++    force_explain_fail: bool
+--- a/backend/app/domains/business_qa_graph/nqe_sql_agent_trace.py
++++ b/backend/app/domains/business_qa_graph/nqe_sql_agent_trace.py
+@@ -0,0 +1,369 @@
++"""NQE 独立 Graph 的 trace、query log 与 replay 辅助函数。
++
++本模块只处理内存态结构化记录，不连接数据库、不写文件，也不把内部候选查询
++写入脱敏 query log。需要复现路径时，replay_record 单独保存受控重放输入。
++"""
++
++from __future__ import annotations
++
++import hashlib
++import json
++from copy import deepcopy
++from typing import Any
++
++from backend.app.domains.business_qa_graph.nqe_sql_agent_state import NqeSqlAgentState
++
++QUERY_LOG_SCHEMA_VERSION = "nqe_query_log.v1"
++REPLAY_SCHEMA_VERSION = "nqe_replay.v1"
++
++_REPLAY_INPUT_KEYS = (
++    "nqe_mode",
++    "domain_mode",
++    "domain_hint",
++    "selected_domain",
++    "selected_capability",
++    "trace_id",
++    "fallback_policy",
++    "metadata_version_id",
++    "prompt_version_id",
++    "context_readiness",
++    "force_safety_reject",
++    "force_explain_fail",
++)
++_SENSITIVE_KEY_FRAGMENTS = (
++    "token",
++    "secret",
++    "password",
++    "passwd",
++    "credential",
++    "api_key",
++    "apikey",
++    "access_key",
++    "private_key",
++    "sql",
++    "table",
++    "column",
++    "field",
++    "schema",
++)
++_REPLAY_PLACEHOLDER_QUESTION = "已脱敏重放问题"
++
++
++def _jsonable(value: Any) -> Any:
++    """把任意值转换为稳定 JSON 可序列化结构。
++
++    参数：
++        value: 可能来自 Graph state 的任意 Python 值。
++    返回：
++        可被 json.dumps 稳定编码的值；无法编码时退化为字符串。
++    业务逻辑：
++        trace/replay 记录必须稳定、可比较，不能因为 set 等对象导致序列化失败。
++    """
++    try:
++        return json.loads(json.dumps(value, ensure_ascii=False, sort_keys=True, default=str))
++    except TypeError:
++        return str(value)
++
++
++def _stable_json(value: Any) -> str:
++    """生成稳定 JSON 字符串。
++
++    参数：
++        value: 需要做摘要或比较的结构化值。
++    返回：
++        排序后的紧凑 JSON 文本。
++    业务逻辑：
++        用于生成稳定摘要，避免同一结构因键顺序不同产生不同追踪号。
++    """
++    return json.dumps(_jsonable(value), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
++
++
++def _digest_text(value: str) -> str:
++    """计算文本的稳定摘要。
++
++    参数：
++        value: 待摘要文本。
++    返回：
++        sha256 十六进制摘要。
++    业务逻辑：
++        query log 只保存问题摘要与长度，不保存原始问题文本，降低日志泄露风险。
++    """
++    return hashlib.sha256(value.encode("utf-8")).hexdigest()
++
++
++def _digest_payload(value: Any) -> str:
++    """计算结构化载荷的稳定摘要。
++
++    参数：
++        value: 需要摘要的结构化对象。
++    返回：
++        sha256 十六进制摘要。
++    业务逻辑：
++        log_id 由脱敏摘要构成，既可关联 replay，又不依赖数据库自增主键。
++    """
++    return _digest_text(_stable_json(value))
++
++
++def _trace_summary(state: NqeSqlAgentState) -> list[dict[str, str]]:
++    """生成脱敏节点轨迹摘要。
++
++    参数：
++        state: Graph 最终或中间运行态。
++    返回：
++        只包含 node/status/summary 的列表。
++    业务逻辑：
++        trace 摘要不保存内部候选文本、对象白名单或执行结果明细，只用于审计路径。
++    """
++    summary: list[dict[str, str]] = []
++    for step in state.get("trace_steps", []) or []:
++        if not isinstance(step, dict):
++            continue
++        summary.append(
++            {
++                "node": str(step.get("node") or ""),
++                "status": str(step.get("status") or ""),
++                "summary": str(step.get("summary") or ""),
++            }
++        )
++    return summary
++
++
++def _node_names(state: NqeSqlAgentState) -> list[str]:
++    """读取节点名称序列。
++
++    参数：
++        state: Graph 运行态。
++    返回：
++        trace_steps 中的节点名序列。
++    业务逻辑：
++        replay 对比只比较执行形状，不比较内部候选文本。
++    """
++    return [step["node"] for step in _trace_summary(state) if step.get("node")]
++
++
++def _safety_summary(state: NqeSqlAgentState) -> dict[str, Any]:
++    """提取安全预检脱敏摘要。
++
++    参数：
++        state: Graph 运行态。
++    返回：
++        status、reason_code、violations 等稳定字段，不包含候选文本和对象名。
++    业务逻辑：
++        安全日志需要可追溯原因码，但不能把被拒绝候选或白名单对象直接写入 query log。
++    """
++    result = dict(state.get("sql_safety_result") or {})
++    violations = sorted(str(item) for item in result.get("violations", []) or [])
++    return {
++        "status": str(result.get("status") or "not_run"),
++        "reason_code": str(result.get("reason_code") or ""),
++        "violations": violations,
++        "violation_count": len(violations),
++        "limit_applied": bool(result.get("limit_applied")),
++    }
++
++
++def _explain_summary(state: NqeSqlAgentState) -> dict[str, Any]:
++    """提取解释校验脱敏摘要。
++
++    参数：
++        state: Graph 运行态。
++    返回：
++        status、violations、revision_round。
++    业务逻辑：
++        解释校验摘要只记录稳定原因码，不记录字段名、表名或候选文本。
++    """
++    result = dict(state.get("explain_result") or {})
++    violations = sorted(str(item) for item in result.get("violations", []) or [])
++    return {
++        "status": str(result.get("status") or "not_run"),
++        "violations": violations,
++        "violation_count": len(violations),
++        "revision_round": int(result.get("revision_round") or state.get("sql_revision_round", 0) or 0),
++    }
++
++
++def summarize_nqe_run(state: NqeSqlAgentState) -> dict[str, Any]:
++    """生成可用于 replay 对比的脱敏运行摘要。
++
++    参数：
++        state: Graph 最终态。
++    返回：
++        终态、执行状态、行数、节点序列和安全/解释摘要。
++    业务逻辑：
++        replay 只验证路径与关键业务状态是否一致，不比较内部候选文本。
++    """
++    return {
++        "terminal_status": str(state.get("terminal_status") or ""),
++        "execution_status": str(state.get("execution_status") or ""),
++        "fallback_reason": str(state.get("fallback_reason") or ""),
++        "row_count": int(state.get("row_count") or 0),
++        "result_truncated": bool(state.get("result_truncated")),
++        "sql_revision_round": int(state.get("sql_revision_round") or 0),
++        "node_names": _node_names(state),
++        "safety_summary": _safety_summary(state),
++        "explain_summary": _explain_summary(state),
++    }
++
++
++def build_nqe_query_log_record(state: NqeSqlAgentState) -> dict[str, Any]:
++    """构造脱敏 query log 记录。
++
++    参数：
++        state: 已进入终态并追加 record 节点后的 Graph state。
++    返回：
++        可落库/落文件的脱敏 query log 字典。
++    业务逻辑：
++        query log 记录运行模式、终态、原因码、节点轨迹和摘要；不保存原始候选查询、
++        安全候选、召回上下文包、执行明细或用户可见回答，防止内部信息扩散。
++    """
++    question = str(state.get("question") or "")
++    base_record = {
++        "schema_version": QUERY_LOG_SCHEMA_VERSION,
++        "trace_id": str(state.get("trace_id") or ""),
++        "graph_version": str(state.get("graph_version") or ""),
++        "nqe_mode": str(state.get("nqe_mode") or ""),
++        "domain_mode": str(state.get("domain_mode") or ""),
++        "selected_domain": str(state.get("selected_domain") or ""),
++        "selected_capability": str(state.get("selected_capability") or ""),
++        "terminal_status": str(state.get("terminal_status") or ""),
++        "execution_status": str(state.get("execution_status") or ""),
++        "fallback_reason": str(state.get("fallback_reason") or ""),
++        "row_count": int(state.get("row_count") or 0),
++        "result_truncated": bool(state.get("result_truncated")),
++        "sql_revision_round": int(state.get("sql_revision_round") or 0),
++        "question_digest": _digest_text(question),
++        "question_length": len(question),
++        "safety_summary": _safety_summary(state),
++        "explain_summary": _explain_summary(state),
++        "trace_summary": _trace_summary(state),
++        "shadow_status": str(dict(state.get("shadow_compare_result") or {}).get("status") or "not_run"),
++    }
++    base_record["log_id"] = _digest_payload(
++        {
++            "trace_id": base_record["trace_id"],
++            "question_digest": base_record["question_digest"],
++            "terminal_status": base_record["terminal_status"],
++            "node_names": [step["node"] for step in base_record["trace_summary"]],
++        }
++    )
++    return base_record
++
++
++def _contains_sensitive_key(value: Any) -> bool:
++    """递归判断结构中是否出现敏感或内部元数据键。
++
++    参数：
++        value: 任意上下文结构。
++    返回：
++        任一字典键命中敏感片段时返回 True。
++    业务逻辑：
++        replay 持久化记录只能保存 allowlist 摘要，不能因嵌套上下文中的密钥、
++        内部候选、对象或字段元数据导致信息扩散。
++    """
++    if isinstance(value, dict):
++        for key, child in value.items():
++            key_text = str(key).lower()
++            if any(fragment in key_text for fragment in _SENSITIVE_KEY_FRAGMENTS):
++                return True
++            if _contains_sensitive_key(child):
++                return True
++    elif isinstance(value, list | tuple | set):
++        return any(_contains_sensitive_key(item) for item in value)
++    return False
++
++
++def _replay_context_summary(state: NqeSqlAgentState) -> dict[str, Any]:
++    """生成 replay 输入的脱敏上下文摘要。
++
++    参数：
++        state: Graph 最终态。
++    返回：
++        只包含长度、摘要、终态和布尔标记的 allowlist 摘要。
++    业务逻辑：
++        原始问题、客户端上下文、用户上下文和召回上下文包都可能包含内部候选、
++        对象字段元数据或密钥，持久化 replay 只能保存可比对的摘要和风险标记。
++    """
++    question = str(state.get("question") or "")
++    raw_context = {
++        "client_context": state.get("client_context"),
++        "user_context": state.get("user_context"),
++        "retrieval_context_package": state.get("retrieval_context_package"),
++    }
++    return {
++        "question_digest": _digest_text(question),
++        "question_length": len(question),
++        "terminal_status": str(state.get("terminal_status") or ""),
++        "context_readiness": str(state.get("context_readiness") or ""),
++        "had_client_context": bool(state.get("client_context")),
++        "had_user_context": bool(state.get("user_context")),
++        "had_retrieval_context": bool(state.get("retrieval_context_package")),
++        "sensitive_key_seen": _contains_sensitive_key(raw_context),
++    }
++
++
++def build_nqe_replay_input(state: NqeSqlAgentState) -> dict[str, Any]:
++    """从最终态反推脱敏最小重放输入。
++
++    参数：
++        state: Graph 最终态。
++    返回：
++        可持久化的 replay 输入摘要；不包含原始问题、客户端/用户上下文或召回包。
++    业务逻辑：
++        replay 输入采用 allowlist：只保留灰度模式、追踪版本等低敏控制字段，
++        原始上下文统一替换为摘要。实际重放时再由 replay 函数注入内存态合成上下文。
++    """
++    replay_input: dict[str, Any] = {"question": _REPLAY_PLACEHOLDER_QUESTION}
++    for key in _REPLAY_INPUT_KEYS:
++        if key in state:
++            replay_input[key] = deepcopy(_jsonable(state[key]))
++    replay_input["replay_context_summary"] = _replay_context_summary(state)
++    return replay_input
++
++
++def build_nqe_replay_record(state: NqeSqlAgentState, query_log_record: dict[str, Any]) -> dict[str, Any]:
++    """构造 replay 记录。
++
++    参数：
++        state: Graph 最终态。
++        query_log_record: 同一次运行生成的脱敏 query log。
++    返回：
++        包含 replay_input 与 expected_summary 的重放记录。
++    业务逻辑：
++        query log 用于审计，replay record 用于内部可复现；两者通过 log_id 关联。
++    """
++    replay_input = build_nqe_replay_input(state)
++    expected_summary = summarize_nqe_run(state)
++    return {
++        "schema_version": REPLAY_SCHEMA_VERSION,
++        "query_log_id": str(query_log_record.get("log_id") or ""),
++        "trace_id": str(query_log_record.get("trace_id") or ""),
++        "replay_input": replay_input,
++        "replay_input_digest": _digest_payload(replay_input),
++        "expected_summary": expected_summary,
++    }
++
++
++def compare_nqe_replay_summary(expected_summary: dict[str, Any], actual_state: NqeSqlAgentState) -> dict[str, Any]:
++    """比较 replay 期望摘要与实际重放结果。
++
++    参数：
++        expected_summary: replay_record 中保存的期望摘要。
++        actual_state: 重放后得到的 Graph 最终态。
++    返回：
++        matched 与关键字段对比结果。
++    业务逻辑：
++        replay 只校验终态、行数、修正轮次和节点序列，避免比较内部候选文本。
++    """
++    actual_summary = summarize_nqe_run(actual_state)
++    expected = dict(expected_summary or {})
++    comparable_keys = ("terminal_status", "execution_status", "row_count", "sql_revision_round", "node_names")
++    mismatches = [key for key in comparable_keys if expected.get(key) != actual_summary.get(key)]
++    return {
++        "schema_version": "nqe_replay_summary.v1",
++        "matched": not mismatches,
++        "mismatches": mismatches,
++        "expected_terminal_status": str(expected.get("terminal_status") or ""),
++        "actual_terminal_status": str(actual_summary.get("terminal_status") or ""),
++        "expected_node_count": len(expected.get("node_names") or []),
++        "actual_node_count": len(actual_summary.get("node_names") or []),
++    }
+--- a/backend/app/domains/business_qa_graph/nqe_sql_safety.py
++++ b/backend/app/domains/business_qa_graph/nqe_sql_safety.py
+@@ -0,0 +1,418 @@
++"""NQE 独立 Graph 内部查询安全预检。
++
++本模块只做确定性字符串级安全拦截，不连接数据库、不访问真实业务入口，
++也不把内部候选文本暴露给用户。
++"""
++
++from __future__ import annotations
++
++import re
++from typing import Any
++
++
++DEFAULT_RESULT_CAP = 200
++
++_COMMENT_TOKENS = ("--", "/*", "*/", "#")
++_BANNED_STATEMENT_KEYWORDS = {
++    "insert",
++    "update",
++    "delete",
++    "merge",
++    "create",
++    "alter",
++    "drop",
++    "truncate",
++    "replace",
++    "call",
++    "exec",
++    "execute",
++    "grant",
++    "revoke",
++    "commit",
++    "rollback",
++}
++_BANNED_EXPRESSION_PATTERNS = (
++    "sleep",
++    "pg_sleep",
++    "benchmark",
++    "load_file",
++    "pg_read_file",
++    "pg_read_binary_file",
++    "pg_ls_dir",
++    "pg_stat_file",
++    "dblink",
++    "dblink_exec",
++    "xp_cmdshell",
++    "sys_exec",
++    "sys_eval",
++    "lo_import",
++    "lo_export",
++    "outfile",
++    "dumpfile",
++    "into outfile",
++    "into dumpfile",
++)
++_SYSTEM_OBJECT_PREFIXES = (
++    "information_schema",
++    "performance_schema",
++    "mysql",
++    "sys",
++    "pg_catalog",
++    "pg_toast",
++    "sqlite_master",
++)
++_IDENTIFIER_PATTERN = r"[`\"\[]?[A-Za-z_][\w$]*(?:\s*\.\s*[`\"\[]?[A-Za-z_][\w$]*){0,2}"
++_TABLE_REF_PATTERN = re.compile(
++    rf"\b(?:from|join)\s+({_IDENTIFIER_PATTERN})",
++    re.IGNORECASE,
++)
++_LEADING_TABLE_REF_PATTERN = re.compile(rf"^\s*({_IDENTIFIER_PATTERN})\b", re.IGNORECASE)
++_CLAUSE_STOP_PATTERN = re.compile(
++    r"\b(?:where|group\s+by|order\s+by|having|limit|union|intersect|except|for\s+update)\b",
++    re.IGNORECASE,
++)
++_FROM_CLAUSE_PATTERN = re.compile(
++    r"\bfrom\b\s+([^()]*?)(?=\)|\bwhere\b|\bgroup\s+by\b|\border\s+by\b|\bhaving\b|\blimit\b|\bunion\b|\bintersect\b|\bexcept\b|$)",
++    re.IGNORECASE,
++)
++_LIMIT_PATTERN = re.compile(r"\blimit\s+(\d+)\b", re.IGNORECASE)
++
++
++def _normalize_identifier(identifier: str) -> str:
++    """归一化对象标识。
++
++    参数：
++        identifier: 候选文本中或上下文白名单中出现的对象名称。
++    返回：
++        去除常见引用符号并统一小写后的对象名称。
++    业务逻辑：
++        仅做确定性规整，不补全业务对象，也不把非白名单对象自动映射为可用对象。
++    """
++    parts = []
++    for part in identifier.split("."):
++        cleaned = part.strip().strip("`\"[]").strip()
++        if cleaned:
++            parts.append(cleaned.lower())
++    return ".".join(parts)
++
++
++def _extract_allowed_tables(context_package: dict[str, Any]) -> set[str]:
++    """从召回上下文包中读取白名单对象。
++
++    参数：
++        context_package: Graph 上游注入的召回上下文包。
++    返回：
++        归一化后的白名单集合；缺失或格式不合法时返回空集合。
++    业务逻辑：
++        安全预检只信任上下文包显式注入的白名单，不读取外部配置或业务元数据。
++    """
++    raw_allowed = (
++        context_package.get("allowed_tables")
++        or context_package.get("allowed_table_names")
++        or context_package.get("table_whitelist")
++        or context_package.get("whitelist_tables")
++    )
++    if not isinstance(raw_allowed, list | tuple | set):
++        return set()
++
++    allowed: set[str] = set()
++    for item in raw_allowed:
++        if isinstance(item, str):
++            normalized = _normalize_identifier(item)
++        elif isinstance(item, dict):
++            normalized = _normalize_identifier(
++                str(
++                    item.get("name")
++                    or item.get("table")
++                    or item.get("table_name")
++                    or item.get("object_name")
++                    or item.get("qualified_name")
++                    or ""
++                )
++            )
++        else:
++            normalized = ""
++        if normalized:
++            allowed.add(normalized)
++    return allowed
++
++
++def _normalize_sql_text(sql_text: str) -> tuple[str, list[str]]:
++    """归一化候选文本并识别基础文本风险。
++
++    参数：
++        sql_text: 待预检的内部候选文本。
++    返回：
++        二元组：归一化文本、违规原因列表。
++    业务逻辑：
++        单条语句可带一个末尾分号；多分号、内嵌分号或注释标记一律拒绝。
++    """
++    violations: list[str] = []
++    stripped = str(sql_text or "").strip()
++    if not stripped:
++        return "", ["missing_candidate"]
++
++    lowered = stripped.lower()
++    if any(token in lowered for token in _COMMENT_TOKENS):
++        violations.append("comment_token_detected")
++
++    semicolon_count = stripped.count(";")
++    if semicolon_count > 1 or (semicolon_count == 1 and not stripped.endswith(";")):
++        violations.append("multiple_statements")
++    if semicolon_count == 1:
++        stripped = stripped[:-1].strip()
++
++    normalized = " ".join(stripped.split())
++    return normalized, violations
++
++
++def _split_top_level_commas(clause: str) -> list[str]:
++    """按顶层逗号拆分 FROM 片段。
++
++    参数：
++        clause: FROM 后、WHERE/GROUP/LIMIT 等边界前的文本片段。
++    返回：
++        顶层逗号拆分后的片段列表。
++    业务逻辑：
++        逗号连接是常见白名单绕过点；拆分时忽略括号内逗号，无法解析的片段由上层拒绝。
++    """
++    parts: list[str] = []
++    start = 0
++    depth = 0
++    for index, char in enumerate(clause):
++        if char == "(":
++            depth += 1
++        elif char == ")" and depth > 0:
++            depth -= 1
++        elif char == "," and depth == 0:
++            parts.append(clause[start:index].strip())
++            start = index + 1
++    parts.append(clause[start:].strip())
++    return [part for part in parts if part]
++
++
++def _extract_from_clause(normalized_sql: str) -> str:
++    """截取主 FROM 子句中可用于对象抽取的片段。
++
++    参数：
++        normalized_sql: 已压缩空白并去掉末尾分号的候选文本。
++    返回：
++        FROM 后到 WHERE/GROUP/ORDER/LIMIT 等边界前的片段；缺少 FROM 时返回空字符串。
++    业务逻辑：
++        本骨架不解析完整 SQL AST，只做安全前置拦截；能定位的 FROM 范围越窄，越不容易把 SELECT 列表逗号误当成表。
++    """
++    match = re.search(r"\bfrom\b\s+(.+)", normalized_sql, re.IGNORECASE)
++    if not match:
++        return ""
++    clause = match.group(1)
++    stop_match = _CLAUSE_STOP_PATTERN.search(clause)
++    if stop_match:
++        clause = clause[: stop_match.start()]
++    return clause.strip()
++
++
++def _extract_from_clauses(normalized_sql: str) -> list[str]:
++    """抽取候选文本中所有 FROM 片段。
++
++    参数：
++        normalized_sql: 已压缩空白并去掉末尾分号的候选文本。
++    返回：
++        每个 FROM 后到 WHERE/GROUP/右括号等边界前的片段列表。
++    业务逻辑：
++        安全预检必须覆盖嵌套子查询；只取首个 FROM 会漏掉子查询里的逗号连接对象。
++        本函数用保守边界扫描所有 FROM 片段，无法解析的复杂片段由上层 fail-closed。
++    """
++    clauses: list[str] = []
++    for match in _FROM_CLAUSE_PATTERN.finditer(normalized_sql):
++        clause = match.group(1).strip()
++        if clause:
++            clauses.append(clause)
++    return clauses
++
++
++def _extract_table_refs(normalized_sql: str) -> tuple[set[str], list[str]]:
++    """抽取候选文本中的对象引用。
++
++    参数：
++        normalized_sql: 已压缩空白并去掉末尾分号的候选文本。
++    返回：
++        二元组：归一化后的对象引用集合、对象抽取违规原因列表。
++    业务逻辑：
++        同时覆盖 FROM/JOIN、顶层逗号连接和嵌套子查询里的逗号连接。遇到子查询、函数表或无法识别的逗号片段时保守拒绝，避免漏抽非白名单对象。
++    """
++    refs: set[str] = set()
++    violations: list[str] = []
++    for match in _TABLE_REF_PATTERN.finditer(normalized_sql):
++        normalized = _normalize_identifier(match.group(1))
++        if normalized:
++            refs.add(normalized)
++
++    for from_clause in _extract_from_clauses(normalized_sql):
++        comma_parts = _split_top_level_commas(from_clause)
++        for part in comma_parts[1:]:
++            if part.lstrip().startswith("("):
++                violations.append("unsupported_table_reference")
++                continue
++            match = _LEADING_TABLE_REF_PATTERN.search(part)
++            if not match:
++                violations.append("unsupported_table_reference")
++                continue
++            normalized = _normalize_identifier(match.group(1))
++            if normalized:
++                refs.add(normalized)
++            else:
++                violations.append("unsupported_table_reference")
++    return refs, violations
++
++
++def _is_system_or_high_risk_object(table_ref: str) -> bool:
++    """判断对象是否属于系统库或高风险对象。
++
++    参数：
++        table_ref: 已归一化的对象引用。
++    返回：
++        属于系统库、高风险前缀或外部系统对象时返回 True。
++    业务逻辑：
++        系统对象即使被误放入白名单也拒绝，避免通过白名单配置错误绕过安全边界。
++    """
++    parts = table_ref.split(".")
++    first_part = parts[0] if parts else table_ref
++    return first_part in _SYSTEM_OBJECT_PREFIXES or table_ref in _SYSTEM_OBJECT_PREFIXES
++
++
++def _is_table_ref_allowed(table_ref: str, allowed_tables: set[str]) -> bool:
++    """判断候选对象是否被白名单精确授权。
++
++    参数：
++        table_ref: 从候选文本中抽取并归一化后的对象名。
++        allowed_tables: 上下文包显式给出的白名单对象集合。
++    返回：
++        候选对象与白名单对象完全一致时返回 True。
++    业务逻辑：
++        不能用 basename 放行跨 schema 对象；例如白名单只有 `table_a` 时，
++        `other_schema.table_a` 必须拒绝，避免同名对象绕过业务域边界。
++    """
++    return table_ref in allowed_tables
++
++
++def _apply_result_cap(normalized_sql: str, result_cap: int) -> tuple[str, bool, list[str]]:
++    """校验或追加结果行数上限。
++
++    参数：
++        normalized_sql: 已通过基础安全检查的候选文本。
++        result_cap: 允许的最大结果行数。
++    返回：
++        三元组：带上限的安全候选、是否由预检修改上限、违规原因列表。
++    业务逻辑：
++        无上限时追加最小上限；已有上限超过 cap 时收敛到 cap；无法解析时拒绝。
++    """
++    violations: list[str] = []
++    limit_matches = list(_LIMIT_PATTERN.finditer(normalized_sql))
++    if len(limit_matches) > 1:
++        return normalized_sql, False, ["invalid_limit"]
++    if not limit_matches:
++        return f"{normalized_sql} LIMIT {result_cap}", True, violations
++
++    limit_match = limit_matches[0]
++    if re.search(r"\blimit\s+\d+\s*,\s*\d+\b", normalized_sql, re.IGNORECASE):
++        return normalized_sql, False, ["invalid_limit"]
++    try:
++        limit_value = int(limit_match.group(1))
++    except ValueError:
++        return normalized_sql, False, ["invalid_limit"]
++    if limit_value <= 0:
++        return normalized_sql, False, ["invalid_limit"]
++    if limit_value <= result_cap:
++        return normalized_sql, False, violations
++
++    capped_sql = f"{normalized_sql[: limit_match.start(1)]}{result_cap}{normalized_sql[limit_match.end(1) :]}"
++    return capped_sql, True, violations
++
++
++def precheck_nqe_sql_safety(
++    sql_text: str | None,
++    context_package: dict[str, Any] | None,
++    domain: str | None = None,
++    *,
++    result_cap: int = DEFAULT_RESULT_CAP,
++) -> dict[str, Any]:
++    """执行 NQE 内部候选文本安全预检。
++
++    参数：
++        sql_text: Graph 生成或测试注入的内部候选文本。
++        context_package: 上游召回上下文包，必须显式包含对象白名单。
++        domain: 当前业务域，仅用于结构化结果追溯，不参与放宽校验。
++        result_cap: 默认结果行数上限，必须为正整数。
++    返回：
++        结构化预检结果，包含 status、reason_code、normalized_sql、safe_sql、
++        limit_applied、violations、allowed_tables。
++    业务逻辑：
++        预检采用 fail-closed：缺少候选、缺少白名单、非只读、多语句、系统对象、
++        非白名单对象或无法确定时全部拒绝。
++    """
++    context = dict(context_package or {})
++    cap = result_cap if isinstance(result_cap, int) and result_cap > 0 else DEFAULT_RESULT_CAP
++    allowed_tables = _extract_allowed_tables(context)
++    normalized_sql, violations = _normalize_sql_text(sql_text or "")
++    domain_value = str(domain or context.get("domain") or "").strip()
++
++    if not allowed_tables:
++        violations.append("missing_whitelist")
++    if not normalized_sql:
++        violations.append("missing_candidate")
++
++    lowered = normalized_sql.lower()
++    if normalized_sql and not lowered.startswith("select "):
++        violations.append("not_select_only")
++
++    keyword_matches = {
++        keyword for keyword in _BANNED_STATEMENT_KEYWORDS if re.search(rf"\b{re.escape(keyword)}\b", lowered)
++    }
++    if keyword_matches:
++        violations.append("mutating_or_ddl_keyword")
++
++    expression_matches = {
++        pattern for pattern in _BANNED_EXPRESSION_PATTERNS if re.search(rf"\b{re.escape(pattern)}\b", lowered)
++    }
++    if re.search(r"\bdblink(?:_\w+)?\s*\(", lowered):
++        # dblink 扩展函数族可建立外部连接或读取远端结果，不能只拦截精确 dblink/dblink_exec。
++        expression_matches.add("dblink_family")
++    if expression_matches:
++        violations.append("dangerous_expression")
++
++    if any(prefix in lowered for prefix in _SYSTEM_OBJECT_PREFIXES):
++        violations.append("system_object")
++
++    extracted_table_refs = _extract_table_refs(normalized_sql) if normalized_sql else (set(), [])
++    table_refs, table_ref_warnings = extracted_table_refs
++    violations.extend(table_ref_warnings)
++    if normalized_sql and not table_refs:
++        violations.append("missing_table_reference")
++
++    for table_ref in table_refs:
++        if _is_system_or_high_risk_object(table_ref):
++            violations.append("system_object")
++        if not _is_table_ref_allowed(table_ref, allowed_tables):
++            violations.append("table_not_whitelisted")
++
++    safe_sql = ""
++    limit_applied = False
++    if not violations:
++        safe_sql, limit_applied, limit_violations = _apply_result_cap(normalized_sql, cap)
++        violations.extend(limit_violations)
++
++    unique_violations = sorted(set(violations))
++    status = "pass" if not unique_violations else "reject"
++    reason_code = "safe" if status == "pass" else unique_violations[0]
++
++    return {
++        "status": status,
++        "reason_code": reason_code,
++        "normalized_sql": normalized_sql,
++        "safe_sql": safe_sql if status == "pass" else "",
++        "limit_applied": limit_applied if status == "pass" else False,
++        "violations": unique_violations,
++        "allowed_tables": sorted(allowed_tables),
++        "referenced_tables": sorted(table_refs),
++        "domain": domain_value,
++    }
+--- a/tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py
++++ b/tests/unit/business_qa_graph/test_nqe_sql_agent_graph_skeleton.py
+@@ -0,0 +1,192 @@
++from __future__ import annotations
++
++import importlib
++from typing import Any
++
++
++INTERNAL_TERMS = (
++    "SQL",
++    "SELECT",
++    "FROM",
++    "table",
++    "column",
++    "query_key",
++    "planner",
++    "guardrail",
++    "schema",
++    "raw",
++    "debug",
++    "LLM",
++    "prompt",
++    "trace",
++)
++
++
++def _node_names(state: dict[str, Any]) -> list[str]:
++    """读取测试态中的节点轨迹名称。"""
++    return [step["node"] for step in state.get("trace_steps", [])]
++
++
++def _assert_business_safe_text(text: str) -> None:
++    """断言用户可见文本不暴露内部技术词。"""
++    upper_text = text.upper()
++    for term in INTERNAL_TERMS:
++        assert term.upper() not in upper_text
++
++
++def _safe_ready_context() -> dict[str, Any]:
++    """构造可通过 NQE 内部安全预检的测试上下文。"""
++    return {
++        "ready": True,
++        "business_object": "shipment",
++        "allowed_tables": ["nqe_safe_metric_view"],
++        "generated_sql_candidate": "SELECT metric_value FROM nqe_safe_metric_view",
++    }
++
++
++def test_nqe_graph_declares_expected_node_sequence() -> None:
++    """NQE Graph 必须声明 NQE-SQL-MAIN-4 约定的 19 个节点及顺序。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++
++    assert graph_module.NQE_SQL_AGENT_NODE_SEQUENCE == (
++        "receive_query",
++        "init_trace_and_mode",
++        "route_domain_and_capability",
++        "normalize_query",
++        "retrieve_context_multiway",
++        "merge_rank_and_build_context",
++        "check_context_readiness",
++        "generate_sql_direct",
++        "precheck_sql_safety",
++        "explain_validate_sql",
++        "correct_sql",
++        "execute_sql_readonly",
++        "present_business_answer",
++        "record_query_log_and_trace",
++        "legacy_fallback",
++        "shadow_compare",
++        "terminal_clarify",
++        "terminal_safety_reject",
++        "terminal_error",
++    )
++    assert len(graph_module.NQE_SQL_AGENT_NODE_SEQUENCE) == 19
++
++
++def test_nqe_graph_compiles_without_touching_runtime_entrypoint() -> None:
++    """独立 NQE builder 可编译，且不需要导入正式 API 或修改运行入口。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    assert graph is not None
++    assert "backend.app.api.router" not in graph_module.__dict__
++    assert "BusinessQaGraphRunner" not in graph_module.__dict__
++
++
++def test_off_mode_routes_to_legacy_fallback_without_sql_generation() -> None:
++    """off 模式应进入 legacy_fallback，不能生成、预检或执行 SQL。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke({"question": "查询本月经营情况", "nqe_mode": "off"})
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "legacy_fallback"
++    assert "legacy_fallback" in node_names
++    assert "record_query_log_and_trace" in node_names
++    assert "generate_sql_direct" not in node_names
++    assert "precheck_sql_safety" not in node_names
++    assert "execute_sql_readonly" not in node_names
++
++
++def test_context_not_ready_returns_business_clarification() -> None:
++    """on 模式上下文不足时应业务化澄清，不能泄露内部实现。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke({"question": "查一下库存", "nqe_mode": "on"})
++
++    assert final_state["terminal_status"] == "clarify"
++    assert "terminal_clarify" in _node_names(final_state)
++    _assert_business_safe_text(final_state["user_visible_response"])
++
++
++def test_sql_lifecycle_orders_precheck_before_explain_and_execute() -> None:
++    """ready 上下文下 SQL 生命周期顺序必须先预检，再解释校验，再只读执行。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _safe_ready_context(),
++            "context_readiness": "pass",
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "completed"
++    expected = ["generate_sql_direct", "precheck_sql_safety", "explain_validate_sql", "execute_sql_readonly"]
++    positions = [node_names.index(node) for node in expected]
++    assert positions == sorted(positions)
++
++
++def test_correct_loop_returns_to_precheck_and_stops_after_two_rounds() -> None:
++    """解释校验失败后必须 correct→precheck 循环，且最多两轮后进入终态。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _safe_ready_context(),
++            "context_readiness": "pass",
++            "force_explain_fail": True,
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] in {"error", "safety_reject", "clarify"}
++    assert node_names.count("correct_sql") == 2
++    assert node_names.count("precheck_sql_safety") == 3
++    assert final_state["sql_revision_round"] == 2
++    first_correct = node_names.index("correct_sql")
++    assert "precheck_sql_safety" in node_names[first_correct + 1 :]
++
++
++def test_terminal_states_are_recorded_before_end() -> None:
++    """所有终态都必须先经过 record_query_log_and_trace 再结束。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++    cases = [
++        ({"question": "查一下", "nqe_mode": "on"}, "clarify"),
++        ({"question": "查一下", "nqe_mode": "on", "retrieval_context_package": _safe_ready_context(), "context_readiness": "pass", "force_safety_reject": True}, "safety_reject"),
++        ({"question": "查一下", "nqe_mode": "on", "retrieval_context_package": _safe_ready_context(), "context_readiness": "pass", "force_explain_fail": True}, "error"),
++        ({"question": "查一下", "nqe_mode": "off"}, "legacy_fallback"),
++        ({"question": "查一下", "nqe_mode": "on", "retrieval_context_package": _safe_ready_context(), "context_readiness": "pass"}, "completed"),
++    ]
++
++    for initial_state, status in cases:
++        final_state = graph.invoke(initial_state)
++        node_names = _node_names(final_state)
++        assert final_state["terminal_status"] == status
++        assert node_names[-1] == "record_query_log_and_trace"
++
++
++def test_user_visible_response_masks_internal_terms() -> None:
++    """所有用户可见输出必须屏蔽内部技术词。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++    states = [
++        {"question": "查一下", "nqe_mode": "on"},
++        {"question": "查一下", "nqe_mode": "off"},
++        {"question": "查一下", "nqe_mode": "on", "retrieval_context_package": _safe_ready_context(), "context_readiness": "pass"},
++        {"question": "查一下", "nqe_mode": "on", "retrieval_context_package": _safe_ready_context(), "context_readiness": "pass", "force_safety_reject": True},
++        {"question": "查一下", "nqe_mode": "on", "retrieval_context_package": _safe_ready_context(), "context_readiness": "pass", "force_explain_fail": True},
++    ]
++
++    for state in states:
++        final_state = graph.invoke(state)
++        _assert_business_safe_text(final_state["user_visible_response"])
+--- a/tests/unit/business_qa_graph/test_nqe_sql_agent_safety_precheck.py
++++ b/tests/unit/business_qa_graph/test_nqe_sql_agent_safety_precheck.py
+@@ -0,0 +1,275 @@
++from __future__ import annotations
++
++import importlib
++from typing import Any
++
++from backend.app.domains.business_qa_graph.nqe_sql_safety import precheck_nqe_sql_safety
++
++
++INTERNAL_TERMS = (
++    "SQL",
++    "SELECT",
++    "FROM",
++    "table",
++    "column",
++    "query_key",
++    "planner",
++    "guardrail",
++    "schema",
++    "raw",
++    "debug",
++    "LLM",
++    "prompt",
++    "trace",
++)
++
++
++def _node_names(state: dict[str, Any]) -> list[str]:
++    """读取 Graph 测试态中的节点名称。"""
++    return [step["node"] for step in state.get("trace_steps", [])]
++
++
++def _assert_business_safe_text(text: str) -> None:
++    """断言用户可见文本不暴露内部技术词。"""
++    upper_text = text.upper()
++    for term in INTERNAL_TERMS:
++        assert term.upper() not in upper_text
++
++
++def _safe_package(candidate: str = "SELECT metric_value FROM nqe_safe_metric_view") -> dict[str, Any]:
++    """构造带白名单和候选文本的安全测试上下文。"""
++    return {
++        "ready": True,
++        "allowed_tables": ["nqe_safe_metric_view"],
++        "generated_sql_candidate": candidate,
++    }
++
++
++def test_precheck_allows_whitelisted_select_and_builds_safe_candidate() -> None:
++    """白名单内的单条只读查询应通过，并生成带结果上限的安全候选。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "pass"
++    assert result["reason_code"] == "safe"
++    assert result["safe_sql"] == "SELECT metric_value FROM nqe_safe_metric_view LIMIT 200"
++    assert result["limit_applied"] is True
++    assert result["allowed_tables"] == ["nqe_safe_metric_view"]
++
++
++def test_precheck_rejects_non_whitelisted_table() -> None:
++    """候选文本引用非白名单对象时必须拒绝。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_other_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "table_not_whitelisted" in result["violations"]
++    assert result["safe_sql"] == ""
++
++
++def test_precheck_rejects_dml_and_ddl_keywords() -> None:
++    """写入、变更结构或过程调用类语句必须拒绝。"""
++    dml_result = precheck_nqe_sql_safety(
++        "UPDATE nqe_safe_metric_view SET metric_value = 1",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++    ddl_result = precheck_nqe_sql_safety(
++        "DROP TABLE nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert dml_result["status"] == "reject"
++    assert ddl_result["status"] == "reject"
++    assert "mutating_or_ddl_keyword" in dml_result["violations"]
++    assert "mutating_or_ddl_keyword" in ddl_result["violations"]
++
++
++def test_precheck_rejects_multiple_statements() -> None:
++    """多语句候选必须拒绝，避免绕过后续只读边界。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_safe_metric_view; SELECT metric_value FROM nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "multiple_statements" in result["violations"]
++
++
++def test_precheck_rejects_system_or_high_risk_objects() -> None:
++    """系统库或高风险对象必须拒绝，即使上下文误配白名单也不能放行。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT table_name FROM information_schema.tables",
++        {"allowed_tables": ["information_schema.tables"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "system_object" in result["violations"]
++
++
++def test_precheck_rejects_dangerous_functions_and_export_expressions() -> None:
++    """危险函数和导出类表达式必须拒绝。"""
++    function_result = precheck_nqe_sql_safety(
++        "SELECT sleep(1) FROM nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++    export_result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_safe_metric_view INTO OUTFILE '/tmp/a.txt'",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert function_result["status"] == "reject"
++    assert export_result["status"] == "reject"
++    assert "dangerous_expression" in function_result["violations"]
++    assert "dangerous_expression" in export_result["violations"]
++
++
++def test_precheck_rejects_missing_whitelist_fail_closed() -> None:
++    """缺少上下文白名单时必须 fail-closed 拒绝。"""
++    result = precheck_nqe_sql_safety("SELECT metric_value FROM nqe_safe_metric_view", {}, "logistics")
++
++    assert result["status"] == "reject"
++    assert "missing_whitelist" in result["violations"]
++    assert result["safe_sql"] == ""
++
++
++def test_precheck_rejects_comma_join_non_whitelisted_table() -> None:
++    """逗号连接中的每个对象都必须纳入白名单校验。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT a.metric_value FROM nqe_safe_metric_view a, nqe_secret_metric_view b",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "table_not_whitelisted" in result["violations"]
++    assert "nqe_secret_metric_view" in result["referenced_tables"]
++
++
++def test_precheck_rejects_schema_qualified_basename_bypass() -> None:
++    """候选带 schema 时不能只凭同名表 basename 放行。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM other_schema.nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "table_not_whitelisted" in result["violations"]
++
++
++def test_precheck_rejects_database_file_and_external_access_functions() -> None:
++    """数据库文件读取、外联和命令类函数必须保守拒绝。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT pg_read_file('/etc/passwd') FROM nqe_safe_metric_view",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "dangerous_expression" in result["violations"]
++
++
++def test_precheck_rejects_dblink_family_functions() -> None:
++    """dblink 下划线同族函数可能建立外部连接或读取远端结果，必须统一拒绝。"""
++    for sql in (
++        "SELECT dblink_connect('x') FROM nqe_safe_metric_view",
++        "SELECT dblink_get_result('x') FROM nqe_safe_metric_view",
++        "SELECT dblink_disconnect('x') FROM nqe_safe_metric_view",
++    ):
++        result = precheck_nqe_sql_safety(sql, {"allowed_tables": ["nqe_safe_metric_view"]}, "logistics")
++
++        assert result["status"] == "reject"
++        assert "dangerous_expression" in result["violations"]
++        assert result["safe_sql"] == ""
++
++
++def test_precheck_rejects_nested_subquery_comma_join_non_whitelisted_table() -> None:
++    """嵌套子查询中的逗号连接也必须抽取每个对象，不能只校验外层 FROM。"""
++    result = precheck_nqe_sql_safety(
++        "SELECT metric_value FROM nqe_safe_metric_view "
++        "WHERE EXISTS (SELECT 1 FROM nqe_safe_metric_view a, nqe_secret_metric_view b)",
++        {"allowed_tables": ["nqe_safe_metric_view"]},
++        "logistics",
++    )
++
++    assert result["status"] == "reject"
++    assert "table_not_whitelisted" in result["violations"]
++    assert "nqe_secret_metric_view" in result["referenced_tables"]
++
++
++def test_graph_writes_safe_candidate_after_whitelisted_precheck() -> None:
++    """Graph 安全预检通过后应写入安全候选和结构化预检结果。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _safe_package(),
++            "context_readiness": "pass",
++        }
++    )
++
++    assert final_state["terminal_status"] == "completed"
++    assert final_state["sql_safety_result"]["status"] == "pass"
++    assert final_state["safe_sql_candidate"].endswith("LIMIT 200")
++
++
++def test_safety_reject_still_records_trace_and_masks_user_response() -> None:
++    """安全拒绝终态仍必须记录运行摘要，且用户回答不暴露内部技术词。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _safe_package("SELECT metric_value FROM nqe_other_metric_view"),
++            "context_readiness": "pass",
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "safety_reject"
++    assert node_names[-1] == "record_query_log_and_trace"
++    assert "terminal_safety_reject" in node_names
++    assert "table_not_whitelisted" in final_state["sql_safety_result"]["violations"]
++    assert "safe_sql_candidate" not in final_state
++    _assert_business_safe_text(final_state["user_visible_response"])
++
++
++def test_correct_sql_returns_to_safety_precheck() -> None:
++    """修正循环后必须重新经过安全预检，不能直接进入后续校验。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _safe_package(),
++            "context_readiness": "pass",
++            "force_explain_fail": True,
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "error"
++    assert final_state["sql_revision_round"] == 2
++    assert node_names.count("correct_sql") == 2
++    assert node_names.count("precheck_sql_safety") == 3
++    first_correct = node_names.index("correct_sql")
++    assert node_names[first_correct + 1] == "precheck_sql_safety"
+--- a/tests/unit/business_qa_graph/test_nqe_sql_agent_explain_correct.py
++++ b/tests/unit/business_qa_graph/test_nqe_sql_agent_explain_correct.py
+@@ -0,0 +1,195 @@
++from __future__ import annotations
++
++import importlib
++from typing import Any
++
++
++INTERNAL_TERMS = (
++    "SQL",
++    "SELECT",
++    "FROM",
++    "table",
++    "column",
++    "query_key",
++    "planner",
++    "guardrail",
++    "schema",
++    "raw",
++    "debug",
++    "LLM",
++    "prompt",
++    "trace",
++)
++
++
++def _node_names(state: dict[str, Any]) -> list[str]:
++    """读取 Graph 测试态中的节点名称。"""
++    return [step["node"] for step in state.get("trace_steps", [])]
++
++
++def _assert_business_safe_text(text: str) -> None:
++    """断言用户可见文本不暴露内部技术词。"""
++    upper_text = text.upper()
++    for term in INTERNAL_TERMS:
++        assert term.upper() not in upper_text
++
++
++def _assert_subsequence(items: list[str], expected: list[str]) -> None:
++    """断言 expected 节点按顺序出现在实际轨迹中。"""
++    cursor = 0
++    for item in items:
++        if cursor < len(expected) and item == expected[cursor]:
++            cursor += 1
++    assert cursor == len(expected)
++
++
++def _unknown_column_context(
++    *,
++    correction_candidates: list[str] | None = None,
++    generated_sql_candidate: str = "SELECT missing_metric FROM nqe_safe_metric_view",
++) -> dict[str, Any]:
++    """构造含字段元数据和错误字段候选的 NQE 测试上下文。"""
++    context: dict[str, Any] = {
++        "ready": True,
++        "business_object": "shipment",
++        "allowed_tables": ["nqe_safe_metric_view"],
++        "table_columns": {"nqe_safe_metric_view": ["metric_value"]},
++        "generated_sql_candidate": generated_sql_candidate,
++    }
++    if correction_candidates is not None:
++        context["sql_correction_candidates"] = correction_candidates
++    return context
++
++
++def _build_graph():
++    """构建 NQE SQL Agent 独立测试 Graph。"""
++    graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++    return graph_module.build_nqe_sql_agent_graph()
++
++
++def test_explain_validate_rejects_unknown_column_before_execution() -> None:
++    """解释校验必须基于字段元数据拦截未知字段，且不能进入只读执行。"""
++    graph = _build_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _unknown_column_context(),
++            "context_readiness": "pass",
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "error"
++    assert final_state["explain_result"]["status"] == "fail"
++    assert "unknown_column" in final_state["explain_result"]["violations"]
++    assert "execute_sql_readonly" not in node_names
++    assert node_names.count("correct_sql") == 2
++    assert node_names.count("precheck_sql_safety") == 3
++    assert final_state["sql_revision_round"] == 2
++    _assert_business_safe_text(final_state["user_visible_response"])
++
++
++def test_explain_validate_rejects_unknown_projection_expressions() -> None:
++    """解释校验必须拦截函数和引用符包裹的未知字段，避免投影校验绕过。"""
++    for candidate in (
++        "SELECT SUM(missing_metric) FROM nqe_safe_metric_view",
++        'SELECT "missing_metric" FROM nqe_safe_metric_view',
++    ):
++        graph = _build_graph()
++        final_state = graph.invoke(
++            {
++                "question": "查询本月发运量",
++                "nqe_mode": "on",
++                "retrieval_context_package": _unknown_column_context(generated_sql_candidate=candidate),
++                "context_readiness": "pass",
++            }
++        )
++        node_names = _node_names(final_state)
++
++        assert final_state["terminal_status"] == "error"
++        assert final_state["explain_result"]["status"] == "fail"
++        assert "unknown_column" in final_state["explain_result"]["violations"]
++        assert "execute_sql_readonly" not in node_names
++        _assert_business_safe_text(final_state["user_visible_response"])
++
++
++def test_explain_validate_rejects_select_star_before_execution() -> None:
++    """解释校验必须拒绝 SELECT *，避免过宽字段绕过执行前校验。"""
++    graph = _build_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _unknown_column_context(
++                generated_sql_candidate="SELECT * FROM nqe_safe_metric_view"
++            ),
++            "context_readiness": "pass",
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "error"
++    assert final_state["explain_result"]["status"] == "fail"
++    assert "select_star_not_allowed" in final_state["explain_result"]["violations"]
++    assert "execute_sql_readonly" not in node_names
++
++
++def test_explain_validate_rejects_unknown_filter_columns_before_execution() -> None:
++    """解释校验必须校验 WHERE 条件字段，避免过滤条件未知字段绕过。"""
++    graph = _build_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _unknown_column_context(
++                generated_sql_candidate="SELECT metric_value FROM nqe_safe_metric_view WHERE missing_metric = 1"
++            ),
++            "context_readiness": "pass",
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "error"
++    assert final_state["explain_result"]["status"] == "fail"
++    assert "unknown_column" in final_state["explain_result"]["violations"]
++    assert "execute_sql_readonly" not in node_names
++
++
++def test_correct_sql_uses_context_candidate_and_rechecks_safety_before_completion() -> None:
++    """受控修正候选必须回写后重新预检，再解释校验并只读执行。"""
++    graph = _build_graph()
++    corrected_sql = "SELECT metric_value FROM nqe_safe_metric_view"
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "retrieval_context_package": _unknown_column_context(correction_candidates=[corrected_sql]),
++            "context_readiness": "pass",
++        }
++    )
++    node_names = _node_names(final_state)
++
++    assert final_state["terminal_status"] == "completed"
++    _assert_subsequence(
++        node_names,
++        [
++            "precheck_sql_safety",
++            "explain_validate_sql",
++            "correct_sql",
++            "precheck_sql_safety",
++            "explain_validate_sql",
++            "execute_sql_readonly",
++        ],
++    )
++    assert node_names.count("correct_sql") == 1
++    assert node_names.count("precheck_sql_safety") == 2
++    assert node_names.count("explain_validate_sql") == 2
++    assert final_state["sql_revision_round"] == 1
++    assert final_state["generated_sql"] == corrected_sql
++    assert final_state["safe_sql_candidate"] == f"{corrected_sql} LIMIT 200"
++    _assert_business_safe_text(final_state["user_visible_response"])
+--- a/tests/unit/business_qa_graph/test_nqe_sql_agent_trace_replay.py
++++ b/tests/unit/business_qa_graph/test_nqe_sql_agent_trace_replay.py
+@@ -0,0 +1,149 @@
++from __future__ import annotations
++
++import importlib
++from typing import Any
++
++
++FORBIDDEN_LOG_KEYS = {
++    "generated_sql",
++    "safe_sql_candidate",
++    "execution_result_internal",
++    "retrieval_context_package",
++    "user_visible_response",
++}
++FORBIDDEN_TEXT_FRAGMENTS = (
++    "SELECT metric_value",
++    "FROM nqe_safe_metric_view",
++    "LIMIT 200",
++)
++
++
++def _safe_ready_context(candidate: str = "SELECT metric_value FROM nqe_safe_metric_view") -> dict[str, Any]:
++    """构造可通过 NQE 内部链路的测试上下文。"""
++    return {
++        "ready": True,
++        "business_object": "shipment",
++        "allowed_tables": ["nqe_safe_metric_view"],
++        "table_columns": {"nqe_safe_metric_view": ["metric_value"]},
++        "generated_sql_candidate": candidate,
++    }
++
++
++def _build_graph_module():
++    """加载 NQE 独立 Graph 模块。"""
++    return importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
++
++
++def _node_names(state: dict[str, Any]) -> list[str]:
++    """读取最终态中的节点轨迹名称。"""
++    return [step["node"] for step in state.get("trace_steps", [])]
++
++
++def test_record_node_writes_sanitized_query_log_and_replay_record() -> None:
++    """记录节点必须写入脱敏 query log 与可重放记录，且不把内部候选文本放进 query log。"""
++    graph_module = _build_graph_module()
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "trace_id": "trace-test-001",
++            "domain_hint": "logistics",
++            "retrieval_context_package": {
++                **_safe_ready_context(),
++                "password": "SENSITIVE_MARKER_PASSWORD",
++                "nested": {"api_key": "SENSITIVE_MARKER_API", "note": "ok"},
++                "ignored_blob": {"raw": "SENSITIVE_MARKER_RAW"},
++            },
++            "client_context": {"api_key": "SENSITIVE_MARKER_CLIENT"},
++            "user_context": {"token": "SENSITIVE_MARKER_USER"},
++            "context_readiness": "pass",
++        }
++    )
++
++    query_log = final_state["query_log_record"]
++    replay_record = final_state["replay_record"]
++
++    assert final_state["terminal_status"] == "completed"
++    assert query_log["schema_version"] == "nqe_query_log.v1"
++    assert query_log["trace_id"] == "trace-test-001"
++    assert query_log["terminal_status"] == "completed"
++    assert query_log["execution_status"] == "executed"
++    assert query_log["row_count"] == 1
++    assert query_log["question_digest"]
++    assert query_log["question_length"] == len("查询本月发运量")
++    assert query_log["trace_summary"][-1]["node"] == "record_query_log_and_trace"
++    assert query_log["safety_summary"]["status"] == "pass"
++    assert query_log["explain_summary"]["status"] == "pass"
++    assert not (FORBIDDEN_LOG_KEYS & set(query_log))
++    assert replay_record["schema_version"] == "nqe_replay.v1"
++    assert replay_record["query_log_id"] == query_log["log_id"]
++    replay_input = replay_record["replay_input"]
++    assert replay_input["question"] != "查询本月发运量"
++    assert replay_input["replay_context_summary"]["question_digest"]
++    assert replay_input["replay_context_summary"]["had_retrieval_context"] is True
++    assert replay_input["replay_context_summary"]["sensitive_key_seen"] is True
++    assert replay_record["expected_summary"]["terminal_status"] == "completed"
++    assert "retrieval_context_package" not in replay_input
++    assert "client_context" not in replay_input
++    assert "user_context" not in replay_input
++    assert "generated_sql_candidate" not in str(replay_input)
++    assert "table_columns" not in str(replay_input)
++    assert "SECRET" not in str(replay_record)
++
++    query_log_text = str(query_log)
++    for fragment in FORBIDDEN_TEXT_FRAGMENTS:
++        assert fragment not in query_log_text
++
++
++def test_replay_record_reproduces_terminal_status_and_trace_shape() -> None:
++    """replay_record 应能重放同一骨架路径，并复现终态与节点顺序摘要。"""
++    graph_module = _build_graph_module()
++    graph = graph_module.build_nqe_sql_agent_graph()
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "shadow",
++            "trace_id": "trace-test-002",
++            "domain_hint": "logistics",
++            "retrieval_context_package": _safe_ready_context(),
++            "context_readiness": "pass",
++        }
++    )
++
++    replay_state = graph_module.replay_nqe_sql_agent_record(final_state["replay_record"])
++
++    assert replay_state["terminal_status"] == final_state["terminal_status"]
++    assert replay_state["query_log_record"]["terminal_status"] == final_state["query_log_record"]["terminal_status"]
++    assert replay_state["query_log_record"]["row_count"] == final_state["query_log_record"]["row_count"]
++    assert _node_names(replay_state) == _node_names(final_state)
++    assert replay_state["replay_summary"]["matched"] is True
++    assert replay_state["replay_summary"]["expected_terminal_status"] == "completed"
++    assert replay_state["replay_summary"]["actual_terminal_status"] == "completed"
++
++
++def test_query_log_is_written_for_safety_reject_without_leaking_candidate_text() -> None:
++    """安全拒绝路径也必须记录结构化日志，但 query log 不能保存被拒绝候选文本。"""
++    graph_module = _build_graph_module()
++    graph = graph_module.build_nqe_sql_agent_graph()
++
++    final_state = graph.invoke(
++        {
++            "question": "查询本月发运量",
++            "nqe_mode": "on",
++            "trace_id": "trace-test-003",
++            "retrieval_context_package": _safe_ready_context("SELECT metric_value FROM nqe_other_metric_view"),
++            "context_readiness": "pass",
++        }
++    )
++
++    query_log = final_state["query_log_record"]
++
++    assert final_state["terminal_status"] == "safety_reject"
++    assert query_log["terminal_status"] == "safety_reject"
++    assert query_log["execution_status"] == "skipped"
++    assert query_log["safety_summary"]["status"] == "reject"
++    assert "table_not_whitelisted" in query_log["safety_summary"]["violations"]
++    assert "nqe_other_metric_view" not in str(query_log)
++    assert "SELECT metric_value" not in str(query_log)
