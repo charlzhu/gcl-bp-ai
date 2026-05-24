@@ -75,21 +75,29 @@ def _nqe_shadow_attach(
 
 
 def _nqe_on_mode_query(question: str, trace_id: str, domain: str) -> dict[str, Any] | None:
-    """NQE SQL Agent on 模式主链路查询。
+    """NQE SQL Agent on 模式主链路查询，按域读取独立配置。
 
     返回 NQE Graph 执行结果；失败时返回 None 触发旧链路 fallback。
     """
     try:
-        from backend.app.domains.business_qa_graph.nqe_logistics_gray import (
-            get_nqe_logistics_mode,
-            run_nqe_logistics_graph,
-        )
-        mode = get_nqe_logistics_mode()
+        from backend.app.core.config import settings
+
+        # 按域映射独立配置项
+        domain_mode_map = {
+            "logistics": settings.nqe_logistics_mode,
+            "plan_bom": settings.nqe_plan_bom_mode,
+            "business_analysis": settings.nqe_business_analysis_mode,
+            "power_prediction": settings.nqe_power_prediction_mode,
+        }
+        mode = domain_mode_map.get(domain, "off")
         if mode != "on":
             return None
+
+        from backend.app.domains.business_qa_graph.nqe_logistics_gray import run_nqe_logistics_graph
+
         nqe_result = run_nqe_logistics_graph(question, trace_id, nqe_mode="on")
         if nqe_result.get("terminal_status") == "completed":
-            return {"nqe_result": nqe_result, "mode": "on"}
+            return {"nqe_result": nqe_result, "mode": "on", "domain": domain}
     except Exception:
         logger.warning("NQE on-mode query failed, fallback to legacy, trace_id=%s", trace_id, exc_info=True)
     return None
