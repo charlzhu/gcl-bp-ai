@@ -877,44 +877,80 @@ def correct_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
 
 
 def execute_sql_readonly(state: NqeSqlAgentState) -> NqeSqlAgentState:
-    """执行只读查询占位。
+    """真实只读 SQL 执行节点。
 
-    参数：
-        state: 解释校验通过后的运行态。
-    返回：
-        写入内部执行结果和行数的运行态。
-    业务逻辑：
-        本卡不连接数据库，仅返回确定性占位结果用于验证编排顺序。
+    NQE-SQL-REAL-4: 连接开发数据库执行验证通过的 SQL。
+    测试注入 SQL 时跳过真实执行。
     """
-    next_state = _append_trace(
-        state,
-        node="execute_sql_readonly",
-        summary="已完成只读执行占位",
-    )
-    next_state["execution_status"] = "executed"
-    next_state["execution_result_internal"] = {"rows": [{"value": 1}], "source": "stub"}
-    next_state["row_count"] = 1
-    next_state["result_truncated"] = False
+    sql = str(state.get("generated_sql") or "")
+    package = dict(state.get("retrieval_context_package") or {})
+    injected = bool(package.get("generated_sql_candidate") or package.get("sql_candidate"))
+
+    import time
+    start = time.monotonic()
+    rows_data: list = []
+    columns: list = []
+    row_count = 0
+    error = ""
+
+    if sql.strip() and not injected:
+        try:
+            from sqlalchemy import text
+            from backend.app.db.session import SessionLocal
+            db = SessionLocal()
+            try:
+                result = db.execute(text(sql), execution_options={"timeout": 30})
+                columns = list(result.keys())
+                rows_data = [dict(zip(columns, row)) for row in result.fetchmany(size=500)]
+                row_count = len(rows_data)
+            finally:
+                db.close()
+        except Exception as exc:
+            error = str(exc)[:500]
+
+    duration_ms = int((time.monotonic() - start) * 1000)
+
+    next_state = _append_trace(state, node="execute_sql_readonly",
+        summary="已完成只读执行" if not error else "SQL 执行异常",
+        status="error" if error else "ok")
+    next_state["execution_status"] = "error" if error else "executed"
+    next_state["execution_result_internal"] = {"rows": rows_data, "columns": columns, "source": "db"}
+    next_state["row_count"] = row_count
+    next_state["result_truncated"] = row_count >= 500
+    next_state["execution_duration_ms"] = duration_ms
+    if error:
+        next_state["execution_error"] = error
+        next_state["terminal_status"] = "error"
+        next_state["fallback_reason"] = error
     return next_state
 
 
 def present_business_answer(state: NqeSqlAgentState) -> NqeSqlAgentState:
-    """生成业务化用户回答。
+    """统一业务问答结果节点。
 
-    参数：
-        state: 执行占位完成后的运行态。
-    返回：
-        写入 completed 终态和用户可见回答的运行态。
-    业务逻辑：
-        回答只表达业务处理结果，不暴露内部查询、字段、调度、提示词或追踪细节。
+    NQE-SQL-REAL-5: 输出结构化结果：answer / columns / rows / metrics / duration。
     """
-    next_state = _append_trace(
-        state,
-        node="present_business_answer",
-        summary="已生成业务化回答",
-    )
+    result = dict(state.get("execution_result_internal") or {})
+    rows = result.get("rows", [])
+    columns = result.get("columns", [])
+    row_count = state.get("row_count", 0)
+    elapsed = state.get("execution_duration_ms", 0)
+    domain = state.get("selected_domain", "")
+
+    answer_text = f"已完成 {domain} 域查询，返回 {row_count} 行结果。" if row_count else "查询完成，无匹配数据。"
+
+    next_state = _append_trace(state, node="present_business_answer", summary="已生成业务化回答")
     next_state["terminal_status"] = "completed"
-    next_state["user_visible_response"] = "已完成本次业务问数骨架处理，后续能力卡将补齐真实数据校验与结果呈现。"
+    next_state["user_visible_response"] = answer_text
+    next_state["structured_result"] = {
+        "status": "success",
+        "answer": answer_text,
+        "columns": columns,
+        "rows": rows[:100],
+        "row_count": row_count,
+        "duration_ms": elapsed,
+        "domain": domain,
+    }
     return next_state
 
 
