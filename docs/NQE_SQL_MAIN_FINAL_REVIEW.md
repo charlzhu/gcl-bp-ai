@@ -44,15 +44,35 @@ NQE-SQL-MAIN-43 | 2026-05-24
 
 | 组件 | 状态 |
 |---|---|
-| NqeChatPage.vue | 骨架 ✅ |
+| NqeChatPage.vue | 原型/骨架 ✅ |
 | /nqe-chat | 路由 ✅ |
-| vue-tsc | NQE 零错误 ✅ |
+| vue-tsc typecheck | ✅ 通过 |
+| npm run build | ⚠️ 未确认 |
 | quick chips | 静态 ⚠️ |
 | 流式 | 非SSE ⚠️ |
+| 产品化程度 | 原型，非完整产品 |
 
 ### 评测
 
 物流 50题 ✅ | BOM 30题 ✅ | 产销存/功率 未评测 ⚠️
+
+### NQE-29 / NQE-30
+
+验证型任务。功率预测作为 plan_bom 子域访问，已有 catalog 覆盖。未新增功率实现代码。
+
+### NQE-41
+
+运营指标报告（metrics-report.md），不是完整运营看板系统。
+
+## 测试体系状态
+
+| 范围 | 通过 | 失败 | 说明 |
+|---|---|---|---|
+| NQE-SQL-MAIN focused tests | 136 | 0 | ✅ |
+| business_qa_graph 全目录 | 253 | 51 | 失败在旧 S1-S4 和 ZG 测试 |
+| 失败文件 | — | — | test_nqe_s1/s2/s3/s4 + test_zg_nodes |
+| 失败是否 NQE 改造引入 | — | ❌ | 非本轮 NQE 引入 |
+| 建议 | — | — | 测试体系需清理/隔离旧测试 |
 
 ## Go / No-Go 表格
 
@@ -63,7 +83,7 @@ NQE-SQL-MAIN-43 | 2026-05-24
 | 生产 assist | ❌ No-Go | 评测不足 |
 | 生产 on | ❌ No-Go | 无生产运营数据 |
 | 旧链路下线 | ❌ No-Go | 功率永不替换 |
-| 前端替换 | ❌ No-Go | quick chips/SSE 未完善 |
+| 前端替换 | ❌ No-Go | prototype, quick chips/SSE 未完善 |
 | 继续扩大评测 | ✅ Go | 903+129+功率+产销存 |
 | 功率SQL化 | ❌ No-Go | 保留PowerPredictionEngine |
 
@@ -84,15 +104,19 @@ NQE-SQL-MAIN-43 | 2026-05-24
 5. quick chips 后端化
 6. SSE 流式消费器
 7. shadow 模式至少运行 100 题/域积累数据
+8. 旧 S1-S4/ZG 测试清理或隔离
 
 ## 当前风险
 
 | 风险 | 等级 |
 |---|---|
-| 评测仅 80 题 | 🟡 中 |
-| quick chips 静态 | 🟡 中 |
-| 流式非 SSE | 🟡 中 |
-| 无生产运营数据 | 🔴 高 |
+| 全目录 51 历史测试失败 | 🟡 |
+| 评测仅 80 题 | 🟡 |
+| quick chips 静态 | 🟡 |
+| 流式非 SSE | 🟡 |
+| npm build 未确认 | 🟡 |
+| NQE-41 非完整运营看板 | 🟡 |
+| 无生产运营数据 | 🔴 |
 
 ## 下一阶段建议
 
@@ -100,4 +124,5 @@ NQE-SQL-MAIN-43 | 2026-05-24
 2. quick chips 后端化
 3. SSE 流式升级
 4. 4域 shadow 模式积累运营数据
-5. 至少 3 个月 shadow 稳定后评估 assist/on
+5. 旧测试清理隔离
+6. 至少 3 个月 shadow 稳定后评估 assist/on
