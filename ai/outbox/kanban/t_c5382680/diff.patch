@@ -1,0 +1,13 @@
+diff --git a/backend/app/core/config.py b/backend/app/core/config.py
+index d9baca66..6f1af239 100644
+--- a/backend/app/core/config.py
++++ b/backend/app/core/config.py
+@@ -122,6 +122,8 @@ class Settings(BaseSettings):
+     # assist = NQE SQL Agent 参与辅助，失败时 fallback 旧链路（接口预留）
+     # on = NQE SQL Agent 作为主链路，旧链路作为 fallback（接口预留）
+     nqe_logistics_mode: Literal["off", "shadow", "assist", "on"] = "off"
++    # NQE 统一 SQL Agent 产销存/经营分析域独立灰度开关（类物流域）
++    nqe_business_analysis_mode: Literal["off", "shadow", "assist", "on"] = "off"
+     query_planning_v2_response_meta_enabled: bool = False
+     business_qa_langgraph_enabled: bool = False
+     # 掌柜问数对齐版 Graph 灰度开关
