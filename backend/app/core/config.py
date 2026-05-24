@@ -124,6 +124,8 @@ class Settings(BaseSettings):
     nqe_logistics_mode: Literal["off", "shadow", "assist", "on"] = "off"
     # NQE 统一 SQL Agent 产销存/经营分析域独立灰度开关（类物流域）
     nqe_business_analysis_mode: Literal["off", "shadow", "assist", "on"] = "off"
+    # NQE 统一 SQL Agent BOM 域独立灰度开关
+    nqe_plan_bom_mode: Literal["off", "shadow", "assist", "on"] = "off"
     query_planning_v2_response_meta_enabled: bool = False
     business_qa_langgraph_enabled: bool = False
     # 掌柜问数对齐版 Graph 灰度开关
