@@ -816,38 +816,63 @@ def explain_validate_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
 
 
 def correct_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
-    """执行内部候选受控修正。
+    """LLM 修正 SQL 节点。
 
-    参数：
-        state: 解释校验失败后的运行态。
-    返回：
-        递增 sql_revision_round、记录修正摘要并回写候选后的运行态。
-    业务逻辑：
-        修正只能使用上下文包显式注入的受控候选；没有候选时沿用原候选触发
-        下一轮校验，且修正后必须回到 precheck_sql_safety 重新过安全边界。
+    NQE-SQL-REAL-3: 调用 LLM 根据 EXPLAIN 错误修正 SQL。
+    无受控候选时调用 LLM；有候选时优先使用。
     """
     next_round = int(state.get("sql_revision_round", 0)) + 1
     package = dict(state.get("retrieval_context_package") or {})
     corrected_candidate = _select_correction_candidate(package, next_round)
     used_controlled_candidate = bool(corrected_candidate)
+
+    # 无受控候选时：LLM 修正
+    if not corrected_candidate:
+        original_sql = str(state.get("generated_sql") or "")
+        violations = list((state.get("explain_result") or {}).get("violations", []))
+        question = str(state.get("question") or "")
+        try:
+            from backend.app.core.config import get_settings
+            settings = get_settings()
+            if settings.llm_api_key and original_sql:
+                from openai import OpenAI
+                client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+                response = client.chat.completions.create(
+                    model=settings.llm_model or "qwen-max",
+                    messages=[{"role": "user", "content": (
+                        f"You are a MySQL expert. The following SQL has validation errors.\n"
+                        f"Original SQL:\n{original_sql}\n\n"
+                        f"Errors: {', '.join(violations)}\n"
+                        f"Question: {question}\n\n"
+                        "Fix the SQL. Output ONLY the corrected SQL statement, no markdown, no explanation."
+                    )}],
+                    temperature=0, max_tokens=2048, timeout=30.0,
+                )
+                corrected = (response.choices[0].message.content or "").strip()
+                if corrected.startswith("```"):
+                    corrected = "\n".join(l for l in corrected.split("\n") if not l.strip().startswith("```")).strip()
+                if corrected:
+                    corrected_candidate = corrected
+        except Exception:
+            pass
+
     next_state = _append_trace(
         state,
         node="correct_sql",
         status="retry",
-        summary=f"已完成第 {next_round} 轮内部候选修正",
+        summary=f"已完成第 {next_round} 轮 SQL 修正",
     )
     revisions = list(next_state.get("sql_revisions", []))
-    revisions.append(
-        {
-            "round": next_round,
-            "reason": "explain_validation_failed",
-            "used_controlled_candidate": used_controlled_candidate,
-        }
-    )
+    revisions.append({
+        "round": next_round,
+        "reason": "explain_validation_failed",
+        "used_controlled_candidate": used_controlled_candidate,
+        "llm_correction": not used_controlled_candidate,
+    })
     next_state["sql_revision_round"] = next_round
     next_state["sql_revisions"] = revisions
     next_state["correction_reason"] = "explain_validation_failed"
-    next_state["generated_sql"] = corrected_candidate or str(state.get("generated_sql") or "SELECT 1")
+    next_state["generated_sql"] = corrected_candidate or str(state.get("generated_sql") or "")
     return next_state
 
 
