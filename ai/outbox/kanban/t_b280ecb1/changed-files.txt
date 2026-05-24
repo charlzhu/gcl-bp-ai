@@ -1,0 +1,28 @@
+# NQE-SQL-MAIN-15 changed files
+
+## 修改
+
+1. backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py:
+   - generate_sql_direct: 增强物流 auto-context 场景，使用白名单第一张表的实际字段构造安全默认 SQL
+
+## 新增
+
+2. tests/unit/business_qa_graph/test_nqe_sql_agent_logistics.py (9 个物流域测试):
+   - domain_route 路由测试
+   - 元数据上下文包验证
+   - 召回资产验证
+   - 端到端完整链路
+   - 安全拒绝测试
+   - SELECT * 拒绝测试
+   - trace/replay 记录测试
+   - shadow 模式测试
+   - off 模式测试
+
+## 禁止修改确认
+
+- docs/CURRENT_STATUS.md: 未修改
+- docs/NEXT_TASK.md: 未修改
+- docs/HANDOFF.md: 未修改
+- frontend/: 未修改
+- 旧 LogisticsDataQaService: 未修改
+- 物流正式问答接口: 未替换

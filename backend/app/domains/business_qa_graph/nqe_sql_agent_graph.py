@@ -652,16 +652,26 @@ def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
     返回：
         写入 generated_sql 的运行态。
     业务逻辑：
-        本骨架优先使用测试显式注入的候选文本；未注入时只给出不可通过预检的
-        确定性占位，避免在缺少上下文时误入后续校验。
+        本骨架优先使用测试显式注入的候选文本；未注入时尝试从物流 auto-context
+        构造安全默认候选；无上下文时给出确定性占位。
     """
     package = dict(state.get("retrieval_context_package") or {})
     candidate = str(
         state.get("generated_sql")
         or package.get("generated_sql_candidate")
         or package.get("sql_candidate")
-        or "SELECT 1"
+        or ""
     ).strip()
+    # 中文注释：物流 auto-context 不含生成候选时，用白名单第一张表的实际字段构造安全默认查询。
+    if not candidate:
+        allowed = package.get("allowed_tables") or []
+        if allowed:
+            table = allowed[0]
+            columns = (package.get("table_columns") or {}).get(table, [])
+            col = columns[0] if columns else "*"
+            candidate = f"SELECT {col} FROM {table} LIMIT 10"
+        else:
+            candidate = "SELECT 1"
     next_state = _append_trace(
         state,
         node="generate_sql_direct",
