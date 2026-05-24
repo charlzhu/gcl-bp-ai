@@ -84,7 +84,7 @@
 
 ## API Key 状态
 
-- SK available: ✅ (sk-7...@dashscope.aliyuncs.com)
+- SK available: ✅ (DashScope/OpenAI compatible)
 - OpenAI v2.16.0 ✅
 - Real DB SMOKE: ✅ SELECT + EXPLAIN
 

@@ -831,20 +831,29 @@ def correct_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
         original_sql = str(state.get("generated_sql") or "")
         violations = list((state.get("explain_result") or {}).get("violations", []))
         question = str(state.get("question") or "")
+        domain = str(state.get("selected_domain") or "")
+        allowed_tables = list(package.get("allowed_tables", []))
+        table_cols = package.get("table_columns", {})
         try:
             from backend.app.core.config import get_settings
             settings = get_settings()
             if settings.llm_api_key and original_sql:
                 from openai import OpenAI
                 client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+                context_lines = [
+                    f"Domain: {domain}",
+                    f"Allowed tables: {', '.join(allowed_tables)}",
+                    f"Table columns: {table_cols}",
+                    f"Errors: {', '.join(violations)}",
+                ]
                 response = client.chat.completions.create(
                     model=settings.llm_model or "qwen-max",
                     messages=[{"role": "user", "content": (
-                        f"You are a MySQL expert. The following SQL has validation errors.\n"
+                        f"You are a MySQL expert. Fix the SQL using only allowed tables/columns.\n"
+                        + "\n".join(context_lines) + "\n\n"
                         f"Original SQL:\n{original_sql}\n\n"
-                        f"Errors: {', '.join(violations)}\n"
                         f"Question: {question}\n\n"
-                        "Fix the SQL. Output ONLY the corrected SQL statement, no markdown, no explanation."
+                        "Output ONLY the corrected SQL, no markdown, no explanation."
                     )}],
                     temperature=0, max_tokens=2048, timeout=30.0,
                 )
@@ -894,19 +903,23 @@ def execute_sql_readonly(state: NqeSqlAgentState) -> NqeSqlAgentState:
     error = ""
 
     if sql.strip() and not injected:
-        try:
-            from sqlalchemy import text
-            from backend.app.db.session import SessionLocal
-            db = SessionLocal()
+        sql_upper = sql.strip().upper()
+        if not (sql_upper.startswith("SELECT") or sql_upper.startswith("WITH")) and not sql_upper.startswith("EXPLAIN"):
+            error = "Only SELECT/WITH queries allowed"
+        else:
             try:
-                result = db.execute(text(sql), execution_options={"timeout": 30})
-                columns = list(result.keys())
-                rows_data = [dict(zip(columns, row)) for row in result.fetchmany(size=500)]
-                row_count = len(rows_data)
-            finally:
-                db.close()
-        except Exception as exc:
-            error = str(exc)[:500]
+                from sqlalchemy import text
+                from backend.app.db.session import SessionLocal
+                db = SessionLocal()
+                try:
+                    result = db.execute(text(sql), execution_options={"timeout": 30})
+                    columns = list(result.keys())
+                    rows_data = [dict(zip(columns, row)) for row in result.fetchmany(size=500)]
+                    row_count = len(rows_data)
+                finally:
+                    db.close()
+            except Exception as exc:
+                error = str(exc)[:500]
 
     duration_ms = int((time.monotonic() - start) * 1000)
 

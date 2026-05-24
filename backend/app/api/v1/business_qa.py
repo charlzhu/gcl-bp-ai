@@ -97,7 +97,18 @@ def _nqe_on_mode_query(question: str, trace_id: str, domain: str) -> dict[str, A
 
         nqe_result = run_nqe_logistics_graph(question, trace_id, nqe_mode="on")
         if nqe_result.get("terminal_status") == "completed":
-            return {"nqe_result": nqe_result, "mode": "on", "domain": domain}
+            structured = nqe_result.get("structured_result", {})
+            return {
+                "status": structured.get("status", "success"),
+                "answer": structured.get("answer", nqe_result.get("user_visible_response", "")),
+                "columns": structured.get("columns", []),
+                "rows": structured.get("rows", []),
+                "row_count": nqe_result.get("row_count", 0),
+                "duration_ms": structured.get("duration_ms", 0),
+                "domain": domain,
+                "trace_id": trace_id,
+                "fallback_used": False,
+            }
     except Exception:
         logger.warning("NQE on-mode query failed, fallback to legacy, trace_id=%s", trace_id, exc_info=True)
     return None
@@ -255,9 +266,7 @@ def business_qa_stream(
                 # NQE-SQL-CUTOVER-2: on 模式优先 NQE SQL Agent
                 nqe_on = _nqe_on_mode_query(payload.question, trace_id, domain)
                 if nqe_on:
-
-                    final_payload = {"_nqe_shadow": nqe_on}
-                    yield build_json_line_event("done", final_payload)
+                    yield build_json_line_event("done", nqe_on)
                     return
 
                 result = logistics_service.query(
@@ -311,8 +320,7 @@ def business_qa_stream(
                 # NQE-SQL-CUTOVER-4/5: on 模式优先 NQE SQL Agent
                 nqe_on = _nqe_on_mode_query(payload.question, trace_id, "plan_bom")
                 if nqe_on:
-                    final_payload = {"_nqe_shadow": nqe_on}
-                    yield build_json_line_event("done", final_payload)
+                    yield build_json_line_event("done", nqe_on)
                     return
 
                 result = plan_bom_service.ask(payload.question, use_llm=True, trace_id=trace_id)
