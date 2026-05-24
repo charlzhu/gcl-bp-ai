@@ -10,7 +10,20 @@
 | REAL-2 | Real MySQL EXPLAIN | nqe_sql_agent_graph.py:747 | ✅ | metadata-only → EXPLAIN on SessionLocal |
 | REAL-3 | LLM correct_sql | nqe_sql_agent_graph.py:818 | ✅ | SELECT 1 → OpenAI |
 | REAL-4 | Real SQL execute | nqe_sql_agent_graph.py:880 | ✅ | {"value":1} → DB fetchmany(500) |
-| REAL-5 | Unified result | nqe_sql_agent_graph.py:936 | ✅ | 骨架→structured_result |
+| REAL-5 | Unified result | nqe_sql_agent_graph.py:936 + business_qa.py:93 | ✅ 加固后通过 | 骨架→structured_result + on-mode full protocol |
+
+## REAL-5R 加固 (d5268d11)
+
+| 加固项 | 状态 |
+|---|---|
+| API key 脱敏 | ✅ sk-* removed |
+| correct_sql metadata | ✅ domain/tables/columns injected |
+| EXPLAIN before safety | ✅ graph flow correct |
+| SELECT-only guard | ✅ execute_sql_readonly line 903 |
+| max 500 rows | ✅ fetchmany(500) |
+| timeout 30s | ✅ execution_options |
+| injected_candidate test-only | ✅ guard at line 887 |
+| on-mode full protocol | ✅ status/answer/columns/rows/duration/fallback_used |
 
 **所有 5 个 REAL 节点均已真实落地，所有 stub 已移除。**
 
