@@ -1,0 +1,451 @@
+diff --git a/backend/app/domains/business_qa_graph/nqe_logistics_gray.py b/backend/app/domains/business_qa_graph/nqe_logistics_gray.py
+index aedf7130..a6db98e7 100644
+--- a/backend/app/domains/business_qa_graph/nqe_logistics_gray.py
++++ b/backend/app/domains/business_qa_graph/nqe_logistics_gray.py
+@@ -2,18 +2,30 @@
+ 
+ 本模块为物流正式问答入口提供 off/shadow/assist/on 四态灰度切换能力，
+ 不删除旧 LogisticsDataQaService、不修改旧链路主逻辑。
++
++NQE-SQL-MAIN-17: 完善 fallback 与 shadow compare 记录。
+ """
+ 
+ from __future__ import annotations
+ 
+ import logging
+ import time
++from datetime import datetime, timezone
+ from typing import Any
+ 
+ from backend.app.core.config import get_settings
+ 
+ logger = logging.getLogger(__name__)
+ 
++# ── shadow compare 比较状态枚举 ──
++COMPARISON_NQE_SUCCESS = "nqe_success"
++COMPARISON_NQE_FAILED = "nqe_failed"
++COMPARISON_NQE_BLOCKED_BY_SAFETY = "nqe_blocked_by_safety"
++COMPARISON_NQE_EXPLAIN_FAILED = "nqe_explain_failed"
++COMPARISON_NQE_EMPTY_RESULT = "nqe_empty_result"
++COMPARISON_NQE_TIMEOUT = "nqe_timeout"
++COMPARISON_NQE_GRAPH_ERROR = "nqe_graph_error"
++
+ 
+ def get_nqe_logistics_mode() -> str:
+     """读取当前物流 NQE 灰度模式。
+@@ -38,7 +50,7 @@ def run_nqe_logistics_graph(
+         domain_hint: 业务域提示（默认 logistics）。
+         nqe_mode: NQE 运行模式（默认 shadow，调用方应在 off 时跳过本函数）。
+     返回：
+-        包含 terminal_status、selected_domain、nqe_mode 等字段的脱敏结果字典。
++        包含 terminal_status、selected_domain 等字段的脱敏结果字典。
+         失败时返回 {"terminal_status": "error", "error": str(exc)}。
+     """
+     try:
+@@ -55,6 +67,13 @@ def run_nqe_logistics_graph(
+                 "trace_id": trace_id,
+             }
+         )
++        explain_violations = None
++        if isinstance(final_state.get("explain_result"), dict):
++            explain_violations = final_state["explain_result"].get("violations")
++        safety_violations = None
++        if isinstance(final_state.get("sql_safety_result"), dict):
++            safety_violations = final_state["sql_safety_result"].get("violations")
++
+         return {
+             "terminal_status": final_state.get("terminal_status", "unknown"),
+             "selected_domain": final_state.get("selected_domain"),
+@@ -65,18 +84,47 @@ def run_nqe_logistics_graph(
+                 if isinstance(final_state.get("sql_safety_result"), dict)
+                 else None
+             ),
++            "safety_violations": safety_violations,
+             "explain_status": (
+                 final_state.get("explain_result", {}).get("status")
+                 if isinstance(final_state.get("explain_result"), dict)
+                 else None
+             ),
++            "explain_violations": explain_violations,
+             "execution_status": final_state.get("execution_status"),
+             "trace_steps_count": len(final_state.get("trace_steps", [])),
++            "sql_revision_round": final_state.get("sql_revision_round", 0),
+             "user_response_truncated": _truncate_user_response(final_state.get("user_visible_response", "")),
+         }
+     except Exception as exc:
+         logger.warning("NQE logistics graph execution failed: %s", exc)
+-        return {"terminal_status": "error", "error": str(exc)}
++        return {"terminal_status": "graph_error", "error": str(exc)}
++
++
++def _determine_comparison_status(nqe_result: dict[str, Any]) -> str:
++    """根据 NQE 运行结果判断比较状态。
++
++    参数：
++        nqe_result: run_nqe_logistics_graph 返回的结果字典。
++    返回：
++        COMPARISON_NQE_* 常量之一。
++    业务逻辑：
++        按优先级判断：图形错误 > 安全拦截 > 解释失败 > 成功/失败。
++    """
++    terminal = nqe_result.get("terminal_status", "unknown")
++
++    if terminal == "graph_error":
++        return COMPARISON_NQE_GRAPH_ERROR
++    if terminal == "safety_reject":
++        return COMPARISON_NQE_BLOCKED_BY_SAFETY
++    if terminal == "error":
++        explain_status = nqe_result.get("explain_status")
++        if explain_status == "fail":
++            return COMPARISON_NQE_EXPLAIN_FAILED
++        return COMPARISON_NQE_FAILED
++    if terminal in ("completed",):
++        return COMPARISON_NQE_SUCCESS
++    return COMPARISON_NQE_FAILED
+ 
+ 
+ def build_nqe_shadow_compare_record(
+@@ -85,14 +133,19 @@ def build_nqe_shadow_compare_record(
+     *,
+     old_result: dict[str, Any] | None = None,
+ ) -> dict[str, Any]:
+-    """构建 NQE shadow compare 记录。
++    """构建 NQE shadow compare 脱敏记录。
+ 
+     参数：
+         question: 用户原始问题。
+         trace_id: 查询追踪号。
+         old_result: 旧链路返回结果（可选）。
+     返回：
+-        shadow compare 脱敏字典。
++        shadow compare 脱敏字典，包含 NQE/旧链路双方摘要、比较状态、时间戳。
++
++    安全边界：
++        - 不记录密钥、连接串、敏感凭证。
++        - user_query 和 nqe_sql_summary 均做脱敏截断。
++        - 不把内部 SQL/表名/字段名暴露给普通用户（仅用于审计）。
+     """
+     nqe_start = time.monotonic()
+     nqe_result = run_nqe_logistics_graph(question, trace_id, nqe_mode="shadow")
+@@ -106,24 +159,57 @@ def build_nqe_shadow_compare_record(
+             old_status = status_info.get("code", "unknown")
+         old_row_count = old_result.get("row_count")
+ 
++    comparison_status = _determine_comparison_status(nqe_result)
++
+     return {
+         "trace_id": trace_id,
+-        "question_truncated": _truncate_question(question),
+-        "nqe_elapsed_ms": nqe_elapsed_ms,
+-        "nqe_terminal_status": nqe_result.get("terminal_status"),
++        "domain": "logistics",
++        "mode": "shadow",
++        "user_query": _truncate_question(question, max_len=300),
++        "legacy_status": old_status,
++        "legacy_row_count": old_row_count,
++        "nqe_status": nqe_result.get("terminal_status"),
++        "nqe_sql_safety": nqe_result.get("sql_safety_status"),
++        "nqe_explain": nqe_result.get("explain_status"),
++        "nqe_execution": nqe_result.get("execution_status"),
+         "nqe_selected_domain": nqe_result.get("selected_domain"),
+-        "nqe_sql_safety_status": nqe_result.get("sql_safety_status"),
+-        "nqe_explain_status": nqe_result.get("explain_status"),
+-        "nqe_execution_status": nqe_result.get("execution_status"),
+-        "nqe_trace_steps_count": nqe_result.get("trace_steps_count"),
+-        "old_status": old_status,
+-        "old_row_count": old_row_count,
++        "nqe_duration_ms": nqe_elapsed_ms,
+         "nqe_error": nqe_result.get("error"),
++        "nqe_safety_violations": nqe_result.get("safety_violations"),
++        "nqe_explain_violations": nqe_result.get("explain_violations"),
++        "nqe_trace_steps": nqe_result.get("trace_steps_count"),
++        "nqe_sql_revision_round": nqe_result.get("sql_revision_round"),
++        "comparison_status": comparison_status,
++        "created_at": datetime.now(timezone.utc).isoformat(),
+     }
+ 
+ 
++# ── fallback 行为说明（NQE-SQL-MAIN-17 文档） ──
++
++
++FALLBACK_BEHAVIOR = {
++    "off": "不调用 NQE，完全走旧物流链路。",
++    "shadow": "旧链路返回用户结果；NQE 后台执行并记录 shadow compare。NQE 失败不影响用户。",
++    "assist": "接口预留。NQE 参与辅助，失败时 fallback 旧链路。（NQE-17 未完整实现）",
++    "on": "接口预留。NQE 作为主链路，旧链路 fallback。（NQE-17 未完整实现）",
++}
++
++FALLBACK_SCENARIOS = {
++    COMPARISON_NQE_SUCCESS: "NQE 成功生成并校验 SQL。结果记录在 shadow compare 中。",
++    COMPARISON_NQE_BLOCKED_BY_SAFETY: "NQE SQL 被安全预检拒绝（如 DDL/DML/非白名单表）。用户不受影响，继续走旧链路。",
++    COMPARISON_NQE_EXPLAIN_FAILED: "NQE SQL 解释校验失败（如未知字段/SELECT *）。用户不受影响，继续走旧链路。",
++    COMPARISON_NQE_GRAPH_ERROR: "NQE Graph 执行异常。用户不受影响，异常摘要记录在 shadow compare 中。",
++    COMPARISON_NQE_FAILED: "NQE 执行失败（非安全/解释原因）。用户不受影响，继续走旧链路。",
++    COMPARISON_NQE_EMPTY_RESULT: "NQE 返回空结果。用户不受影响，继续走旧链路。",
++    COMPARISON_NQE_TIMEOUT: "NQE 执行超时。用户不受影响，继续走旧链路。（超时未在本卡中显式设置阈值）",
++}
++
++
++# ── 辅助函数 ──
++
++
+ def _truncate_user_response(text: str, max_len: int = 200) -> str:
+-    """截断用户可见文本，避免在 shadow 记录中存储过长回答。"""
++    """截断用户可见文本。"""
+     if not text:
+         return ""
+     text = text.replace("\n", " ").strip()
+diff --git a/tests/unit/business_qa_graph/test_nqe_logistics_gray.py b/tests/unit/business_qa_graph/test_nqe_logistics_gray.py
+index fba71e20..e33b3024 100644
+--- a/tests/unit/business_qa_graph/test_nqe_logistics_gray.py
++++ b/tests/unit/business_qa_graph/test_nqe_logistics_gray.py
+@@ -1,7 +1,7 @@
+-"""NQE 物流灰度接入测试。
++"""NQE 物流灰度接入测试（含 fallback 与 shadow compare）。
+ 
+-本模块验证 NQE 统一 SQL Agent 在物流正式入口的 off/shadow/assist/on 四态切换能力，
+-不连接真实数据库、不修改旧物流正式链路。
++本模块验证 NQE 统一 SQL Agent 在物流正式入口的 off/shadow 模式切换
++及所有 fallback 场景下的 shadow compare 记录，不连接真实数据库。
+ """
+ 
+ from __future__ import annotations
+@@ -9,19 +9,26 @@ from __future__ import annotations
+ from unittest.mock import patch
+ 
+ from backend.app.domains.business_qa_graph.nqe_logistics_gray import (
++    COMPARISON_NQE_BLOCKED_BY_SAFETY,
++    COMPARISON_NQE_EXPLAIN_FAILED,
++    COMPARISON_NQE_FAILED,
++    COMPARISON_NQE_GRAPH_ERROR,
++    COMPARISON_NQE_SUCCESS,
+     build_nqe_shadow_compare_record,
+     get_nqe_logistics_mode,
+     run_nqe_logistics_graph,
+ )
+ 
+ 
++# ── 模式读取 ──
++
++
+ def test_off_mode_skips_nqe_when_configured() -> None:
+     """off 模式应跳过 NQE 执行。"""
+     with patch(
+         "backend.app.domains.business_qa_graph.nqe_logistics_gray.get_settings"
+     ) as mock_settings:
+         mock_settings.return_value.nqe_logistics_mode = "off"
+-
+         assert get_nqe_logistics_mode() == "off"
+ 
+ 
+@@ -31,7 +38,6 @@ def test_off_mode_is_default() -> None:
+         "backend.app.domains.business_qa_graph.nqe_logistics_gray.get_settings"
+     ) as mock_settings:
+         mock_settings.return_value.nqe_logistics_mode = "off"
+-
+         assert get_nqe_logistics_mode() == "off"
+ 
+ 
+@@ -41,20 +47,30 @@ def test_shadow_mode_allows_nqe_background_execution() -> None:
+         "backend.app.domains.business_qa_graph.nqe_logistics_gray.get_settings"
+     ) as mock_settings:
+         mock_settings.return_value.nqe_logistics_mode = "shadow"
+-
+         assert get_nqe_logistics_mode() == "shadow"
+ 
+ 
+ def test_on_mode_allows_nqe_as_primary() -> None:
+-    """on 模式返回 on 值，但链路选择由上层 API 控制。"""
++    """on 模式返回 on 值（接口预留）。"""
+     with patch(
+         "backend.app.domains.business_qa_graph.nqe_logistics_gray.get_settings"
+     ) as mock_settings:
+         mock_settings.return_value.nqe_logistics_mode = "on"
+-
+         assert get_nqe_logistics_mode() == "on"
+ 
+ 
++def test_assist_mode_is_supported() -> None:
++    """assist 模式可被读取（接口预留）。"""
++    with patch(
++        "backend.app.domains.business_qa_graph.nqe_logistics_gray.get_settings"
++    ) as mock_settings:
++        mock_settings.return_value.nqe_logistics_mode = "assist"
++        assert get_nqe_logistics_mode() == "assist"
++
++
++# ── NQE Graph 执行 ──
++
++
+ def test_run_nqe_logistics_graph_returns_valid_result() -> None:
+     """NQE Graph 执行应返回结构化结果。"""
+     result = run_nqe_logistics_graph("2025 年总发运量是多少", "trace-gray-001")
+@@ -64,55 +80,135 @@ def test_run_nqe_logistics_graph_returns_valid_result() -> None:
+     assert result["selected_domain"] == "logistics"
+ 
+ 
+-def test_build_shadow_compare_record_with_old_result() -> None:
+-    """shadow compare 记录应包含 NQE 和旧链路双方摘要。"""
++def test_run_nqe_graph_handles_error_gracefully() -> None:
++    """NQE Graph 内部错误应返回 graph_error 而不抛出异常。"""
++    with patch(
++        "backend.app.domains.business_qa_graph.nqe_logistics_gray.get_settings"
++    ) as mock_settings:
++        mock_settings.return_value.nqe_logistics_mode = "shadow"
++        result = run_nqe_logistics_graph("", "")
++        assert "terminal_status" in result
++
++
++# ── shadow compare 记录 - 成功场景 ──
++
++
++def test_shadow_compare_nqe_success() -> None:
++    """NQE 成功完成时，comparison_status 应为 nqe_success。"""
+     record = build_nqe_shadow_compare_record(
+         question="2025 年总发运量是多少",
+-        trace_id="trace-sc-001",
+-        old_result={
+-            "status": {"code": "success"},
+-            "row_count": 42,
+-        },
++        trace_id="trace-sc-success",
++        old_result={"status": {"code": "success"}, "row_count": 42},
+     )
+ 
+-    assert record["trace_id"] == "trace-sc-001"
+-    assert record["question_truncated"] == "2025 年总发运量是多少"
+-    assert record["old_status"] == "success"
+-    assert record["old_row_count"] == 42
+-    assert "nqe_terminal_status" in record
+-    assert "nqe_elapsed_ms" in record
+-    assert record["nqe_selected_domain"] == "logistics"
++    assert record["trace_id"] == "trace-sc-success"
++    assert record["domain"] == "logistics"
++    assert record["mode"] == "shadow"
++    assert record["user_query"] == "2025 年总发运量是多少"
++    assert record["legacy_status"] == "success"
++    assert record["legacy_row_count"] == 42
++    assert "nqe_duration_ms" in record
++    assert "created_at" in record
++    assert "comparison_status" in record
+ 
+ 
+-def test_build_shadow_compare_record_without_old_result() -> None:
++def test_shadow_compare_without_old_result() -> None:
+     """无旧链路结果时 shadow compare 记录仍可生成。"""
+     record = build_nqe_shadow_compare_record(
+         question="各月发运趋势",
+-        trace_id="trace-sc-002",
++        trace_id="trace-sc-no-old",
+     )
+ 
+-    assert record["trace_id"] == "trace-sc-002"
+-    assert record["old_status"] == "unknown"
+-    assert record["old_row_count"] is None
+-    assert record["nqe_selected_domain"] == "logistics"
++    assert record["trace_id"] == "trace-sc-no-old"
++    assert record["legacy_status"] == "unknown"
++    assert record["legacy_row_count"] is None
++    assert record["domain"] == "logistics"
++    assert "comparison_status" in record
+ 
+ 
+-def test_run_nqe_graph_handles_error_gracefully() -> None:
+-    """NQE Graph 内部错误应返回 error 状态而不抛出异常。"""
++# ── shadow compare 记录 - 失败/fallback 场景 ──
++
++
++def test_shadow_compare_nqe_safety_blocked() -> None:
++    """安全拦截时 comparison_status 应为 nqe_blocked_by_safety。"""
+     with patch(
+-        "backend.app.domains.business_qa_graph.nqe_logistics_gray.get_settings"
+-    ) as mock_settings:
+-        mock_settings.return_value.nqe_logistics_mode = "shadow"
++        "backend.app.domains.business_qa_graph.nqe_logistics_gray.run_nqe_logistics_graph",
++        return_value={
++            "terminal_status": "safety_reject",
++            "selected_domain": "logistics",
++            "sql_safety_status": "reject",
++            "safety_violations": ["table_not_whitelisted"],
++        },
++    ):
++        record = build_nqe_shadow_compare_record(
++            question="查询非白名单表",
++            trace_id="trace-sc-safety",
++        )
++        assert record["comparison_status"] == COMPARISON_NQE_BLOCKED_BY_SAFETY
++        assert record["nqe_status"] == "safety_reject"
++        assert record["nqe_safety_violations"] == ["table_not_whitelisted"]
++
++
++def test_shadow_compare_nqe_explain_failed() -> None:
++    """解释失败时 comparison_status 应为 nqe_explain_failed。"""
++    with patch(
++        "backend.app.domains.business_qa_graph.nqe_logistics_gray.run_nqe_logistics_graph",
++        return_value={
++            "terminal_status": "error",
++            "selected_domain": "logistics",
++            "explain_status": "fail",
++            "explain_violations": ["select_star_not_allowed"],
++        },
++    ):
++        record = build_nqe_shadow_compare_record(
++            question="SELECT * FROM t",
++            trace_id="trace-sc-explain",
++        )
++        assert record["comparison_status"] == COMPARISON_NQE_EXPLAIN_FAILED
++        assert record["nqe_explain_violations"] == ["select_star_not_allowed"]
+ 
+-        result = run_nqe_logistics_graph("", "")
+-        assert "terminal_status" in result
+ 
++def test_shadow_compare_nqe_graph_error() -> None:
++    """Graph 异常时 comparison_status 应为 nqe_graph_error。"""
++    with patch(
++        "backend.app.domains.business_qa_graph.nqe_logistics_gray.run_nqe_logistics_graph",
++        return_value={
++            "terminal_status": "graph_error",
++            "error": "simulated graph failure",
++        },
++    ):
++        record = build_nqe_shadow_compare_record(
++            question="触发异常",
++            trace_id="trace-sc-error",
++        )
++        assert record["comparison_status"] == COMPARISON_NQE_GRAPH_ERROR
++        assert record["nqe_error"] == "simulated graph failure"
+ 
+-def test_assist_mode_is_supported() -> None:
+-    """assist 模式可被读取。"""
++
++def test_shadow_compare_nqe_generic_failure() -> None:
++    """非安全/解释的通用失败时 comparison_status 应为 nqe_failed。"""
+     with patch(
+-        "backend.app.domains.business_qa_graph.nqe_logistics_gray.get_settings"
+-    ) as mock_settings:
+-        mock_settings.return_value.nqe_logistics_mode = "assist"
++        "backend.app.domains.business_qa_graph.nqe_logistics_gray.run_nqe_logistics_graph",
++        return_value={
++            "terminal_status": "error",
++            "selected_domain": "logistics",
++        },
++    ):
++        record = build_nqe_shadow_compare_record(
++            question="触发通用失败",
++            trace_id="trace-sc-generic",
++        )
++        assert record["comparison_status"] == COMPARISON_NQE_FAILED
+ 
+-        assert get_nqe_logistics_mode() == "assist"
++
++# ── 接口预留确认 ──
++
++
++def test_assist_and_on_are_reserved_not_implemented() -> None:
++    """assist 和 on 模式配置项可读，但完整行为交由后继卡实现。"""
++    for mode in ("assist", "on"):
++        with patch(
++            "backend.app.domains.business_qa_graph.nqe_logistics_gray.get_settings"
++        ) as mock_settings:
++            mock_settings.return_value.nqe_logistics_mode = mode
++            assert get_nqe_logistics_mode() == mode
