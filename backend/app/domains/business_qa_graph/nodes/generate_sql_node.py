@@ -42,7 +42,7 @@ _GENERATE_SQL_DEFAULT = """【角色】
 
 【任务要求】
 1. 仅允许使用数据表信息中真实存在的表与字段名称，禁止编造、猜测或引入未提供的表和字段。
-2. 指标过滤规则：使用 metric_code = '<metric_id的值>' 进行筛选，不能使用 metric_name LIKE 模糊匹配。指标定义中的 metric_id 就是 metric_code 的取值。
+2. 指标过滤规则：每个指标信息中有 value_for_sql 字段，将其内容直接复制到 WHERE 子句中。严禁使用 metric_name LIKE、metric_name = 等方式替代 value_for_sql。
 3. 产销存数据必须添加 is_published_month=1 过滤已发布月份。
 4. 基地/工厂过滤使用 base_name 或 factory_name 列，值必须准确匹配数据库真实值（如 '合肥'、'阜宁'、'广德'）。
 5. 生成的 SQL 只能用于查询，不能涉及数据写入、更新、删除等操作。
@@ -111,21 +111,17 @@ def _llm_generate_sql(
     client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
     prompt_template = load_prompt_or_default("generate_sqlplan", _GENERATE_SQL_DEFAULT)
 
+    prompt_text = prompt_template.format(
+        query=question,
+        table_infos=yaml.dump(table_infos, allow_unicode=True, sort_keys=False),
+        metric_infos=yaml.dump(metric_infos, allow_unicode=True, sort_keys=False),
+        date_info=yaml.dump(date_info, allow_unicode=True, sort_keys=False),
+        db_info=yaml.dump(db_info, allow_unicode=True, sort_keys=False),
+    )
     response = client.chat.completions.create(
         model=settings.llm_model or "qwen-max",
-        messages=[{
-            "role": "user",
-            "content": prompt_template.format(
-                query=question,
-                table_infos=yaml.dump(table_infos, allow_unicode=True, sort_keys=False),
-                metric_infos=yaml.dump(metric_infos, allow_unicode=True, sort_keys=False),
-                date_info=yaml.dump(date_info, allow_unicode=True, sort_keys=False),
-                db_info=yaml.dump(db_info, allow_unicode=True, sort_keys=False),
-            ),
-        }],
-        temperature=0,
-        max_tokens=2048,
-        timeout=30.0,
+        messages=[{"role": "user", "content": prompt_text}],
+        temperature=0, max_tokens=2048, timeout=30.0,
     )
 
     sql = (response.choices[0].message.content or "").strip()

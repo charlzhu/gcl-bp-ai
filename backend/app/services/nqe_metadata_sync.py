@@ -501,6 +501,9 @@ class NqeMetadataSyncBuilder:
                     "metric_code": self._stable_code("metric_key", domain_code, metric_id),
                     "name": metric.get("display_name") or metric_id,
                     "business_name": metric.get("display_name") or metric_id,
+                    # 保留原始 YAML metric_id 供 SQL 生成使用
+                    "source_metric_id": metric_id,
+                    "aliases": metric.get("aliases", []),
                     "description": metric.get("business_note") or metric.get("nl_description"),
                     "metric_type": self._metric_type(metric.get("aggregation")),
                     "default_aggregation": metric.get("aggregation"),
@@ -911,13 +914,20 @@ def build_nqe_context_package_from_bundle(bundle: NqeMetadataSyncBundle, domain_
     # 指标资产的精简视图（供 LLM SQL 生成时参考）
     metric_view = []
     for m in bundle.metrics:
+        # 使用 source_metric_id（YAML 原始值）供 SQL 生成
+        metric_id = m.get("source_metric_id") or m.get("metric_id") or m.get("code", "")
+        display_name = m.get("name") or m.get("display_name") or m.get("business_name", "")
+        aliases = m.get("aliases", [])
+        # 生成确定的 SQL WHERE 子句片段，LLM 直接拷贝使用
+        value_for_sql = f"metric_code = '{metric_id}'"
         metric_view.append({
-            "metric_id": m.get("metric_id", ""),
-            "display_name": m.get("display_name", ""),
-            "aliases": m.get("aliases", []),
-            "table": m.get("table", ""),
-            "calculation_formula": m.get("calculation_formula", m.get("formula", "")),
+            "metric_id": metric_id,
+            "display_name": display_name,
+            "aliases": aliases,
+            "table": m.get("table") or m.get("base_table_code", ""),
+            "calculation_formula": m.get("formula_text") or m.get("calculation_formula", ""),
             "relevant_columns": m.get("relevant_columns", []),
+            "value_for_sql": value_for_sql,
         })
 
     return {
