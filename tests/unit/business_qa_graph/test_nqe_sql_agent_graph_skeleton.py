@@ -239,20 +239,11 @@ def test_retrieve_context_multiway_builds_logistics_context_when_cwd_changes(mon
     assert package["retrieval_assets"]["summary"]["chunks"] > 0
 
 
-def test_retrieve_context_multiway_does_not_auto_ready_plan_bom() -> None:
-    """验证非本卡接入域仍保持占位澄清，不自动 ready。"""
-
+def test_retrieve_context_multiway_does_not_auto_ready_unknown_domain() -> None:
+    """验证未接入域仍保持占位澄清，不自动 ready。"""
     graph_module = importlib.import_module("backend.app.domains.business_qa_graph.nqe_sql_agent_graph")
-
     state = graph_module.retrieve_context_multiway(
-        {
-            "question": "查询计划 BOM",
-            "normalized_question": "查询计划 BOM",
-            "nqe_mode": "on",
-            "domain_hint": "plan_bom",
-        }
-    )
-
+        {"question": "未知域", "nqe_mode": "on", "domain_hint": "unknown_domain"})
     assert state["retrieval_context_package"] == {}
     assert state["retrieval_candidates"] == []
 

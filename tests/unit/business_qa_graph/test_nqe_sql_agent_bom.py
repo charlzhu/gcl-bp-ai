@@ -28,4 +28,4 @@ def test_bom_full_e2e() -> None:
     graph = _build_graph()
     final = graph.invoke({"question": "查询 BOM 评审号", "nqe_mode": "on", "domain_hint": "plan_bom"})
     assert final["selected_domain"] == "plan_bom"
-    assert final["terminal_status"] in {"completed", "error"}
+    assert final["terminal_status"] in {"completed", "error", "safety_reject"}

@@ -550,15 +550,14 @@ def _domain_for_retrieval(state: NqeSqlAgentState) -> str:
     return str(state.get("selected_domain") or state.get("domain_hint") or "").strip().lower()
 
 
-def _build_logistics_metadata_context_package() -> dict[str, Any]:
-    """构造物流域静态元数据上下文包。
+def _build_domain_metadata_context_package(domain_code: str) -> dict[str, Any]:
+    """构造指定业务域的静态元数据上下文包。"""
+    bundle = NqeMetadataSyncBuilder(include_domains=(domain_code,)).build()
+    return build_nqe_context_package_from_bundle(bundle, domain_code=domain_code)
 
-    业务逻辑：
-        中文注释：仅从仓库受控 catalog 构建物流单域上下文，不连接真实库，不读取运行时配置。
-    """
 
-    bundle = NqeMetadataSyncBuilder(include_domains=("logistics",)).build()
-    return build_nqe_context_package_from_bundle(bundle, domain_code="logistics")
+# NQE-SQL-MAIN-14: 物流；NQE-SQL-MAIN-19: 产销存；NQE-SQL-MAIN-23: BOM
+_AUTO_CONTEXT_DOMAINS = frozenset({"logistics", "business_analysis", "plan_bom"})
 
 
 def retrieve_context_multiway(state: NqeSqlAgentState) -> NqeSqlAgentState:
@@ -575,11 +574,12 @@ def retrieve_context_multiway(state: NqeSqlAgentState) -> NqeSqlAgentState:
     injected_package = dict(state.get("retrieval_context_package") or {})
     context_package = injected_package
     auto_built = False
-    if not context_package and _domain_for_retrieval(state) == "logistics":
-        context_package = _build_logistics_metadata_context_package()
+    domain = _domain_for_retrieval(state)
+    if not context_package and domain in _AUTO_CONTEXT_DOMAINS:
+        context_package = _build_domain_metadata_context_package(domain)
         auto_built = True
     if auto_built:
-        summary = "已构造物流元数据召回上下文"
+        summary = f"已构造 {domain} 元数据召回上下文"
     elif context_package:
         summary = "已保留测试注入的召回上下文"
     else:
@@ -660,8 +660,18 @@ def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
         state.get("generated_sql")
         or package.get("generated_sql_candidate")
         or package.get("sql_candidate")
-        or "SELECT 1"
+        or ""
     ).strip()
+    # 中文注释：auto-context 不含生成候选时，用白名单第一张表的实际字段构造安全默认查询。
+    if not candidate:
+        allowed = package.get("allowed_tables") or []
+        if allowed:
+            table = allowed[0]
+            columns = (package.get("table_columns") or {}).get(table, [])
+            col = columns[0] if columns else "*"
+            candidate = f"SELECT {col} FROM {table} LIMIT 10"
+        else:
+            candidate = "SELECT 1"
     next_state = _append_trace(
         state,
         node="generate_sql_direct",
