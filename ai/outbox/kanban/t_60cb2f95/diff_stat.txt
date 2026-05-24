@@ -1,0 +1,7 @@
+ .../business_qa_graph/nqe_sql_agent_graph.py       |  12 +-
+ backend/app/models/nqe_metadata.py                 | 468 ++++++++++
+ backend/app/services/nqe_metadata_sync.py          | 990 +++++++++++++++++++++
+ docs/NQE_SQL_MAIN_CURRENT_STATUS.md                |  42 +-
+ docs/NQE_SQL_MAIN_HANDOFF.md                       |  34 +-
+ docs/NQE_SQL_MAIN_NEXT_TASK.md                     |  58 +-
+ 6 files changed, 1511 insertions(+), 93 deletions(-)

@@ -1,0 +1,21 @@
+# NQE-SQL-MAIN-14 changed files
+
+## 从恢复工作树回填
+
+1. backend/app/services/nqe_metadata_sync.py (990 行, NqeMetadataSyncBuilder + build_nqe_context_package_from_bundle)
+2. backend/app/models/nqe_metadata.py (468 行, 15 个 SQLAlchemy 模型)
+
+## 适配修改
+
+1. backend/app/domains/business_qa_graph/nqe_sql_agent_graph.py:
+   - 移除 try/except 条件导入守卫，恢复正常导入
+   - 移除 _build_logistics_metadata_context_package 中的 None 守卫
+
+## 禁止修改确认
+
+- docs/CURRENT_STATUS.md: 未修改
+- docs/NEXT_TASK.md: 未修改
+- docs/HANDOFF.md: 未修改
+- frontend/: 未修改
+- .env / 密钥: 未读取
+- 物流旧正式 service: 未修改

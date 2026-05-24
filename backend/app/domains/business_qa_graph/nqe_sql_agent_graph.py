@@ -18,15 +18,7 @@ from backend.app.domains.business_qa_graph.nqe_sql_agent_trace import (
     compare_nqe_replay_summary,
 )
 from backend.app.domains.business_qa_graph.nqe_sql_safety import precheck_nqe_sql_safety
-
-try:
-    from backend.app.services.nqe_metadata_sync import (  # pragma: no cover — NQE-14 物流元数据同步尚未回填
-        NqeMetadataSyncBuilder,
-        build_nqe_context_package_from_bundle,
-    )
-except ImportError:  # pragma: no cover
-    NqeMetadataSyncBuilder = None  # type: ignore[assignment]
-    build_nqe_context_package_from_bundle = None  # type: ignore[assignment]
+from backend.app.services.nqe_metadata_sync import NqeMetadataSyncBuilder, build_nqe_context_package_from_bundle
 
 
 NQE_SQL_AGENT_GRAPH_VERSION = "nqe_sql_agent_graph.skeleton.v1"
@@ -565,8 +557,6 @@ def _build_logistics_metadata_context_package() -> dict[str, Any]:
         中文注释：仅从仓库受控 catalog 构建物流单域上下文，不连接真实库，不读取运行时配置。
     """
 
-    if NqeMetadataSyncBuilder is None:
-        return {}
     bundle = NqeMetadataSyncBuilder(include_domains=("logistics",)).build()
     return build_nqe_context_package_from_bundle(bundle, domain_code="logistics")
 
