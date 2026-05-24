@@ -53,6 +53,10 @@ const routes = [
     path: '/isp-data',
     component: () => import('@/views/inventory-sales-production/DataManagementPage.vue'),
   },
+  {
+    path: '/nqe-chat',
+    component: () => import('@/views/nqe-chat/NqeChatPage.vue'),
+  },
 ]
 
 const router = createRouter({
