@@ -908,6 +908,18 @@ def build_nqe_context_package_from_bundle(bundle: NqeMetadataSyncBundle, domain_
     if metadata_version is None:
         metadata_version = next((row.get("version") for row in tables if row.get("version")), None)
 
+    # 指标资产的精简视图（供 LLM SQL 生成时参考）
+    metric_view = []
+    for m in bundle.metrics:
+        metric_view.append({
+            "metric_id": m.get("metric_id", ""),
+            "display_name": m.get("display_name", ""),
+            "aliases": m.get("aliases", []),
+            "table": m.get("table", ""),
+            "calculation_formula": m.get("calculation_formula", m.get("formula", "")),
+            "relevant_columns": m.get("relevant_columns", []),
+        })
+
     return {
         "ready": bool(allowed_tables and table_columns),
         "domain_code": selected_domain,
@@ -923,6 +935,7 @@ def build_nqe_context_package_from_bundle(bundle: NqeMetadataSyncBundle, domain_
                 "chunks": len(chunks),
             },
             "chunks": retrieval_chunks,
+            "metrics": metric_view,
         },
         "source_refs": source_refs,
     }
