@@ -74,6 +74,27 @@ def _nqe_shadow_attach(
         logger.warning("NQE shadow attach failed (non-blocking), trace_id=%s", trace_id, exc_info=True)
 
 
+def _nqe_on_mode_query(question: str, trace_id: str, domain: str) -> dict[str, Any] | None:
+    """NQE SQL Agent on 模式主链路查询。
+
+    返回 NQE Graph 执行结果；失败时返回 None 触发旧链路 fallback。
+    """
+    try:
+        from backend.app.domains.business_qa_graph.nqe_logistics_gray import (
+            get_nqe_logistics_mode,
+            run_nqe_logistics_graph,
+        )
+        mode = get_nqe_logistics_mode()
+        if mode != "on":
+            return None
+        nqe_result = run_nqe_logistics_graph(question, trace_id, nqe_mode="on")
+        if nqe_result.get("terminal_status") == "completed":
+            return {"nqe_result": nqe_result, "mode": "on"}
+    except Exception:
+        logger.warning("NQE on-mode query failed, fallback to legacy, trace_id=%s", trace_id, exc_info=True)
+    return None
+
+
 # ---- 统一流式事件 stage 常量 ----
 STAGE_RECEIVED = "received"
 STAGE_UNDERSTANDING = "understanding"
@@ -223,6 +244,14 @@ def business_qa_stream(
         try:
             # ---- Stage 4: 执行领域服务 ----
             if domain == "logistics":
+                # NQE-SQL-CUTOVER-2: on 模式优先 NQE SQL Agent
+                nqe_on = _nqe_on_mode_query(payload.question, trace_id, domain)
+                if nqe_on:
+
+                    final_payload = {"_nqe_shadow": nqe_on}
+                    yield build_json_line_event("done", final_payload)
+                    return
+
                 result = logistics_service.query(
                     LogisticsDataQaQueryRequest(question=payload.question),
                     trace_id=trace_id,
@@ -271,6 +300,13 @@ def business_qa_stream(
                 _nqe_shadow_attach(final_payload, payload.question, trace_id, result_payload)
 
             elif domain == "plan_bom":
+                # NQE-SQL-CUTOVER-4/5: on 模式优先 NQE SQL Agent
+                nqe_on = _nqe_on_mode_query(payload.question, trace_id, "plan_bom")
+                if nqe_on:
+                    final_payload = {"_nqe_shadow": nqe_on}
+                    yield build_json_line_event("done", final_payload)
+                    return
+
                 result = plan_bom_service.ask(payload.question, use_llm=True, trace_id=trace_id)
                 result_payload = result.model_dump(mode="json")
                 fallback_answer = _resolve_plan_bom_fallback(result_payload)
