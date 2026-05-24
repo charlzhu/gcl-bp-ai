@@ -121,13 +121,13 @@ class Settings(BaseSettings):
     # shadow = 旧链路返回用户结果，NQE SQL Agent 后台运行并记录 shadow compare
     # assist = NQE SQL Agent 参与辅助，失败时 fallback 旧链路（接口预留）
     # on = NQE SQL Agent 作为主链路，旧链路作为 fallback（接口预留）
-    nqe_logistics_mode: Literal["off", "shadow", "assist", "on"] = "off"
+    nqe_logistics_mode: Literal["off", "shadow", "assist", "on"] = "on"
     # NQE 统一 SQL Agent 产销存/经营分析域独立灰度开关（类物流域）
-    nqe_business_analysis_mode: Literal["off", "shadow", "assist", "on"] = "off"
+    nqe_business_analysis_mode: Literal["off", "shadow", "assist", "on"] = "on"
     # NQE 统一 SQL Agent BOM 域独立灰度开关
-    nqe_plan_bom_mode: Literal["off", "shadow", "assist", "on"] = "off"
+    nqe_plan_bom_mode: Literal["off", "shadow", "assist", "on"] = "on"
     # NQE 统一 SQL Agent 功率预测域灰度开关（plan_bom 子域）
-    nqe_power_prediction_mode: Literal["off", "shadow", "assist", "on"] = "off"
+    nqe_power_prediction_mode: Literal["off", "shadow", "assist", "on"] = "on"
     query_planning_v2_response_meta_enabled: bool = False
     business_qa_langgraph_enabled: bool = False
     # 掌柜问数对齐版 Graph 灰度开关
@@ -360,6 +360,10 @@ class Settings(BaseSettings):
     @property
     def APP_ENV(self) -> str:
         return self.app_env
+
+    @property
+    def IS_PRODUCTION(self) -> bool:
+        return self.app_env in ("prod", "production")
 
     @property
     def APP_DEBUG(self) -> bool:
