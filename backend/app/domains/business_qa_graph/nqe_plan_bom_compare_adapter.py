@@ -51,6 +51,12 @@ class NqePlanBomCompareAdapter:
     def __init__(self, db_session: Any = None) -> None:
         self._db = db_session
 
+    def _ensure_session(self) -> Any:
+        if self._db is not None:
+            return self._db
+        from backend.app.db.session import SessionLocal
+        return SessionLocal()
+
     def try_compare(
         self,
         *,
@@ -90,11 +96,12 @@ class NqePlanBomCompareAdapter:
             from backend.app.domains.plan_bom.services.query_service import (
                 PlanBomQueryService,
             )
+            from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
 
-            service = PlanBomQueryService(db=self._db)
+            service = PlanBomQueryService(repository=PlanBomQueryRepository(db=self._ensure_session()))
             payload = PlanBomCompareQueryRequest(
-                left=PlanBomCompareSideRequest(identifier=left_identifier),
-                right=PlanBomCompareSideRequest(identifier=right_identifier),
+                left=PlanBomCompareSideRequest(order_no=left_identifier),
+                right=PlanBomCompareSideRequest(order_no=right_identifier),
             )
             compare_result = service.compare(payload, trace_id=trace_id)
 
@@ -128,8 +135,9 @@ class NqePlanBomCompareAdapter:
             from backend.app.domains.plan_bom.services.query_service import (
                 PlanBomQueryService,
             )
+            from backend.app.domains.plan_bom.repositories.query_repository import PlanBomQueryRepository
 
-            service = PlanBomQueryService(db=self._db)
+            service = PlanBomQueryService(repository=PlanBomQueryRepository(db=self._ensure_session()))
             replay_result = service.compare_replay(log_id=log_id)
 
             result.executed = True
