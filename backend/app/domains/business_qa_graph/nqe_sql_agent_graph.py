@@ -683,14 +683,54 @@ def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
             settings = get_settings()
             if settings.llm_api_key:
                 from backend.app.domains.business_qa_graph.nodes.generate_sql_node import _llm_generate_sql
-                # 将 context_package 转为 LLM 期望的 table_infos / metric_infos
                 table_infos = []
                 for table in package.get("allowed_tables", []):
                     columns = (package.get("table_columns") or {}).get(table, [])
                     table_infos.append({"table": table, "columns": columns})
                 metric_infos = package.get("retrieval_assets", {}).get("metrics", [])
+                domain = package.get("domain_code") or state.get("domain_hint") or ""
+                question = str(state.get("question") or state.get("normalized_question") or "")
+
+                # Milvus 向量检索（在 LLM 之前）
+                milvus_text = ""
+                try:
+                    from backend.app.domains.business_qa_graph.nqe_semantic_vector_indexer import NqeSemanticVectorRetriever
+                    from collections import defaultdict
+                    retriever = NqeSemanticVectorRetriever()
+                    retrieved = retriever.search(query_text=question, domain=domain, top_k=10)
+                    if retrieved:
+                        by_type = defaultdict(int)
+                        for a in retrieved[:10]:
+                            by_type[a.get("asset_type","")] += 1
+                        milvus_lines = [
+                            f"retrieved_count: {len(retrieved)}",
+                            f"asset_types: {dict(by_type)}",
+                        ]
+                        for a in retrieved[:5]:
+                            milvus_lines.append(f"  [{a.get('asset_type','?')}] {a.get('title','')} score={a.get('score',0):.4f} | {a.get('content','')[:120]}")
+                        milvus_text = "\n".join(milvus_lines)
+                        state.setdefault("_nqe_retrieval_assets", {}).update({
+                            "retrieval_source": "milvus",
+                            "collection_name": retriever.collection_name,
+                            "top_k": 10,
+                            "retrieved_count": len(retrieved),
+                            "assets": retrieved,
+                        })
+                except Exception as e:
+                    state.setdefault("_nqe_retrieval_assets", {})["retrieval_source"] = f"milvus_error:{e}"
+
+                table_infos = []
+                for table in package.get("allowed_tables", []):
+                    columns = (package.get("table_columns") or {}).get(table, [])
+                    table_infos.append({"table": table, "columns": columns})
+                metric_infos = package.get("retrieval_assets", {}).get("metrics", [])
+                # 将 milvus 检索结果追加到 question 末尾，供 LLM 参考
+                enhanced_question = question
+                if milvus_text:
+                    enhanced_question = f"{question}\n\n# Milvus 语义召回参考\n{milvus_text}"
+
                 candidate = _llm_generate_sql(
-                    question, table_infos, metric_infos,
+                    enhanced_question, table_infos, metric_infos,
                     date_info={}, db_info={"dialect": "MySQL"},
                     settings=settings,
                     value_infos=package.get("retrieval_assets", {}).get("values", []),
@@ -705,22 +745,6 @@ def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
                     "dimension_count": len(package.get("retrieval_assets", {}).get("dimensions", [])),
                     "fewshot_count": len(package.get("retrieval_assets", {}).get("fewshot_sql", [])),
                 })
-                # Milvus 向量召回增强
-                try:
-                    from backend.app.domains.business_qa_graph.nqe_semantic_vector_indexer import NqeSemanticVectorRetriever
-                    retriever = NqeSemanticVectorRetriever()
-                    domain_for_search = package.get("domain_code") or state.get("domain_hint") or ""
-                    retrieved = retriever.search(question, domain=domain_for_search, top_k=10)
-                    if retrieved:
-                        state.setdefault("_nqe_retrieval_assets", {}).update({
-                            "retrieval_source": "milvus",
-                            "collection_name": retriever.collection_name,
-                            "top_k": 10,
-                            "retrieved_count": len(retrieved),
-                            "assets": retrieved,
-                        })
-                except Exception:
-                    state.setdefault("_nqe_retrieval_assets", {})["retrieval_source"] = "milvus_unavailable"
                 if not candidate or not candidate.strip():
                     raise ValueError("LLM returned empty SQL")
         except Exception:
