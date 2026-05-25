@@ -45,7 +45,7 @@
 import { ref, nextTick, onUnmounted } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 
-interface Step { label: string; status: 'pending'|'running'|'success'|'error'; detail?: string }
+interface Step { label: string; status: string; detail?: string }
 interface Message { role:'user'|'assistant'; text?:string; answer?:string; progress?:Step[]; error?:string; row_count?:number }
 
 const question = ref('')
