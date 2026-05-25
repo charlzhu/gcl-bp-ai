@@ -681,6 +681,7 @@ def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
         try:
             from backend.app.core.config import get_settings
             settings = get_settings()
+            import os; os.environ.pop('http_proxy',''); os.environ.pop('https_proxy','')
             if settings.llm_api_key:
                 from backend.app.domains.business_qa_graph.nodes.generate_sql_node import _llm_generate_sql
                 # 将 context_package 转为 LLM 期望的 table_infos / metric_infos

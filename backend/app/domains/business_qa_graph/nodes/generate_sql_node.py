@@ -13,6 +13,7 @@ import logging
 from typing import Any
 
 import yaml
+import httpx
 from openai import OpenAI
 
 from backend.app.core.config import get_settings
@@ -121,7 +122,7 @@ def _llm_generate_sql(
     - LLM 直接输出 SQL 文本
     - 不经过 SQLPlan / renderer 中间层
     """
-    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url, http_client=httpx.Client(proxy=None, verify=True, timeout=60))
     prompt_template = load_prompt_or_default("generate_sqlplan", _GENERATE_SQL_DEFAULT)
 
     prompt_text = prompt_template.format(
