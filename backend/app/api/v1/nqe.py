@@ -48,7 +48,13 @@ async def nqe_query_stream(question: str = Query(...), trace_id: str | None = No
             rows_count = final.get("row_count", 0)
             yield _sse_event("sql_executed", {"trace_id": tid, "row_count": rows_count})
 
-            yield _sse_event("result", {"trace_id": tid, "status": final.get("terminal_status"), "answer": result.get("answer",""), "columns": result.get("columns",[]), "rows": result.get("rows",[])[:100], "row_count": rows_count})
+            yield _sse_event("result", {"trace_id": tid, "status": final.get("terminal_status"),
+                "answer": result.get("answer",""), "columns": result.get("columns",[]),
+                "rows": result.get("rows",[])[:100], "row_count": rows_count,
+                "metrics": result.get("metrics",[]), "cards": result.get("cards",[]),
+                "duration_ms": result.get("duration_ms",0), "fallback_used": False,
+                "fallback_reason": final.get("fallback_reason",""),
+            })
 
         except Exception as e:
             yield _sse_event("error", {"trace_id": tid, "error": str(e)[:500]})
