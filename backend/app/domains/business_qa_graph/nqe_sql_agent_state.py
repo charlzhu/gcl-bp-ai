@@ -131,3 +131,8 @@ class NqeSqlAgentState(TypedDict, total=False):
     force_safety_reject: bool
     # 测试控制：强制解释校验失败，用于覆盖修正循环。
     force_explain_fail: bool
+
+    # ASSET-INTEGRATION-3: Milvus 向量召回元数据
+    _nqe_retrieval_assets: dict[str, Any]
+    # 诊断用 prompt 统计
+    _nqe_prompt_stats: dict[str, Any]

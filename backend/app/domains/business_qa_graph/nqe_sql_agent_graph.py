@@ -705,6 +705,22 @@ def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
                     "dimension_count": len(package.get("retrieval_assets", {}).get("dimensions", [])),
                     "fewshot_count": len(package.get("retrieval_assets", {}).get("fewshot_sql", [])),
                 })
+                # Milvus 向量召回增强
+                try:
+                    from backend.app.domains.business_qa_graph.nqe_semantic_vector_indexer import NqeSemanticVectorRetriever
+                    retriever = NqeSemanticVectorRetriever()
+                    domain_for_search = package.get("domain_code") or state.get("domain_hint") or ""
+                    retrieved = retriever.search(question, domain=domain_for_search, top_k=10)
+                    if retrieved:
+                        state.setdefault("_nqe_retrieval_assets", {}).update({
+                            "retrieval_source": "milvus",
+                            "collection_name": retriever.collection_name,
+                            "top_k": 10,
+                            "retrieved_count": len(retrieved),
+                            "assets": retrieved,
+                        })
+                except Exception:
+                    state.setdefault("_nqe_retrieval_assets", {})["retrieval_source"] = "milvus_unavailable"
                 if not candidate or not candidate.strip():
                     raise ValueError("LLM returned empty SQL")
         except Exception:
