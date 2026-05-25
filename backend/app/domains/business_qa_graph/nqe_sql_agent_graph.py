@@ -669,13 +669,17 @@ def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
     package = dict(state.get("retrieval_context_package") or {})
     question = str(state.get("question") or state.get("normalized_question") or "")
 
-    # 优先测试注入，其次 LLM 生成
-    candidate = str(
+    # 正式 on-mode 不走候选注入：仅测试路径允许
+    is_test = bool(state.get("_nqe_test_injected") or state.get("force_safety_reject") or state.get("force_explain_fail"))
+    candidate = ""
+    test_candidate = str(
         state.get("generated_sql")
         or package.get("generated_sql_candidate")
         or package.get("sql_candidate")
         or ""
     ).strip()
+    if is_test and test_candidate:
+        candidate = test_candidate
 
     if not candidate and question:
         try:

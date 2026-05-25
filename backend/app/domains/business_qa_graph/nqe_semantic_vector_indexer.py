@@ -6,7 +6,7 @@ Milvus search() 做向量相似度检索，结果注入 LLM prompt。
 
 from __future__ import annotations
 
-import json, logging, time
+import json, logging, time, hashlib
 from collections import Counter, defaultdict
 from typing import Any
 
@@ -26,16 +26,17 @@ EMBEDDING_MODEL = "text-embedding-v4"
 class NqeEmbeddingClient:
     """DashScope 兼容 embedding 客户端。"""
 
-    def __init__(self, base_url: str, api_key: str, model: str = EMBEDDING_MODEL):
+    def __init__(self, base_url: str, api_key: str, model: str = EMBEDDING_MODEL, verify_ssl: bool = True):
         self.base_url = base_url
         self.api_key = api_key
         self.model = model
+        self.verify_ssl = verify_ssl
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         """批量生成 embedding。"""
         if not texts:
             return []
-        client = httpx.Client(verify=False, timeout=120)
+        client = httpx.Client(verify=self.verify_ssl, timeout=120)
         try:
             # 批量发送
             all_vectors: list[list[float]] = []
@@ -76,13 +77,18 @@ class NqeSemanticVectorIndexer:
         self.collection_name = collection_name
         self._embedder: NqeEmbeddingClient | None = None
 
+    def _get_milvus_config(self):
+        from backend.app.core.config import get_settings
+        s = get_settings()
+        return {"host": s.nqe_milvus_host, "port": s.nqe_milvus_port, "collection": s.nqe_milvus_collection}
+
     def _get_embedder(self) -> NqeEmbeddingClient | None:
         if self._embedder is None:
             from backend.app.core.config import get_settings
             s = get_settings()
             if not s.llm_api_key:
                 return None
-            self._embedder = NqeEmbeddingClient(s.llm_base_url, s.llm_api_key)
+            self._embedder = NqeEmbeddingClient(s.llm_base_url, s.llm_api_key, verify_ssl=s.nqe_llm_ssl_verify)
         return self._embedder
 
     def build_asset_docs(self, domain: str | None = None) -> list[dict[str, Any]]:
@@ -113,13 +119,17 @@ class NqeSemanticVectorIndexer:
             for r in db.execute(text(f"SELECT domain_code, dimension_code, dimension_name, aliases, table_name, column_name, description FROM nqe_dimension_info WHERE is_active = 1 {dflt}"), params).fetchall():
                 docs.append({"domain": r[0], "asset_type": "dimension", "asset_id": f"dim:{r[0]}:{r[1]}", "title": r[2], "content": f"维度 {r[2]} (编码 {r[1]})，别名 {r[3] or '无'}，对应表 {r[4]}.{r[5]}。{r[6] or ''}", "table_name": r[4], "column_name": r[5]})
 
-            # 5. Values (top 200)
-            for r in db.execute(text(f"SELECT domain_code, table_name, column_name, raw_value, value_type FROM nqe_value_index WHERE is_active = 1 {dflt} LIMIT 200"), params).fetchall():
-                docs.append({"domain": r[0], "asset_type": "value", "asset_id": f"val:{r[0]}:{r[1]}:{r[2]}:{r[3]}", "title": f"{r[1]}.{r[2]}={r[3]}", "content": f"字段取值 {r[1]}.{r[2]} = '{r[3]}'，取值类型 {r[4]}", "table_name": r[1], "column_name": r[2]})
+            # 5. Values per-column top 200
+            cols = db.execute(text(f"SELECT DISTINCT table_name, column_name FROM nqe_value_index WHERE is_active = 1 {dflt}"), params).fetchall()
+            for (ctable, ccol) in cols:
+                rows = db.execute(text(f"SELECT raw_value, value_type FROM nqe_value_index WHERE domain_code = :d AND table_name = :t AND column_name = :c AND is_active = 1 LIMIT 200"),
+                                  {"d": domain, "t": ctable, "c": ccol} if domain else {"t": ctable, "c": ccol})
+                for (rval, rtype) in rows.fetchall():
+                    docs.append({"domain": domain or "", "asset_type": "value", "asset_id": f"val:{domain or ''}:{ctable}:{ccol}:{rval}", "title": f"{ctable}.{ccol}={rval}", "content": f"字段取值 {ctable}.{ccol} = '{rval}'，取值类型 {rtype}", "table_name": ctable, "column_name": ccol})
 
             # 6. Few-shot SQL
             for r in db.execute(text(f"SELECT domain_code, question, `sql`, difficulty FROM nqe_fewshot_sql WHERE is_active = 1 {dflt}"), params).fetchall():
-                docs.append({"domain": r[0], "asset_type": "fewshot_sql", "asset_id": f"fewshot:{r[0]}:{hash(r[1])}", "title": r[1], "content": f"示例问法: {r[1]}。SQL: {r[2]}。难度: {r[3]}"})
+                docs.append({"domain": r[0], "asset_type": "fewshot_sql",                    "asset_id": f"fewshot:{r[0]}:{hashlib.sha1(r[1].encode()).hexdigest()[:12]}", "title": r[1], "content": f"示例问法: {r[1]}。SQL: {r[2]}。难度: {r[3]}"})
         finally:
             db.close()
         return docs
@@ -202,13 +212,18 @@ class NqeSemanticVectorRetriever:
         self.collection_name = collection_name
         self._embedder: NqeEmbeddingClient | None = None
 
+    def _get_milvus_config(self):
+        from backend.app.core.config import get_settings
+        s = get_settings()
+        return {"host": s.nqe_milvus_host, "port": s.nqe_milvus_port, "collection": s.nqe_milvus_collection}
+
     def _get_embedder(self) -> NqeEmbeddingClient | None:
         if self._embedder is None:
             from backend.app.core.config import get_settings
             s = get_settings()
             if not s.llm_api_key:
                 return None
-            self._embedder = NqeEmbeddingClient(s.llm_base_url, s.llm_api_key)
+            self._embedder = NqeEmbeddingClient(s.llm_base_url, s.llm_api_key, verify_ssl=s.nqe_llm_ssl_verify)
         return self._embedder
 
     def search(self, query_text: str, domain: str | None = None, top_k: int = 10) -> list[dict[str, Any]]:

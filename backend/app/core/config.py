@@ -360,6 +360,14 @@ class Settings(BaseSettings):
     # NQE LLM 代理控制：本机 VPN/代理导致 SSL 连接失败时可设为 true
     nqe_llm_disable_proxy: bool = False
 
+    # NQE Milvus 连接配置
+    nqe_milvus_host: str = "127.0.0.1"
+    nqe_milvus_port: int = 19530
+    nqe_milvus_collection: str = "gcl_bp_ai_nqe_semantic_catalog"
+
+    # NQE embedding SSL 验证（开发环境可关闭）
+    nqe_llm_ssl_verify: bool = True
+
     @property
     def APP_ENV(self) -> str:
         return self.app_env

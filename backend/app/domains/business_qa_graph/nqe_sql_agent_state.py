@@ -136,3 +136,5 @@ class NqeSqlAgentState(TypedDict, total=False):
     _nqe_retrieval_assets: dict[str, Any]
     # 诊断用 prompt 统计
     _nqe_prompt_stats: dict[str, Any]
+    # 测试注入标志：正式 on-mode 不得走 sql_candidate 绕过 LLM
+    _nqe_test_injected: bool
