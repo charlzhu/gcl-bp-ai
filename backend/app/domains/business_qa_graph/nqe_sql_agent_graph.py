@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
-import re
+import logging, re
 from typing import Any, Literal
+
+logger = logging.getLogger(__name__)
 
 from langgraph.graph import END, START, StateGraph
 
@@ -576,7 +578,18 @@ def retrieve_context_multiway(state: NqeSqlAgentState) -> NqeSqlAgentState:
     auto_built = False
     domain = _domain_for_retrieval(state)
     if not context_package and domain in _AUTO_CONTEXT_DOMAINS:
-        context_package = _build_domain_metadata_context_package(domain)
+        # ASSET-INTEGRATION-2: DB semantic catalog first, YAML as fallback
+        try:
+            from backend.app.domains.business_qa_graph.nqe_semantic_catalog_reader import load_semantic_context_from_db
+            context_package = load_semantic_context_from_db(domain)
+        except Exception:
+            context_package = None
+        if not context_package:
+            logger.warning("DB semantic catalog not available for domain=%s, falling back to YAML", domain)
+            context_package = _build_domain_metadata_context_package(domain)
+            if context_package:
+                context_package["context_source"] = "yaml_fallback"
+                context_package["fallback_reason"] = "db_semantic_catalog_not_available"
         auto_built = True
     if auto_built:
         summary = f"已构造 {domain} 元数据召回上下文"
