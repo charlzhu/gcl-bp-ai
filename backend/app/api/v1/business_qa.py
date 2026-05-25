@@ -99,7 +99,7 @@ def _nqe_on_mode_query(question: str, trace_id: str, domain: str) -> dict[str, A
 
         from backend.app.domains.business_qa_graph.nqe_logistics_gray import run_nqe_logistics_graph
 
-        nqe_result = run_nqe_logistics_graph(question, trace_id, nqe_mode="on")
+        nqe_result = run_nqe_logistics_graph(question, trace_id, nqe_mode="on", domain_hint=domain)
         if nqe_result.get("terminal_status") == "completed":
             structured = nqe_result.get("structured_result", {})
             return {
