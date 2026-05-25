@@ -82,6 +82,10 @@ def _nqe_on_mode_query(question: str, trace_id: str, domain: str) -> dict[str, A
     try:
         from backend.app.core.config import settings
 
+        # production 环境强制 off
+        if settings.IS_PRODUCTION:
+            return None
+
         # 按域映射独立配置项
         domain_mode_map = {
             "logistics": settings.nqe_logistics_mode,
