@@ -553,6 +553,35 @@ def normalize_query(state: NqeSqlAgentState) -> NqeSqlAgentState:
     return next_state
 
 
+def raw_safety_gate(state: NqeSqlAgentState) -> NqeSqlAgentState:
+    """原始用户问题安全门：在 LLM/Milvus/DB 访问前拦截危险请求。"""
+    from backend.app.domains.business_qa_graph.nqe_raw_question_safety import check_raw_question_safety
+
+    question = str(state.get("question") or state.get("normalized_question") or "")
+    result = check_raw_question_safety(question)
+
+    if result.get("safe"):
+        return _append_trace(state, node="raw_safety_gate", status="ok", summary="原始问题安全检查通过")
+
+    next_state = _append_trace(state, node="raw_safety_gate", status="blocked",
+                               summary=f"原始问题包含高风险操作: {result.get('matched_rules',[])}")
+    next_state["terminal_status"] = "safety_reject"
+    next_state["error_code"] = result.get("error_code", "raw_question_safety_blocked")
+    next_state["user_visible_response"] = result.get("user_visible_message", "已拦截")
+    next_state.setdefault("_nqe_raw_safety", {}).update({
+        "safe": False, "matched_rules": result.get("matched_rules", []),
+        "blocked_before_llm": True,
+    })
+    return next_state
+
+
+def _route_after_raw_safety(state: NqeSqlAgentState) -> str:
+    """原始问题安全检查路由：blocked → terminal_safety_reject，ok → init_trace_and_mode。"""
+    if state.get("terminal_status") == "safety_reject":
+        return "terminal_safety_reject"
+    return "init_trace_and_mode"
+
+
 def _domain_for_retrieval(state: NqeSqlAgentState) -> str:
     """读取召回阶段使用的业务域编码。"""
 
@@ -1224,6 +1253,7 @@ def build_nqe_sql_agent_graph():
     graph = StateGraph(NqeSqlAgentState)
 
     graph.add_node("receive_query", receive_query)
+    graph.add_node("raw_safety_gate", raw_safety_gate)
     graph.add_node("init_trace_and_mode", init_trace_and_mode)
     graph.add_node("route_domain_and_capability", route_domain_and_capability)
     graph.add_node("normalize_query", normalize_query)
@@ -1244,7 +1274,15 @@ def build_nqe_sql_agent_graph():
     graph.add_node("terminal_error", terminal_error)
 
     graph.add_edge(START, "receive_query")
-    graph.add_edge("receive_query", "init_trace_and_mode")
+    graph.add_edge("receive_query", "raw_safety_gate")
+    graph.add_conditional_edges(
+        "raw_safety_gate",
+        _route_after_raw_safety,
+        {
+            "init_trace_and_mode": "init_trace_and_mode",
+            "terminal_safety_reject": "terminal_safety_reject",
+        },
+    )
     graph.add_conditional_edges(
         "init_trace_and_mode",
         _route_after_init,
