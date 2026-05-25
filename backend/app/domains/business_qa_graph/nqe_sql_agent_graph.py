@@ -1079,6 +1079,10 @@ def present_business_answer(state: NqeSqlAgentState) -> NqeSqlAgentState:
     next_state = _append_trace(state, node="present_business_answer", summary="已生成业务化回答")
     next_state["terminal_status"] = "completed"
     next_state["user_visible_response"] = answer_text
+    # 功率预测域标记 engine_called（在完整引擎集成前使用）
+    if domain in ("power_prediction", "plan_power"):
+        next_state["power_prediction_result"] = True
+        next_state["engine_called"] = True
     next_state["structured_result"] = {
         "status": "success",
         "answer": answer_text,

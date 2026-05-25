@@ -141,3 +141,6 @@ class NqeSqlAgentState(TypedDict, total=False):
     _nqe_test_injected: bool
     # raw safety gate 结果
     _nqe_raw_safety: dict[str, Any]
+    # PowerPredictionEngine 调用标记
+    engine_called: bool
+    power_prediction_result: bool
