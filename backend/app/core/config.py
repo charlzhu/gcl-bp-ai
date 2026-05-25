@@ -357,6 +357,9 @@ class Settings(BaseSettings):
     def APP_NAME(self) -> str:
         return self.app_name
 
+    # NQE LLM 代理控制：本机 VPN/代理导致 SSL 连接失败时可设为 true
+    nqe_llm_disable_proxy: bool = False
+
     @property
     def APP_ENV(self) -> str:
         return self.app_env

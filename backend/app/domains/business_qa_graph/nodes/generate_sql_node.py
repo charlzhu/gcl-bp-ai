@@ -122,7 +122,13 @@ def _llm_generate_sql(
     - LLM 直接输出 SQL 文本
     - 不经过 SQLPlan / renderer 中间层
     """
-    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url, http_client=httpx.Client(proxy=None, verify=True, timeout=60))
+    # 根据配置决定是否禁用代理（本机 VPN/代理导致 SSL 失败时需设为 true）
+    if settings.nqe_llm_disable_proxy:
+        client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url,
+                        http_client=httpx.Client(proxy=None, verify=True, timeout=60))
+    else:
+        client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url,
+                        http_client=httpx.Client(verify=True, timeout=60))
     prompt_template = load_prompt_or_default("generate_sqlplan", _GENERATE_SQL_DEFAULT)
 
     prompt_text = prompt_template.format(
