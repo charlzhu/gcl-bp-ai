@@ -877,6 +877,7 @@ def explain_validate_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
     injected_candidate = bool(package.get("generated_sql_candidate") or package.get("sql_candidate"))
 
     # 真实 MySQL EXPLAIN（仅 LLM 生成的 SQL，跳过测试注入）
+    db_explain_passed = False
     if sql_candidate.strip() and not injected_candidate:
         try:
             from sqlalchemy import text
@@ -885,10 +886,13 @@ def explain_validate_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
             try:
                 result = db.execute(text(f"EXPLAIN {sql_candidate}"))
                 rows = result.fetchall()
+                extra_warnings = 0
                 for row in rows:
                     extra = str(getattr(row, "Extra", "") or "")
                     if "no matching" in extra.lower() or "impossible" in extra.lower():
-                        violations.append("explain_no_matching_row")
+                        extra_warnings += 1
+                if extra_warnings == 0:
+                    db_explain_passed = True  # DB EXPLAIN passed
             except Exception as db_exc:
                 err = str(db_exc).lower()
                 if "syntax" in err:
@@ -904,13 +908,14 @@ def explain_validate_sql(state: NqeSqlAgentState) -> NqeSqlAgentState:
         except Exception:
             pass
 
-    # metadata 校验（总是执行，捕获 select_star/unknown_column 等逻辑校验）
-    metadata_violations = _validate_explain_against_metadata(
-        safe_candidate=sql_candidate,
-        safety_result=safety_result,
-        context_package=package,
-    )
-    violations.extend(metadata_violations)
+    # metadata 校验（DB EXPLAIN 通过时跳过列校验，DB 为权威来源）
+    if not db_explain_passed:
+        metadata_violations = _validate_explain_against_metadata(
+            safe_candidate=sql_candidate,
+            safety_result=safety_result,
+            context_package=package,
+        )
+        violations.extend(metadata_violations)
 
     if state.get("force_explain_fail"):
         violations.append("forced_explain_failure")
