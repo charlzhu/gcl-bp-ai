@@ -53,7 +53,8 @@
             <div v-if="m.chart" class="chart-area">[图表]</div>
             <!-- trace -->
             <div v-if="m.trace_id" class="msg-trace">
-              <span @click="m._debug=!m._debug" style="cursor:pointer;user-select:none">trace: {{ m.trace_id }} {{ m._debug?'▲':'▼' }}</span>
+              <span v-if="isDev" @click="m._debug=!m._debug" style="cursor:pointer;user-select:none">trace: {{ m.trace_id }} {{ m._debug?'▲':'▼' }}</span>
+              <span v-else>trace: {{ m.trace_id }}</span>
               <!-- FE-8: debug panel -->
               <div v-if="m._debug" class="debug-panel">
                 <div class="debug-row"><span>trace_id:</span><code>{{ m.trace_id }}</code></div>
@@ -90,6 +91,7 @@ interface Message { role:'user'|'assistant'; text?:string; answer?:string; progr
 
 const question=ref('');const loading=ref(false);const messages=ref<Message[]>([]);const msgList=ref<HTMLElement|null>(null);const chips=ref<any[]>([])
 let es:EventSource|null=null
+const isDev = import.meta.env.DEV || location.search.includes('debug=1')
 const STEP_ORDER=['domain_routed','metadata_loaded','sql_generated','safety_checked','explain_checked','sql_executed','result']
 const STEP_LABELS:Record<string,string>={domain_routed:'领域识别',metadata_loaded:'加载元数据',sql_generated:'生成SQL',safety_checked:'安全校验',explain_checked:'EXPLAIN校验',sql_corrected:'修正SQL',sql_executed:'执行查询',result:'完成'}
 const scrollToBottom=()=>nextTick(()=>{const el=msgList.value;if(el)el.scrollTop=el.scrollHeight})
