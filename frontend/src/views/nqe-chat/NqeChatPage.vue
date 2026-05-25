@@ -108,13 +108,29 @@ const send = () => {
 const stop = ()=>{if(es){es.close();es=null};loading.value=false}
 onUnmounted(()=>{if(es){es.close();es=null}})
 
-// NQE-FE-5: candidate selection
+// NQE-FE-5R: real candidate selection via continue API
 const selectCandidate = (msg: Message, candidate: any) => {
+  if (loading.value) return
+  const continueToken = msg.disambiguation?.continue_token || ''
+  if (!continueToken) { msg.disambiguation = { ...msg.disambiguation, error: 'continue_token missing' }; return }
+  
   msg.disambiguation = { ...msg.disambiguation, selected: candidate }
-  // Re-query with selected candidate
-  const key = candidate.candidate_key || candidate.display_name || candidate.name || ''
-  question.value = key
-  send()
+  loading.value = true
+  if (es) { es.close(); es = null }
+
+  const progress: Step[] = STEP_ORDER.map(s => ({ label: STEP_LABELS[s]||s, status: 'pending' as string, detail: '' }))
+  const url = `/api/v1/nqe/query/stream/continue?continue_token=${encodeURIComponent(continueToken)}&candidate_key=${encodeURIComponent(candidate.candidate_key||'')}`
+  es = new EventSource(url)
+  
+  es.addEventListener('progress',(e:any)=>{const d=JSON.parse(e.data);const s=d.step||'';const i=STEP_ORDER.indexOf(s);if(i>=0){for(let j=0;j<i;j++)progress[j].status='success';progress[i].status='running'}})
+  es.addEventListener('sql_generated',(e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('sql_generated');if(i>=0){progress[i].status='success';progress[i].detail=(d.sql||'').slice(0,80)}})
+  es.addEventListener('safety_checked',()=>{const i=STEP_ORDER.indexOf('safety_checked');if(i>=0)progress[i].status='success'})
+  es.addEventListener('explain_checked',(e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('explain_checked');if(i>=0)progress[i].status=d.passed?'success':'error'})
+  es.addEventListener('sql_executed',(e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('sql_executed');if(i>=0){progress[i].status='success';progress[i].detail=`${d.row_count}行`}})
+  es.addEventListener('result',(e:any)=>{const d=JSON.parse(e.data);addMsg({role:'assistant',progress:[...progress],answer:d.answer,columns:d.columns,rows:d.rows,row_count:d.row_count,metrics:d.metrics,chart:d.chart,fallback_used:d.fallback_used,fallback_reason:d.fallback_reason,trace_id:d.trace_id});loading.value=false;es?.close();es=null})
+  es.addEventListener('error',(e:any)=>{const d=e.data?JSON.parse(e.data):{};addMsg({role:'assistant',error:d.error||'continue失败',trace_id:d.trace_id});loading.value=false;es?.close();es=null})
+  es.addEventListener('done',()=>{if(loading.value){addMsg({role:'assistant',progress:[...progress],answer:'完成'});loading.value=false}es?.close();es=null})
+  es.onerror=()=>{if(loading.value){addMsg({role:'assistant',error:'连接中断'});loading.value=false}es?.close();es=null}
 }
 </script>
 
