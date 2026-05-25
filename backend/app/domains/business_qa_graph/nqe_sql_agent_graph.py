@@ -563,6 +563,15 @@ def raw_safety_gate(state: NqeSqlAgentState) -> NqeSqlAgentState:
     if result.get("safe"):
         return _append_trace(state, node="raw_safety_gate", status="ok", summary="原始问题安全检查通过")
 
+    # 空问题：clarify，不等同于危险攻击
+    if "empty_question" in result.get("matched_rules", []):
+        next_state = _append_trace(state, node="raw_safety_gate", status="clarify", summary="问题为空")
+        next_state["terminal_status"] = "clarify"
+        next_state["error_code"] = result.get("error_code", "invalid_question")
+        next_state["user_visible_response"] = result.get("user_visible_message", "请输入有效问题")
+        return next_state
+
+    # 危险问题：直接 safety_reject
     next_state = _append_trace(state, node="raw_safety_gate", status="blocked",
                                summary=f"原始问题包含高风险操作: {result.get('matched_rules',[])}")
     next_state["terminal_status"] = "safety_reject"
