@@ -56,30 +56,39 @@ const disambiguation = ref<Array<{value:string;label:string}>>([])
 const selectedCandidate = ref('')
 const chips = ['2024年总发运量', 'BOM评审号查询', '供应商效率对比', '库存周转率']
 
-async function send() {
+const send = () => {
   if (!question.value.trim() || loading.value) return
   loading.value = true; result.value = null; steps.value = []
-  try {
-    steps.value.push({step:'正在连接...',status:'process',ts:new Date().toLocaleTimeString()})
-    // NQE-35: streaming consumer
-    const resp = await fetch('/api/v1/business-qa', {
-      method: 'POST', headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({question:question.value})
-    })
-    const data = await resp.json()
-    steps.value.push({step:'查询完成',status:'done',ts:new Date().toLocaleTimeString()})
-    result.value = {
-      domain: data.domain || data._nqe_shadow?.domain || '-',
-      mode: data._nqe_shadow?.mode || 'off',
-      answer: data.answer || data.final_answer || '-',
-      elapsed: data.elapsed_ms ? `${data.elapsed_ms}ms` : '-',
-      columns: data.columns || [],
-      rows: data.rows || [],
-      error: data.error,
-    }
-    if (data.candidates) { disambiguation.value = data.candidates }
-  } catch(e:any) { result.value = {error:e.message||'请求失败'} }
-  finally { loading.value = false }
+  const tid = `nqe-${Date.now()}`
+  
+  // NQE-FE-1: real SSE via EventSource
+  const url = `/api/v1/nqe/query/stream?question=${encodeURIComponent(question.value)}&trace_id=${tid}`
+  const es = new EventSource(url)
+  
+  es.addEventListener('progress', (e: any) => {
+    const d = JSON.parse(e.data)
+    steps.value.push({step: d.step||d.message, status: 'process', ts: new Date().toLocaleTimeString()})
+  })
+  es.addEventListener('sql_generated', (e: any) => {
+    const d = JSON.parse(e.data)
+    steps.value.push({step: `SQL: ${(d.sql||'').slice(0,100)}`, status: 'process', ts: new Date().toLocaleTimeString()})
+  })
+  es.addEventListener('result', (e: any) => {
+    const d = JSON.parse(e.data)
+    result.value = { domain: '-', mode: 'on', answer: d.answer || d.status, columns: d.columns || [], rows: d.rows || [], elapsed: '-' }
+  })
+  es.addEventListener('error', (e: any) => {
+    const err = JSON.parse(e.data||'{}')
+    result.value = { error: err.error || 'NQE error' }
+    es.close()
+    loading.value = false
+  })
+  es.addEventListener('done', () => {
+    steps.value.push({step: '查询完成', status: 'done', ts: new Date().toLocaleTimeString()})
+    es.close()
+    loading.value = false
+  })
+  es.onerror = () => { es.close(); loading.value = false }
 }
 </script>
 
