@@ -2,56 +2,63 @@
 
 ## 当前状态
 
-首批 101 条评测题，覆盖 4 个业务域。
+首批 125 条评测题，覆盖 4 个业务域，95 条 answer_sql 全部 EXPLAIN 通过。
 
 ## 评测集位置
 
 ```
 tests/fixtures/nqe_eval/
-  logistics_cases.jsonl          (33 cases)
-  business_analysis_cases.jsonl  (26 cases)
-  plan_bom_cases.jsonl           (23 cases)
-  power_prediction_cases.jsonl   (19 cases)
+  logistics_cases.jsonl          (35 cases, 30 answer_sql)
+  business_analysis_cases.jsonl  (30 cases, 23 answer_sql)
+  plan_bom_cases.jsonl           (30 cases, 22 answer_sql)
+  power_prediction_cases.jsonl   (30 cases, 20 answer_sql)
+  validate_nqe_eval_dataset.py   (校验脚本)
 ```
 
 ## 分层分布
 
-| source_type | 数量 | 说明 |
-|---|---|---|
-| real_user | 14 | 真实业务问题 |
-| paraphrase | 25 | 基于核心问题的改写 |
-| asset_generated | 41 | 基于真实表/字段/指标生成 |
-| safety | 16 | SQL 注入/系统表攻击 |
-| edge | 5 | 空结果/参数缺失/无候选 |
+| source_type | 数量 |
+|---|---|
+| asset_generated | 58 |
+| paraphrase | 31 |
+| safety | 16 |
+| edge | 11 |
+| real_user | 9 |
 
 ## 域覆盖
 
-| 域 | 数量 | 覆盖重点 |
-|---|---|---|
-| logistics | 33 | 运输量/基地/承运商/客户/月度/安全 |
-| business_analysis | 26 | 产量/销量/库存/指标别名/基地 |
-| plan_bom | 23 | 订单/SAP/物料类别/BOM compare/消歧 |
-| power_prediction | 19 | 模型/供应商/档位/因子/PowerPredictionEngine |
+| 域 | 题数 | answer_sql | EXPLAIN OK | needs_review |
+|---|---|---|---|---|
+| logistics | 35 | 30 | 30 | 5 |
+| business_analysis | 30 | 23 | 23 | 7 |
+| plan_bom | 30 | 22 | 22 | 8 |
+| power_prediction | 30 | 20 | 20 | 13 |
 
 ## expected_result_source
 
 | 来源 | 数量 |
 |---|---|
-| deterministic_sql | 96 |
+| deterministic_sql | 95 |
+| manual_verified | 24 |
+| PowerPredictionEngine | 4 |
 | old_service | 2 |
-| PowerPredictionEngine | 3 |
 
-## 验收状态
+## real_user 说明
+
+9 条标记为 real_user 的题来自项目既有业务问答场景（物流运输量/产销存产量/BOM明细/功率模型），不声称来自企业正式采集流程。如需要正式标注来源，后续可补充 `collected_from` / `collected_at` 字段。
+
+## 校验结果
 
 | 检查项 | 结果 |
 |---|---|
-| JSONL 格式 | ✅ 0 errors |
-| case_id 唯一 | ✅ |
-| domain 合法 | ✅ |
-| source_type 合法 | ✅ |
-| answer_sql 空缺 | ⚠️ 101/101 (需 LLM 生成) |
-| 需人工确认 | 101/101 |
+| 总题量 >=120 | ✅ 125 |
+| 每域 >=30 | ✅ 35/30/30/30 |
+| deterministic_sql 有 answer_sql | ✅ 95/95 |
+| EXPLAIN smoke 通过 | ✅ 95/95 |
+| safety expected_status=safety_blocked | ✅ 16/16 |
+| DB context | ✅ 125/125 |
+| Milvus retrieval | ✅ 125/125 |
 
 ## 下一步
 
-NQE-QA-DATASET-1：编写评测执行器，逐题调用 NQE SQL Agent 生成 SQL 并与预期对比。
+NQE-QA-DATASET-1：编写评测执行器。
