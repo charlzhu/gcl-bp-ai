@@ -52,7 +52,20 @@
             <!-- chart -->
             <div v-if="m.chart" class="chart-area">[图表]</div>
             <!-- trace -->
-            <div v-if="m.trace_id" class="msg-trace">trace: {{ m.trace_id }}</div>
+            <div v-if="m.trace_id" class="msg-trace">
+              <span @click="m._debug=!m._debug" style="cursor:pointer;user-select:none">trace: {{ m.trace_id }} {{ m._debug?'▲':'▼' }}</span>
+              <!-- FE-8: debug panel -->
+              <div v-if="m._debug" class="debug-panel">
+                <div class="debug-row"><span>trace_id:</span><code>{{ m.trace_id }}</code></div>
+                <div class="debug-row"><span>mode:</span><code>{{ m.mode||'on' }}</code></div>
+                <div class="debug-row" v-if="m.sql"><span>SQL:</span><code class="debug-sql">{{ m.sql }}</code></div>
+                <div class="debug-row"><span>safety:</span><code>{{ m.safety_status||'-' }}</code></div>
+                <div class="debug-row"><span>EXPLAIN:</span><code>{{ m.explain_status||'-' }}</code></div>
+                <div class="debug-row"><span>fallback:</span><code>{{ m.fallback_used?'YES ('+(m.fallback_reason||'')+')':'no' }}</code></div>
+                <div class="debug-row" v-if="m.duration_ms"><span>duration:</span><code>{{ m.duration_ms }}ms</code></div>
+                <div class="debug-note">仅开发调试使用 · 会话内历史 · 刷新后丢失</div>
+              </div>
+            </div>
             <div v-if="m.error" class="msg-error">{{ m.error }}</div>
           </div>
         </div>
@@ -73,7 +86,7 @@
 import { ref, nextTick, onUnmounted } from 'vue'; import { Loading } from '@element-plus/icons-vue'
 
 interface Step { label:string; status:string; detail?:string }
-interface Message { role:'user'|'assistant'; text?:string; answer?:string; progress?:Step[]; columns?:string[]; rows?:any[]; row_count?:number; metrics?:any[]; chart?:any; fallback_used?:boolean; fallback_reason?:string; trace_id?:string; error?:string; disambiguation?:any; state?:string; safety_blocked?:boolean; explain_failed?:boolean; generation_failed?:boolean; execute_failed?:boolean; empty_result?:boolean; stopped?:boolean; sse_error?:boolean; continue_expired?:boolean }
+interface Message { role:'user'|'assistant'; text?:string; answer?:string; progress?:Step[]; columns?:string[]; rows?:any[]; row_count?:number; metrics?:any[]; chart?:any; fallback_used?:boolean; fallback_reason?:string; trace_id?:string; error?:string; disambiguation?:any; state?:string; safety_blocked?:boolean; explain_failed?:boolean; generation_failed?:boolean; execute_failed?:boolean; empty_result?:boolean; stopped?:boolean; sse_error?:boolean; continue_expired?:boolean; _debug?:boolean; sql?:string; safety_status?:string; explain_status?:string; mode?:string; duration_ms?:number }
 
 const question=ref('');const loading=ref(false);const messages=ref<Message[]>([]);const msgList=ref<HTMLElement|null>(null);const chips=ref<any[]>([])
 let es:EventSource|null=null
@@ -93,13 +106,13 @@ const send=()=>{
   const url=`/api/v1/nqe/query/stream?question=${encodeURIComponent(q)}&trace_id=nqe-${Date.now()}`
   es=new EventSource(url)
   es.addEventListener('progress',(e:any)=>{const d=JSON.parse(e.data);const s=d.step||'';const i=STEP_ORDER.indexOf(s);if(i>=0){for(let j=curIdx;j<i;j++)progress[j].status='success';progress[i].status='running';curIdx=i}})
-  es.addEventListener('sql_generated',(e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('sql_generated');if(i>=0){progress[i].status='success';progress[i].detail=(d.sql||'').slice(0,80);curIdx=i+1}})
+  var _lastSql='';es.addEventListener('sql_generated',(e:any)=>{const d=JSON.parse(e.data);_lastSql=d.sql||'';const i=STEP_ORDER.indexOf('sql_generated');if(i>=0){progress[i].status='success';progress[i].detail=(d.sql||'').slice(0,80);curIdx=i+1}})
   es.addEventListener('safety_checked',()=>{const i=STEP_ORDER.indexOf('safety_checked');if(i>=0){progress[i].status='success';curIdx=i+1}})
   es.addEventListener('explain_checked',(e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('explain_checked');if(i>=0){progress[i].status=d.passed?'success':'error';curIdx=i+1}})
   es.addEventListener('disambiguation_required',(e:any)=>{const d=JSON.parse(e.data);addMsg({role:'assistant',progress:[...progress],answer:`请选择 (${d.scope||''}):`,disambiguation:{scope:d.scope,message:d.message,candidates:d.candidates||[],trace_id:d.trace_id,continue_token:d.continue_token}})})
   es.addEventListener('sql_executed',(e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('sql_executed');if(i>=0){progress[i].status='success';progress[i].detail=`${d.row_count}行`;curIdx=i+1}})
   es.addEventListener('result',(e:any)=>{const d=JSON.parse(e.data);progress.forEach(p=>{if(p.status==='pending'||p.status==='running')p.status='success'})
-    const isErr=d.status==='error';const empty=!isErr&&d.row_count===0;addMsg({role:'assistant',progress:[...progress],answer:d.answer,columns:d.columns,rows:d.rows,row_count:d.row_count,metrics:d.metrics,chart:d.chart,fallback_used:d.fallback_used,fallback_reason:d.fallback_reason,trace_id:d.trace_id,empty_result:empty,error:isErr?d.fallback_reason:undefined});loading.value=false;es?.close();es=null})
+    const isErr=d.status==='error';const empty=!isErr&&d.row_count===0;addMsg({role:'assistant',progress:[...progress],answer:d.answer,columns:d.columns,rows:d.rows,row_count:d.row_count,metrics:d.metrics,chart:d.chart,fallback_used:d.fallback_used,fallback_reason:d.fallback_reason,trace_id:d.trace_id,empty_result:empty,error:isErr?d.fallback_reason:undefined,mode:'on',duration_ms:d.duration_ms,sql:_lastSql});loading.value=false;es?.close();es=null})
   es.addEventListener('error',(e:any)=>{const d=e.data?JSON.parse(e.data):{};addMsg({role:'assistant',error:d.error||'查询失败',trace_id:d.trace_id,sse_error:true});loading.value=false;es?.close();es=null})
   es.addEventListener('done',()=>{if(loading.value){addMsg({role:'assistant',progress:[...progress],answer:'完成'});loading.value=false}es?.close();es=null})
   es.onerror=()=>{if(loading.value){addMsg({role:'assistant',error:'连接中断',sse_error:true});loading.value=false}es?.close();es=null}
@@ -134,6 +147,13 @@ const selectCandidate=(msg:Message,candidate:any)=>{
 .msg-content{background:#f5f7fa;border-radius:8px;padding:12px}.msg-bubble.user .msg-content{background:#ecf5ff}
 .msg-answer{white-space:pre-wrap;margin-top:8px}.msg-error{color:#f56c6c;margin-top:8px}
 .msg-fallback{color:#e6a23c;font-size:12px;margin-top:8px}.msg-trace{color:#c0c4cc;font-size:11px;margin-top:4px}
+/* debug panel */
+.debug-panel{background:#1e1e1e;color:#d4d4d4;border-radius:6px;padding:10px;margin-top:4px;font-family:monospace;font-size:12px}
+.debug-row{display:flex;gap:8px;margin:2px 0}
+.debug-row span{color:#888;min-width:70px}
+.debug-row code{color:#ce9178;word-break:break-all}
+.debug-sql{color:#6a9955!important}
+.debug-note{color:#888;font-size:10px;margin-top:6px;border-top:1px solid #333;padding-top:4px}
 /* states */
 .state{padding:6px 10px;border-radius:6px;font-size:13px;margin:4px 0;display:inline-block}
 .state.loading{background:#e6f7ff;color:#409eff}.state.blocked{background:#fef0f0;color:#f56c6c}
