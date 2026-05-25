@@ -108,6 +108,21 @@ const send = () => {
 const stop = ()=>{if(es){es.close();es=null};loading.value=false}
 onUnmounted(()=>{if(es){es.close();es=null}})
 
+// FE-6: load chips from backend
+const chips = ref<any[]>([])
+const chipsDomain = ref('all')
+const loadChips = async () => {
+  try {
+    const r = await fetch(`/api/v1/nqe/quick-chips?domain=${chipsDomain.value}`)
+    const d = await r.json()
+    chips.value = d.items || []
+  } catch {
+    // Fallback: keep empty, user can type freely
+    chips.value = []
+  }
+}
+loadChips()
+
 // NQE-FE-5R: real candidate selection via continue API
 const selectCandidate = (msg: Message, candidate: any) => {
   if (loading.value) return
