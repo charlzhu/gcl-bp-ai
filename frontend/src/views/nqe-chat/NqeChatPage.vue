@@ -72,7 +72,7 @@ const send = () => {
   if (es) { es.close(); es=null }
 
   // Initialize progress with all steps as pending
-  const progress = STEP_ORDER.map(s => ({ label: STEP_LABELS[s]||s, status:'pending' as const, detail:'' }))
+  const progress: Step[] = STEP_ORDER.map(s => ({ label: STEP_LABELS[s]||s, status: 'pending' as string, detail: '' }))
   let curIdx = 0
 
   const url = `/api/v1/nqe/query/stream?question=${encodeURIComponent(q)}&trace_id=nqe-${Date.now()}`
