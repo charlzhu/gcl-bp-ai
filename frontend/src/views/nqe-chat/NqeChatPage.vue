@@ -34,6 +34,15 @@
             </el-table>
               <div class="table-meta" v-if="m.row_count!=null">共 {{ m.row_count }} 行{{ m.row_count>=(m.rows?.length||0)&&m.row_count>0?`（显示前${m.rows?.length||0}行）`:'' }}</div>
             </div>
+            <!-- NQE-FE-5: disambiguation panel -->
+            <div v-if="m.disambiguation?.candidates?.length" class="disambig-panel">
+              <div class="disambig-header">{{ m.disambiguation.message||'请选择' }}</div>
+              <div class="disambig-candidates">
+                <el-button v-for="(c,k) in m.disambiguation.candidates" :key="k" size="small" type="primary" plain @click="selectCandidate(m,c)" class="candidate-btn">{{ c.display_name||c.candidate_key||c.name }}</el-button>
+              </div>
+              <div v-if="m.disambiguation.selected" class="selected-info">已选择: {{ m.disambiguation.selected.display_name||m.disambiguation.selected }}</div>
+            </div>
+
             <!-- chart placeholder -->
             <div v-if="m.chart" class="chart-area">[图表]</div>
             <!-- fallback -->
@@ -60,7 +69,7 @@ import { ref, nextTick, onUnmounted } from 'vue'
 import { Loading } from '@element-plus/icons-vue'
 
 interface Step { label:string; status:string; detail?:string }
-interface Message { role:'user'|'assistant'; text?:string; answer?:string; progress?:Step[]; columns?:string[]; rows?:any[]; row_count?:number; metrics?:any[]; chart?:any; fallback_used?:boolean; fallback_reason?:string; trace_id?:string; error?:string }
+interface Message { role:'user'|'assistant'; text?:string; answer?:string; progress?:Step[]; columns?:string[]; rows?:any[]; row_count?:number; metrics?:any[]; chart?:any; fallback_used?:boolean; fallback_reason?:string; trace_id?:string; error?:string; disambiguation?:any }
 
 const question = ref(''); const loading = ref(false); const messages = ref<Message[]>([]); const msgList = ref<HTMLElement|null>(null)
 let es: EventSource|null = null
@@ -81,15 +90,32 @@ const send = () => {
   es.addEventListener('progress',(e:any)=>{const d=JSON.parse(e.data);const s=d.step||'';const i=STEP_ORDER.indexOf(s);if(i>=0){for(let j=curIdx;j<i;j++)progress[j].status='success';progress[i].status='running';curIdx=i}})
   es.addEventListener('sql_generated',(e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('sql_generated');if(i>=0){progress[i].status='success';progress[i].detail=(d.sql||'').slice(0,80);curIdx=i+1}})
   es.addEventListener('safety_checked',()=>{const i=STEP_ORDER.indexOf('safety_checked');if(i>=0){progress[i].status='success';curIdx=i+1}})
-  es.addEventListener('explain_checked',(e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('explain_checked');if(i>=0){progress[i].status=d.passed?'success':'error';curIdx=i+1}})
-  es.addEventListener('sql_executed',(e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('sql_executed');if(i>=0){progress[i].status='success';progress[i].detail=`${d.row_count}行`;curIdx=i+1}})
-  es.addEventListener('result',(e:any)=>{const d=JSON.parse(e.data);progress.forEach(p=>{if(p.status==='pending'||p.status==='running')p.status='success'});addMsg({role:'assistant',progress:[...progress],answer:d.answer,columns:d.columns,rows:d.rows,row_count:d.row_count,metrics:d.metrics,chart:d.chart,fallback_used:d.fallback_used,fallback_reason:d.fallback_reason,trace_id:d.trace_id});loading.value=false;es?.close();es=null})
+            es.addEventListener('explain_checked', (e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('explain_checked');if(i>=0){progress[i].status=d.passed?'success':'error';curIdx=i+1}})
+            
+            // NQE-FE-5: disambiguation
+            es.addEventListener('disambiguation_required', (e:any) => {
+              const d = JSON.parse(e.data)
+              const cands = d.candidates || []
+              addMsg({role:'assistant',progress:[...progress],answer:`请选择 (${d.scope||''}):`,disambiguation:{scope:d.scope,message:d.message,candidates:cands,trace_id:d.trace_id}})
+            })
+            
+            es.addEventListener('sql_executed', (e:any)=>{const d=JSON.parse(e.data);const i=STEP_ORDER.indexOf('sql_executed');if(i>=0){progress[i].status='success';progress[i].detail=`${d.row_count}行`;curIdx=i+1}})
+            es.addEventListener('result', (e:any)=>{const d=JSON.parse(e.data);progress.forEach(p=>{if(p.status==='pending'||p.status==='running')p.status='success'});addMsg({role:'assistant',progress:[...progress],answer:d.answer,columns:d.columns,rows:d.rows,row_count:d.row_count,metrics:d.metrics,chart:d.chart,fallback_used:d.fallback_used,fallback_reason:d.fallback_reason,trace_id:d.trace_id});loading.value=false;es?.close();es=null})
   es.addEventListener('error',(e:any)=>{const d=e.data?JSON.parse(e.data):{};addMsg({role:'assistant',error:d.error||'查询失败',trace_id:d.trace_id});loading.value=false;es?.close();es=null})
   es.addEventListener('done',()=>{if(loading.value){progress.forEach(p=>{if(p.status==='pending'||p.status==='running')p.status='success'});addMsg({role:'assistant',progress:[...progress],answer:'完成'});loading.value=false}es?.close();es=null})
   es.onerror=()=>{if(loading.value){addMsg({role:'assistant',error:'连接中断'});loading.value=false}es?.close();es=null}
 }
 const stop = ()=>{if(es){es.close();es=null};loading.value=false}
 onUnmounted(()=>{if(es){es.close();es=null}})
+
+// NQE-FE-5: candidate selection
+const selectCandidate = (msg: Message, candidate: any) => {
+  msg.disambiguation = { ...msg.disambiguation, selected: candidate }
+  // Re-query with selected candidate
+  const key = candidate.candidate_key || candidate.display_name || candidate.name || ''
+  question.value = key
+  send()
+}
 </script>
 
 <style scoped>
@@ -119,6 +145,12 @@ onUnmounted(()=>{if(es){es.close();es=null}})
 .result-table-wrap{margin:8px 0}
 .table-meta{font-size:12px;color:#909399;margin-top:4px}
 .chart-area{padding:20px;background:#fff;border:1px dashed #dcdfe6;border-radius:8px;margin:8px 0;text-align:center;color:#909399}
+/* disambiguation */
+.disambig-panel{margin:8px 0;padding:12px;background:#fdf6ec;border:1px solid #faecd8;border-radius:8px}
+.disambig-header{font-size:13px;color:#e6a23c;margin-bottom:8px}
+.disambig-candidates{display:flex;flex-wrap:wrap;gap:6px}
+.candidate-btn{margin:0}
+.selected-info{font-size:13px;color:#67c23a;margin-top:8px}
 .input-area{padding:12px 0;border-top:1px solid #e4e7ed}
 .input-actions{display:flex;gap:8px;margin-top:8px}
 </style>

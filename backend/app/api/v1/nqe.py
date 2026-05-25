@@ -44,6 +44,11 @@ async def nqe_query_stream(question: str = Query(...), trace_id: str | None = No
             explain = final.get("explain_result", {})
             yield _sse_event("explain_checked", {"trace_id": tid, "passed": explain.get("status") == "pass"})
 
+            # 候选消歧
+            candidates = final.get("disambiguation_candidates")
+            if candidates:
+                yield _sse_event("disambiguation_required", {"trace_id": tid, "candidates": candidates, "scope": final.get("candidate_scope","unknown"), "message": final.get("disambiguation_message","请选择目标对象")})
+
             result = final.get("structured_result", {})
             rows_count = final.get("row_count", 0)
             yield _sse_event("sql_executed", {"trace_id": tid, "row_count": rows_count})
