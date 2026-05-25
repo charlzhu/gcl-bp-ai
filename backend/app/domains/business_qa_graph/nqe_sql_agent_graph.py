@@ -693,7 +693,18 @@ def generate_sql_direct(state: NqeSqlAgentState) -> NqeSqlAgentState:
                     question, table_infos, metric_infos,
                     date_info={}, db_info={"dialect": "MySQL"},
                     settings=settings,
+                    value_infos=package.get("retrieval_assets", {}).get("values", []),
+                    dimension_infos=package.get("retrieval_assets", {}).get("dimensions", []),
+                    fewshot_examples=package.get("retrieval_assets", {}).get("fewshot_sql", []),
                 )
+                # 记录 prompt 使用的上下文统计
+                state.setdefault("_nqe_prompt_stats", {}).update({
+                    "table_count": len(table_infos),
+                    "metric_count": len(metric_infos),
+                    "value_count": len(package.get("retrieval_assets", {}).get("values", [])),
+                    "dimension_count": len(package.get("retrieval_assets", {}).get("dimensions", [])),
+                    "fewshot_count": len(package.get("retrieval_assets", {}).get("fewshot_sql", [])),
+                })
                 if not candidate or not candidate.strip():
                     raise ValueError("LLM returned empty SQL")
         except Exception:

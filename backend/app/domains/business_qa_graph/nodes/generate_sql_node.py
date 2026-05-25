@@ -37,8 +37,17 @@ _GENERATE_SQL_DEFAULT = """【角色】
 当前的时间信息如下：
 {date_info}
 
-数据库环境如下：
+当前连接数据库信息如下：
 {db_info}
+
+可参考的字段取值示例如下：
+{value_infos}
+
+可参考的维度信息如下：
+{dimension_infos}
+
+可参考的示例 SQL 如下：
+{fewshot_examples}
 
 【任务要求】
 1. 仅允许使用数据表信息中真实存在的表与字段名称，禁止编造、猜测或引入未提供的表和字段。
@@ -100,6 +109,10 @@ def _llm_generate_sql(
     date_info: dict[str, Any],
     db_info: dict[str, Any],
     settings: Any,
+    *,
+    value_infos: list[dict[str, Any]] | None = None,
+    dimension_infos: list[dict[str, Any]] | None = None,
+    fewshot_examples: list[dict[str, Any]] | None = None,
 ) -> str:
     """LLM 直接生成 SQL 字符串。
 
@@ -117,6 +130,9 @@ def _llm_generate_sql(
         metric_infos=yaml.dump(metric_infos, allow_unicode=True, sort_keys=False),
         date_info=yaml.dump(date_info, allow_unicode=True, sort_keys=False),
         db_info=yaml.dump(db_info, allow_unicode=True, sort_keys=False),
+        value_infos=yaml.dump(value_infos or [], allow_unicode=True, sort_keys=False),
+        dimension_infos=yaml.dump(dimension_infos or [], allow_unicode=True, sort_keys=False),
+        fewshot_examples=yaml.dump(fewshot_examples or [], allow_unicode=True, sort_keys=False),
     )
     response = client.chat.completions.create(
         model=settings.llm_model or "qwen-max",
