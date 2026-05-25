@@ -585,9 +585,15 @@ def raw_safety_gate(state: NqeSqlAgentState) -> NqeSqlAgentState:
 
 
 def _route_after_raw_safety(state: NqeSqlAgentState) -> str:
-    """原始问题安全检查路由：blocked → terminal_safety_reject，ok → init_trace_and_mode。"""
+    """原始问题安全检查路由。
+    safety_reject → terminal_safety_reject
+    clarify → terminal_clarify
+    ok → init_trace_and_mode
+    """
     if state.get("terminal_status") == "safety_reject":
         return "terminal_safety_reject"
+    if state.get("terminal_status") == "clarify":
+        return "terminal_clarify"
     return "init_trace_and_mode"
 
 
@@ -1290,6 +1296,7 @@ def build_nqe_sql_agent_graph():
         {
             "init_trace_and_mode": "init_trace_and_mode",
             "terminal_safety_reject": "terminal_safety_reject",
+            "terminal_clarify": "terminal_clarify",
         },
     )
     graph.add_conditional_edges(

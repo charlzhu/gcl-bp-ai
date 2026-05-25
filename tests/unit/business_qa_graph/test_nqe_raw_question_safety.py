@@ -111,3 +111,41 @@ def test_normal_origin_place():
 def test_regular_select_not_blocked():
     r = check_raw_question_safety("SELECT COUNT(*) FROM orders")
     assert r["safe"] == True, "正常的SELECT不应被拦截"
+
+
+# ====== Graph-level routing tests ======
+
+def test_empty_question_routes_to_clarify():
+    """空问题在 graph 中路由到 clarify 终态，不进入 LLM/Milvus。"""
+    from backend.app.domains.business_qa_graph.nqe_sql_agent_graph import build_nqe_sql_agent_graph
+    g = build_nqe_sql_agent_graph()
+    f = g.invoke({"question": "", "nqe_mode": "on", "domain_hint": "logistics", "trace_id": "empty-test"})
+    assert f.get("terminal_status") in ("clarify", "clarify_required"), f"got {f.get('terminal_status')}"
+
+def test_empty_question_not_enter_llm():
+    """空问题不应生成 SQL。"""
+    from backend.app.domains.business_qa_graph.nqe_sql_agent_graph import build_nqe_sql_agent_graph
+    g = build_nqe_sql_agent_graph()
+    f = g.invoke({"question": "", "nqe_mode": "on", "domain_hint": "logistics", "trace_id": "empty-llm"})
+    assert not f.get("generated_sql"), "空问题不应调用 LLM 生成 SQL"
+
+def test_drop_table_routes_to_safety_reject_graph():
+    """DROP TABLE 在 graph 中路由到 safety_reject。"""
+    from backend.app.domains.business_qa_graph.nqe_sql_agent_graph import build_nqe_sql_agent_graph
+    g = build_nqe_sql_agent_graph()
+    f = g.invoke({"question": "DROP TABLE users", "nqe_mode": "on", "domain_hint": "logistics", "trace_id": "drop-test"})
+    assert f.get("terminal_status") == "safety_reject"
+
+def test_drop_table_not_generated_sql():
+    """DROP TABLE 不应进入 SQL 生成路径。"""
+    from backend.app.domains.business_qa_graph.nqe_sql_agent_graph import build_nqe_sql_agent_graph
+    g = build_nqe_sql_agent_graph()
+    f = g.invoke({"question": "DROP TABLE users", "nqe_mode": "on", "domain_hint": "logistics", "trace_id": "drop-sql"})
+    assert not f.get("generated_sql"), "危险问题不应生成 SQL"
+
+def test_normal_question_passes_graph():
+    """正常问题通过 raw safety gate。"""
+    from backend.app.domains.business_qa_graph.nqe_sql_agent_graph import build_nqe_sql_agent_graph
+    g = build_nqe_sql_agent_graph()
+    f = g.invoke({"question": "2024年运输记录数", "nqe_mode": "on", "domain_hint": "logistics", "trace_id": "normal-test"})
+    assert f.get("terminal_status") == "completed"
