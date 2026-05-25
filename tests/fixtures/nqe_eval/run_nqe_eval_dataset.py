@@ -82,31 +82,48 @@ def compare_results(expected_rows, expected_cols, nqe_rows, nqe_cols,
         except:
             return {"match": False, "reason": "compare_error", "expected_rows": exp_count, "nqe_rows": nqe_count}
 
-    # grouped_rows / top_n
+    # grouped_rows / top_n: 用 expected_dimensions 作为 key 对齐行
     if exp_count != nqe_count:
         return {"match": False, "reason": f"row_count_mismatch ({exp_count} vs {nqe_count})",
                 "expected_rows": exp_count, "nqe_rows": nqe_count}
-
     if exp_count == 0:
         return {"match": True, "reason": "ok", "expected_rows": 0, "nqe_rows": 0}
 
-    # 用 expected_dimensions/expected_metrics 做对齐比较
     key_cols = (dims or []) + (metrics or [])
     if not key_cols:
         key_cols = list(expected_rows[0].keys())
 
+    # 维度对齐：用 dims columns 做 key
+    dim_cols = dims or list(expected_rows[0].keys())[:2]
+    exp_by_key = {}
+    for row in expected_rows:
+        k = tuple(str(row.get(c,"")) for c in dim_cols)
+        exp_by_key[k] = row
+    nqe_by_key = {}
+    for row in nqe_rows:
+        k = tuple(str(row.get(c,"")) for c in dim_cols)
+        nqe_by_key[k] = row
+
+    if set(exp_by_key.keys()) != set(nqe_by_key.keys()):
+        exp_only = set(exp_by_key.keys()) - set(nqe_by_key.keys())
+        nqe_only = set(nqe_by_key.keys()) - set(exp_by_key.keys())
+        return {"match": False, "reason": f"dimension_key_mismatch: exp_only={list(exp_only)[:3]} nqe_only={list(nqe_only)[:3]}",
+                "expected_rows": exp_count, "nqe_rows": nqe_count}
+
+    # 指标值比较
+    metric_cols = metrics or [c for c in expected_rows[0].keys() if c not in dim_cols]
     match = True; mismatches = []
-    for i in range(min(exp_count, 5)):  # 前 5 行
-        for col in key_cols:
-            ev = expected_rows[i].get(col)
-            nv = nqe_rows[i].get(col) if i < len(nqe_rows) else None
+    for key in exp_by_key:
+        for col in metric_cols:
+            ev = exp_by_key[key].get(col)
+            nv = nqe_by_key[key].get(col)
             if isinstance(ev, (int, float)) and isinstance(nv, (int, float)):
                 if abs(ev - nv) > tolerance * max(abs(ev), 1):
-                    match = False; mismatches.append(f"row{i}.{col}: {ev} vs {nv}")
+                    match = False; mismatches.append(f"{key}.{col}: {ev} vs {nv}")
             elif str(ev) != str(nv):
-                match = False; mismatches.append(f"row{i}.{col}: {ev} vs {nv}")
+                match = False; mismatches.append(f"{key}.{col}: {ev} vs {nv}")
 
-    return {"match": match, "reason": "ok" if match else f"value_mismatch:{mismatches[:3]}",
+    return {"match": match, "reason": "ok" if match else f"metric_mismatch: {'; '.join(mismatches[:3])}",
             "expected_rows": exp_count, "nqe_rows": nqe_count}
 
 
@@ -135,6 +152,7 @@ def evaluate_one(case: dict, db, domain: str, timeout_sec: int) -> dict:
         "expected_retrieval_source": expected_ret, "actual_retrieval_source": "",
         "generated_sql": "", "final_sql": "",
         "expected_rows": 0, "actual_rows": 0, "duration_ms": 0,
+        "retrieved_assets_count": 0,
         "llm_sql_generated": False, "safety_executed": False,
         "explain_executed": False, "execute_executed": False, "fallback_used": False,
     }
@@ -171,9 +189,15 @@ def evaluate_one(case: dict, db, domain: str, timeout_sec: int) -> dict:
             if ts == expected_status or (expected_status == "clarify_required" and ts in ("clarify","clarify_required")):
                 base["status"] = "pass"
             elif expected_status == "empty_result":
-                base["actual_rows"] = f.get("row_count", 0)
-                base["status"] = "pass" if base["actual_rows"] == 0 else "fail"
-                if base["status"] == "fail": base["failure_reason"] = f"expected_empty got {base['actual_rows']}"
+                if ts in ("error","failed","safety_reject"):
+                    base["status"] = "fail"
+                    base["failure_reason"] = f"expected_empty but status={ts}"
+                else:
+                    exec_int = f.get("execution_result_internal") or {}
+                    rows = exec_int.get("rows", [])
+                    base["actual_rows"] = len(rows) if isinstance(rows, (list, tuple)) else 0
+                    base["status"] = "pass" if base["actual_rows"] == 0 else "fail"
+                    if base["status"] == "fail": base["failure_reason"] = f"expected_empty got {base['actual_rows']} rows"
             else:
                 base["status"] = "fail"; base["failure_reason"] = f"expected_{expected_status}_got_{ts}"
         except TimeoutError:
@@ -250,9 +274,12 @@ def evaluate_one(case: dict, db, domain: str, timeout_sec: int) -> dict:
     base["llm_sql_generated"] = bool(base["generated_sql"])
     base["safety_executed"] = bool(f.get("sql_safety_result"))
     base["explain_executed"] = bool(f.get("explain_result"))
-    # execute: 检查 execution_result_internal 或 execution_status
+    # execute: execution_status 必须是 executed/completed 等明确态
+    exec_status = str(f.get("execution_status","")).lower()
     exec_int = f.get("execution_result_internal") or {}
-    base["execute_executed"] = bool(f.get("execution_status") or exec_int.get("rows") is not None)
+    has_exec_rows = exec_int.get("rows") is not None
+    has_exec_cols = bool(exec_int.get("columns"))
+    base["execute_executed"] = (exec_status in ("executed","completed","done")) or has_exec_rows or has_exec_cols
     base["fallback_used"] = bool(f.get("fallback_used"))
     ts = f.get("terminal_status",""); base["actual_status"] = ts
 
@@ -262,10 +289,15 @@ def evaluate_one(case: dict, db, domain: str, timeout_sec: int) -> dict:
         base["status"] = "fail"
         base["failure_reason"] = f"context_source_mismatch: expect={expected_ctx} actual={base['actual_context_source']}"
         return base
-    # retrieval_source
+    # retrieval_source + retrieved_assets_count
+    base["retrieved_assets_count"] = ra.get("retrieved_count", 0) if ra else 0
     if base["actual_retrieval_source"] != expected_ret:
         base["status"] = "fail"
         base["failure_reason"] = f"retrieval_source_mismatch: expect={expected_ret} actual={base['actual_retrieval_source']}"
+        return base
+    if expected_ret == "milvus" and base["retrieved_assets_count"] == 0:
+        base["status"] = "fail"
+        base["failure_reason"] = "milvus_retrieved_zero"
         return base
     # fallback
     allow_fb = case.get("allow_fallback", False)
@@ -336,6 +368,7 @@ def parse_args():
     p.add_argument("--case-id", type=str, help="指定单个 case_id")
     p.add_argument("--max-cases", type=int, default=0, help="每域最大 case 数")
     p.add_argument("--timeout-seconds", type=int, default=120, help="单 case 超时 (秒)")
+    p.add_argument("--skip-validate", action="store_true", help="跳过数据集校验")
     return p.parse_args()
 
 
@@ -349,6 +382,16 @@ def main():
     all_domains = ["logistics","business_analysis","plan_bom","power_prediction"]
     if args.domain:
         all_domains = [args.domain]
+
+    # 预校验数据集
+    if not args.skip_validate:
+        import subprocess
+        vp = str(base / "validate_nqe_eval_dataset.py")
+        rc = subprocess.run([sys.executable, vp], capture_output=False)
+        if rc.returncode != 0:
+            print("❌ 数据集校验未通过，终止评测")
+            sys.exit(1)
+        print("✅ 数据集校验通过")
 
     all_results = []
     stats = Counter()
