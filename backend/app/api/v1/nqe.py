@@ -85,6 +85,7 @@ QUICK_CHIPS = {
         {"id": "qc-2", "domain": "business_analysis", "label": "2024 年组件产量", "question": "2024 年组件产量"},
         {"id": "qc-3", "domain": "plan_bom", "label": "BOM 订单明细", "question": "BOM 订单明细查询"},
         {"id": "qc-4", "domain": "plan_bom", "label": "功率模型版本", "question": "有哪些功率模型版本"},
+        {"id": "qc-5", "domain": "power_prediction", "label": "供应商效率", "question": "供应商电池效率分布查询"},
     ],
     "logistics": [
         {"id": "qc-l1", "domain": "logistics", "label": "各月运输量汇总", "question": "2024 年各月运输量"},
@@ -100,6 +101,11 @@ QUICK_CHIPS = {
         {"id": "qc-p1", "domain": "plan_bom", "label": "BOM 订单明细", "question": "BOM 订单明细查询"},
         {"id": "qc-p2", "domain": "plan_bom", "label": "BOM 物料清单", "question": "SAP 编码的 BOM 物料清单"},
         {"id": "qc-p3", "domain": "plan_bom", "label": "功率模型版本", "question": "有哪些功率模型版本"},
+    ],
+    "power_prediction": [
+        {"id": "qc-pw1", "domain": "power_prediction", "label": "功率模型版本", "question": "当前有哪些功率预测模型版本"},
+        {"id": "qc-pw2", "domain": "power_prediction", "label": "供应商效率分布", "question": "供应商电池效率分布查询"},
+        {"id": "qc-pw3", "domain": "power_prediction", "label": "功率预测计算", "question": "根据组件配置预测功率分布"},
     ],
 }
 
