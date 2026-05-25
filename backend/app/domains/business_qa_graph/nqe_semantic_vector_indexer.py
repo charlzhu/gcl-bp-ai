@@ -73,8 +73,8 @@ class NqeEmbeddingClient:
 class NqeSemanticVectorIndexer:
     """NQE 语义资产向量化写入 Milvus（真实 embedding）。"""
 
-    def __init__(self, collection_name: str = COLLECTION_NAME):
-        self.collection_name = collection_name
+    def __init__(self, collection_name: str | None = None):
+        self.collection_name = collection_name or self._get_milvus_config()["collection"]
         self._embedder: NqeEmbeddingClient | None = None
 
     def _get_milvus_config(self):
@@ -120,12 +120,13 @@ class NqeSemanticVectorIndexer:
                 docs.append({"domain": r[0], "asset_type": "dimension", "asset_id": f"dim:{r[0]}:{r[1]}", "title": r[2], "content": f"维度 {r[2]} (编码 {r[1]})，别名 {r[3] or '无'}，对应表 {r[4]}.{r[5]}。{r[6] or ''}", "table_name": r[4], "column_name": r[5]})
 
             # 5. Values per-column top 200
-            cols = db.execute(text(f"SELECT DISTINCT table_name, column_name FROM nqe_value_index WHERE is_active = 1 {dflt}"), params).fetchall()
-            for (ctable, ccol) in cols:
-                rows = db.execute(text(f"SELECT raw_value, value_type FROM nqe_value_index WHERE domain_code = :d AND table_name = :t AND column_name = :c AND is_active = 1 LIMIT 200"),
-                                  {"d": domain, "t": ctable, "c": ccol} if domain else {"t": ctable, "c": ccol})
+            cols = db.execute(text(f"SELECT DISTINCT domain_code, table_name, column_name FROM nqe_value_index WHERE is_active = 1 {dflt}"), params).fetchall()
+            for (vdomain, ctable, ccol) in cols:
+                vparams = {"d": vdomain, "t": ctable, "c": ccol}
+                # 取该域/表/列的值，每列最多 200 条
+                rows = db.execute(text("SELECT raw_value, value_type FROM nqe_value_index WHERE domain_code = :d AND table_name = :t AND column_name = :c AND is_active = 1 LIMIT 200"), vparams)
                 for (rval, rtype) in rows.fetchall():
-                    docs.append({"domain": domain or "", "asset_type": "value", "asset_id": f"val:{domain or ''}:{ctable}:{ccol}:{rval}", "title": f"{ctable}.{ccol}={rval}", "content": f"字段取值 {ctable}.{ccol} = '{rval}'，取值类型 {rtype}", "table_name": ctable, "column_name": ccol})
+                    docs.append({"domain": vdomain, "asset_type": "value", "asset_id": f"val:{vdomain}:{ctable}:{ccol}:{rval}", "title": f"{ctable}.{ccol}={rval}", "content": f"字段取值 {ctable}.{ccol} = '{rval}'，取值类型 {rtype}", "table_name": ctable, "column_name": ccol})
 
             # 6. Few-shot SQL
             for r in db.execute(text(f"SELECT domain_code, question, `sql`, difficulty FROM nqe_fewshot_sql WHERE is_active = 1 {dflt}"), params).fetchall():
@@ -143,7 +144,8 @@ class NqeSemanticVectorIndexer:
             logger.error("No embedding client available")
             return 0
 
-        connections.connect(alias="default", host="127.0.0.1", port="19530")
+        cfg = self._get_milvus_config()
+        connections.connect(alias="default", host=cfg["host"], port=cfg["port"])
 
         if drop_first and utility.has_collection(self.collection_name):
             utility.drop_collection(self.collection_name)
@@ -208,8 +210,8 @@ class NqeSemanticVectorIndexer:
 class NqeSemanticVectorRetriever:
     """NQE 语义资产向量检索器（真实向量相似度搜索）。"""
 
-    def __init__(self, collection_name: str = COLLECTION_NAME):
-        self.collection_name = collection_name
+    def __init__(self, collection_name: str | None = None):
+        self.collection_name = collection_name or self._get_milvus_config()["collection"]
         self._embedder: NqeEmbeddingClient | None = None
 
     def _get_milvus_config(self):
@@ -238,7 +240,8 @@ class NqeSemanticVectorRetriever:
         if not qvec or all(v == 0.0 for v in qvec):
             return []
 
-        connections.connect(alias="default", host="127.0.0.1", port="19530")
+        cfg = self._get_milvus_config()
+        connections.connect(alias="default", host=cfg["host"], port=cfg["port"])
         col = Collection(self.collection_name)
         col.load()
 

@@ -1,7 +1,14 @@
-"""NQE 统一 SQL Agent Graph 独立骨架。
+"""NQE 统一 SQL Agent Graph。
 
-本模块只提供可单测、可编译的 LangGraph 编排骨架。它不替换正式问答入口、
-不访问生产库、不调用真实模型、不执行真实查询，也不把内部过程暴露给用户。
+本模块提供 LangGraph 编排骨架，支持：
+- 真实 LLM SQL 生成 (OpenAI/DashScope 兼容)
+- 真实 MySQL EXPLAIN 校验
+- 真实只读 SQL 执行
+- DB semantic catalog 上下文
+- Milvus 向量检索增强
+- SQL 安全预检与 LLM 修正
+- 四域灰度控制与旧链路 fallback
+- 测试注入路径 (需 _nqe_test_injected 标记)
 """
 
 from __future__ import annotations

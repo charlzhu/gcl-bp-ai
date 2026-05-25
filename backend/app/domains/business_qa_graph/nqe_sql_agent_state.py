@@ -17,13 +17,14 @@ class NqeSqlAgentState(TypedDict, total=False):
     """NQE SQL Agent LangGraph 节点之间传递的状态。
 
     参数：
-        所有字段均由 Graph 节点按阶段增量写入；调用方可传入 question、
-        nqe_mode、retrieval_context_package 等测试态字段驱动骨架分支。
+        所有字段均由 Graph 节点按阶段写入。支持真实 LLM SQL 生成、
+        EXPLAIN 校验、只读执行、DB semantic catalog、Milvus 检索。
+        调用方可传入 question/nqe_mode/domain_hint 等字段驱动流程。
     返回：
         StateGraph 节点之间共享和更新的字典态。
     业务边界：
-        本状态允许保存内部占位执行信息，但用户可见回答只能写入
-        user_visible_response，且必须屏蔽内部技术词。
+        本状态允许保存内部执行信息（SQL/EXPLAIN/trace），
+        用户可见回答只能写入 user_visible_response，必须屏蔽内部技术词。
     """
 
     # 请求上下文：用户原始问题。
