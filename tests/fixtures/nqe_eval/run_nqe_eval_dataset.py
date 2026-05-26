@@ -237,6 +237,11 @@ def evaluate_one(case: dict, db, domain: str, timeout_sec: int) -> dict:
 
     # ---- DETERMINISTIC_SQL ----
     if not sql:
+        # old_service: 无标准 SQL，预期走旧链路/fallback
+        if case.get("expected_result_source") == "old_service":
+            base["status"] = "skip"
+            base["failure_reason"] = "old_service_not_available"
+            return base
         base["status"] = "skip"; base["failure_reason"] = "no_answer_sql"; return base
 
     # Step 1: execute answer_sql
