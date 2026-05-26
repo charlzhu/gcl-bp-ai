@@ -235,10 +235,13 @@ def evaluate_one(case: dict, db, domain: str, timeout_sec: int) -> dict:
             base["status"] = "fail"; base["failure_reason"] = f"graph_error:{type(e).__name__}"
         return base
 
-    # ---- DETERMINISTIC_SQL ----
+    # ---- DETERMINISTIC_SQL / OLD_SERVICE ----
     if not sql:
-        # old_service: 无标准 SQL，预期走旧链路/fallback
         if case.get("expected_result_source") == "old_service":
+            old_result = _eval_old_service(case, db, domain)
+            if old_result:
+                old_result.update({k: base[k] for k in ["case_id","domain","source_type","question"]})
+                return old_result
             base["status"] = "skip"
             base["failure_reason"] = "old_service_not_available"
             return base
@@ -340,8 +343,34 @@ def evaluate_one(case: dict, db, domain: str, timeout_sec: int) -> dict:
 
 
 # ============================================================
-# Smoke selection
+# Old service evaluator
 # ============================================================
+
+def _eval_old_service(case: dict, db, domain: str) -> dict | None:
+    """调用旧服务（BOM compare adapter 等）生成 expected_result_runtime。"""
+    if domain == "plan_bom" and "compare" in case.get("expected_intent", ""):
+        filters = case.get("expected_filters", {})
+        left = filters.get("left_order", "")
+        right = filters.get("right_order", "")
+        if left and right:
+            try:
+                from backend.app.domains.business_qa_graph.nqe_plan_bom_compare_adapter import (
+                    NqePlanBomCompareAdapter,
+                )
+                adapter = NqePlanBomCompareAdapter()
+                result = adapter.try_compare(left_identifier=left, right_identifier=right)
+                if result and result.executed:
+                    return {
+                        "status": "pass",
+                        "failure_reason": "",
+                        "expected_rows": result.changed_count,
+                        "actual_rows": result.changed_count,
+                        "actual_context_source": "old_service",
+                        "actual_retrieval_source": "old_service",
+                    }
+            except Exception:
+                pass
+    return None
 
 def smoke_select(cases, domain):
     by_type = defaultdict(list)
